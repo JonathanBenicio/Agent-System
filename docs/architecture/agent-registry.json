@@ -1,0 +1,295 @@
+{
+  "$schema": "./agent-registry.schema.json",
+  "version": "1.0.0",
+  "agents": [
+    {
+      "id": "meta-agent",
+      "name": "MetaAgent",
+      "tier": { "level": 0, "label": "Chief" },
+      "domain": "orchestration",
+      "description": "Coordenador central — analisa contexto, decide routing e orquestra agents especializados.",
+      "llmProfile": {
+        "preferredModel": "gpt-4o",
+        "fallbackModel": "gemini-1.5-pro",
+        "defaultParameters": {
+          "temperature": 0.2,
+          "maxTokens": 800,
+          "responseFormat": "Json"
+        },
+        "taskParameters": {
+          "context-analysis": { "temperature": 0.1, "maxTokens": 500 },
+          "agent-routing": { "temperature": 0.0, "maxTokens": 300 }
+        }
+      },
+      "skills": ["context-analysis", "intent-classification", "tier-system"],
+      "tools": ["smart-router", "quality-gate-validator", "session-manager"],
+      "handoffs": [
+        { "targetAgent": "personal-agent", "condition": "personal-context", "preserveContext": true },
+        { "targetAgent": "work-agent", "condition": "work-context", "preserveContext": true },
+        { "targetAgent": "learning-agent", "condition": "learning-context", "preserveContext": true }
+      ],
+      "qualityGates": {
+        "preExecution": ["input-not-empty", "session-valid"],
+        "postExecution": ["routing-decision-valid", "confidence-above-threshold"],
+        "minConfidence": 0.7
+      },
+      "routingHints": {
+        "keywords": [],
+        "intentPatterns": ["*"],
+        "priority": 1
+      }
+    },
+    {
+      "id": "personal-agent",
+      "name": "PersonalAgent",
+      "tier": { "level": 1, "label": "Master" },
+      "domain": "personal",
+      "description": "Produtividade pessoal — calendário, tarefas, lembretes e organização.",
+      "llmProfile": {
+        "preferredModel": "gpt-4o",
+        "defaultParameters": {
+          "temperature": 0.4,
+          "maxTokens": 1500
+        },
+        "taskParameters": {
+          "scheduling": { "temperature": 0.1 },
+          "task-planning": { "temperature": 0.3 }
+        }
+      },
+      "skills": ["time-management", "task-prioritization"],
+      "tools": ["calendar-provider", "task-provider", "notification-sender"],
+      "handoffs": [
+        { "targetAgent": "calendar-agent", "condition": "requires-scheduling", "preserveContext": true, "returnToSource": true },
+        { "targetAgent": "notification-agent", "condition": "requires-reminder", "preserveContext": false }
+      ],
+      "qualityGates": {
+        "preExecution": ["input-not-empty"],
+        "postExecution": ["response-not-empty"],
+        "minConfidence": 0.6
+      },
+      "routingHints": {
+        "keywords": ["agenda", "tarefa", "lembrete", "pessoal", "organizar"],
+        "intentPatterns": ["schedule-*", "remind-*", "organize-*"],
+        "priority": 2
+      }
+    },
+    {
+      "id": "work-agent",
+      "name": "WorkAgent",
+      "tier": { "level": 1, "label": "Master" },
+      "domain": "work",
+      "description": "Produtividade profissional — email, documentos, reuniões e comunicação.",
+      "llmProfile": {
+        "preferredModel": "gpt-4o",
+        "defaultParameters": {
+          "temperature": 0.3,
+          "maxTokens": 2000
+        },
+        "taskParameters": {
+          "email-drafting": { "temperature": 0.4 },
+          "meeting-summary": { "temperature": 0.2 }
+        }
+      },
+      "skills": ["email-etiquette", "meeting-management", "document-synthesis"],
+      "tools": ["email-provider", "calendar-provider", "storage-provider", "graph-api"],
+      "handoffs": [
+        { "targetAgent": "research-agent", "condition": "requires-research", "preserveContext": true, "returnToSource": true },
+        { "targetAgent": "notification-agent", "condition": "requires-notification", "preserveContext": false }
+      ],
+      "qualityGates": {
+        "preExecution": ["input-not-empty"],
+        "postExecution": ["response-not-empty", "tone-professional"],
+        "minConfidence": 0.6
+      },
+      "routingHints": {
+        "keywords": ["email", "reunião", "documento", "trabalho", "meeting"],
+        "intentPatterns": ["draft-email", "summarize-meeting", "create-document"],
+        "priority": 2
+      }
+    },
+    {
+      "id": "learning-agent",
+      "name": "LearningAgent",
+      "tier": { "level": 1, "label": "Master" },
+      "domain": "learning",
+      "description": "Aprendizado e pesquisa — explicações, resumos, tutoriais e exploração de tópicos.",
+      "llmProfile": {
+        "preferredModel": "gpt-4o",
+        "defaultParameters": {
+          "temperature": 0.6,
+          "maxTokens": 3000
+        },
+        "taskParameters": {
+          "explanation": { "temperature": 0.5 },
+          "research": { "temperature": 0.7 }
+        }
+      },
+      "skills": ["pedagogy", "research-methodology", "summarization"],
+      "tools": ["research-engine", "notes-provider", "storage-provider"],
+      "handoffs": [
+        { "targetAgent": "creative-agent", "condition": "creative-task-detected", "preserveContext": true },
+        { "targetAgent": "analysis-agent", "condition": "data-analysis-needed", "preserveContext": true }
+      ],
+      "qualityGates": {
+        "preExecution": ["input-not-empty"],
+        "postExecution": ["response-not-empty", "accuracy-check"],
+        "minConfidence": 0.5
+      },
+      "routingHints": {
+        "keywords": ["explique", "aprenda", "pesquise", "resuma", "tutorial"],
+        "intentPatterns": ["explain-*", "research-*", "summarize-*", "learn-*"],
+        "priority": 2
+      }
+    },
+    {
+      "id": "creative-agent",
+      "name": "CreativeAgent",
+      "tier": { "level": 2, "label": "Specialist" },
+      "domain": "creative",
+      "description": "Brainstorming, escrita criativa, ideação e geração de conteúdo.",
+      "llmProfile": {
+        "preferredModel": "gpt-4o",
+        "defaultParameters": {
+          "temperature": 0.9,
+          "maxTokens": 3000,
+          "presencePenalty": 0.3
+        },
+        "taskParameters": {
+          "brainstorming": { "temperature": 1.1, "presencePenalty": 0.6 },
+          "writing": { "temperature": 0.8 },
+          "ideation": { "temperature": 1.0 }
+        }
+      },
+      "skills": ["creative-writing", "brainstorming-techniques", "storytelling"],
+      "tools": ["notes-provider", "storage-provider"],
+      "handoffs": [],
+      "qualityGates": {
+        "preExecution": ["input-not-empty"],
+        "postExecution": ["response-not-empty", "originality-check"],
+        "minConfidence": 0.4
+      },
+      "routingHints": {
+        "keywords": ["crie", "invente", "brainstorm", "ideias", "história", "escreva"],
+        "intentPatterns": ["create-*", "brainstorm-*", "write-*", "generate-*"],
+        "priority": 3
+      }
+    },
+    {
+      "id": "analysis-agent",
+      "name": "AnalysisAgent",
+      "tier": { "level": 2, "label": "Specialist" },
+      "domain": "analysis",
+      "description": "Análise de dados, geração de relatórios e extração de insights.",
+      "llmProfile": {
+        "preferredModel": "gpt-4o",
+        "defaultParameters": {
+          "temperature": 0.1,
+          "maxTokens": 2500,
+          "responseFormat": "Markdown"
+        },
+        "taskParameters": {
+          "data-analysis": { "temperature": 0.0 },
+          "report-generation": { "temperature": 0.2 }
+        }
+      },
+      "skills": ["data-analysis", "statistical-reasoning", "report-formatting"],
+      "tools": ["vision-provider", "storage-provider", "api-agent"],
+      "handoffs": [],
+      "qualityGates": {
+        "preExecution": ["input-not-empty", "data-source-valid"],
+        "postExecution": ["response-not-empty", "numbers-verified"],
+        "minConfidence": 0.8
+      },
+      "routingHints": {
+        "keywords": ["analise", "dados", "relatório", "insight", "métrica", "gráfico"],
+        "intentPatterns": ["analyze-*", "report-*", "compare-*", "extract-insights"],
+        "priority": 3
+      }
+    },
+    {
+      "id": "calendar-agent",
+      "name": "CalendarAgent",
+      "tier": { "level": 2, "label": "Specialist" },
+      "domain": "scheduling",
+      "description": "Agendamentos, eventos e gestão de calendário com precisão.",
+      "llmProfile": {
+        "preferredModel": "gpt-4o",
+        "defaultParameters": {
+          "temperature": 0.0,
+          "maxTokens": 500,
+          "responseFormat": "Json"
+        }
+      },
+      "skills": ["datetime-parsing", "timezone-handling"],
+      "tools": ["calendar-provider"],
+      "handoffs": [
+        { "targetAgent": "notification-agent", "condition": "reminder-needed", "preserveContext": false }
+      ],
+      "qualityGates": {
+        "preExecution": ["datetime-parseable"],
+        "postExecution": ["event-created-valid"],
+        "minConfidence": 0.9
+      },
+      "routingHints": {
+        "keywords": ["agendar", "reunião", "evento", "calendário", "horário"],
+        "intentPatterns": ["schedule-*", "create-event", "check-availability"],
+        "priority": 4
+      }
+    },
+    {
+      "id": "notification-agent",
+      "name": "NotificationAgent",
+      "tier": { "level": 3, "label": "Support" },
+      "domain": "notifications",
+      "description": "Alertas, lembretes e notificações com templates padronizados.",
+      "llmProfile": {
+        "preferredModel": "gpt-4o-mini",
+        "defaultParameters": {
+          "temperature": 0.2,
+          "maxTokens": 300
+        }
+      },
+      "skills": ["notification-templates"],
+      "tools": ["notification-sender", "email-provider"],
+      "handoffs": [],
+      "qualityGates": {
+        "preExecution": ["recipient-valid"],
+        "postExecution": ["notification-sent"],
+        "minConfidence": 0.9
+      },
+      "routingHints": {
+        "keywords": ["lembrete", "alerta", "notificar", "avisar"],
+        "intentPatterns": ["notify-*", "remind-*", "alert-*"],
+        "priority": 5
+      }
+    },
+    {
+      "id": "api-agent",
+      "name": "APIAgent",
+      "tier": { "level": 3, "label": "Support" },
+      "domain": "api-integration",
+      "description": "Chamadas para APIs externas e integrações via MCP plugins.",
+      "llmProfile": {
+        "preferredModel": "gpt-4o-mini",
+        "defaultParameters": {
+          "temperature": 0.3,
+          "maxTokens": 1000,
+          "responseFormat": "Json"
+        }
+      },
+      "skills": ["api-documentation", "json-handling"],
+      "tools": ["mcp-plugin-runner", "api-caller"],
+      "handoffs": [],
+      "qualityGates": {
+        "preExecution": ["endpoint-valid", "auth-configured"],
+        "postExecution": ["response-status-ok"],
+        "minConfidence": 0.8
+      },
+      "routingHints": {
+        "keywords": ["api", "endpoint", "webhook", "integração"],
+        "intentPatterns": ["call-api", "fetch-data", "send-webhook"],
+        "priority": 5
+      }
+    }
+  ]
+}

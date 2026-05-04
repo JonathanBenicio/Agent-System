@@ -1,0 +1,1131 @@
+{
+  "info": {
+    "name": "Agentic System API",
+    "_postman_id": "agentic-system-v1",
+    "description": "Coleção completa da API do Agentic System — agents, tools, skills, sessions, gateway admin.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Agent",
+      "description": "Endpoints de gestão de agents",
+      "item": [
+        {
+          "name": "GET — Listar agents ativos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "agents"]
+            },
+            "description": "Retorna todos os agents atualmente ativos no sistema."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.be.an('array');",
+                  "});",
+                  "pm.test('Agents possuem campos obrigatórios', () => {",
+                  "    const body = pm.response.json();",
+                  "    if (body.length > 0) {",
+                  "        pm.expect(body[0]).to.have.property('name');",
+                  "        pm.expect(body[0]).to.have.property('tier');",
+                  "        pm.expect(body[0]).to.have.property('isActive');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Agents por tier (Chief)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/agents/tier/Chief",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "agents", "tier", "Chief"]
+            },
+            "description": "Lista agents do tier Chief (tier 0 — MetaAgent)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Agents por tier (Master)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/agents/tier/Master",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "agents", "tier", "Master"]
+            },
+            "description": "Lista agents do tier Master (tier 1)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Agents por tier (Specialist)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/agents/tier/Specialist",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "agents", "tier", "Specialist"]
+            },
+            "description": "Lista agents do tier Specialist (tier 2)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Agents por tier (Support)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/agents/tier/Support",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "agents", "tier", "Support"]
+            },
+            "description": "Lista agents do tier Support (tier 3)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST — Criar agent customizado",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"code-reviewer\",\n  \"description\": \"Agent especializado em code review .NET\",\n  \"tier\": \"Specialist\",\n  \"capabilities\": [\"code-review\", \"security-scan\", \"best-practices\"],\n  \"systemPrompt\": \"Você é um reviewer experiente em .NET/C#. Analise código com foco em segurança, performance e Clean Architecture.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "agents"]
+            },
+            "description": "Cria um agent customizado com spec definida pelo usuário."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
+                  "pm.test('Retorna agent criado', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('name', 'code-reviewer');",
+                  "    pm.expect(body).to.have.property('tier');",
+                  "    pm.expect(body).to.have.property('isActive', true);",
+                  "});",
+                  "pm.test('Header Location presente', () => {",
+                  "    pm.response.to.have.header('Location');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST — Criar agent — body vazio (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "agents"]
+            },
+            "description": "Cenário negativo: body sem campos obrigatórios."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400 ou 422', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Tools",
+      "description": "Endpoints de tools (ferramentas executáveis)",
+      "item": [
+        {
+          "name": "GET — Listar todas as tools",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/tools",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "tools"]
+            },
+            "description": "Lista todas as tools disponíveis no sistema."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});",
+                  "pm.test('Tools possuem id, name, category', () => {",
+                  "    const body = pm.response.json();",
+                  "    if (body.length > 0) {",
+                  "        pm.expect(body[0]).to.have.property('id');",
+                  "        pm.expect(body[0]).to.have.property('name');",
+                  "        pm.expect(body[0]).to.have.property('category');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Tools filtradas por categoria",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/tools?category=Api",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "tools"],
+              "query": [
+                { "key": "category", "value": "Api" }
+              ]
+            },
+            "description": "Filtra tools pela categoria informada (Calendar, Email, Storage, Notes, Tasks, Search, Api, Database)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Todas são da categoria filtrada', () => {",
+                  "    const body = pm.response.json();",
+                  "    body.forEach(tool => {",
+                  "        pm.expect(tool.category).to.eql('Api');",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST — Executar tool (DateTime)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parameters\": {\n    \"action\": \"now\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/tools/datetime/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "tools", "datetime", "execute"]
+            },
+            "description": "Executa a tool DateTime para obter a data/hora atual."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resultado contém success', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('success');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST — Executar tool (Calculator)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parameters\": {\n    \"expression\": \"2 + 2 * 3\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/tools/calculator/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "tools", "calculator", "execute"]
+            },
+            "description": "Executa a tool Calculator para avaliar uma expressão matemática."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resultado contém success', () => {",
+                  "    pm.expect(pm.response.json().success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST — Executar tool inexistente (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parameters\": {}\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/tools/tool-que-nao-existe/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "tools", "tool-que-nao-existe", "execute"]
+            },
+            "description": "Cenário negativo: tool ID inválido retorna erro."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400 ou 404', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 404]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Skills",
+      "description": "Endpoints de skills (conhecimento e templates)",
+      "item": [
+        {
+          "name": "GET — Listar skills (default)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/skills",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "skills"]
+            },
+            "description": "Lista skills sem filtro (agent=general, domain=general)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Skills por agent e domínio",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/skills?agent=code-reviewer&domain=development",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "skills"],
+              "query": [
+                { "key": "agent", "value": "code-reviewer" },
+                { "key": "domain", "value": "development" }
+              ]
+            },
+            "description": "Filtra skills por agent e domínio específicos."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "description": "Endpoints de sessão e eventos",
+      "item": [
+        {
+          "name": "GET — Eventos de sessão (válido)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/sessions/session-001/events?count=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "sessions", "session-001", "events"],
+              "query": [
+                { "key": "count", "value": "10" }
+              ]
+            },
+            "description": "Busca os últimos 10 eventos de uma sessão."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Eventos de sessão (default count=20)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/sessions/session-001/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "sessions", "session-001", "events"]
+            },
+            "description": "Busca eventos com count default (20)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Maintenance",
+      "description": "Endpoints administrativos de manutenção",
+      "item": [
+        {
+          "name": "POST — Cleanup agents inativos",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/maintenance/cleanup",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "maintenance", "cleanup"]
+            },
+            "description": "Dispara limpeza de agents inativos."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Mensagem de sucesso', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('message');",
+                  "    pm.expect(body.message).to.include('sucesso');",
+                  "});",
+                  "pm.test('Timestamp presente', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('timestamp');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Gateway Admin",
+      "description": "Endpoints administrativos do Gateway de serviços",
+      "item": [
+        {
+          "name": "GET — Dashboard consolidado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "dashboard"]
+            },
+            "description": "Retorna dashboard com health, custos e métricas consolidadas."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Dashboard possui campos esperados', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('totalServices');",
+                  "    pm.expect(body).to.have.property('healthyServices');",
+                  "    pm.expect(body).to.have.property('totalCost');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Listar todos os serviços",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services"]
+            },
+            "description": "Lista status de todos os serviços registrados no gateway."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Serviço por nome (existente)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services/openai",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services", "openai"]
+            },
+            "description": "Busca status de um serviço pelo nome."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 ou 404', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
+                  "});",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Serviço possui name e isEnabled', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('name');",
+                  "        pm.expect(body).to.have.property('isEnabled');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Serviço inexistente (404)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services/servico-que-nao-existe",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services", "servico-que-nao-existe"]
+            },
+            "description": "Cenário negativo: buscar serviço que não existe retorna 404."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Mensagem de erro', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('error');",
+                  "    pm.expect(body.error).to.include('not found');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Serviços por categoria",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services/category/llm",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services", "category", "llm"]
+            },
+            "description": "Filtra serviços do gateway pela categoria (ex: llm, embedding, search)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Resposta é array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Relatório de custos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/costs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "costs"]
+            },
+            "description": "Relatório de custos consolidado — total, por serviço, por categoria, alerta de budget."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Relatório possui campos de custo', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('totalCost');",
+                  "    pm.expect(body).to.have.property('costByService');",
+                  "    pm.expect(body).to.have.property('costByCategory');",
+                  "    pm.expect(body).to.have.property('budgetAlert');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — Relatório de saúde",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "health"]
+            },
+            "description": "Relatório de saúde de todos os serviços."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Relatório possui campos de saúde', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('overallHealthy');",
+                  "    pm.expect(body).to.have.property('services');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST — Habilitar serviço",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services/openai/enable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services", "openai", "enable"]
+            },
+            "description": "Habilita um serviço no gateway."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST — Desabilitar serviço",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services/openai/disable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services", "openai", "disable"]
+            },
+            "description": "Desabilita um serviço no gateway."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST — Enable + Disable (fluxo completo)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services/ollama/disable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services", "ollama", "disable"]
+            },
+            "description": "Cenário: desabilitar e depois reabilitar um serviço (use com o próximo request)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));",
+                  "",
+                  "// Após desabilitar, verifica status",
+                  "pm.sendRequest({",
+                  "    url: pm.variables.get('baseUrl') + '/api/admin/gateway/services/ollama',",
+                  "    method: 'GET'",
+                  "}, (err, res) => {",
+                  "    if (res.code === 200) {",
+                  "        pm.test('Serviço está desabilitado', () => {",
+                  "            pm.expect(res.json().isEnabled).to.be.false;",
+                  "        });",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Smoke Tests",
+      "description": "Cenários de smoke test para validação rápida da API",
+      "item": [
+        {
+          "name": "Health Check — API respondendo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/agents",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "agents"]
+            },
+            "description": "Verifica se a API está respondendo."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('API está respondendo', () => {",
+                  "    pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "pm.test('Tempo de resposta < 2s', () => {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
+                  "});",
+                  "pm.test('Content-Type é JSON', () => {",
+                  "    pm.response.to.have.header('Content-Type');",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Swagger disponível",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/swagger/v1/swagger.json",
+              "host": ["{{baseUrl}}"],
+              "path": ["swagger", "v1", "swagger.json"]
+            },
+            "description": "Verifica se o Swagger/OpenAPI está acessível."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('É um OpenAPI válido', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('openapi');",
+                  "    pm.expect(body.info.title).to.eql('Agentic System API');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Gateway Dashboard OK",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "dashboard"]
+            },
+            "description": "Valida que o dashboard do gateway responde corretamente."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Tempo de resposta < 1s', () => {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "SignalR Hubs",
+      "description": "Endpoints SignalR (WebSocket). O Postman testa o handshake HTTP 'negotiate'. Para testar métodos do Hub (SendMessage, GetDashboard etc.), use um client SignalR (ex: @microsoft/signalr no Node.js).\n\n## ChatHub — /hubs/chat\n### Métodos (Client → Server)\n- `SendMessage(userId: string, message: string)` — Envia mensagem ao MetaAgent\n### Eventos (Server → Client)\n- `Connected` — { connectionId, timestamp }\n- `ProcessingStarted` — { timestamp }\n- `ReceiveMessage` — { content, agentName, agentTier, actions, tools, success, sessionId, timestamp }\n- `ReceiveError` — { error, timestamp }\n\n## GatewayHub — /hubs/gateway\n### Métodos (Client → Server)\n- `GetDashboard()` — Solicita dashboard consolidado\n- `GetServiceStatus(serviceName: string)` — Status de um serviço\n- `SubscribeToService(serviceName: string)` — Inscreve-se em updates de um serviço\n- `UnsubscribeFromService(serviceName: string)` — Cancela inscrição\n### Eventos (Server → Client)\n- `DashboardUpdate` — GatewayDashboard completo\n- `ServiceStatusChanged` — ServiceStatus atualizado\n- `Error` — Mensagem de erro",
+      "item": [
+        {
+          "name": "POST — ChatHub Negotiate",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hubs/chat/negotiate?negotiateVersion=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["hubs", "chat", "negotiate"],
+              "query": [
+                { "key": "negotiateVersion", "value": "1" }
+              ]
+            },
+            "description": "Handshake SignalR do ChatHub. Retorna connectionId e transportes disponíveis (WebSockets, ServerSentEvents, LongPolling)."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Retorna connectionId', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('connectionId');",
+                  "    pm.expect(body.connectionId).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Lista transportes disponíveis', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('availableTransports');",
+                  "    pm.expect(body.availableTransports).to.be.an('array').with.length.greaterThan(0);",
+                  "});",
+                  "pm.test('Suporta WebSockets', () => {",
+                  "    const transports = pm.response.json().availableTransports;",
+                  "    const ws = transports.find(t => t.transport === 'WebSockets');",
+                  "    pm.expect(ws).to.not.be.undefined;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST — GatewayHub Negotiate",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hubs/gateway/negotiate?negotiateVersion=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["hubs", "gateway", "negotiate"],
+              "query": [
+                { "key": "negotiateVersion", "value": "1" }
+              ]
+            },
+            "description": "Handshake SignalR do GatewayHub. Retorna connectionId e transportes disponíveis."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Retorna connectionId', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('connectionId');",
+                  "    pm.expect(body.connectionId).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Lista transportes disponíveis', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('availableTransports');",
+                  "    pm.expect(body.availableTransports).to.be.an('array').with.length.greaterThan(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET — ChatHub negotiate inexistente (404 sanity)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/hubs/hub-que-nao-existe/negotiate?negotiateVersion=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["hubs", "hub-que-nao-existe", "negotiate"],
+              "query": [
+                { "key": "negotiateVersion", "value": "1" }
+              ]
+            },
+            "description": "Cenário negativo: negotiate para hub inexistente retorna 404."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Pre-request global — pode adicionar headers de auth aqui",
+          "// pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('token') });"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Test global — log de response time",
+          "console.log(`[${pm.info.requestName}] ${pm.response.code} — ${pm.response.responseTime}ms`);"
+        ]
+      }
+    }
+  ]
+}

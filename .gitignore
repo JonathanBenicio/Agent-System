@@ -1,0 +1,32 @@
+## .NET
+**/bin/
+**/obj/
+*.user
+*.suo
+*.DotSettings.user
+TestResults/
+packages/
+
+## IDE
+.vs/
+.idea/
+*.sln.docstates
+
+## OS
+Thumbs.db
+.DS_Store
+
+## Environment
+.env
+
+## K8s secrets — nunca commitar; gerenciar via Sealed Secrets / ESO / CI pipeline
+k8s/secrets-*.yaml
+
+## Coverage
+coverage-output/
+coverage.cobertura.xml
+coverage.xml
+coverage/
+
+## Stryker mutation testing
+**/StrykerOutput/

@@ -1,0 +1,221 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentic-system/schemas/agent-registry.json",
+  "title": "Agent Registry",
+  "description": "Schema de registro de agents no Sistema Agentic. Todo agent deve ser registrado com seus metadados, perfil LLM, capabilities e regras de handoff.",
+  "type": "object",
+  "required": ["agents"],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Versão semântica do registry"
+    },
+    "agents": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/AgentDefinition" },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "AgentDefinition": {
+      "type": "object",
+      "required": ["id", "name", "tier", "domain", "llmProfile"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]+$",
+          "description": "Identificador único, kebab-case (ex: meta-agent, creative-agent)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Nome de exibição (ex: MetaAgent, CreativeAgent)"
+        },
+        "tier": {
+          "$ref": "#/$defs/Tier"
+        },
+        "domain": {
+          "type": "string",
+          "description": "Domínio funcional do agent (ex: orchestration, creative, analysis)"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Descrição curta da responsabilidade do agent"
+        },
+        "llmProfile": {
+          "$ref": "#/$defs/LLMProfile"
+        },
+        "skills": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs das skills que este agent possui (conhecimento/instruções)"
+        },
+        "tools": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs das tools que este agent pode invocar (capabilities executáveis)"
+        },
+        "handoffs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Handoff" },
+          "description": "Regras de delegação/transferência para outros agents"
+        },
+        "qualityGates": {
+          "$ref": "#/$defs/QualityGates"
+        },
+        "routingHints": {
+          "$ref": "#/$defs/RoutingHints"
+        },
+        "isEnabled": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    },
+    "Tier": {
+      "type": "object",
+      "required": ["level", "label"],
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3,
+          "description": "0=Chief, 1=Master, 2=Specialist, 3=Support"
+        },
+        "label": {
+          "type": "string",
+          "enum": ["Chief", "Master", "Specialist", "Support"]
+        }
+      }
+    },
+    "LLMProfile": {
+      "type": "object",
+      "required": ["preferredModel", "defaultParameters"],
+      "properties": {
+        "preferredModel": {
+          "type": "string",
+          "description": "Modelo LLM preferido (ex: gpt-4o, gemini-1.5-pro)"
+        },
+        "fallbackModel": {
+          "type": "string",
+          "description": "Modelo fallback se o preferido falhar"
+        },
+        "defaultParameters": {
+          "$ref": "#/$defs/LLMParameters"
+        },
+        "taskParameters": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/LLMParameters" },
+          "description": "Overrides por tipo de tarefa (ex: brainstorming, analysis)"
+        }
+      }
+    },
+    "LLMParameters": {
+      "type": "object",
+      "properties": {
+        "temperature": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 2.0
+        },
+        "maxTokens": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 128000
+        },
+        "topP": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "frequencyPenalty": {
+          "type": "number",
+          "minimum": -2.0,
+          "maximum": 2.0
+        },
+        "presencePenalty": {
+          "type": "number",
+          "minimum": -2.0,
+          "maximum": 2.0
+        },
+        "responseFormat": {
+          "type": "string",
+          "enum": ["Text", "Json", "Markdown"]
+        },
+        "systemMessage": {
+          "type": "string",
+          "description": "System prompt base do agent"
+        }
+      }
+    },
+    "Handoff": {
+      "type": "object",
+      "required": ["targetAgent", "condition"],
+      "properties": {
+        "targetAgent": {
+          "type": "string",
+          "description": "ID do agent de destino"
+        },
+        "condition": {
+          "type": "string",
+          "description": "Condição que dispara o handoff (ex: 'requires-scheduling', 'creative-task-detected')"
+        },
+        "preserveContext": {
+          "type": "boolean",
+          "default": true,
+          "description": "Se o contexto da sessão é transferido ao destino"
+        },
+        "returnToSource": {
+          "type": "boolean",
+          "default": false,
+          "description": "Se o controle volta ao agent de origem após execução"
+        }
+      }
+    },
+    "QualityGates": {
+      "type": "object",
+      "properties": {
+        "preExecution": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Validações antes da execução (ex: 'input-not-empty', 'context-valid')"
+        },
+        "postExecution": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Validações após execução (ex: 'response-not-empty', 'confidence-above-threshold')"
+        },
+        "minConfidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Confiança mínima para a resposta ser aceita"
+        }
+      }
+    },
+    "RoutingHints": {
+      "type": "object",
+      "properties": {
+        "keywords": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Palavras-chave que indicam afinidade com este agent"
+        },
+        "intentPatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Padrões de intent que este agent atende"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Prioridade na resolução de conflitos de routing"
+        }
+      }
+    }
+  }
+}

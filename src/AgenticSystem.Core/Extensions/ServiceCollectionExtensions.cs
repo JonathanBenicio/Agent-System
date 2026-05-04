@@ -1,0 +1,108 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Services;
+using AgenticSystem.Core.Tools;
+using AgenticSystem.Core.Skills;
+
+namespace AgenticSystem.Core.Extensions;
+
+public static class ServiceCollectionExtensions
+{
+    public static IServiceCollection AddAgenticSystemCore(this IServiceCollection services)
+    {
+        services.AddSingleton<IMetaAgent, MetaAgentOrchestrator>();
+        services.AddSingleton<IContextAnalyzer, ContextAnalyzer>();
+        services.AddSingleton<IAgentFactory, HierarchicalAgentFactory>();
+        services.AddSingleton<ISessionStore, InMemorySessionStore>();
+        services.AddSingleton<ISessionManager, SessionManager>();
+        services.AddSingleton<ISkillManager, InMemorySkillManager>();
+        services.AddSingleton<IToolManager, InMemoryToolManager>();
+
+        // Multi-Tenant
+        services.AddSingleton<ITenantStore, InMemoryTenantStore>();
+        services.AddSingleton<ITenantResolver, TenantResolver>();
+        services.AddScoped<TenantContext>();
+
+        // Maturity Level Services
+        services.AddSingleton<IChunkLifecycleManager, ChunkLifecycleManager>();
+        services.AddSingleton<IContextBudgetManager, ContextBudgetManager>();
+        services.AddSingleton<ITaskPlanManager, TaskPlanManager>();
+        services.AddSingleton<IReflectionEngine, ReflectionEngine>();
+        services.AddSingleton<ICorrectionLoop, CorrectionLoopService>();
+        services.AddSingleton<IKnowledgeFreshnessService, KnowledgeFreshnessService>();
+        services.AddSingleton<IConfidenceScoreCalculator, ConfidenceScoreCalculator>();
+        services.AddSingleton<ISemanticCompressor, SemanticCompressorService>();
+        services.AddSingleton<IQueryCompressor, QueryCompressorService>();
+        services.AddSingleton<IUserPreferenceEngine, UserPreferenceEngine>();
+
+        // ML11-ML15 — Roadmap Services
+        services.AddSingleton<IDynamicAgentService, DynamicAgentService>();
+        services.AddSingleton<IHandoffManager, HandoffManager>();
+        services.AddSingleton<ISessionConsolidator, SessionConsolidator>();
+        services.AddSingleton<ISmartRouter, SmartRouter>();
+        services.AddSingleton<ISetupFlowManager, SetupFlowManager>();
+
+        // ML20 — Tool Availability Guard + Discovery
+        services.AddSingleton<IToolDiscoveryService, ToolDiscoveryService>();
+        services.AddSingleton<IToolAvailabilityGuard, ToolAvailabilityGuard>();
+
+        // ML21 — Scheduled Tasks & Trigger Engine
+        services.AddHttpClient();
+        services.AddSingleton<IScheduledTaskStore, InMemoryScheduledTaskStore>();
+        services.AddSingleton<IDeliveryChannel, WebhookDeliveryChannel>();
+        services.AddSingleton<IDeliveryChannel, EmailDeliveryChannel>();
+        services.AddSingleton<IDeliveryChannel, PushDeliveryChannel>();
+        services.AddSingleton<ITriggerEngine, TriggerEngine>();
+        services.AddSingleton<IScheduledTaskManager, ScheduledTaskManager>();
+        services.AddHostedService<ScheduledTaskHostedService>();
+
+        // ML22 — Config Management (Credentials, Paths, Settings)
+        services.AddSingleton<IConfigStore, InMemoryConfigStore>();
+        services.AddSingleton<IConfigEncryptionService>(sp =>
+        {
+            var config = sp.GetService<Microsoft.Extensions.Configuration.IConfiguration>();
+            var encryptionKey = config?["AgenticSystem:Encryption:Key"];
+            var env = sp.GetService<IHostEnvironment>();
+            if (string.IsNullOrEmpty(encryptionKey) && env?.EnvironmentName != "Development")
+                throw new InvalidOperationException("AgenticSystem:Encryption:Key must be configured in non-Development environments.");
+            return new AesConfigEncryptionService(encryptionKey);
+        });
+        services.AddSingleton<IConfigReloadNotifier, ConfigReloadNotifier>();
+        services.AddSingleton<IConfigManager, ConfigManager>();
+
+        // ML23 — Embedding Migration (Re-indexação)
+        services.AddSingleton<IEmbeddingModelStore, InMemoryEmbeddingModelStore>();
+        services.AddSingleton<IMigrationJobStore, InMemoryMigrationJobStore>();
+        services.AddSingleton<IEmbeddingGenerator, HttpEmbeddingGenerator>();
+        services.AddSingleton<IEmbeddingMigrationManager, EmbeddingMigrationManager>();
+
+        services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ServiceCollectionExtensions).Assembly));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registra tools e skills built-in no sistema.
+    /// Chamar após o build do ServiceProvider.
+    /// </summary>
+    public static IServiceProvider SeedAgenticDefaults(this IServiceProvider serviceProvider)
+    {
+        // Register built-in tools
+        var toolManager = serviceProvider.GetRequiredService<IToolManager>();
+        toolManager.RegisterTool(new DateTimeTool());
+        toolManager.RegisterTool(new CalculatorTool());
+        toolManager.RegisterTool(new FileSearchTool());
+
+        // Register built-in skills
+        var skillManager = serviceProvider.GetRequiredService<ISkillManager>();
+        skillManager.RegisterSkill(new CodingAssistantSkill());
+        skillManager.RegisterSkill(new ProductivitySkill());
+        skillManager.RegisterSkill(new CreativeWritingSkill());
+        skillManager.RegisterSkill(new DataAnalysisSkill());
+
+        return serviceProvider;
+    }
+}
