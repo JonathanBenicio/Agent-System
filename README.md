@@ -1,6 +1,19 @@
 # 🤖 Sistema Agentic Generalista
 
-> .NET 8 + Microsoft Agent Framework — multi-provider LLM, memória Obsidian + pgvector, orquestração inteligente. Inspirado no Baianinho-Labs.
+> .NET 8 + Microsoft.Extensions.AI + OpenAI SDK — multi-provider LLM, memória Obsidian + pgvector, orquestração inteligente. Inspirado no Baianinho-Labs.
+
+## Atualização Maio/2026 — Runtime V2
+
+- Execução centralizada em `AgentExecutionWorkflow` (orquestração operacional fora do `MetaAgentOrchestrator`)
+- Streaming fim a fim via SignalR (`ChatHub`) e SSE (`POST /api/chat/stream`)
+- MCP server HTTP autenticado em `/mcp` com tools para listar agents, consultar RAG, inventariar tools e executar o MetaAgent
+- Governança de tools com políticas de risco, aprovação e auditoria
+- Artefatos operacionais persistidos por sessão (plan, steps, review, handoff, tool outputs)
+- Human-in-the-loop para resposta final sensível (`final-approvals`)
+
+Referências:
+- [docs/USER-STORIES.md](docs/USER-STORIES.md)
+- [docs/TECHNICAL_ARCHITECTURE_GUIDE.md](docs/TECHNICAL_ARCHITECTURE_GUIDE.md)
 
 ## 🚀 Quick Start
 
@@ -16,6 +29,8 @@ curl -X POST https://localhost:5001/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Crie um lembrete para amanhã às 14h"}'
 ```
+
+**MCP server**: `https://localhost:5001/mcp` via Streamable HTTP/SSE, protegido pela autenticação padrão da API.
 
 ## 🧠 O que este sistema faz?
 
@@ -68,8 +83,8 @@ graph TD
 
 | Camada | Tecnologias |
 |--------|-------------|
-| **Core** | .NET 8, ASP.NET Core, SignalR, Microsoft Agent Framework |
-| **LLM** | OpenAI (GPT-4o), Google Gemini, Anthropic Claude, Ollama, Microsoft.Extensions.AI (IChatClient) |
+| **Core** | .NET 8, ASP.NET Core, SignalR, Microsoft.Extensions.AI |
+| **LLM** | OpenAI SDK 2.10 (GPT-4o), Google Gemini, Anthropic Claude, Ollama, M.E.AI.OpenAI (IChatClient bridge) |
 | **Embeddings** | OpenAI (text-embedding-3-small), Google (text-embedding-004), Ollama (nomic-embed-text), ML.NET+ONNX |
 | **Vision** | OpenAI Vision, Google Cloud Vision, Azure CV, Ollama llava |
 | **Memory** | Obsidian vault (human-readable), PostgreSQL + pgvector (semantic search) |
@@ -77,7 +92,19 @@ graph TD
 | **Document Pipeline** | Parsers (Markdown, PlainText, HTML), Hybrid Chunking, RAG + Re-Ranking |
 | **Gateway** | Circuit Breaker (pure C#), Rate Limiter, Cost Tracker, Health Monitor |
 
-## 📂 Estrutura do Projeto
+## � Segurança & Resiliência
+
+| Proteção | Implementação |
+|----------|---------------|
+| **Prompt Injection Protection** | Delimitadores `<user_input>` no ContextAnalyzer isolam input do usuário do system prompt |
+| **Rate Limiting per-Tenant** | Sliding window no `/api/chat` — retorna 429 Too Many Requests quando excedido |
+| **Correlation ID** | Header `X-Correlation-Id` em error responses para rastreabilidade de incidentes |
+| **Retry com Jitter Exponencial** | PostgresVectorStore e PostgresSessionStore — evita thundering herd |
+| **JSON Corrupted Data Safety** | try/catch `JsonException` em `GetAsync`/`ReadSessionsAsync` — dados corrompidos não crasham o sistema |
+| **Named Constants (Re-Ranker)** | `VectorScoreWeight`, `TfScoreWeight`, `ExactPhraseBonus`, `SectionMatchBonus`, `TagMatchBonus`, `OverlapPenalty` |
+| **Token Estimation Multilingual** | `CharsPerToken = 3.5` (otimizado para conteúdo multilingual, era 4.0) |
+
+## �📂 Estrutura do Projeto
 
 ```
 src/
@@ -105,7 +132,7 @@ src/
     ├── Memory/                     # pgvector
     └── MCP/                        # MCP plugins
 tests/
-└── AgenticSystem.Tests/            # 344 testes (Unit + Integration)
+└── AgenticSystem.Tests/            # 549 testes (Unit + Integration)
 docs/architecture/                  # Diagramas, pipeline, RAG flow
 data/obsidian-vault/                # Obsidian notes
 ```
@@ -337,7 +364,7 @@ Todo serviço externo passa pelo Gateway unificado com proteção e telemetria.
 
 | Categoria | Providers | Interface |
 |-----------|-----------|-----------|
-| LLM | OpenAI, Gemini, Claude, Ollama, M.E.AI (IChatClient) | `ILLMProvider` |
+| LLM | OpenAI SDK 2.10, Gemini, Claude, Ollama, M.E.AI (IChatClient) | `ILLMProvider` |
 | Embedding | OpenAI, Google, Ollama, ONNX | `IEmbeddingProvider` |
 | Vision | OpenAI, Google CV, Azure CV, Ollama | `IVisionProvider` |
 | Calendar | Google Calendar, Outlook | `ICalendarProvider` |
@@ -377,6 +404,8 @@ GET  /api/admin/mcp/plugins                    # Listar plugins
 POST /api/admin/mcp/plugins                    # Registrar plugin
 ```
 
+**MCP Server**: `/mcp` — expõe `list_agents`, `search_knowledge`, `list_runtime_tools` e `execute_agent`
+
 **SignalR Hub**: `/hubs/gateway` — eventos: `ServiceStatusChanged`, `CostAlertTriggered`, `CircuitStateChanged`, `RateLimitWarning`
 
 **Dashboard Web**: `https://localhost:5001/dashboard`
@@ -393,6 +422,7 @@ POST /api/admin/mcp/plugins                    # Registrar plugin
 | NoWait Pattern | ✅ |
 | Memory (Obsidian + pgvector) | ✅ |
 | MCP Plugin System | ✅ |
+| MCP Server Mode (HTTP `/mcp`) | ✅ |
 | External Service Gateway | ✅ |
 | Document Ingestion Pipeline | ✅ |
 | Hybrid Chunking (structural + semantic + size) | ✅ |
@@ -431,8 +461,8 @@ RawDocument → Parser → ParsedDocument → Chunking → Embedding → VectorS
 |-----------|---------------|--------|
 | **Parsers** | `MarkdownParser`, `PlainTextParser`, `HtmlParser` | Extração estrutural por tipo de documento |
 | **Chunking** | `HybridChunkingStrategy` | Chunking por seções com overlap, merge de chunks pequenos |
-| **Re-Ranker** | `HeuristicReRanker` | TF + phrase match + metadata scoring (sem LLM) |
-| **RAG Service** | `RAGService` | Retrieval agentic com estratégias por contexto |
+| **Re-Ranker** | `HeuristicReRanker` | TF + phrase match + metadata scoring via named constants (sem LLM) |
+| **RAG Service** | `RAGService` | Retrieval agentic com query variants, merge distinto e compressão semântica sob pressão de contexto |
 | **Pipeline** | `DocumentIngestionPipeline` | Orquestra parse → chunk → embed → upsert |
 
 ### Estratégias de Retrieval
@@ -504,7 +534,7 @@ kubectl apply -f k8s/
 - **Application Insights**: Telemetria automática
 - **Prometheus**: Métricas custom (requests, latency, costs)
 - **Grafana**: Dashboards de uso por agent
-- **Quality Score**: Avaliação contínua 0-10
+- **Quality Score**: Score contínuo 0-1 com baseline histórico e AI evaluation (`Fluency` + `RTC`) quando há contexto de sessão
 
 ## 🧪 Testes
 

@@ -21,8 +21,15 @@ public class TenantMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, TenantContext tenantContext, ITenantResolver tenantResolver)
+    public async Task InvokeAsync(HttpContext context, TenantContext tenantContext, ITenantResolver tenantResolver, ITenantContextAccessor tenantContextAccessor)
     {
+        using var tenantScope = tenantContextAccessor.BeginScope(tenantContext);
+
+        // Skip tenant resolution for unauthenticated endpoints (health, swagger, etc.)
+        var endpoint = context.GetEndpoint();
+        var hasAuthorize = endpoint?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>() is not null;
+        var allowAnonymous = endpoint?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute>() is not null;
+
         var tenantId = ResolveTenantId(context);
 
         if (!string.IsNullOrWhiteSpace(tenantId))
@@ -40,8 +47,21 @@ public class TenantMiddleware
             }
             else
             {
-                _logger.LogWarning("Tenant not found for id: {TenantId}. Using default.", tenantId);
+                _logger.LogWarning("Tenant not found for id: {TenantId}", tenantId);
+                if (hasAuthorize && !allowAnonymous)
+                {
+                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    await context.Response.WriteAsJsonAsync(new { error = "Tenant not found." });
+                    return;
+                }
             }
+        }
+        else if (hasAuthorize && !allowAnonymous && context.User?.Identity?.IsAuthenticated == true)
+        {
+            _logger.LogWarning("Authenticated request without tenant context.");
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { error = "Tenant identification required." });
+            return;
         }
 
         await _next(context);

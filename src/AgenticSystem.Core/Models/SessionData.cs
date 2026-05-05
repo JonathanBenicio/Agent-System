@@ -10,6 +10,7 @@ public class SessionData
     public DateTime StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }
     public bool IsConsolidated { get; set; }
+    public Dictionary<string, string> RuntimeSettings { get; set; } = new();
     public List<AgentEvent> Events { get; set; } = new();
     public SessionSummary? Summary { get; set; }
     public SessionInsights? Insights { get; set; }

@@ -15,16 +15,18 @@ public class EfSessionStore : ISessionStore
 
     public async Task SaveAsync(SessionData session, CancellationToken ct = default)
     {
-        var existing = await _db.Sessions
-            .AsNoTracking()
-            .AnyAsync(s => s.Id == session.Id, ct);
-
-        if (existing)
+        try
+        {
             _db.Sessions.Update(session);
-        else
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            // Detach the failed entity and retry as insert
+            _db.Entry(session).State = EntityState.Detached;
             _db.Sessions.Add(session);
-
-        await _db.SaveChangesAsync(ct);
+            await _db.SaveChangesAsync(ct);
+        }
     }
 
     public async Task<SessionData?> GetAsync(string sessionId, CancellationToken ct = default)

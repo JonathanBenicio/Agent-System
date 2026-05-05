@@ -29,7 +29,7 @@ export function ToolsPage() {
   const handleExecute = async (id: string) => {
     setExecutingId(id)
     try {
-      const r = await executeTool(id, { parameters: {} })
+      const r = await executeTool(id, { action: '', parameters: {} })
       setResult(r)
       addToast(r.success ? 'Tool executada com sucesso' : 'Tool retornou erro', r.success ? 'success' : 'error')
     } catch {
@@ -125,7 +125,10 @@ export function ToolsPage() {
               <Badge variant={result.success ? 'success' : 'danger'}>{result.success ? 'Sucesso' : 'Erro'}</Badge>
             </div>
             <pre className="text-xs text-zinc-400 bg-zinc-950 border border-zinc-800 rounded-lg p-3 overflow-x-auto whitespace-pre-wrap">
-              {typeof result.output === 'string' ? result.output : JSON.stringify(result.output, null, 2)}
+              {(() => {
+                const output = result.output ?? result.data
+                return typeof output === 'string' ? output : JSON.stringify(output, null, 2) ?? ''
+              })()}
             </pre>
           </div>
         )}

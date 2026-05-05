@@ -203,7 +203,7 @@ O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou d
 | **Taxa de fallback** | Frequência de troca automática de provedor |
 | **Correções humanas/dia** | Volume de ajustes manuais (quanto menor, melhor) |
 | **Regras ativas** | Quantidade de aprendizados extraídos de correções |
-| **Cobertura de testes** | 315 testes automatizados cobrindo todos os componentes |
+| **Cobertura de testes** | 549 testes automatizados cobrindo todos os componentes |
 
 ---
 
@@ -219,7 +219,7 @@ O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou d
 | Gateway com proteção e monitoramento | ✅ Ativo |
 | Dashboard web de administração | ✅ Disponível |
 | Deploy via Docker/Kubernetes | ✅ Pronto |
-| 315 testes automatizados | ✅ Passando |
+| 549 testes automatizados | ✅ Passando |
 
 ---
 

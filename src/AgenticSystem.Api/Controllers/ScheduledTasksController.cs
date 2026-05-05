@@ -65,11 +65,21 @@ public class ScheduledTasksController : ControllerBase
 
         if (!string.IsNullOrWhiteSpace(request.CronExpression))
         {
-            task = await _taskManager.RegisterAsync(request.Name, request.CronExpression, request.AssociatedRule, ct);
+            task = await _taskManager.RegisterAsync(
+                request.Name,
+                request.CronExpression,
+                request.AssociatedRule,
+                request.MaxRetryAttempts,
+                ct);
         }
         else if (request.IntervalSeconds > 0)
         {
-            task = await _taskManager.RegisterAsync(request.Name, TimeSpan.FromSeconds(request.IntervalSeconds), request.AssociatedRule, ct);
+            task = await _taskManager.RegisterAsync(
+                request.Name,
+                TimeSpan.FromSeconds(request.IntervalSeconds),
+                request.AssociatedRule,
+                request.MaxRetryAttempts,
+                ct);
         }
         else
         {
@@ -323,6 +333,7 @@ public class CreateTaskRequest
     public string Name { get; set; } = string.Empty;
     public string? CronExpression { get; set; }
     public int IntervalSeconds { get; set; }
+    public int MaxRetryAttempts { get; set; } = 3;
     public TriggerRule? AssociatedRule { get; set; }
 }
 

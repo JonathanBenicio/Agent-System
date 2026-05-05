@@ -496,13 +496,19 @@ public class ScheduledTask
     public string Schedule { get; set; } = string.Empty; // CRON ou intervalo
     public TimeSpan? Interval { get; set; }
     public ScheduledTaskStatus Status { get; set; } = ScheduledTaskStatus.Active;
+    public int MaxRetryAttempts { get; set; } = 3;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? NextRunAt { get; set; }
     public DateTime? LastRunAt { get; set; }
+    public DateTime? LastFailedAt { get; set; }
     public int TotalExecutions { get; set; }
     public int FailedExecutions { get; set; }
+    public int ConsecutiveFailures { get; set; }
+    public string? DeadLetterReason { get; set; }
     public TriggerRule? AssociatedRule { get; set; }
     public string? TimeZoneId { get; set; }
+    public List<string> DependencyTaskIds { get; set; } = new();
+    public List<string> ContinuationTaskIds { get; set; } = new();
 }
 
 /// <summary>
@@ -512,9 +518,11 @@ public class TaskExecution
 {
     public string ExecutionId { get; set; } = Guid.NewGuid().ToString();
     public string TaskId { get; set; } = string.Empty;
+    public int AttemptNumber { get; set; } = 1;
     public DateTime StartedAt { get; set; } = DateTime.UtcNow;
     public DateTime? CompletedAt { get; set; }
     public bool Success { get; set; }
+    public bool DeadLettered { get; set; }
     public string? ErrorMessage { get; set; }
     public TimeSpan Duration => CompletedAt.HasValue ? CompletedAt.Value - StartedAt : TimeSpan.Zero;
 }

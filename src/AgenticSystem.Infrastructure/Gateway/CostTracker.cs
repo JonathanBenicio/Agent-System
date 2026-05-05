@@ -1,12 +1,13 @@
 using System.Collections.Concurrent;
+using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Infrastructure.Gateway;
 
 /// <summary>
-/// Rastreamento de custos por serviço, categoria e tenant.
+/// Rastreamento de custos por serviço, categoria e tenant (implementação in-memory).
 /// </summary>
-public class CostTracker
+public class CostTracker : ICostTracker
 {
     private readonly ConcurrentDictionary<string, ServiceCostData> _serviceCosts = new();
     private readonly decimal _defaultDailyBudget;

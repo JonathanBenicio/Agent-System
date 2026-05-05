@@ -87,7 +87,7 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
           <Field label="Tier">
             <select
               value={form.tier}
-              onChange={e => setForm(prev => ({ ...prev, tier: Number(e.target.value) }))}
+              onChange={e => setForm(prev => ({ ...prev, tier: Number(e.target.value) as AgentSpecification['tier'] }))}
               className="input"
             >
               {[0, 1, 2, 3].map(t => (

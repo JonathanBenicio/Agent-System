@@ -100,11 +100,16 @@ public class ContextBudgetManager : IContextBudgetManager
         var trimmed = new RAGContext
         {
             Query = ragContext.Query,
+            EffectiveQuery = ragContext.EffectiveQuery,
+            QueryVariants = new List<string>(ragContext.QueryVariants),
             StrategyUsed = ragContext.StrategyUsed,
             RetrievalTime = ragContext.RetrievalTime,
             ReRankTime = ragContext.ReRankTime,
             TotalTime = ragContext.TotalTime,
-            CandidatesRetrieved = ragContext.CandidatesRetrieved
+            CandidatesRetrieved = ragContext.CandidatesRetrieved,
+            SemanticSummary = ragContext.SemanticSummary,
+            UsedSemanticCompression = ragContext.UsedSemanticCompression,
+            OriginalContextTokens = ragContext.OriginalContextTokens
         };
 
         var tokensRemaining = budget.MaxTokens;

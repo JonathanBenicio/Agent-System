@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Cpu, TestTube, RefreshCw, Check, X, Star } from 'lucide-react'
+import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { BrainCircuit, Cpu, TestTube, RefreshCw, Check, X, Star, WandSparkles } from 'lucide-react'
 import { useLLMProviders } from '@/hooks/useLLMProviders'
 import { PageLoading, PageError } from '@/components/shared/Loading'
 import { Badge } from '@/components/shared/Badge'
@@ -8,11 +8,31 @@ import { cn } from '@/lib/utils'
 import type { LLMProviderInfo } from '@/types/api'
 
 export function ProvidersPage() {
-  const { providers, loading, error, refresh, updateProvider, testProvider } = useLLMProviders()
+  const {
+    providers,
+    defaultProvider,
+    defaultModel,
+    loading,
+    error,
+    refresh,
+    updateProvider,
+    updateDefaultSelection,
+    testProvider,
+  } = useLLMProviders()
   const { addToast } = useToast()
   const [testing, setTesting] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
-  const [editForm, setEditForm] = useState({ apiKey: '', isEnabled: false, priority: 0 })
+  const [editForm, setEditForm] = useState({ apiKey: '', defaultModel: '', isEnabled: false, priority: 0 })
+  const [defaultSelection, setDefaultSelection] = useState({ providerName: '', model: '' })
+
+  useEffect(() => {
+    setDefaultSelection({ providerName: defaultProvider, model: defaultModel })
+  }, [defaultModel, defaultProvider])
+
+  const selectedDefaultProvider = useMemo(
+    () => providers.find((provider: LLMProviderInfo) => provider.name === defaultSelection.providerName) ?? providers[0],
+    [defaultSelection.providerName, providers],
+  )
 
   if (loading) return <PageLoading />
   if (error) return <PageError message={error} onRetry={refresh} />
@@ -33,16 +53,18 @@ export function ProvidersPage() {
 
   const handleEdit = (p: LLMProviderInfo) => {
     setEditing(p.name)
-    setEditForm({ apiKey: '', isEnabled: p.isEnabled, priority: p.priority })
+    setEditForm({ apiKey: '', defaultModel: p.defaultModel, isEnabled: p.isEnabled, priority: p.priority })
   }
 
   const handleSave = async (name: string) => {
     try {
       await updateProvider(name, {
         apiKey: editForm.apiKey || undefined,
-        isEnabled: editForm.isEnabled,
+        defaultModel: editForm.defaultModel || undefined,
+        enabled: editForm.isEnabled,
         priority: editForm.priority,
       })
+      window.dispatchEvent(new Event('agentic:llm-config-updated'))
       addToast('Provider atualizado', 'success')
       setEditing(null)
     } catch {
@@ -50,11 +72,31 @@ export function ProvidersPage() {
     }
   }
 
+  const handleSaveDefaultSelection = async () => {
+    if (!defaultSelection.providerName) {
+      addToast('Selecione um provider default antes de salvar', 'info')
+      return
+    }
+
+    try {
+      await updateDefaultSelection(defaultSelection)
+      window.dispatchEvent(new Event('agentic:llm-config-updated'))
+      addToast('IA default do chat atualizada', 'success')
+    } catch {
+      addToast('Erro ao atualizar IA default do chat', 'error')
+    }
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-5xl mx-auto px-6 py-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold text-zinc-100">LLM Providers ({providers.length})</h1>
+          <div>
+            <h1 className="text-xl font-semibold text-zinc-100">Configuração de IAs ({providers.length})</h1>
+            <p className="mt-1 text-sm text-zinc-400">
+              Gerencie quais IAs ficam disponíveis e qual combinação provider + modelo abre pré-selecionada no chat.
+            </p>
+          </div>
           <button
             onClick={refresh}
             className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800"
@@ -62,6 +104,67 @@ export function ProvidersPage() {
             <RefreshCw className="w-4 h-4" />
             Atualizar
           </button>
+        </div>
+
+        <div className="rounded-2xl border border-zinc-800 bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(168,85,247,0.16),_transparent_34%),#09090b] p-5">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <div className="flex items-center gap-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-sky-900/70 bg-sky-950/60 text-sky-300">
+                  <BrainCircuit className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-semibold text-zinc-100">IA padrão do chat</h2>
+                  <p className="text-xs text-zinc-400">Define a seleção inicial exibida para qualquer conversa nova.</p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs text-zinc-400">Provider default</span>
+                  <select
+                    value={defaultSelection.providerName}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) => {
+                      const provider = providers.find((item: LLMProviderInfo) => item.name === event.target.value)
+                      setDefaultSelection({
+                        providerName: event.target.value,
+                        model: provider?.defaultModel ?? provider?.models[0] ?? '',
+                      })
+                    }}
+                    className="input mt-1"
+                  >
+                    {providers.filter((provider: LLMProviderInfo) => provider.isEnabled).map((provider: LLMProviderInfo) => (
+                      <option key={provider.name} value={provider.name}>{provider.name}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs text-zinc-400">Modelo default</span>
+                  <select
+                    value={defaultSelection.model}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) => setDefaultSelection(prev => ({ ...prev, model: event.target.value }))}
+                    className="input mt-1"
+                  >
+                    {(selectedDefaultProvider?.models ?? []).map((model: string) => (
+                      <option key={model} value={model}>{model}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {defaultProvider ? <Badge variant="success">Provider atual: {defaultProvider}</Badge> : null}
+              {defaultModel ? <Badge variant="violet">Modelo atual: {defaultModel}</Badge> : null}
+              <button
+                onClick={handleSaveDefaultSelection}
+                disabled={!defaultSelection.providerName}
+                className="inline-flex items-center gap-2 rounded-xl bg-sky-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-500"
+              >
+                <WandSparkles className="h-4 w-4" />
+                Salvar IA padrão
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -140,7 +243,19 @@ export function ProvidersPage() {
                       placeholder="••••••••"
                     />
                   </label>
-                  <div className="flex gap-4">
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,140px)_auto]">
+                    <label className="block flex-1">
+                      <span className="text-xs text-zinc-400">Modelo padrão do provider</span>
+                      <select
+                        value={editForm.defaultModel}
+                        onChange={e => setEditForm(prev => ({ ...prev, defaultModel: e.target.value }))}
+                        className="input mt-1"
+                      >
+                        {p.models.map(model => (
+                          <option key={model} value={model}>{model}</option>
+                        ))}
+                      </select>
+                    </label>
                     <label className="block flex-1">
                       <span className="text-xs text-zinc-400">Prioridade</span>
                       <input

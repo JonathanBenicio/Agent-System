@@ -11,9 +11,10 @@ Feature: Mensagem vai direto ao agent selecionado
 
   Scenario: Mensagem via SignalR é enviada com targetAgent
     Given o usuário está na página "/chat/SecurityAnalyst"
-    And a conexão SignalR está estabelecida
+    And a conexão SignalR está estabelecida e autenticada
     When o usuário envia a mensagem "Analise vulnerabilidades no endpoint /api/users"
-    Then o hub SignalR recebe "SendMessage" com userId, mensagem e targetAgent "SecurityAnalyst"
+    Then o hub SignalR recebe "SendMessage" com mensagem e targetAgent "SecurityAnalyst"
+    And o userId é extraído do ClaimsPrincipal (não enviado pelo cliente)
     And o MetaAgentOrchestrator chama ProcessDirectRequestAsync com targetAgent "SecurityAnalyst"
     And a resposta é do agent "SecurityAnalyst" sem passar pela análise de contexto
 

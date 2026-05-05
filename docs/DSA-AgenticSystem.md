@@ -120,7 +120,9 @@ graph LR
 | Runtime | .NET | 8.0 |
 | Web Framework | ASP.NET Core | 8.x |
 | Real-time | SignalR | 8.x |
-| LLM Abstraction | Microsoft.Extensions.AI (IChatClient) | — |
+| LLM SDK | OpenAI (oficial) | 2.10 |
+| LLM Abstraction | Microsoft.Extensions.AI (IChatClient) | 9.6 / 10.5 |
+| LLM Bridge | Microsoft.Extensions.AI.OpenAI | 10.5.1 |
 | ORM/Data | Npgsql + pgvector | — |
 | Testes | xUnit + Moq + FluentAssertions | — |
 | Auth | API Key (middleware) | — |
@@ -247,9 +249,13 @@ graph TD
 | Autenticação | API Key via middleware (`X-Api-Key` header) |
 | Secrets | Variáveis de ambiente ou appsettings.json (nunca em código) |
 | HTTPS | Obrigatório em todos os endpoints |
-| Rate Limiting | Por provider e por IP (Service Gateway) |
+| Rate Limiting | Por provider (Service Gateway) + por tenant no endpoint `/api/chat` (sliding window, 429) |
 | Cost Control | Budget diário com alerta e bloqueio |
 | Input Validation | FluentValidation em requests |
+| Prompt Injection Protection | Delimitadores `<user_input>` no ContextAnalyzer isolam input do usuário do system prompt |
+| Correlation ID | Header `X-Correlation-Id` em error responses para rastreabilidade de incidentes |
+| Retry com Jitter | Exponential backoff + jitter em PostgresVectorStore e PostgresSessionStore (evita thundering herd) |
+| JSON Safety | try/catch `JsonException` em sessões — dados corrompidos não crasham o sistema |
 | CORS | Configurado para frontend origin |
 | Análise Estática | Checkmarx (SAST) no pipeline CI |
 | Scan de Vulnerabilidades | Qualys |
@@ -333,7 +339,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 
 | Tipo | Quantidade | Ferramenta | Localização |
 |------|:----------:|-----------|-------------|
-| Unitários + Integração | 450 | xUnit | `tests/AgenticSystem.Tests/` |
+| Unitários + Integração | 549 | xUnit | `tests/AgenticSystem.Tests/` |
 | BDD (cenários) | 17 + 6 features | Gherkin | `docs/bdd/` |
 | API E2E | 14 | Cypress | `frontend/cypress/e2e/` |
 | Performance | 1 script | K6 | `frontend/k6/` |
@@ -353,6 +359,19 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 ---
 
 ## 13. Próximos Passos
+
+### Concluídos (Architectural Review)
+
+- [x] Proteção contra prompt injection (`<user_input>` delimiters no ContextAnalyzer)
+- [x] Rate limiting per-tenant no `/api/chat` (sliding window, 429)
+- [x] Correlation ID (`X-Correlation-Id`) em error responses
+- [x] Retry com jitter exponencial em PostgresVectorStore e PostgresSessionStore
+- [x] JSON corrupted data safety no SessionStore
+- [x] Named constants no HeuristicReRanker (6 magic numbers extraídos)
+- [x] Token estimation multilingual (`CharsPerToken = 3.5`)
+- [x] 11 novos testes cobrindo fixes de segurança e qualidade (549 total)
+
+### Pendentes
 
 - [ ] Deploy em ambiente de homologação (Kubernetes)
 - [ ] Integração com Dynatrace APM

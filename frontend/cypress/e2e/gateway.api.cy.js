@@ -1,19 +1,20 @@
 /**
  * @tags @smoke @api @gateway
  * Testes de API para Gateway Dashboard
+ * Contrato alinhado com GatewayController.cs
  */
 
 describe('Gateway API', () => {
   const baseUrl = Cypress.env('API_BASE_URL') || ''
 
-  it('@smoke deve retornar dashboard com métricas', () => {
+  it('@smoke deve retornar dashboard consolidado', () => {
     cy.request('GET', `${baseUrl}/api/admin/gateway/dashboard`).then((response) => {
       expect(response.status).to.eq(200)
-      expect(response.body).to.have.property('totalAgents').that.is.a('number')
-      expect(response.body).to.have.property('totalTools').that.is.a('number')
-      expect(response.body).to.have.property('totalPlugins').that.is.a('number')
-      expect(response.body).to.have.property('activeServices').that.is.a('number')
-      expect(response.body.totalAgents).to.be.at.least(0)
+      expect(response.body).to.have.property('health')
+      expect(response.body).to.have.property('costs')
+      expect(response.body).to.have.property('services').that.is.an('array')
+      expect(response.body).to.have.property('metrics')
+      expect(response.body).to.have.property('timestamp').that.is.a('string')
     })
   })
 
@@ -24,7 +25,9 @@ describe('Gateway API', () => {
       if (response.body.length > 0) {
         const service = response.body[0]
         expect(service).to.have.property('name').that.is.a('string')
-        expect(service).to.have.property('enabled').that.is.a('boolean')
+        expect(service).to.have.property('isEnabled').that.is.a('boolean')
+        expect(service).to.have.property('isHealthy').that.is.a('boolean')
+        expect(service).to.have.property('successRate').that.is.a('number')
       }
     })
   })
@@ -32,8 +35,12 @@ describe('Gateway API', () => {
   it('@regression deve retornar health report', () => {
     cy.request('GET', `${baseUrl}/api/admin/gateway/health`).then((response) => {
       expect(response.status).to.eq(200)
-      expect(response.body).to.have.property('status').that.is.a('string')
-      expect(['Healthy', 'Degraded', 'Unhealthy']).to.include(response.body.status)
+      expect(response.body).to.have.property('overallHealthy').that.is.a('boolean')
+      expect(response.body).to.have.property('totalServices').that.is.a('number')
+      expect(response.body).to.have.property('healthyServices').that.is.a('number')
+      expect(response.body).to.have.property('unhealthyServices').that.is.a('number')
+      expect(response.body).to.have.property('services').that.is.an('array')
+      expect(response.body).to.have.property('timestamp').that.is.a('string')
     })
   })
 
@@ -45,10 +52,22 @@ describe('Gateway API', () => {
     })
   })
 
+  it('@regression deve retornar serviço específico por nome', () => {
+    cy.request('GET', `${baseUrl}/api/admin/gateway/services`).then((listResponse) => {
+      if (listResponse.body.length > 0) {
+        const name = listResponse.body[0].name
+        cy.request('GET', `${baseUrl}/api/admin/gateway/services/${name}`).then((response) => {
+          expect(response.status).to.eq(200)
+          expect(response.body).to.have.property('name', name)
+        })
+      }
+    })
+  })
+
   it('@error deve retornar 404 para serviço inexistente', () => {
     cy.request({
-      method: 'POST',
-      url: `${baseUrl}/api/admin/gateway/services/servico-inexistente/enable`,
+      method: 'GET',
+      url: `${baseUrl}/api/admin/gateway/services/servico-inexistente`,
       failOnStatusCode: false
     }).then((response) => {
       expect(response.status).to.eq(404)

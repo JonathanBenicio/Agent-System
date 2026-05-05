@@ -12,6 +12,11 @@ public interface IVectorStore
     /// Insere ou atualiza documento com embedding
     /// </summary>
     Task UpsertAsync(EmbeddingDocument document);
+
+    /// <summary>
+    /// Remove um documento pelo id, opcionalmente restringindo à coleção informada.
+    /// </summary>
+    Task DeleteAsync(string id, string? collection = null);
     
     /// <summary>
     /// Busca semântica por similaridade

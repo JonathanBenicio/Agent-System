@@ -1,8 +1,9 @@
+using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Services;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
-using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.Services;
 
 namespace AgenticSystem.Tests;
 
@@ -75,6 +76,45 @@ public class InMemoryToolManagerTests
     }
 
     [Fact]
+    public async Task ExecuteToolAsync_WithExplicitVersion_UsesRequestedVariant()
+    {
+        _sut.RegisterToolVariant("search", new FakeTool("search-v1", "v1"), "1.0.0", isDefault: true);
+        _sut.RegisterToolVariant("search", new FakeTool("search-v2", "v2"), "2.0.0", variantName: "beta", rolloutPercentage: 0);
+
+        var result = await _sut.ExecuteToolAsync("search", new ToolInput
+        {
+            Action = "get",
+            Parameters = new Dictionary<string, object>
+            {
+                ["toolVersion"] = "2.0.0"
+            },
+            UserId = "user-1"
+        });
+
+        result.Success.Should().BeTrue();
+        result.Data.Should().Be("v2");
+        result.Metadata.Should().ContainKey("toolVersion");
+        result.Metadata!["toolVersion"].Should().Be("2.0.0");
+    }
+
+    [Fact]
+    public async Task ExecuteToolAsync_WithRolloutCandidate_UsesExperimentalVariantWhenBucketMatches()
+    {
+        _sut.RegisterToolVariant("search", new FakeTool("search-v1", "stable"), "1.0.0", isDefault: true);
+        _sut.RegisterToolVariant("search", new FakeTool("search-v2", "experiment"), "2.0.0", variantName: "experiment", rolloutPercentage: 100);
+
+        var result = await _sut.ExecuteToolAsync("search", new ToolInput
+        {
+            Action = "get",
+            UserId = "user-42"
+        });
+
+        result.Success.Should().BeTrue();
+        result.Data.Should().Be("experiment");
+        result.Metadata!["toolVariant"].Should().Be("experiment");
+    }
+
+    [Fact]
     public void UnregisterTool_RemovesExistingTool()
     {
         _sut.RegisterTool(CreateMockTool("t1", "Tool 1", ToolCategory.Tasks));
@@ -118,9 +158,27 @@ public class InMemoryToolManagerTests
         var tool = Substitute.For<ITool>();
         tool.Id.Returns(id);
         tool.Name.Returns(name);
+        tool.Description.Returns(name);
         tool.Category.Returns(category);
         tool.RequiresAuth.Returns(false);
         tool.IsAvailableAsync(Arg.Any<CancellationToken>()).Returns(true);
+        tool.ExecuteAsync(Arg.Any<ToolInput>(), Arg.Any<CancellationToken>())
+            .Returns(ToolResult.Ok(name));
         return tool;
+    }
+
+    private sealed class FakeTool(string id, string payload) : ITool
+    {
+        public string Id => id;
+        public string Name => id;
+        public string Description => id;
+        public ToolCategory Category => ToolCategory.Search;
+        public bool RequiresAuth => false;
+
+        public Task<ToolResult> ExecuteAsync(ToolInput input, CancellationToken ct = default)
+            => Task.FromResult(ToolResult.Ok(payload));
+
+        public Task<bool> IsAvailableAsync(CancellationToken ct = default)
+            => Task.FromResult(true);
     }
 }

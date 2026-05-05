@@ -2,12 +2,14 @@
 // Enums
 // ══════════════════════════════════════
 
-export enum AgentTier {
-  Chief = 0,
-  Master = 1,
-  Specialist = 2,
-  Support = 3,
-}
+export const AgentTier = {
+  Chief: 0,
+  Master: 1,
+  Specialist: 2,
+  Support: 3,
+} as const
+
+export type AgentTier = (typeof AgentTier)[keyof typeof AgentTier]
 
 export const TierLabels: Record<number, string> = {
   0: 'Chief',
@@ -23,11 +25,13 @@ export const TierColors: Record<number, string> = {
   3: 'bg-amber-600',
 }
 
-export enum CircuitState {
-  Closed = 'Closed',
-  Open = 'Open',
-  HalfOpen = 'HalfOpen',
-}
+export const CircuitState = {
+  Closed: 'Closed',
+  Open: 'Open',
+  HalfOpen: 'HalfOpen',
+} as const
+
+export type CircuitState = (typeof CircuitState)[keyof typeof CircuitState]
 
 // ══════════════════════════════════════
 // Agent Models
@@ -202,9 +206,15 @@ export interface LLMProviderInfo {
   isEnabled: boolean
   priority: number
   hasApiKey: boolean
-  isDefault?: boolean
-  isAvailable?: boolean
-  models?: string[]
+  isDefault: boolean
+  isAvailable: boolean
+  models: string[]
+}
+
+export interface LLMConfigurationInfo {
+  defaultProvider: string
+  defaultModel: string
+  providers: LLMProviderInfo[]
 }
 
 export interface LLMProviderSummary {
@@ -219,6 +229,11 @@ export interface UpdateProviderRequest {
   defaultModel?: string
   enabled?: boolean
   priority?: number
+}
+
+export interface UpdateDefaultLlmSelectionRequest {
+  providerName: string
+  model?: string
 }
 
 // ══════════════════════════════════════
@@ -272,22 +287,48 @@ export interface GatewaySettings {
   defaultFailureThreshold: number
   defaultBreakDurationSeconds: number
   defaultRequestsPerMinute: number
-  maxRetryAttempts: number
-  circuitBreakerThreshold: number
-  circuitBreakerDuration: number
-  dailyBudget: number
-  defaultTimeout: number
-  enableCostTracking: boolean
 }
 
 export interface MemorySettings {
   obsidianVaultPath: string
   vectorStoreType: string
   connectionString?: string
-  maxSessions: number
-  maxHistoryPerSession: number
-  sessionTimeoutMinutes: number
-  enablePersistence: boolean
+}
+
+export interface RerankingSettings {
+  enabled: boolean
+  useDedicatedProvider: boolean
+  dedicatedProvider: string
+  dedicatedProviderBaseUrl: string
+  dedicatedProviderModel: string
+  hasDedicatedProviderApiKey: boolean
+  dedicatedProviderApiKey?: string
+  dedicatedProviderTimeoutSeconds: number
+  localOnnxModelPath?: string
+  localOnnxVocabularyPath?: string
+  localOnnxMaxSequenceLength: number
+  localOnnxMaxQueryTokens: number
+  localOnnxLowerCase: boolean
+  localOnnxInputIdsName: string
+  localOnnxAttentionMaskName: string
+  localOnnxTokenTypeIdsName: string
+  localOnnxOutputName: string
+  localOnnxPositiveLabelIndex: number
+  useEmbeddingReRanking: boolean
+  useLlmReRanking: boolean
+  candidatePoolSize: number
+  minCandidateCountForLlm: number
+  maxSnippetCharacters: number
+  maxOutputTokens: number
+  temperature: number
+  heuristicConfidenceThreshold: number
+  heuristicConfidenceGap: number
+  neuralScoreWeight: number
+  llmScoreWeight: number
+  hasUploadedLocalOnnxModel: boolean
+  uploadedLocalOnnxModelFileName?: string
+  hasUploadedLocalOnnxVocabulary: boolean
+  uploadedLocalOnnxVocabularyFileName?: string
 }
 
 export interface ProviderSettingsView {
@@ -305,6 +346,7 @@ export interface SystemSettings {
   claude: ProviderSettingsView
   gateway: GatewaySettings
   memory: MemorySettings
+  reranking: RerankingSettings
 }
 
 // ══════════════════════════════════════
@@ -319,34 +361,42 @@ export interface ErrorResponse {
 // Scheduled Tasks & Triggers (ML21)
 // ══════════════════════════════════════
 
-export enum ScheduledTaskStatus {
-  Active = 'Active',
-  Paused = 'Paused',
-  Completed = 'Completed',
-  Failed = 'Failed',
-  Disabled = 'Disabled',
-}
+export const ScheduledTaskStatus = {
+  Active: 'Active',
+  Paused: 'Paused',
+  Completed: 'Completed',
+  Failed: 'Failed',
+  Disabled: 'Disabled',
+} as const
 
-export enum DeliveryStatus {
-  Success = 'Success',
-  Failed = 'Failed',
-  Retrying = 'Retrying',
-  Skipped = 'Skipped',
-}
+export type ScheduledTaskStatus = (typeof ScheduledTaskStatus)[keyof typeof ScheduledTaskStatus]
 
-export enum TriggerSourceType {
-  Http = 'Http',
-  Queue = 'Queue',
-  FileSystem = 'FileSystem',
-  Database = 'Database',
-}
+export const DeliveryStatus = {
+  Success: 'Success',
+  Failed: 'Failed',
+  Retrying: 'Retrying',
+  Skipped: 'Skipped',
+} as const
 
-export enum ConditionType {
-  JsonPath = 'JsonPath',
-  Threshold = 'Threshold',
-  Regex = 'Regex',
-  Contains = 'Contains',
-}
+export type DeliveryStatus = (typeof DeliveryStatus)[keyof typeof DeliveryStatus]
+
+export const TriggerSourceType = {
+  Http: 'Http',
+  Queue: 'Queue',
+  FileSystem: 'FileSystem',
+  Database: 'Database',
+} as const
+
+export type TriggerSourceType = (typeof TriggerSourceType)[keyof typeof TriggerSourceType]
+
+export const ConditionType = {
+  JsonPath: 'JsonPath',
+  Threshold: 'Threshold',
+  Regex: 'Regex',
+  Contains: 'Contains',
+} as const
+
+export type ConditionType = (typeof ConditionType)[keyof typeof ConditionType]
 
 export interface TriggerSource {
   type: TriggerSourceType

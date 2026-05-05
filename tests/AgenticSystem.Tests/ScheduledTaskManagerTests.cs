@@ -36,6 +36,7 @@ public class ScheduledTaskManagerTests
         task.Name.Should().Be("health-check");
         task.Schedule.Should().Be("*/5 * * * *");
         task.Status.Should().Be(ScheduledTaskStatus.Active);
+        task.MaxRetryAttempts.Should().Be(3);
         task.NextRunAt.Should().NotBeNull();
         await _store.Received(1).SaveTaskAsync(Arg.Any<ScheduledTask>(), Arg.Any<CancellationToken>());
     }
@@ -104,6 +105,27 @@ public class ScheduledTaskManagerTests
     }
 
     [Fact]
+    public async Task ResumeAsync_FailedTask_ClearsDeadLetterState()
+    {
+        var task = new ScheduledTask
+        {
+            Id = "t1",
+            Name = "test",
+            Status = ScheduledTaskStatus.Failed,
+            Interval = TimeSpan.FromMinutes(5),
+            ConsecutiveFailures = 3,
+            DeadLetterReason = "boom"
+        };
+        _store.GetTaskAsync("t1", Arg.Any<CancellationToken>()).Returns(task);
+
+        await _sut.ResumeAsync("t1");
+
+        task.Status.Should().Be(ScheduledTaskStatus.Active);
+        task.ConsecutiveFailures.Should().Be(0);
+        task.DeadLetterReason.Should().BeNull();
+    }
+
+    [Fact]
     public async Task RemoveAsync_TaskWithRule_RemovesBothTaskAndRule()
     {
         var rule = CreateTestRule();
@@ -158,8 +180,39 @@ public class ScheduledTaskManagerTests
 
         execution.Success.Should().BeFalse();
         execution.ErrorMessage.Should().Contain("Connection refused");
+        execution.DeadLettered.Should().BeFalse();
         task.FailedExecutions.Should().Be(1);
+        task.ConsecutiveFailures.Should().Be(1);
+        task.Status.Should().Be(ScheduledTaskStatus.Active);
+        task.NextRunAt.Should().NotBeNull();
         task.TotalExecutions.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenFailuresReachRetryLimit_MarksTaskAsDeadLettered()
+    {
+        var rule = CreateTestRule();
+        var task = new ScheduledTask
+        {
+            Id = "t1",
+            Name = "test",
+            Status = ScheduledTaskStatus.Active,
+            AssociatedRule = rule,
+            Interval = TimeSpan.FromMinutes(5),
+            MaxRetryAttempts = 2,
+            ConsecutiveFailures = 1
+        };
+        _store.GetTaskAsync("t1", Arg.Any<CancellationToken>()).Returns(task);
+        _triggerEngine.EvaluateAsync(rule, Arg.Any<CancellationToken>())
+            .ThrowsAsync(new HttpRequestException("still down"));
+
+        var execution = await _sut.ExecuteAsync("t1");
+
+        execution.Success.Should().BeFalse();
+        execution.DeadLettered.Should().BeTrue();
+        task.Status.Should().Be(ScheduledTaskStatus.Failed);
+        task.DeadLetterReason.Should().Be("still down");
+        task.NextRunAt.Should().BeNull();
     }
 
     [Fact]

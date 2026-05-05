@@ -13,6 +13,7 @@ public class CircuitBreaker
     private readonly ConcurrentQueue<DateTime> _failures = new();
     private CircuitState _state = CircuitState.Closed;
     private DateTime _openedAt = DateTime.MinValue;
+    private int _consecutiveOpens;
     private readonly object _lock = new();
 
     public CircuitBreaker(CircuitBreakerConfig config)
@@ -26,10 +27,14 @@ public class CircuitBreaker
         {
             lock (_lock)
             {
-                if (_state == CircuitState.Open &&
-                    DateTime.UtcNow - _openedAt >= _config.BreakDuration)
+                if (_state == CircuitState.Open)
                 {
-                    _state = CircuitState.HalfOpen;
+                    var backoffMultiplier = Math.Min(_consecutiveOpens, 5);
+                    var effectiveDuration = _config.BreakDuration * Math.Pow(2, backoffMultiplier - 1);
+                    if (DateTime.UtcNow - _openedAt >= effectiveDuration)
+                    {
+                        _state = CircuitState.HalfOpen;
+                    }
                 }
                 return _state;
             }
@@ -49,6 +54,7 @@ public class CircuitBreaker
             if (_state == CircuitState.HalfOpen)
             {
                 _state = CircuitState.Closed;
+                _consecutiveOpens = 0;
                 while (_failures.TryDequeue(out _)) { }
             }
         }
@@ -65,6 +71,7 @@ public class CircuitBreaker
             {
                 _state = CircuitState.Open;
                 _openedAt = DateTime.UtcNow;
+                _consecutiveOpens++;
             }
         }
     }
@@ -74,6 +81,7 @@ public class CircuitBreaker
         lock (_lock)
         {
             _state = CircuitState.Closed;
+            _consecutiveOpens = 0;
             while (_failures.TryDequeue(out _)) { }
         }
     }

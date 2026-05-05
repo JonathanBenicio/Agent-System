@@ -3,11 +3,22 @@ import { Bot, ArrowLeft } from 'lucide-react'
 import { useChat } from '@/hooks/useChat'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
+import { AISelectorBar } from './AISelectorBar'
 
 export function AgentChatPage() {
   const { agentName } = useParams<{ agentName: string }>()
   const navigate = useNavigate()
-  const { messages, isConnected, isProcessing, sendMessage } = useChat(agentName)
+  const {
+    messages,
+    isConnected,
+    isProcessing,
+    providers,
+    selectedProvider,
+    selectedModel,
+    setSelectedProvider,
+    setSelectedModel,
+    sendMessage,
+  } = useChat(agentName)
 
   return (
     <div className="flex flex-col h-full">
@@ -30,6 +41,14 @@ export function AgentChatPage() {
           </div>
         </div>
       </div>
+
+      <AISelectorBar
+        providers={providers}
+        selectedProvider={selectedProvider}
+        selectedModel={selectedModel}
+        onProviderChange={setSelectedProvider}
+        onModelChange={setSelectedModel}
+      />
 
       <MessageList messages={messages} isProcessing={isProcessing} />
       <ChatInput

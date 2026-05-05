@@ -264,21 +264,32 @@ services.AddSingleton<ISessionStore, RedisSessionStore>();
 
 ## 6. Integrar LLM via Microsoft.Extensions.AI (ML17)
 
-Registre qualquer `IChatClient` no DI e o `ChatClientProviderAdapter` o expõe automaticamente como `ILLMProvider`:
+O sistema usa **OpenAI SDK 2.10** + **Microsoft.Extensions.AI.OpenAI** como bridge. O `ChatClientProviderAdapter` expõe o `IChatClient` automaticamente como `ILLMProvider`:
 
 ```csharp
-// 1. Registre um IChatClient (ex: Azure OpenAI, qualquer provider M.E.AI)
-services.AddChatClient(new AzureOpenAIClient(...).GetChatClient("gpt-4o"));
+// 1. Registre um IChatClient via OpenAI SDK + M.E.AI pipeline
+services.AddSingleton<IChatClient>(sp =>
+{
+    var client = new OpenAIClient(apiKey);
+    IChatClient chatClient = client.GetChatClient("gpt-4o").AsIChatClient();
+    return new ChatClientBuilder(chatClient)
+        .UseLogging(sp.GetRequiredService<ILoggerFactory>())
+        .Build();
+});
 
 // 2. O ChatClientProviderAdapter é registrado automaticamente
 //    quando detecta um IChatClient no DI (via Infrastructure DI Extensions)
 //    Ele implementa ILLMProvider e funciona como qualquer outro provider
 
-// Zero código adicional — o adapter mapeia:
+// Pipeline: OpenAIClient → ChatClient → .AsIChatClient() → ChatClientBuilder → DI
+// O adapter mapeia:
 // - LLMRequest → ChatMessage[]
-// - IChatClient.CompleteAsync() → resultado
+// - IChatClient.GetResponseAsync() → resultado
 // - ChatResponse → LLMResponse (com tokens de uso)
 ```
+
+> **Nota**: Semantic Kernel foi removido em favor do OpenAI SDK nativo + M.E.AI.OpenAI bridge.
+> Pacotes: `OpenAI 2.10.0`, `Microsoft.Extensions.AI.OpenAI 10.5.1`, `Microsoft.Extensions.AI 9.6.0`
 
 ## 7. Convenções de Extensão
 

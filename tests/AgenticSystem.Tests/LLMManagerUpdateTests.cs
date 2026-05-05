@@ -31,67 +31,67 @@ public class LLMManagerUpdateTests
     }
 
     [Fact]
-    public void UpdateProvider_WhenExists_CallsConfigureAndReturnsTrue()
+    public async Task UpdateProvider_WhenExists_CallsConfigureAndReturnsTrue()
     {
         var request = new UpdateProviderRequest { Enabled = false, Priority = 5 };
 
-        var result = _sut.UpdateProvider("OpenAI", request);
+        var result = await _sut.UpdateProviderAsync("OpenAI", request);
 
         result.Should().BeTrue();
         _openAi.Received(1).Configure(null, null, false, 5);
     }
 
     [Fact]
-    public void UpdateProvider_WhenNotExists_ReturnsFalse()
+    public async Task UpdateProvider_WhenNotExists_ReturnsFalse()
     {
         var request = new UpdateProviderRequest { Enabled = true };
 
-        var result = _sut.UpdateProvider("NonExistent", request);
+        var result = await _sut.UpdateProviderAsync("NonExistent", request);
 
         result.Should().BeFalse();
     }
 
     [Fact]
-    public void UpdateProvider_IsCaseInsensitive()
+    public async Task UpdateProvider_IsCaseInsensitive()
     {
         var request = new UpdateProviderRequest { Priority = 2 };
 
-        var result = _sut.UpdateProvider("openai", request);
+        var result = await _sut.UpdateProviderAsync("openai", request);
 
         result.Should().BeTrue();
         _openAi.Received(1).Configure(null, null, null, 2);
     }
 
     [Fact]
-    public void UpdateProvider_WhenDisabled_RemovesFromEnabledProviders()
+    public async Task UpdateProvider_WhenDisabled_RemovesFromEnabledProviders()
     {
         // After Configure, IsEnabled will return false
         _openAi.IsEnabled.Returns(false);
 
         var request = new UpdateProviderRequest { Enabled = false };
-        _sut.UpdateProvider("OpenAI", request);
+        await _sut.UpdateProviderAsync("OpenAI", request);
 
         _sut.GetEnabledProviders().Should().NotContain(p => p.Name == "OpenAI");
     }
 
     [Fact]
-    public void UpdateProvider_WhenEnabled_AddsToEnabledProviders()
+    public async Task UpdateProvider_WhenEnabled_AddsToEnabledProviders()
     {
         // After Configure, IsEnabled will return true
         _claude.IsEnabled.Returns(true);
 
         var request = new UpdateProviderRequest { Enabled = true };
-        _sut.UpdateProvider("Claude", request);
+        await _sut.UpdateProviderAsync("Claude", request);
 
         _sut.GetEnabledProviders().Should().Contain(p => p.Name == "Claude");
     }
 
     [Fact]
-    public void UpdateProvider_UpdatesApiKeyAndModel()
+    public async Task UpdateProvider_UpdatesApiKeyAndModel()
     {
         var request = new UpdateProviderRequest { ApiKey = "sk-new", DefaultModel = "gpt-4-turbo" };
 
-        _sut.UpdateProvider("OpenAI", request);
+        await _sut.UpdateProviderAsync("OpenAI", request);
 
         _openAi.Received(1).Configure("sk-new", "gpt-4-turbo", null, null);
     }

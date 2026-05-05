@@ -37,6 +37,9 @@ public record ToolResult
     public string? ErrorMessage { get; init; }
     public Dictionary<string, object>? Metadata { get; init; }
 
-    public static ToolResult Ok(object? data = null) => new() { Success = true, Data = data };
-    public static ToolResult Fail(string error) => new() { Success = false, ErrorMessage = error };
+    public static ToolResult Ok(object? data = null, Dictionary<string, object>? metadata = null)
+        => new() { Success = true, Data = data, Metadata = metadata };
+
+    public static ToolResult Fail(string error, Dictionary<string, object>? metadata = null)
+        => new() { Success = false, ErrorMessage = error, Metadata = metadata };
 }

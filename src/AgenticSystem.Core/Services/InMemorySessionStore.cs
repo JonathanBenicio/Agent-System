@@ -11,9 +11,13 @@ namespace AgenticSystem.Core.Services;
 public class InMemorySessionStore : ISessionStore
 {
     private readonly ConcurrentDictionary<string, SessionData> _store = new();
+    private readonly TimeSpan _ttl = TimeSpan.FromHours(24);
+    private readonly int _maxEntries = 10_000;
+    private DateTime _lastCleanup = DateTime.UtcNow;
 
     public Task SaveAsync(SessionData session, CancellationToken ct = default)
     {
+        EvictStaleEntriesIfNeeded();
         _store[session.Id] = session;
         return Task.CompletedTask;
     }
@@ -59,5 +63,35 @@ public class InMemorySessionStore : ISessionStore
     public Task<bool> ExistsAsync(string sessionId, CancellationToken ct = default)
     {
         return Task.FromResult(_store.ContainsKey(sessionId));
+    }
+
+    private void EvictStaleEntriesIfNeeded()
+    {
+        if (DateTime.UtcNow - _lastCleanup < TimeSpan.FromMinutes(5) && _store.Count < _maxEntries)
+            return;
+
+        _lastCleanup = DateTime.UtcNow;
+        var cutoff = DateTime.UtcNow - _ttl;
+
+        var staleKeys = _store
+            .Where(kv => kv.Value.StartedAt < cutoff)
+            .Select(kv => kv.Key)
+            .ToList();
+
+        foreach (var key in staleKeys)
+            _store.TryRemove(key, out _);
+
+        // If still over limit, remove oldest
+        if (_store.Count > _maxEntries)
+        {
+            var toRemove = _store
+                .OrderBy(kv => kv.Value.StartedAt)
+                .Take(_store.Count - _maxEntries)
+                .Select(kv => kv.Key)
+                .ToList();
+
+            foreach (var key in toRemove)
+                _store.TryRemove(key, out _);
+        }
     }
 }

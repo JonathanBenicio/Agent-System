@@ -13,15 +13,36 @@ namespace AgenticSystem.Core.Services;
 public class HandoffManager : IHandoffManager
 {
     private readonly IAgentFactory _agentFactory;
+    private readonly IAgentChannelService? _agentChannelService;
+    private readonly IAgentRuntimeCoordinator? _runtimeCoordinator;
     private readonly ILogger<HandoffManager> _logger;
     private readonly ConcurrentDictionary<string, List<HandoffRecord>> _history = new();
 
     public HandoffManager(
         IAgentFactory agentFactory,
+        IAgentChannelService? agentChannelService,
+        IAgentRuntimeCoordinator? runtimeCoordinator,
         ILogger<HandoffManager> logger)
     {
         _agentFactory = agentFactory;
+        _agentChannelService = agentChannelService;
+        _runtimeCoordinator = runtimeCoordinator;
         _logger = logger;
+    }
+
+    public HandoffManager(
+        IAgentFactory agentFactory,
+        IAgentRuntimeCoordinator? runtimeCoordinator,
+        ILogger<HandoffManager> logger)
+        : this(agentFactory, null, runtimeCoordinator, logger)
+    {
+    }
+
+    public HandoffManager(
+        IAgentFactory agentFactory,
+        ILogger<HandoffManager> logger)
+        : this(agentFactory, null, null, logger)
+    {
     }
 
     public async Task<HandoffDecision> EvaluateHandoffAsync(AnalysisResult analysis, IAgent currentAgent)
@@ -116,13 +137,58 @@ public class HandoffManager : IHandoffManager
         _logger.LogInformation("🔄 Executing handoff: {Strategy} → {TargetCount} targets",
             decision.Strategy, decision.Targets.Count);
 
-        return decision.Strategy switch
+        if (_runtimeCoordinator is not null)
+        {
+            await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
+            {
+                Type = AgentStreamEventType.HandoffStarted,
+                Message = decision.Reason,
+                Data = new Dictionary<string, object>
+                {
+                    ["strategy"] = decision.Strategy.ToString(),
+                    ["targetCount"] = decision.Targets.Count
+                }
+            });
+        }
+
+        var response = decision.Strategy switch
         {
             HandoffStrategy.SingleDelegate => await ExecuteSingleDelegateAsync(input, context, decision),
             HandoffStrategy.FanOut => await ExecuteFanOutAsync(input, context, decision),
             HandoffStrategy.Chain => await ExecuteChainAsync(input, context, decision),
             _ => AgentResponse.Error("No handoff strategy matched", "HandoffManager")
         };
+
+        if (_runtimeCoordinator is not null)
+        {
+            await _runtimeCoordinator.RecordArtifactAsync(new AgentExecutionArtifact
+            {
+                SessionId = _runtimeCoordinator.CurrentSessionId ?? string.Empty,
+                Type = AgentExecutionArtifactType.Handoff,
+                Name = decision.Strategy.ToString(),
+                AgentName = _runtimeCoordinator.CurrentAgentName,
+                Status = response.Success ? "Completed" : "Failed",
+                Summary = decision.Reason,
+                Data = new Dictionary<string, object>
+                {
+                    ["targets"] = decision.Targets.Select(target => target.AgentName).ToList(),
+                    ["strategy"] = decision.Strategy.ToString()
+                }
+            });
+
+            await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
+            {
+                Type = AgentStreamEventType.HandoffCompleted,
+                Message = response.Content,
+                Data = new Dictionary<string, object>
+                {
+                    ["strategy"] = decision.Strategy.ToString(),
+                    ["success"] = response.Success
+                }
+            });
+        }
+
+        return response;
     }
 
     public Task RecordHandoffAsync(string sessionId, HandoffRecord record)
@@ -155,6 +221,9 @@ public class HandoffManager : IHandoffManager
         var agent = await _agentFactory.GetOrCreateAgentAsync(analysis);
         _logger.LogInformation("🔄 Single delegate → {Agent}", agent.Name);
 
+        input = await BuildChannelAwareInputAsync(agent.Name, input, AgentChannelKind.Direct, decision.Reason);
+
+        using var agentScope = _runtimeCoordinator?.BeginAgentScope(agent.Name, agent.AvailableTools);
         var response = await agent.ExecuteAsync(input, context);
         response.SuggestedHandoffs.Add(new HandoffSuggestion
         {
@@ -169,7 +238,6 @@ public class HandoffManager : IHandoffManager
     {
         var results = new List<(string AgentName, AgentResponse Response)>();
 
-        // Execute all targets (could be parallel, but sequential for simplicity)
         foreach (var target in decision.Targets.OrderBy(t => t.Order))
         {
             var analysis = new AnalysisResult
@@ -183,7 +251,14 @@ public class HandoffManager : IHandoffManager
             _logger.LogInformation("🔄 FanOut [{Order}] → {Agent} (domain: {Domain})",
                 target.Order, agent.Name, target.Domain);
 
-            var response = await agent.ExecuteAsync(input, context);
+            var fanOutInput = await BuildChannelAwareInputAsync(
+                agent.Name,
+                $"[Subtask]\n{target.SubTask}\n\n[Original Request]\n{input}",
+                AgentChannelKind.FanOut,
+                decision.Reason);
+
+            using var agentScope = _runtimeCoordinator?.BeginAgentScope(agent.Name, agent.AvailableTools);
+            var response = await agent.ExecuteAsync(fanOutInput, context);
             results.Add((agent.Name, response));
         }
 
@@ -208,6 +283,9 @@ public class HandoffManager : IHandoffManager
             var agent = await _agentFactory.GetOrCreateAgentAsync(analysis);
             _logger.LogInformation("🔄 Chain [{Order}] → {Agent}", target.Order, agent.Name);
 
+            chainInput = await BuildChannelAwareInputAsync(agent.Name, chainInput, AgentChannelKind.Chain, decision.Reason);
+
+            using var agentScope = _runtimeCoordinator?.BeginAgentScope(agent.Name, agent.AvailableTools);
             lastResponse = await agent.ExecuteAsync(chainInput, context);
 
             // Feed output as input to next agent
@@ -216,6 +294,32 @@ public class HandoffManager : IHandoffManager
         }
 
         return lastResponse ?? AgentResponse.Error("Chain produced no output", "HandoffManager");
+    }
+
+    private async Task<string> BuildChannelAwareInputAsync(
+        string targetAgent,
+        string input,
+        AgentChannelKind kind,
+        string? reason)
+    {
+        var sessionId = _runtimeCoordinator?.CurrentSessionId;
+        if (_agentChannelService is null || string.IsNullOrWhiteSpace(sessionId))
+        {
+            return input;
+        }
+
+        await _agentChannelService.PublishAsync(
+            sessionId,
+            _runtimeCoordinator?.CurrentAgentName ?? "HandoffManager",
+            targetAgent,
+            string.IsNullOrWhiteSpace(reason) ? input : $"{reason}\n\n{input}",
+            kind,
+            new Dictionary<string, object>
+            {
+                ["source"] = "handoff-manager"
+            });
+
+        return await _agentChannelService.BuildChannelContextAsync(sessionId, targetAgent, input);
     }
 
     private static AgentResponse AggregateResponses(

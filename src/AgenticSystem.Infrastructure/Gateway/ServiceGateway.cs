@@ -13,13 +13,13 @@ namespace AgenticSystem.Infrastructure.Gateway;
 public class ServiceGateway : IServiceGateway
 {
     private readonly ConcurrentDictionary<string, ServiceEntry> _services = new();
-    private readonly CostTracker _costTracker;
+    private readonly ICostTracker _costTracker;
     private readonly ILogger<ServiceGateway> _logger;
     private readonly DateTime _startTime = DateTime.UtcNow;
     private long _totalRequests;
     private long _totalFailures;
 
-    public ServiceGateway(CostTracker costTracker, ILogger<ServiceGateway> logger)
+    public ServiceGateway(ICostTracker costTracker, ILogger<ServiceGateway> logger)
     {
         _costTracker = costTracker;
         _logger = logger;
@@ -56,7 +56,7 @@ public class ServiceGateway : IServiceGateway
 
         var sw = Stopwatch.StartNew();
         Interlocked.Increment(ref _totalRequests);
-        entry.RequestCount++;
+        entry.IncrementRequests();
 
         try
         {
@@ -79,7 +79,7 @@ public class ServiceGateway : IServiceGateway
         {
             sw.Stop();
             Interlocked.Increment(ref _totalFailures);
-            entry.FailureCount++;
+            entry.IncrementFailures();
             entry.CircuitBreaker.RecordFailure();
             entry.IsHealthy = false;
             entry.LastError = ex.Message;
@@ -153,14 +153,14 @@ public class ServiceGateway : IServiceGateway
         return Task.FromResult(report);
     }
 
-    public Task<GatewayDashboard> GetDashboardAsync()
+    public async Task<GatewayDashboard> GetDashboardAsync()
     {
         var totalReqs = Interlocked.Read(ref _totalRequests);
         var totalFails = Interlocked.Read(ref _totalFailures);
 
         var dashboard = new GatewayDashboard
         {
-            Health = GetHealthReportAsync().Result,
+            Health = await GetHealthReportAsync(),
             Costs = _costTracker.GetReport(),
             Services = _services.Values.Select(e => e.ToServiceStatus()).ToList(),
             Metrics = new GatewayMetrics
@@ -173,7 +173,7 @@ public class ServiceGateway : IServiceGateway
             }
         };
 
-        return Task.FromResult(dashboard);
+        return dashboard;
     }
 
     private TimeSpan CalculateAverageLatency()
@@ -194,34 +194,52 @@ public class ServiceGateway : IServiceGateway
         public RateLimiter RateLimiter { get; set; } = null!;
         public bool IsEnabled { get; set; }
         public bool IsHealthy { get; set; } = true;
-        public int RequestCount { get; set; }
-        public int FailureCount { get; set; }
+        private int _requestCount;
+        private int _failureCount;
+        public int RequestCount => _requestCount;
+        public int FailureCount => _failureCount;
+        public void IncrementRequests() => Interlocked.Increment(ref _requestCount);
+        public void IncrementFailures() => Interlocked.Increment(ref _failureCount);
         public string? LastError { get; set; }
         public DateTime LastChecked { get; set; } = DateTime.UtcNow;
+        private readonly object _latencyLock = new();
         public List<TimeSpan> RecentLatencies { get; } = new();
 
         public void RecordLatency(TimeSpan latency)
         {
-            RecentLatencies.Add(latency);
-            if (RecentLatencies.Count > 100)
-                RecentLatencies.RemoveAt(0);
+            lock (_latencyLock)
+            {
+                RecentLatencies.Add(latency);
+                if (RecentLatencies.Count > 100)
+                    RecentLatencies.RemoveAt(0);
+            }
         }
 
-        public ServiceStatus ToServiceStatus() => new()
+        public ServiceStatus ToServiceStatus()
         {
-            Name = Registration.Name,
-            Category = Registration.Category,
-            IsEnabled = IsEnabled,
-            IsHealthy = IsHealthy,
-            CircuitState = CircuitBreaker.State,
-            RequestCount = RequestCount,
-            FailureCount = FailureCount,
-            SuccessRate = RequestCount > 0 ? (double)(RequestCount - FailureCount) / RequestCount * 100 : 100,
-            AverageLatency = RecentLatencies.Count > 0
-                ? TimeSpan.FromMilliseconds(RecentLatencies.Average(l => l.TotalMilliseconds))
-                : TimeSpan.Zero,
-            TotalCost = 0, // Filled from CostTracker
-            LastChecked = LastChecked
-        };
+            var reqCount = _requestCount;
+            var failCount = _failureCount;
+            TimeSpan avgLatency;
+            lock (_latencyLock)
+            {
+                avgLatency = RecentLatencies.Count > 0
+                    ? TimeSpan.FromMilliseconds(RecentLatencies.Average(l => l.TotalMilliseconds))
+                    : TimeSpan.Zero;
+            }
+            return new ServiceStatus
+            {
+                Name = Registration.Name,
+                Category = Registration.Category,
+                IsEnabled = IsEnabled,
+                IsHealthy = IsHealthy,
+                CircuitState = CircuitBreaker.State,
+                RequestCount = reqCount,
+                FailureCount = failCount,
+                SuccessRate = reqCount > 0 ? (double)(reqCount - failCount) / reqCount * 100 : 100,
+                AverageLatency = avgLatency,
+                TotalCost = 0, // Filled from CostTracker
+                LastChecked = LastChecked
+            };
+        }
     }
 }

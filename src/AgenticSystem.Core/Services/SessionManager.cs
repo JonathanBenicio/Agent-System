@@ -9,22 +9,30 @@ public class SessionManager : ISessionManager
     private readonly ISessionStore _store;
     private readonly ISessionConsolidator _consolidator;
     private readonly ILogger<SessionManager> _logger;
+    private readonly ISemanticCompressor? _semanticCompressor;
 
-    public SessionManager(ISessionStore store, ISessionConsolidator consolidator, ILogger<SessionManager> logger)
+    public SessionManager(
+        ISessionStore store,
+        ISessionConsolidator consolidator,
+        ILogger<SessionManager> logger,
+        ISemanticCompressor? semanticCompressor = null)
     {
         _store = store;
         _consolidator = consolidator;
         _logger = logger;
+        _semanticCompressor = semanticCompressor;
     }
 
     public async Task<string> StartSessionAsync(UserContext userContext)
     {
-        var sessionId = $"session-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid().ToString("N")[..8]}";
+        var sessionId = $"session-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}";
         var session = new SessionData
         {
             Id = sessionId,
             UserId = userContext.UserId,
+            TenantId = string.IsNullOrWhiteSpace(userContext.TenantId) ? Tenant.DefaultTenantId : userContext.TenantId,
             StartedAt = DateTime.UtcNow,
+            RuntimeSettings = BuildRuntimeSettings(userContext),
             Events = new List<AgentEvent>()
         };
 
@@ -57,6 +65,20 @@ public class SessionManager : ISessionManager
             session.Summary = summary;
             session.Insights = insights;
 
+            // GAP-10 — Semantic Compression: comprime sessão em insights semânticos
+            if (_semanticCompressor != null)
+            {
+                try
+                {
+                    await _semanticCompressor.CompressSessionAsync(sessionId);
+                    _logger.LogDebug("🗜️ Session {SessionId} semantically compressed", sessionId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Semantic compression failed for session {SessionId}", sessionId);
+                }
+            }
+
             await _store.SaveAsync(session);
 
             _logger.LogInformation("🔒 Session consolidated: {SessionId} ({EventCount} events, {Topics} topics)",
@@ -87,5 +109,41 @@ public class SessionManager : ISessionManager
             _logger.LogInformation("🏁 Session ended: {SessionId} (Duration: {Duration})",
                 sessionId, session.EndedAt - session.StartedAt);
         }
+    }
+
+    private static Dictionary<string, string> BuildRuntimeSettings(UserContext userContext)
+    {
+        var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        CopyPreference(userContext.Preferences, settings, "llm.session.provider");
+        CopyPreference(userContext.Preferences, settings, "llm.session.model");
+        CopyPreference(userContext.Preferences, settings, "llm.session.apiKey");
+
+        if (!settings.ContainsKey("llm.session.provider"))
+            CopyPreference(userContext.Preferences, settings, "llm.provider", "llm.session.provider");
+
+        if (!settings.ContainsKey("llm.session.model"))
+            CopyPreference(userContext.Preferences, settings, "llm.model", "llm.session.model");
+
+        if (!settings.ContainsKey("llm.session.apiKey"))
+            CopyPreference(userContext.Preferences, settings, "llm.apiKey", "llm.session.apiKey");
+
+        return settings;
+    }
+
+    private static void CopyPreference(
+        IReadOnlyDictionary<string, object> source,
+        IDictionary<string, string> destination,
+        string sourceKey,
+        string? targetKey = null)
+    {
+        if (!source.TryGetValue(sourceKey, out var raw) || raw is null)
+            return;
+
+        var value = raw.ToString();
+        if (string.IsNullOrWhiteSpace(value))
+            return;
+
+        destination[targetKey ?? sourceKey] = value;
     }
 }

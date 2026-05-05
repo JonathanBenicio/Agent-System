@@ -57,9 +57,8 @@ graph TB
             end
 
             subgraph Persistence["Persistence"]
-                PG[(PostgreSQL<br/>+ pgvector)]
+                PG[(PostgreSQL<br/>+ pgvector<br/>Sessions + Vectors)]
                 OBS[(Obsidian Vault<br/>Markdown)]
-                SQLITE[(SQLite<br/>Session Store)]
                 MCP[MCP Plugins]
             end
         end
@@ -104,7 +103,7 @@ graph TB
     META --> OBS
     T2 --> MCP
     SESSION --> SESSSTORE
-    SESSSTORE --> SQLITE
+    SESSSTORE --> PG
     MEAI_ADAPT --> LLM
 
     style GW fill:#ff6b35,stroke:#333,stroke-width:3px,color:#fff
@@ -129,6 +128,15 @@ sequenceDiagram
     participant Mem as Memory (PG + Obsidian)
 
     User->>API: POST /api/chat {message}
+
+    rect rgb(255, 230, 230)
+        Note over API: Rate Limiting per-Tenant
+        API->>API: Sliding window check (MaxRequestsPerMinute)
+        alt Limite excedido
+            API-->>User: 429 Too Many Requests + Retry-After
+        end
+    end
+
     API->>Meta: ProcessAsync(request)
 
     rect rgb(230, 240, 255)
@@ -405,8 +413,8 @@ graph TB
     SM --> ISTORE
     SC --> ISTORE
     ISTORE -.->|default| INMEM
-    ISTORE -.->|UseSqliteSessionStore()| SQLITE
-    SQLITE --> FS[(File System<br/>sessions/{id}.json)]
+    ISTORE -.->|"UseSqliteSessionStore()"| SQLITE
+    SQLITE --> FS[("File System<br/>sessions/#123;id#125;.json")]
 
     style ISTORE fill:#1a73e8,stroke:#333,color:#fff
     style INMEM fill:#34a853,stroke:#333,color:#fff
@@ -422,7 +430,7 @@ graph LR
     end
 
     subgraph Adapter["ChatClientProviderAdapter"]
-        MAP_IN[LLMRequest → ChatMessage[]]
+        MAP_IN["LLMRequest → ChatMessage#91;#93;"]
         EXEC[CompleteAsync]
         MAP_OUT[ChatResponse → LLMResponse]
     end

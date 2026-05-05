@@ -38,7 +38,7 @@ const navItems: NavItem[] = [
   { icon: Cable, label: 'Gateway', path: '/gateway' },
   { icon: HeartPulse, label: 'Saúde', path: '/gateway/health' },
   { icon: DollarSign, label: 'Custos', path: '/costs' },
-  { icon: Cpu, label: 'Providers', path: '/providers' },
+  { icon: Cpu, label: 'IAs', path: '/ai' },
   { icon: Plug, label: 'Plugins', path: '/plugins' },
   { icon: Clock, label: 'Scheduled Tasks', path: '/scheduled-tasks' },
   { icon: Settings, label: 'Config', path: '/config' },

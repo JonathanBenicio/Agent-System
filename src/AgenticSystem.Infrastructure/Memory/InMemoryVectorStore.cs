@@ -1,3 +1,4 @@
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -5,14 +6,18 @@ using System.Collections.Concurrent;
 
 namespace AgenticSystem.Infrastructure.Memory;
 
+using TextEmbeddingGenerator = Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>;
+
 public class InMemoryVectorStore : IVectorStore
 {
     private readonly ConcurrentDictionary<string, List<EmbeddingDocument>> _collections = new();
+    private readonly TextEmbeddingGenerator? _embeddingGenerator;
     private readonly ILogger<InMemoryVectorStore> _logger;
 
-    public InMemoryVectorStore(ILogger<InMemoryVectorStore> logger)
+    public InMemoryVectorStore(ILogger<InMemoryVectorStore> logger, TextEmbeddingGenerator? embeddingGenerator = null)
     {
         _logger = logger;
+        _embeddingGenerator = embeddingGenerator;
     }
 
     public Task UpsertAsync(EmbeddingDocument document)
@@ -30,11 +35,44 @@ public class InMemoryVectorStore : IVectorStore
         return Task.CompletedTask;
     }
 
-    public Task<SearchResult> SearchAsync(string query, SearchScope scope = SearchScope.All, int maxResults = 10)
+    public Task DeleteAsync(string id, string? collection = null)
+    {
+        var removed = 0;
+
+        if (!string.IsNullOrWhiteSpace(collection))
+        {
+            if (_collections.TryGetValue(collection, out var docs))
+            {
+                lock (docs)
+                {
+                    removed = docs.RemoveAll(d => d.Id == id);
+                }
+            }
+        }
+        else
+        {
+            foreach (var (_, docs) in _collections)
+            {
+                lock (docs)
+                {
+                    removed += docs.RemoveAll(d => d.Id == id);
+                }
+            }
+        }
+
+        _logger.LogDebug("🗑️ Deleted {Count} document(s) with id {Id} from collection {Collection}",
+            removed, id, collection ?? "*");
+
+        return Task.CompletedTask;
+    }
+
+    public async Task<SearchResult> SearchAsync(string query, SearchScope scope = SearchScope.All, int maxResults = 10)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var queryLower = query.ToLowerInvariant();
         var matches = new List<SearchMatch>();
+
+        float[]? queryEmbedding = await GenerateQueryEmbeddingAsync(query);
 
         var targetCollections = scope == SearchScope.All
             ? _collections
@@ -46,18 +84,10 @@ public class InMemoryVectorStore : IVectorStore
             {
                 foreach (var doc in docs)
                 {
-                    var score = CalculateRelevance(queryLower, doc);
+                    var score = CalculateRelevance(queryLower, doc, queryEmbedding);
                     if (score > 0.1)
                     {
-                        matches.Add(new SearchMatch
-                        {
-                            Id = doc.Id,
-                            Content = doc.Content,
-                            Type = doc.Type,
-                            Score = score,
-                            Metadata = doc.Metadata,
-                            Snippet = ExtractSnippet(doc.Content, queryLower)
-                        });
+                        matches.Add(CreateSearchMatch(doc, score, ExtractSnippet(doc.Content, queryLower)));
                     }
                 }
             }
@@ -74,15 +104,20 @@ public class InMemoryVectorStore : IVectorStore
             ExecutionTime = sw.Elapsed
         };
 
-        _logger.LogDebug("🔍 Search '{Query}': {Found} matches in {Time}ms", query, result.TotalFound, sw.ElapsedMilliseconds);
-        return Task.FromResult(result);
+        _logger.LogDebug("🔍 Search '{Query}': {Found} matches in {Time}ms (semantic: {Semantic})",
+            query, result.TotalFound, sw.ElapsedMilliseconds, queryEmbedding != null);
+        return result;
     }
 
-    public Task<SearchResult> SearchWithFiltersAsync(string query, Dictionary<string, string> filters)
+    public async Task<SearchResult> SearchWithFiltersAsync(string query, Dictionary<string, string> filters)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        var queryLower = query.ToLowerInvariant();
+        var normalizedQuery = query.Trim();
+        var hasQuery = !string.IsNullOrWhiteSpace(normalizedQuery) && normalizedQuery != "*";
+        var queryLower = normalizedQuery.ToLowerInvariant();
         var matches = new List<SearchMatch>();
+
+        float[]? queryEmbedding = hasQuery ? await GenerateQueryEmbeddingAsync(normalizedQuery) : null;
 
         foreach (var (_, docs) in _collections)
         {
@@ -92,18 +127,13 @@ public class InMemoryVectorStore : IVectorStore
                 {
                     if (!MatchesFilters(doc, filters)) continue;
 
-                    var score = CalculateRelevance(queryLower, doc);
-                    if (score > 0.1)
+                    var score = hasQuery ? CalculateRelevance(queryLower, doc, queryEmbedding) : 1.0;
+                    if (!hasQuery || score > 0.1)
                     {
-                        matches.Add(new SearchMatch
-                        {
-                            Id = doc.Id,
-                            Content = doc.Content,
-                            Type = doc.Type,
-                            Score = score,
-                            Metadata = doc.Metadata,
-                            Snippet = ExtractSnippet(doc.Content, queryLower)
-                        });
+                        matches.Add(CreateSearchMatch(
+                            doc,
+                            score,
+                            hasQuery ? ExtractSnippet(doc.Content, queryLower) : null));
                     }
                 }
             }
@@ -111,13 +141,15 @@ public class InMemoryVectorStore : IVectorStore
 
         sw.Stop();
 
-        return Task.FromResult(new SearchResult
+        return new SearchResult
         {
             Query = query,
-            Matches = matches.OrderByDescending(m => m.Score).Take(10).ToList(),
+            Matches = hasQuery
+                ? matches.OrderByDescending(m => m.Score).Take(10).ToList()
+                : matches,
             TotalFound = matches.Count,
             ExecutionTime = sw.Elapsed
-        });
+        };
     }
 
     public Task<IEnumerable<string>> GetCollectionsAsync()
@@ -144,7 +176,21 @@ public class InMemoryVectorStore : IVectorStore
         return Task.CompletedTask;
     }
 
-    private static double CalculateRelevance(string query, EmbeddingDocument doc)
+    private static double CalculateRelevance(string query, EmbeddingDocument doc, float[]? queryEmbedding)
+    {
+        // Semantic search via cosine similarity when embeddings are available
+        if (queryEmbedding != null && doc.Embedding is { Length: > 0 })
+        {
+            var cosine = CosineSimilarity(queryEmbedding, doc.Embedding);
+            // Normalize from [-1,1] to [0,1]
+            return (cosine + 1.0) / 2.0;
+        }
+
+        // Fallback: lexical search
+        return CalculateLexicalRelevance(query, doc);
+    }
+
+    private static double CalculateLexicalRelevance(string query, EmbeddingDocument doc)
     {
         var contentLower = doc.Content.ToLowerInvariant();
         var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -163,6 +209,39 @@ public class InMemoryVectorStore : IVectorStore
             score = Math.Min(score + 0.2, 1.0);
 
         return score;
+    }
+
+    private static double CosineSimilarity(float[] a, float[] b)
+    {
+        if (a.Length != b.Length) return 0;
+
+        double dot = 0, normA = 0, normB = 0;
+        for (int i = 0; i < a.Length; i++)
+        {
+            dot += a[i] * (double)b[i];
+            normA += a[i] * (double)a[i];
+            normB += b[i] * (double)b[i];
+        }
+
+        var denominator = Math.Sqrt(normA) * Math.Sqrt(normB);
+        return denominator == 0 ? 0 : dot / denominator;
+    }
+
+    private async Task<float[]?> GenerateQueryEmbeddingAsync(string query)
+    {
+        if (_embeddingGenerator is null)
+            return null;
+
+        try
+        {
+            var embedding = await _embeddingGenerator.GenerateAsync(query);
+            return embedding.Vector.ToArray();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate query embedding, falling back to lexical search");
+            return null;
+        }
     }
 
     private static bool MatchesScope(string collectionName, SearchScope scope)
@@ -185,11 +264,31 @@ public class InMemoryVectorStore : IVectorStore
                 return false;
             if (key == "collection" && !doc.Collection.Equals(value, StringComparison.OrdinalIgnoreCase))
                 return false;
-            if (doc.Metadata.TryGetValue(key, out var metaValue) &&
+            if (key == "id" && !doc.Id.Equals(value, StringComparison.OrdinalIgnoreCase))
+                return false;
+            if (key is "type" or "collection" or "id")
+                continue;
+            if (!doc.Metadata.TryGetValue(key, out var metaValue) ||
                 !metaValue.Equals(value, StringComparison.OrdinalIgnoreCase))
                 return false;
         }
         return true;
+    }
+
+    private static SearchMatch CreateSearchMatch(EmbeddingDocument doc, double score, string? snippet)
+    {
+        return new SearchMatch
+        {
+            Id = doc.Id,
+            Content = doc.Content,
+            Type = doc.Type,
+            Collection = doc.Collection,
+            Score = score,
+            Metadata = doc.Metadata,
+            Snippet = snippet,
+            Embedding = doc.Embedding,
+            IndexedAt = doc.IndexedAt
+        };
     }
 
     private static string ExtractSnippet(string content, string query, int contextChars = 150)

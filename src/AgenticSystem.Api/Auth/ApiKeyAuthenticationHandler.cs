@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
@@ -32,7 +34,10 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         if (string.IsNullOrWhiteSpace(configuredKey))
             return Task.FromResult(AuthenticateResult.Fail("Admin API key not configured on server."));
 
-        if (!string.Equals(providedKey, configuredKey, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(providedKey) ||
+            !CryptographicOperations.FixedTimeEquals(
+                Encoding.UTF8.GetBytes(providedKey),
+                Encoding.UTF8.GetBytes(configuredKey)))
             return Task.FromResult(AuthenticateResult.Fail("Invalid API key."));
 
         var claims = new[]

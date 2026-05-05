@@ -12,6 +12,7 @@ public class SmartRouter : ISmartRouter
 {
     private readonly IUserPreferenceEngine _preferenceEngine;
     private readonly ILogger<SmartRouter> _logger;
+    private readonly ConcurrentDictionary<string, object> _metricsLocks = new();
     private readonly ConcurrentDictionary<string, List<AgentPerformanceMetric>> _metrics = new();
 
     public SmartRouter(
@@ -72,16 +73,23 @@ public class SmartRouter : ISmartRouter
 
     public Task RecordPerformanceAsync(string agentName, AgentPerformanceMetric metric)
     {
+        var agentLock = _metricsLocks.GetOrAdd(agentName, _ => new object());
+
         _metrics.AddOrUpdate(
             agentName,
-            _ => [metric],
+            _ =>
+            {
+                lock (agentLock) { return [metric]; }
+            },
             (_, list) =>
             {
-                list.Add(metric);
-                // Keep last 100 metrics per agent
-                if (list.Count > 100)
-                    list.RemoveRange(0, list.Count - 100);
-                return list;
+                lock (agentLock)
+                {
+                    list.Add(metric);
+                    if (list.Count > 100)
+                        list.RemoveRange(0, list.Count - 100);
+                    return list;
+                }
             });
 
         _logger.LogDebug("📊 Performance recorded: {Agent} | {Latency}ms | {Success}",

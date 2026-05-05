@@ -12,8 +12,9 @@ namespace AgenticSystem.Core.Interfaces;
 /// </summary>
 public interface IScheduledTaskManager
 {
-    Task<ScheduledTask> RegisterAsync(string name, string cronExpression, TriggerRule? rule = null, CancellationToken ct = default);
-    Task<ScheduledTask> RegisterAsync(string name, TimeSpan interval, TriggerRule? rule = null, CancellationToken ct = default);
+    Task<ScheduledTask> RegisterAsync(string name, string cronExpression, TriggerRule? rule = null, int maxRetryAttempts = 3, CancellationToken ct = default);
+    Task<ScheduledTask> RegisterAsync(string name, TimeSpan interval, TriggerRule? rule = null, int maxRetryAttempts = 3, CancellationToken ct = default);
+    Task LinkTasksAsync(string predecessorTaskId, string successorTaskId, CancellationToken ct = default);
     Task<ScheduledTask?> GetAsync(string taskId, CancellationToken ct = default);
     Task<IReadOnlyList<ScheduledTask>> GetAllAsync(CancellationToken ct = default);
     Task<IReadOnlyList<ScheduledTask>> GetActiveAsync(CancellationToken ct = default);

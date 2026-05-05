@@ -1,14 +1,168 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.RAG;
-using FluentAssertions;
 using Microsoft.Extensions.Logging;
-using NSubstitute;
-using Xunit;
 
 namespace AgenticSystem.Tests;
 
-public class RAGServiceTests
+public partial class RAGServiceTests
+{
+    [Fact]
+    public async Task RetrieveContextAsync_WhenCompressionGeneratesVariant_MergesDistinctMatchesBeforeReRanking()
+    {
+        // Arrange
+        var vectorStore = Substitute.For<IVectorStore>();
+        var reRanker = Substitute.For<IReRanker>();
+        var logger = Substitute.For<ILogger<RAGService>>();
+        var queryCompressor = Substitute.For<IQueryCompressor>();
+
+        queryCompressor
+            .CompressAsync(Arg.Any<string>(), Arg.Any<QueryCompressionStrategy>())
+            .Returns(new CompressedQuery
+            {
+                OriginalQuery = "how to fix runtime error in sdk",
+                CompressedText = "sdk runtime error",
+                ExtractedKeyTerms = new List<string> { "sdk", "runtime", "error" }
+            });
+
+        vectorStore
+            .SearchAsync("sdk runtime error", SearchScope.All, 10)
+            .Returns(new SearchResult
+            {
+                Matches = new List<SearchMatch>
+                {
+                    new() { Id = "chunk-1", Content = "SDK runtime troubleshooting guide", Score = 0.92, Metadata = new Dictionary<string, string> { ["source"] = "guide" } },
+                    new() { Id = "chunk-2", Content = "Known runtime errors in SDK", Score = 0.85, Metadata = new Dictionary<string, string> { ["source"] = "kb" } }
+                }
+            });
+
+        vectorStore
+            .SearchAsync("how to fix runtime error in sdk", SearchScope.All, 10)
+            .Returns(new SearchResult
+            {
+                Matches = new List<SearchMatch>
+                {
+                    new() { Id = "chunk-1", Content = "SDK runtime troubleshooting guide", Score = 0.70, Metadata = new Dictionary<string, string> { ["source"] = "guide" } }
+                }
+            });
+
+        IReadOnlyList<SearchMatch>? receivedCandidates = null;
+        string? receivedQuery = null;
+        reRanker
+            .ReRankAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<SearchMatch>>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                receivedQuery = callInfo.ArgAt<string>(0);
+                receivedCandidates = callInfo.ArgAt<IReadOnlyList<SearchMatch>>(1);
+
+                var ranked = receivedCandidates
+                    .OrderByDescending(match => match.Score)
+                    .Select((match, index) => new RankedChunk
+                    {
+                        Id = match.Id,
+                        Content = match.Content,
+                        OriginalScore = match.Score,
+                        ReRankedScore = match.Score,
+                        Rank = index + 1,
+                        Source = match.Metadata.GetValueOrDefault("source", string.Empty),
+                        Metadata = match.Metadata
+                    })
+                    .ToList();
+
+                return Task.FromResult<IReadOnlyList<RankedChunk>>(ranked);
+            });
+
+        var service = new RAGService(vectorStore, reRanker, logger, queryCompressor: queryCompressor);
+
+        // Act
+        var result = await service.RetrieveContextAsync(new RAGQuery
+        {
+            Query = "how to fix runtime error in sdk"
+        });
+
+        // Assert
+        receivedQuery.Should().Be("how to fix runtime error in sdk");
+        receivedCandidates.Should().NotBeNull();
+        receivedCandidates!.Should().HaveCount(2);
+        result.QueryVariants.Should().Contain(new[] { "sdk runtime error", "how to fix runtime error in sdk" });
+        result.EffectiveQuery.Should().Be("sdk runtime error");
+    }
+
+    [Fact]
+    public async Task RetrieveContextAsync_WhenContextIsLarge_UsesSemanticCompressionToReducePromptContext()
+    {
+        // Arrange
+        var vectorStore = Substitute.For<IVectorStore>();
+        var reRanker = Substitute.For<IReRanker>();
+        var logger = Substitute.For<ILogger<RAGService>>();
+        var semanticCompressor = Substitute.For<ISemanticCompressor>();
+
+        var longContent = string.Join(' ', Enumerable.Repeat("runtime diagnostics for sdk failures and mitigation", 40));
+        var matches = Enumerable.Range(1, 4)
+            .Select(index => new SearchMatch
+            {
+                Id = $"chunk-{index}",
+                Content = $"Section {index}. {longContent}",
+                Score = 0.90 - (index * 0.05),
+                Metadata = new Dictionary<string, string>
+                {
+                    ["source"] = $"doc-{index}",
+                    ["section"] = $"section-{index}"
+                }
+            })
+            .ToList();
+
+        vectorStore
+            .SearchAsync("sdk runtime diagnostics", SearchScope.All, 10)
+            .Returns(new SearchResult { Matches = matches });
+
+        reRanker
+            .ReRankAsync(Arg.Any<string>(), Arg.Any<IReadOnlyList<SearchMatch>>(), Arg.Any<int>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var candidates = callInfo.ArgAt<IReadOnlyList<SearchMatch>>(1);
+                var ranked = candidates.Select((match, index) => new RankedChunk
+                {
+                    Id = match.Id,
+                    Content = match.Content,
+                    OriginalScore = match.Score,
+                    ReRankedScore = match.Score,
+                    Rank = index + 1,
+                    Source = match.Metadata.GetValueOrDefault("source", string.Empty),
+                    Section = match.Metadata.GetValueOrDefault("section", string.Empty),
+                    Metadata = match.Metadata
+                }).ToList();
+
+                return Task.FromResult<IReadOnlyList<RankedChunk>>(ranked);
+            });
+
+        semanticCompressor
+            .CompressRankedChunksAsync(Arg.Any<IEnumerable<RankedChunk>>(), "sdk runtime diagnostics")
+            .Returns(new SemanticSummary
+            {
+                CompressedKnowledge = "Tema: sdk runtime diagnostics\n- Diagnóstico consolidado das falhas mais frequentes.\n- Mitigações recorrentes por seção.",
+                OriginalTokenCount = 600,
+                CompressedTokenCount = 40,
+                CompressionRatio = 0.07
+            });
+
+        var service = new RAGService(vectorStore, reRanker, logger, semanticCompressor: semanticCompressor);
+
+        // Act
+        var result = await service.RetrieveContextAsync(new RAGQuery
+        {
+            Query = "sdk runtime diagnostics"
+        });
+
+        // Assert
+        result.UsedSemanticCompression.Should().BeTrue();
+        result.SemanticSummary.Should().Contain("Diagnóstico consolidado");
+        result.OriginalContextTokens.Should().BeGreaterThan(result.TotalTokensUsed);
+        result.BuiltContext.Should().Contain("### Semantic Summary");
+    }
+}
+
+public partial class RAGServiceTests
 {
     private readonly IVectorStore _vectorStore;
     private readonly IReRanker _reRanker;

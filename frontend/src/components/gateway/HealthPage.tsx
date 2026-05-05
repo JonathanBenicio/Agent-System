@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { HeartPulse, CheckCircle2, XCircle, RefreshCw } from 'lucide-react'
+import { CheckCircle2, XCircle, RefreshCw } from 'lucide-react'
 import { gatewayApi } from '@/lib/api'
 import { PageLoading, PageError } from '@/components/shared/Loading'
 import { Badge } from '@/components/shared/Badge'

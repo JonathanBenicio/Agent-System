@@ -24,29 +24,32 @@ public class PostgresSessionStore : ISessionStore
 
     public async Task SaveAsync(SessionData session, CancellationToken ct = default)
     {
-        const string sql = """
-            INSERT INTO sessions (id, user_id, tenant_id, data, started_at, ended_at, is_consolidated)
-            VALUES (@id, @userId, @tenantId, @data::jsonb, @startedAt, @endedAt, @isConsolidated)
-            ON CONFLICT (id) DO UPDATE SET
-                data = EXCLUDED.data,
-                ended_at = EXCLUDED.ended_at,
-                is_consolidated = EXCLUDED.is_consolidated
-            """;
+        await ExecuteWithRetryAsync(async () =>
+        {
+            const string sql = """
+                INSERT INTO sessions (id, user_id, tenant_id, data, started_at, ended_at, is_consolidated)
+                VALUES (@id, @userId, @tenantId, @data::jsonb, @startedAt, @endedAt, @isConsolidated)
+                ON CONFLICT (id) DO UPDATE SET
+                    data = EXCLUDED.data,
+                    ended_at = EXCLUDED.ended_at,
+                    is_consolidated = EXCLUDED.is_consolidated
+                """;
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
+            await using var conn = new NpgsqlConnection(_connectionString);
+            await conn.OpenAsync(ct);
 
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", session.Id);
-        cmd.Parameters.AddWithValue("userId", session.UserId);
-        cmd.Parameters.AddWithValue("tenantId", session.TenantId);
-        cmd.Parameters.AddWithValue("data", JsonSerializer.Serialize(session, JsonOptions));
-        cmd.Parameters.AddWithValue("startedAt", session.StartedAt);
-        cmd.Parameters.AddWithValue("endedAt", (object?)session.EndedAt ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("isConsolidated", session.IsConsolidated);
+            await using var cmd = new NpgsqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("id", session.Id);
+            cmd.Parameters.AddWithValue("userId", session.UserId);
+            cmd.Parameters.AddWithValue("tenantId", session.TenantId);
+            cmd.Parameters.AddWithValue("data", JsonSerializer.Serialize(session, JsonOptions));
+            cmd.Parameters.AddWithValue("startedAt", session.StartedAt);
+            cmd.Parameters.AddWithValue("endedAt", (object?)session.EndedAt ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("isConsolidated", session.IsConsolidated);
 
-        await cmd.ExecuteNonQueryAsync(ct);
-        _logger.LogDebug("Session saved to PostgreSQL: {SessionId}", session.Id);
+            await cmd.ExecuteNonQueryAsync(ct);
+            _logger.LogDebug("Session saved to PostgreSQL: {SessionId}", session.Id);
+        }, ct);
     }
 
     public async Task<SessionData?> GetAsync(string sessionId, CancellationToken ct = default)
@@ -63,7 +66,15 @@ public class PostgresSessionStore : ISessionStore
         if (result is null or DBNull)
             return null;
 
-        return JsonSerializer.Deserialize<SessionData>((string)result, JsonOptions);
+        try
+        {
+            return JsonSerializer.Deserialize<SessionData>((string)result, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to deserialize session {SessionId}", sessionId);
+            return null;
+        }
     }
 
     public async Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, CancellationToken ct = default)
@@ -145,11 +156,41 @@ public class PostgresSessionStore : ISessionStore
         while (await reader.ReadAsync(ct))
         {
             var json = reader.GetString(0);
-            var session = JsonSerializer.Deserialize<SessionData>(json, JsonOptions);
-            if (session is not null)
-                sessions.Add(session);
+            try
+            {
+                var session = JsonSerializer.Deserialize<SessionData>(json, JsonOptions);
+                if (session is not null)
+                    sessions.Add(session);
+            }
+            catch (JsonException)
+            {
+                // Skip corrupted session records rather than failing entire query
+            }
         }
 
         return sessions;
+    }
+
+    private static readonly Random s_jitter = new();
+
+    private async Task ExecuteWithRetryAsync(Func<Task> action, CancellationToken ct, int maxRetries = 3)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                await action();
+                return;
+            }
+            catch (NpgsqlException ex) when (ex.IsTransient && attempt < maxRetries - 1)
+            {
+                var baseDelay = 100 * Math.Pow(2, attempt);
+                var jitter = s_jitter.Next(0, (int)(baseDelay * 0.5));
+                var delay = TimeSpan.FromMilliseconds(baseDelay + jitter);
+                _logger.LogWarning(ex, "Transient PostgreSQL error (attempt {Attempt}/{MaxRetries}). Retrying in {Delay}ms.",
+                    attempt + 1, maxRetries, delay.TotalMilliseconds);
+                await Task.Delay(delay, ct);
+            }
+        }
     }
 }

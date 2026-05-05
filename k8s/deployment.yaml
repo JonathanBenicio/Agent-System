@@ -30,6 +30,21 @@ spec:
                 secretKeyRef:
                   name: agentic-secrets
                   key: openai-api-key
+            - name: AgenticSystem__Jwt__SecretKey
+              valueFrom:
+                secretKeyRef:
+                  name: agentic-secrets
+                  key: jwt-secret-key
+            - name: ConnectionStrings__SessionStore
+              valueFrom:
+                secretKeyRef:
+                  name: agentic-secrets
+                  key: postgres-connection-string
+            - name: AgenticSystem__AdminApiKey
+              valueFrom:
+                secretKeyRef:
+                  name: agentic-secrets
+                  key: admin-api-key
           resources:
             requests:
               memory: "256Mi"

@@ -16,14 +16,22 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMetaAgent, MetaAgentOrchestrator>();
         services.AddSingleton<IContextAnalyzer, ContextAnalyzer>();
         services.AddSingleton<IAgentFactory, HierarchicalAgentFactory>();
+        services.AddSingleton<IAgentMemoryStore, InMemoryAgentMemoryStore>();
+        services.AddSingleton<IAgentMemoryService, AgentMemoryService>();
         services.AddSingleton<ISessionStore, InMemorySessionStore>();
         services.AddSingleton<ISessionManager, SessionManager>();
+        services.AddSingleton<ILLMRuntimeContextAccessor, LLMRuntimeContextAccessor>();
+        services.AddSingleton<IAgentRuntimeCoordinator, AgentRuntimeCoordinator>();
+        services.AddSingleton<IFinalResponseApprovalService, FinalResponseApprovalService>();
+        services.AddSingleton<IAgentExecutionWorkflow, AgentExecutionWorkflow>();
         services.AddSingleton<ISkillManager, InMemorySkillManager>();
         services.AddSingleton<IToolManager, InMemoryToolManager>();
+        services.AddSingleton<IToolGovernanceService, ToolGovernanceService>();
 
         // Multi-Tenant
         services.AddSingleton<ITenantStore, InMemoryTenantStore>();
         services.AddSingleton<ITenantResolver, TenantResolver>();
+        services.AddSingleton<ITenantContextAccessor, TenantContextAccessor>();
         services.AddScoped<TenantContext>();
 
         // Maturity Level Services
@@ -58,6 +66,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITriggerEngine, TriggerEngine>();
         services.AddSingleton<IScheduledTaskManager, ScheduledTaskManager>();
         services.AddHostedService<ScheduledTaskHostedService>();
+
+        // GAP-13 — Agent Cleanup Background Service
+        services.AddHostedService<AgentCleanupHostedService>();
 
         // ML22 — Config Management (Credentials, Paths, Settings)
         services.AddSingleton<IConfigStore, InMemoryConfigStore>();

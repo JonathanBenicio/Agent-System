@@ -68,7 +68,10 @@ public class SearchMatch
     public string Id { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
+    public string Collection { get; set; } = string.Empty;
     public double Score { get; set; }
     public Dictionary<string, string> Metadata { get; set; } = new();
     public string? Snippet { get; set; }
+    public float[]? Embedding { get; set; }
+    public DateTime IndexedAt { get; set; }
 }

@@ -1,3 +1,5 @@
+using AgenticSystem.Core.Models;
+
 namespace AgenticSystem.Core.Interfaces;
 
 /// <summary>
@@ -30,6 +32,7 @@ public interface IMCPPluginManager
     IMCPPlugin? GetPlugin(string pluginId);
     Task<MCPResponse> ExecutePluginToolAsync(string pluginId, string toolName, Dictionary<string, object> parameters, CancellationToken ct = default);
     Task<IEnumerable<MCPToolInfo>> GetAllToolsAsync();
+    Task AutoStartPluginsAsync(IEnumerable<MCPPluginConfig> configs, CancellationToken ct = default);
 }
 
 // ═══════════════════════════════════════════════════════════

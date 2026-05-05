@@ -70,6 +70,33 @@ public class WebhookDeliveryChannelTests
     }
 
     [Fact]
+    public async Task SendAsync_WithSecurityHeaders_AddsSignatureAndIdempotency()
+    {
+        var handler = new FakeHttpMessageHandler(System.Net.HttpStatusCode.OK);
+        var client = new HttpClient(handler);
+        _httpClientFactory.CreateClient("WebhookDelivery").Returns(client);
+
+        var payload = CreatePayload();
+        var config = new Dictionary<string, string>
+        {
+            ["webhookUrl"] = "https://hooks.example.com/alert",
+            ["hmacSecret"] = "top-secret",
+            ["signatureHeaderName"] = "X-Test-Signature",
+            ["idempotencyKey"] = "delivery-123",
+            ["idempotencyHeaderName"] = "X-Idempotency-Key",
+            ["header:Authorization"] = "Bearer abc"
+        };
+
+        var result = await _sut.SendAsync(payload, config);
+
+        result.Status.Should().Be(DeliveryStatus.Success);
+        handler.LastRequest.Should().NotBeNull();
+        handler.LastRequest!.Headers.Should().Contain(header => header.Key == "X-Test-Signature");
+        handler.LastRequest.Headers.Should().Contain(header => header.Key == "X-Idempotency-Key" && header.Value.Contains("delivery-123"));
+        handler.LastRequest.Headers.Should().Contain(header => header.Key == "Authorization" && header.Value.Contains("Bearer abc"));
+    }
+
+    [Fact]
     public async Task SendAsync_ServerError_RetriesAndFails()
     {
         var handler = new FakeHttpMessageHandler(System.Net.HttpStatusCode.InternalServerError);
@@ -113,6 +140,7 @@ public class WebhookDeliveryChannelTests
     private class FakeHttpMessageHandler : HttpMessageHandler
     {
         private readonly System.Net.HttpStatusCode _statusCode;
+        public HttpRequestMessage? LastRequest { get; private set; }
 
         public FakeHttpMessageHandler(System.Net.HttpStatusCode statusCode)
         {
@@ -121,6 +149,7 @@ public class WebhookDeliveryChannelTests
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            LastRequest = request;
             return Task.FromResult(new HttpResponseMessage(_statusCode)
             {
                 Content = new StringContent("{}")

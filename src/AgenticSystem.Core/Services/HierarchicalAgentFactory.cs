@@ -12,6 +12,7 @@ public class HierarchicalAgentFactory : IAgentFactory
     private readonly ConcurrentDictionary<string, IAgent> _agentPool = new();
     private readonly ILLMManager _llmManager;
     private readonly ISkillManager _skillManager;
+    private readonly IAgentMemoryService? _agentMemoryService;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<HierarchicalAgentFactory> _logger;
 
@@ -19,10 +20,12 @@ public class HierarchicalAgentFactory : IAgentFactory
         ILLMManager llmManager,
         ISkillManager skillManager,
         ILoggerFactory loggerFactory,
-        ILogger<HierarchicalAgentFactory> logger)
+        ILogger<HierarchicalAgentFactory> logger,
+        IAgentMemoryService? agentMemoryService = null)
     {
         _llmManager = llmManager;
         _skillManager = skillManager;
+        _agentMemoryService = agentMemoryService;
         _loggerFactory = loggerFactory;
         _logger = logger;
         InitializeDefaultAgents();
@@ -50,7 +53,8 @@ public class HierarchicalAgentFactory : IAgentFactory
             _llmManager,
             _skillManager,
             _loggerFactory.CreateLogger<CustomAgent>(),
-            specification);
+            specification,
+            _agentMemoryService);
 
         _agentPool[specification.Name] = agent;
         _logger.LogInformation("🔧 Custom agent created: {Agent}", specification.Name);
@@ -157,15 +161,15 @@ public class HierarchicalAgentFactory : IAgentFactory
     {
         return name switch
         {
-            "PersonalAgent" or "personal" => new PersonalAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<PersonalAgent>()),
-            "WorkAgent" or "work" => new WorkAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<WorkAgent>()),
-            "LearningAgent" or "learning" => new LearningAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<LearningAgent>()),
-            "CreativeAgent" or "creative" => new CreativeAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<CreativeAgent>()),
-            "CalendarAgent" or "calendar" => new CalendarAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<CalendarAgent>()),
-            "AnalysisAgent" or "analysis" => new AnalysisAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<AnalysisAgent>()),
-            "NotificationAgent" or "notification" => new NotificationAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<NotificationAgent>()),
-            "APIAgent" or "api" => new APIAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<APIAgent>()),
-            _ => new GeneralAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<GeneralAgent>())
+            "PersonalAgent" or "personal" => new PersonalAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<PersonalAgent>(), _agentMemoryService),
+            "WorkAgent" or "work" => new WorkAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<WorkAgent>(), _agentMemoryService),
+            "LearningAgent" or "learning" => new LearningAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<LearningAgent>(), _agentMemoryService),
+            "CreativeAgent" or "creative" => new CreativeAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<CreativeAgent>(), _agentMemoryService),
+            "CalendarAgent" or "calendar" => new CalendarAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<CalendarAgent>(), _agentMemoryService),
+            "AnalysisAgent" or "analysis" => new AnalysisAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<AnalysisAgent>(), _agentMemoryService),
+            "NotificationAgent" or "notification" => new NotificationAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<NotificationAgent>(), _agentMemoryService),
+            "APIAgent" or "api" => new APIAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<APIAgent>(), _agentMemoryService),
+            _ => new GeneralAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<GeneralAgent>(), _agentMemoryService)
         };
     }
 
@@ -187,8 +191,9 @@ internal class CustomAgent : BaseAgent
         ILLMManager llmManager,
         ISkillManager skillManager,
         ILogger logger,
-        AgentSpecification specification)
-        : base(llmManager, skillManager, logger)
+        AgentSpecification specification,
+        IAgentMemoryService? agentMemoryService = null)
+        : base(llmManager, skillManager, logger, agentMemoryService)
     {
         _spec = specification;
     }

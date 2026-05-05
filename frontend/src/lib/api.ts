@@ -1,19 +1,31 @@
+import { getAuthHeaders } from '@/lib/auth'
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
 class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  status: number
+
+  constructor(status: number, message: string) {
     super(message)
+    this.status = status
     this.name = 'ApiError'
   }
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers(options?.headers)
+
+  for (const [key, value] of Object.entries(getAuthHeaders())) {
+    headers.set(key, value)
+  }
+
+  if (!(options?.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json')
+  }
+
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   })
 
   if (!res.ok) {
@@ -33,6 +45,13 @@ function post<T>(path: string, body?: unknown) {
   return request<T>(path, {
     method: 'POST',
     body: body ? JSON.stringify(body) : undefined,
+  })
+}
+
+function postForm<T>(path: string, body: FormData) {
+  return request<T>(path, {
+    method: 'POST',
+    body,
   })
 }
 
@@ -64,8 +83,10 @@ import type {
   ServiceStatus,
   CostReport,
   HealthReport,
+  LLMConfigurationInfo,
   LLMProviderInfo,
   LLMProviderSummary,
+  UpdateDefaultLlmSelectionRequest,
   UpdateProviderRequest,
   PluginSummary,
   LoadPluginRequest,
@@ -74,6 +95,7 @@ import type {
   SystemSettings,
   GatewaySettings,
   MemorySettings,
+  RerankingSettings,
   ScheduledTask,
   TriggerRule,
   TaskExecution,
@@ -142,6 +164,7 @@ export const gatewayApi = {
 // ══════════════════════════════════════
 
 export const llmApi = {
+  configuration: () => get<LLMConfigurationInfo>('/api/admin/llm/configuration'),
   providers: () => get<LLMProviderInfo[]>('/api/admin/llm/providers'),
   provider: (name: string) => get<LLMProviderInfo>(`/api/admin/llm/providers/${encodeURIComponent(name)}`),
   enabled: () => get<LLMProviderSummary[]>('/api/admin/llm/providers/enabled'),
@@ -149,6 +172,8 @@ export const llmApi = {
   test: (name: string) => post<{ provider: string; available: boolean }>(`/api/admin/llm/providers/${encodeURIComponent(name)}/test`),
   update: (name: string, req: UpdateProviderRequest) =>
     put<LLMProviderInfo>(`/api/admin/llm/providers/${encodeURIComponent(name)}`, req),
+  updateDefaultSelection: (req: UpdateDefaultLlmSelectionRequest) =>
+    put<LLMConfigurationInfo>('/api/admin/llm/default-selection', req),
 }
 
 // ══════════════════════════════════════
@@ -174,9 +199,27 @@ export const settingsApi = {
   getAll: () => get<SystemSettings>('/api/admin/settings'),
   getGateway: () => get<GatewaySettings>('/api/admin/settings/gateway'),
   getMemory: () => get<MemorySettings>('/api/admin/settings/memory'),
+  getReranking: () => get<RerankingSettings>('/api/admin/settings/reranking'),
   getProviders: () => get('/api/admin/settings/providers'),
   updateGateway: (s: GatewaySettings) => put<GatewaySettings>('/api/admin/settings/gateway', s),
   updateMemory: (s: MemorySettings) => put<MemorySettings>('/api/admin/settings/memory', s),
+  updateReranking: (s: RerankingSettings) => put<RerankingSettings>('/api/admin/settings/reranking', s),
+  uploadRerankingAssets: (modelFile?: File, vocabularyFile?: File, packageFile?: File) => {
+    const formData = new FormData()
+    if (modelFile) {
+      formData.append('modelFile', modelFile)
+    }
+
+    if (vocabularyFile) {
+      formData.append('vocabularyFile', vocabularyFile)
+    }
+
+    if (packageFile) {
+      formData.append('packageFile', packageFile)
+    }
+
+    return postForm<RerankingSettings>('/api/admin/settings/reranking/assets', formData)
+  },
 }
 
 // ══════════════════════════════════════

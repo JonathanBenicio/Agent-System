@@ -59,7 +59,7 @@ public class EmbeddingMigrationController : ControllerBase
     public async Task<IActionResult> SaveModel([FromBody] EmbeddingModelConfig model)
     {
         await _modelStore.SaveAsync(model);
-        return Ok(model);
+        return Ok(MaskApiKey(model));
     }
 
     [HttpDelete("models/{modelId}")]

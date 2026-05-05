@@ -7,12 +7,12 @@
 
 ## Índice
 
-- [Backend — Maturity Levels (ML1–ML23)](#backend--maturity-levels-ml1ml23)
+- [Backend — Maturity Levels (ML1–ML33)](#backend--maturity-levels-ml1ml33)
 - [Frontend — Épicos e User Stories (US-01–US-30)](#frontend--épicos-e-user-stories-us-01us-30)
 
 ---
 
-## Backend — Maturity Levels (ML1–ML23)
+## Backend — Maturity Levels (ML1–ML33)
 
 Cada Maturity Level é um capability flag independente — pode ser ativado/desativado isoladamente.
 
@@ -326,6 +326,13 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] Histórico de performance (EMA latência/qualidade) é considerado
 - [x] Fallback chain garante que nenhuma request fica sem resposta
 - [x] Routing decision é logado para auditoria
+- [x] `PersistentSmartRouter` — decorator write-through que persiste métricas no PostgreSQL
+- [x] Warm-up automático: carrega 7 dias de métricas no startup (`EnsureWarmedUpAsync`)
+- [x] Double-check locking no warm-up para evitar race conditions
+- [x] Fallback gracioso: se PostgreSQL indisponível, opera cold (in-memory only)
+- [x] `AgentPerformanceMetric` persistido com: domain, latency, success, user satisfaction
+- [x] `AgentPerformanceMetricEntity` com `IEntityTypeConfiguration` para EF Core
+- [x] `AgentRanking` calculado por domínio a partir de métricas persistidas
 
 ---
 
@@ -372,6 +379,12 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] PostgreSQL para produção (swap via DI/config)
 - [x] Sessões suportam multi-tenant (ML19)
 - [x] TTL configurável para expiração automática
+- [x] `AgenticDbContext : DbContext` — contexto EF Core centralizado para todas as entidades
+- [x] Entidades persistidas: `SessionData`, `Tenant`, `VectorDocumentEntity`, `CostBudgetEntity`, `CostEntryEntity`, `AgentPerformanceMetricEntity`
+- [x] Cada entidade com `IEntityTypeConfiguration<T>` para mapeamento explícito
+- [x] `EfSessionStore : ISessionStore` — implementação alternativa via EF Core
+- [x] `PostgresCostTracker : ICostTracker` — tracking de custo por provider/model em PostgreSQL
+- [x] `PostgresVectorStore : IVectorStore` — armazenamento de vetores com pgvector
 
 ---
 
@@ -393,6 +406,10 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] Adapter expõe como `ILLMProvider` automaticamente
 - [x] Mapeamento de request/response é transparente
 - [x] Fallback mantém funcionalidade se IChatClient falhar
+- [x] `EmbeddingProviderAdapter` — bridge `IEmbeddingProvider` → `IEmbeddingGenerator<string, Embedding<float>>`
+- [x] `AgenticVectorStoreAdapter` — bridge `IVectorStore` → `IVectorStore` (M.E.AI)
+- [x] 3 adapters distintos cobrem: Chat, Embedding e Vector Store
+- [x] `HttpEmbeddingGenerator : IEmbeddingGenerator` — geração de embeddings via HTTP para providers remotos
 
 ---
 
@@ -436,12 +453,19 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] Store in-memory (default) com interface para persistência
 - [x] Sessões, preferências e agents isolados por tenant
 - [x] Request sem tenant → default tenant ou rejeição (configurável)
+- [x] `JwtTenantAuthenticationHandler : AuthenticationHandler<JwtTenantAuthenticationOptions>` — autenticação JWT com extração automática de tenant
+- [x] `TenantMiddleware` — intercepta toda request, resolve tenant e popula `TenantContext`
+- [x] `TenantResolver : ITenantResolver` — lógica de resolução: JWT claim → header → default
+- [x] `Tenant` persistido via EF Core com `TenantConfiguration : IEntityTypeConfiguration<Tenant>`
+- [x] `TenantLimits` — rate limiting e quotas por tenant (requests, tokens, storage)
 
 ---
 
 ### Infraestrutura Transversal (Backend)
 
-#### Gateway de Serviços Externos
+> 10 componentes cross-cutting que sustentam toda a stack do AgenticSystem.
+
+#### T1 — Gateway de Serviços Externos
 
 **Como** sistema que consome APIs externas,
 **quero** um gateway com resiliência e governança,
@@ -449,21 +473,26 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 | Item | Detalhe |
 |------|---------|
-| Serviço | `ExternalServiceGateway` |
-| Capabilities | Circuit Breaker, Rate Limiter, Cost Tracker, Health Monitor |
+| Serviço | `ServiceGateway` · `CircuitBreaker` · `RateLimiter` · `CostTracker` |
+| Diretório | `Infrastructure/Gateway/` |
+| DI | `IServiceGateway` → `ServiceGateway`; `ICostTracker` → `CostTracker` (ou `PostgresCostTracker`) |
+| Controllers | `GatewayController` (admin dashboard REST) |
+| Hub | `GatewayHub` — eventos real-time: `DashboardUpdate`, `ServiceStatusChanged` |
 | Testes | Unitários (xUnit) |
 | Status | ✅ Implementado |
 
 **Critérios de Aceite:**
-- [x] Circuit Breaker: abre após N falhas consecutivas, half-open após cooldown
-- [x] Rate Limiter: controle por provider (ex: 60 req/min OpenAI)
-- [x] Cost Tracker: rastreamento de custo por provider/model
+- [x] Circuit Breaker: abre após N falhas consecutivas, half-open após cooldown (configurável via `GatewaySettings`)
+- [x] Rate Limiter: controle por provider (ex: 60 req/min OpenAI, configurável em `DefaultRequestsPerMinute`)
+- [x] Cost Tracker: rastreamento de custo por provider/model/tenant com budget diário (`DefaultDailyBudget`)
+- [x] Cost Tracker: dual implementation — `CostTracker` (in-memory) ou `PostgresCostTracker` (persistente)
 - [x] Health Monitor: health check periódico de cada serviço externo
-- [x] Dashboard de saúde via API admin
+- [x] Dashboard de saúde via REST API (`GatewayController`) e SignalR (`GatewayHub`)
+- [x] SignalR subscribe/unsubscribe por serviço individual (`SubscribeToService`)
 
 ---
 
-#### Document Pipeline (RAG)
+#### T2 — Document Pipeline (RAG)
 
 **Como** sistema de RAG,
 **quero** pipeline completo de ingestão, chunking e re-ranking,
@@ -471,23 +500,32 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 | Item | Detalhe |
 |------|---------|
-| Serviços | Parsers (Markdown, PlainText, HTML) · Hybrid Chunking · Heuristic ReRanker |
+| Serviços | `DocumentIngestionPipeline` · `MarkdownParser` · `PlainTextParser` · `HtmlParser` · `HybridChunkingStrategy` · `HeuristicReRanker` |
+| Diretórios | `Infrastructure/Documents/` · `Infrastructure/Chunking/` · `Infrastructure/RAG/` |
+| DI | `IDocumentIngestionPipeline`, `IDocumentParser` (3 impl), `IChunkingStrategy`, `IReRanker`, `IRAGService` |
 | Testes | Unitários (xUnit) |
 | Status | ✅ Implementado |
 
 **Critérios de Aceite:**
-- [x] Parsers suportam Markdown, PlainText e HTML
-- [x] Chunking híbrido preserva estrutura semântica
+- [x] Parsers suportam Markdown, PlainText e HTML via `IDocumentParser` multi-registration
+- [x] Chunking híbrido (`HybridChunkingStrategy`) preserva estrutura semântica
 - [x] ReRanker heurístico: < 5ms/query (vs. 200-500ms cross-encoder)
 - [x] Interface `IReRanker` permite swap para cross-encoder futuro
+- [x] Pipeline completo: parse → chunk → embed → upsert em VectorStore
 
 ---
 
-#### Hierarquia de Agents
+#### T3 — Hierarquia de Agents
 
 **Como** sistema de agentes,
 **quero** hierarquia por tiers com especialização,
 **para que** cada nível tenha responsabilidades claras.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `MetaAgentOrchestrator` · `HierarchicalAgentFactory` · `AgentFrameworkAgentFactory` (decorator) |
+| DI | `IMetaAgent`, `IAgentFactory`, `IContextAnalyzer` |
+| Pattern | Factory + Decorator (Agent Framework wraps HierarchicalAgentFactory) |
 
 | Tier | Papel | Agents |
 |:----:|-------|--------|
@@ -501,6 +539,185 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] Cada agent tem `CanHandle()` claro (nunca aceita `*`)
 - [x] Agents são intercambiáveis via Factory pattern
 - [x] Dynamic agents (ML11) herdam o mesmo tier system
+- [x] Agent Framework decorator aplica pipeline M.E.AI (telemetry, function invocation, logging)
+
+---
+
+#### T4 — Multi-Auth (ApiKey + JWT)
+
+**Como** API que atende clientes internos e tenants,
+**quero** dual authentication (API Key para admin, JWT Bearer para tenants),
+**para que** cada perfil tenha credenciais e claims adequados.
+
+| Item | Detalhe |
+|------|---------|
+| Handlers | `ApiKeyAuthenticationHandler` (header `X-Api-Key`) · `JwtTenantAuthenticationHandler` (Bearer JWT) |
+| Diretório | `Api/Auth/` |
+| Scheme | `MultiAuth` — PolicyScheme que roteia: `Authorization` header → JWT, senão → ApiKey |
+| Segurança | `CryptographicOperations.FixedTimeEquals` (timing-safe comparison) para API Key |
+| JWT Claims | `tenant_id` obrigatório; validação de issuer/audience/lifetime; `ClockSkew: 2min` |
+| Swagger | Ambos schemes documentados em OpenAPI (ApiKey + Bearer) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] ApiKey handler valida contra `AgenticSystem:AdminApiKey` com comparação timing-safe
+- [x] ApiKey gera claims: Name=admin, Role=Admin, tenant_id=default
+- [x] JWT handler valida signing key, issuer, audience e lifetime
+- [x] JWT exige claim `tenant_id` — rejeita token sem ele
+- [x] PolicyScheme `MultiAuth` roteia automaticamente pelo header presente
+- [x] Dev mode: key JWT default gerada se `SecretKey` não configurado; Produção: exige key explícita
+
+---
+
+#### T5 — Multi-Tenant Middleware
+
+**Como** sistema multi-tenant,
+**quero** resolver o tenant em cada request via JWT claim ou header,
+**para que** serviços downstream operem no contexto do tenant correto.
+
+| Item | Detalhe |
+|------|---------|
+| Middleware | `TenantMiddleware` |
+| Diretório | `Api/Middleware/` |
+| DI | `TenantContext` (scoped) · `ITenantResolver` · `ITenantStore` |
+| Resolução | 1º JWT claim `tenant_id` → 2º header `X-Tenant-Id` → fallback "default" |
+| Contexto | `TenantContext.TenantId`, `.TenantName`, `.Plan`, `.Limits`, `.IsAuthenticated` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Middleware extrai tenantId de JWT claim ou header `X-Tenant-Id`
+- [x] `ITenantResolver.ResolveAsync()` popula `TenantContext` scoped completo (id, name, plan, limits)
+- [x] Endpoints sem `[Authorize]` não exigem tenant (health, swagger, etc.)
+- [x] Tenant não encontrado em endpoint autenticado → 403 Forbidden com JSON error
+- [x] Request autenticado sem tenant context → 403 bloqueado
+- [x] Rate limit por tenant no chat endpoint (sliding window, `MaxRequestsPerMinute` do plano)
+
+---
+
+#### T6 — SignalR Real-Time
+
+**Como** frontend que interage com agents,
+**quero** comunicação bidirecional em tempo real via SignalR,
+**para que** o usuário receba respostas e eventos sem polling.
+
+| Item | Detalhe |
+|------|---------|
+| Hubs | `ChatHub` (`/hubs/chat`) · `GatewayHub` (`/hubs/gateway`) |
+| Diretório | `Api/Hubs/` |
+| ChatHub | `SendMessage(userId, message, targetAgent?)` → `ReceiveMessage` · `ProcessingStarted` · `ReceiveError` |
+| GatewayHub | `GetDashboard` · `GetServiceStatus` · `SubscribeToService` · `UnsubscribeFromService` |
+| Eventos | `Connected`, `DashboardUpdate`, `ServiceStatusChanged` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] ChatHub: envia `ProcessingStarted` antes de processar e `ReceiveMessage` com metadata (agentName, tier, tools, actions, sessionId)
+- [x] ChatHub: suporta `targetAgent` para direct request a agent específico
+- [x] GatewayHub: subscribe/unsubscribe por serviço via SignalR Groups
+- [x] GatewayHub: push de status em tempo real para clientes subscribed
+- [x] Ambos hubs logam connect/disconnect com ConnectionId
+
+---
+
+#### T7 — Persistence Layer (PostgreSQL + EF Core + pgvector)
+
+**Como** sistema que precisa persistir sessões, vetores e custos,
+**quero** camada de persistência dual (InMemory para dev, PostgreSQL para produção),
+**para que** o sistema funcione sem infraestrutura externa em dev mas seja durável em produção.
+
+| Item | Detalhe |
+|------|---------|
+| DbContext | `AgenticDbContext` — DbSets: `Sessions`, `Tenants`, `VectorDocuments`, `CostEntries`, `CostBudgets`, `AgentPerformanceMetrics` |
+| Stores | `PostgresSessionStore` · `PostgresVectorStore` · `PostgresCostTracker` · `PersistentSmartRouter` · `EfSessionStore` |
+| InMemory | `InMemorySessionStore` · `InMemoryVectorStore` · `InMemoryTenantStore` (defaults para dev) |
+| Diretório | `Infrastructure/Persistence/` (entities, configurations, stores) |
+| Pattern | Decorator — `PersistentSmartRouter` wraps `SmartRouter` (write-through + warm-up) |
+| Entidades | `VectorDocumentEntity`, `CostEntryEntity`, `CostBudgetEntity`, `AgentPerformanceMetricEntity` |
+| Config EF | Fluent API em `Configurations/` — tabelas snake_case, indexes compostos, JSONB para metadata |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Swap transparente via DI: `UsePostgresSessionStore`, `UsePostgresVectorStore`, `UsePostgresCostTracker`, `UsePostgresSmartRouter`
+- [x] PostgresVectorStore: full-text search com `ts_rank` + `plainto_tsquery` (SQL nativo via Npgsql)
+- [x] PostgresVectorStore: upsert via `ON CONFLICT DO UPDATE` (idempotente)
+- [x] PersistentSmartRouter: write-through decorator com warm-up no startup
+- [x] EF Core configurations: snake_case columns, JSONB, indexes compostos (`tenant_service_date`)
+- [x] pgvector ready: coluna `embedding float[]` pronta para cosine similarity SQL
+
+---
+
+#### T8 — Obsidian Vault Sync
+
+**Como** sistema que precisa persistir eventos de sessão em formato legível,
+**quero** sincronizar eventos de agents com um vault Obsidian (file-based),
+**para que** sessões sejam navegáveis como Markdown e indexadas no VectorStore.
+
+| Item | Detalhe |
+|------|---------|
+| Serviço | `FileObsidianSync` |
+| Diretório | `Infrastructure/Sync/` |
+| Interface | `IObsidianSync` |
+| Formato | Markdown com YAML frontmatter (id, session, agent, tier, timestamp, tags) |
+| Path | Configurável via `AgenticSystem:Memory:ObsidianVaultPath` (default: `{AppDir}/vault`) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Gera arquivo Markdown por evento: `{timestamp}_{agentName}.md` em `vault/sessions/{sessionId}/`
+- [x] YAML frontmatter com id, session, agent, tier, timestamp e tags
+- [x] Seções: Input (code block), Response, Actions, Tools Used
+- [x] Indexa conteúdo no VectorStore automaticamente após salvar (tipo `session_event`)
+- [x] Cria diretórios automaticamente se não existirem
+
+---
+
+#### T9 — Structured Logging (Serilog)
+
+**Como** sistema que precisa de observabilidade,
+**quero** logging estruturado com contexto rico,
+**para que** logs sejam consultáveis e correlacionáveis em produção.
+
+| Item | Detalhe |
+|------|---------|
+| Framework | Serilog via `builder.Host.UseSerilog()` |
+| Sinks | Console + File (rolling diário: `logs/agentic-system-{date}.log`) |
+| Enrichers | `ApplicationName: "AgenticSystem"` · `FromLogContext` |
+| Exception | Global exception handler com `X-Correlation-Id` header (= `TraceIdentifier`) |
+| Config | Serilog lê de `appsettings.json` via `ReadFrom.Configuration` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Serilog configurado via `Host.UseSerilog` com enrichers ApplicationName e LogContext
+- [x] Console sink para dev, File sink com rolling diário para produção
+- [x] Exception handler global: retorna JSON com `correlationId` e status 500
+- [x] Correlation ID via `TraceIdentifier` propagado em header `X-Correlation-Id`
+- [x] Configuração extensível via `appsettings.json` (ReadFrom.Configuration)
+
+---
+
+#### T10 — DI Bootstrapping Modular
+
+**Como** sistema com múltiplas camadas (Core, Infrastructure, Api),
+**quero** registro de DI modular e extensível,
+**para que** cada camada registre seus serviços de forma isolada com overrides opcionais.
+
+| Item | Detalhe |
+|------|---------|
+| Core | `AddAgenticSystemCore()` — agents, sessions, ML services, tools, schedulers, config |
+| Infrastructure | `AddAgenticSystemInfrastructure(config)` — LLM providers, Gateway, RAG, MCP, Persistence, Sync, Vision |
+| Seeds | `SeedAgenticDefaults()` — tools built-in (DateTime, Calculator, FileSearch, WebSearch, etc.) |
+|  | `SeedInfrastructureTools()` — tools de infra (MCP, RAG, etc.) |
+| Overrides | `UsePostgresSessionStore`, `UsePostgresVectorStore`, `UsePostgresCostTracker`, `UsePostgresSmartRouter`, `UseEntityFramework` |
+| Pattern | Remove + re-Add para swap transparente; Decorator para Agent Framework |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] `AddAgenticSystemCore()`: 20+ serviços Core (agents, sessions, ML1-ML23, MediatR)
+- [x] `AddAgenticSystemInfrastructure()`: LLM multi-provider (OpenAI, Ollama, Gemini, Claude), Gateway, RAG, MCP, Persistence
+- [x] Microsoft.Extensions.AI pipeline: `ChatClientBuilder` com OpenTelemetry + FunctionInvocation + Logging
+- [x] M.E.AI `IEmbeddingGenerator<string, Embedding<float>>` com OpenTelemetry
+- [x] Overrides por ambiente: InMemory (dev) → PostgreSQL (produção) via métodos `UsePostgres*`
+- [x] Agent Framework decorator: `AgentFrameworkAgentFactory` wraps `HierarchicalAgentFactory` condicionalmente
+- [x] Health endpoint: `/health` (anonymous) + `/version` (anonymous)
+- [x] CORS: permissivo em dev (`SetIsOriginAllowed(_ => true)`), restrito em produção (AllowedOrigins obrigatório)
 
 ---
 
@@ -718,6 +935,240 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
+### Observability & Self-Healing (ML24–ML25)
+
+#### ML24 — Quality Gates Pipeline
+
+**Como** sistema de orquestração,
+**quero** um pipeline de quality gates extensível que valide entrada e saída de cada interação,
+**para que** requests malformadas sejam rejeitadas cedo e respostas de baixa qualidade sejam detectadas antes de chegar ao usuário.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `IQualityGateService` · `IQualityGate` |
+| Implementações | `InputValidationGate` (pré-execução) · `ResponseQualityGate` (pós-execução) |
+| Integração | `MetaAgentOrchestrator` — gate pipeline entre análise e execução |
+| Registro | DI via `IEnumerable<IQualityGate>` — extensível sem alterar orquestrador |
+| Testes | Unitários (xUnit) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] `IQualityGate` define contrato: `EvaluateAsync(QualityContext) → QualityResult`
+- [x] `InputValidationGate` valida: input não vazio, tamanho dentro do budget, sem injection patterns
+- [x] `ResponseQualityGate` valida: resposta não vazia, confidence acima de threshold, coerência semântica
+- [x] `QualityGateService` orquestra N gates em sequência e agrega `QualityReport`
+- [x] `RegisterGate()` permite adicionar gates em runtime sem recompilação
+- [x] `GetRegisteredGates()` expõe gates ativos para diagnóstico
+- [x] `QualityContext` carrega: input, output, analysis result, session context
+- [x] `QualityReport` consolida: all passed, failures list, gate execution times
+- [x] Integração no `MetaAgentOrchestrator` entre steps 1 (análise) e 2 (routing) — GAP-02
+
+---
+
+#### ML25 — Agent Cleanup (Self-Healing)
+
+**Como** sistema com agents dinâmicos (ML11),
+**quero** limpeza automática de agents inativos via background service,
+**para que** recursos de memória e conexões sejam liberados proativamente.
+
+| Item | Detalhe |
+|------|---------|
+| Serviço | `AgentCleanupHostedService : BackgroundService` |
+| Dependência | `IMetaAgent.CleanupInactiveAgentsAsync()` |
+| Intervalo | 5 minutos (configurável) |
+| Lifecycle | Registrado como Hosted Service — inicia com a app, para com graceful shutdown |
+| Testes | Unitários (xUnit) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] `BackgroundService` executa tick de cleanup a cada 5 minutos
+- [x] Delega a `IMetaAgent.CleanupInactiveAgentsAsync()` para decisão de quais agents remover
+- [x] Tolerante a falhas: exceptions não param o loop (catch + log + continua)
+- [x] Respeita `CancellationToken` para shutdown gracioso
+- [x] Logs estruturados: startup, cada tick, errors, shutdown
+
+---
+
+### Vision (ML26)
+
+#### ML26 — Vision (Análise de Imagens)
+
+**Como** usuário que precisa analisar imagens,
+**quero** enviar imagens ao sistema e receber análise via LLM multimodal,
+**para que** o sistema suporte interações visuais além de texto.
+
+| Item | Detalhe |
+|------|---------|
+| Serviço | `IVisionProvider` |
+| Implementação | `OpenAIVisionProvider` (gpt-4o / gpt-4o-mini) |
+| Modelos | `VisionRequest` · `VisionResponse` |
+| Input | Imagem via URL ou Base64 |
+| Testes | Unitários (xUnit) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Interface `IVisionProvider` com contrato: `AnalyzeImageAsync(VisionRequest) → VisionResponse`
+- [x] Suporte a imagem via URL (http/https) e Base64 (inline)
+- [x] Multi-model: default `gpt-4o-mini`, configurável por request
+- [x] `VisionRequest` inclui: image source, prompt, model override, max tokens
+- [x] `VisionResponse` inclui: description, tokens used, model, latency
+- [x] Health check: `IsEnabled` valida API key + settings antes de aceitar requests
+- [x] Priority system para fallback entre providers (expansível para Google Vision, Azure CV)
+- [x] Provider registrado via DI com `HttpClient` factory (resiliência Polly aplicável)
+
+---
+
+### MCP & Extensibility (ML27–ML28)
+
+#### ML27 — MCP Plugin System
+
+**Como** operador do sistema,
+**quero** integrar Model Context Protocol (MCP) servers como plugins gerenciáveis,
+**para que** o sistema estenda suas capabilities dinamicamente via servidores MCP externos.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `IMCPPluginManager` · `IMCPPlugin` |
+| Implementações | `MCPPluginManager` · `McpClientPlugin` (IAsyncDisposable) |
+| Adapter | `McpToolsAIFunctionAdapter` — bridge MCP tools → AI Functions (M.E.AI) |
+| API | `MCPPluginController` (load, unload, list, discover, execute) |
+| Frontend | `PluginsPage.tsx` · `PluginDetailModal.tsx` · `PluginLoadModal.tsx` |
+| Testes | Unitários (xUnit) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] `MCPPluginManager` gerencia lifecycle completo: load → connect → discover → execute → unload
+- [x] `McpClientPlugin : IMCPPlugin, IAsyncDisposable` — encapsula conexão com MCP server
+- [x] Discover automático de tools, resources e prompts do MCP server
+- [x] `McpToolsAIFunctionAdapter` converte MCP tools em `AIFunction` para uso no pipeline M.E.AI
+- [x] API REST completa: `POST /load`, `DELETE /unload`, `GET /list`, `GET /tools`, `POST /execute`
+- [x] Frontend com UI para carregar plugins (URL + config), visualizar tools e resources
+- [x] Modelos: `MCPPluginConfig`, `MCPToolInfo`, `MCPToolDetail`, `MCPResourceInfo`, `MCPPromptInfo`, `MCPResponse`
+- [x] Cleanup automático via `IAsyncDisposable` quando plugin é descarregado
+
+---
+
+#### ML28 — Storage Abstraction
+
+**Como** sistema que gera e consome arquivos (documentos RAG, exports, attachments),
+**quero** uma abstração de storage desacoplada do filesystem,
+**para que** seja possível trocar entre local, S3, Azure Blob ou outro provider sem mudar código de negócio.
+
+| Item | Detalhe |
+|------|---------|
+| Serviço | `IStorageProvider` |
+| Modelo | `StorageFile` |
+| Testes | Unitários (xUnit) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Interface `IStorageProvider` com operações: Save, Get, Delete, List, Exists
+- [x] `StorageFile` encapsula: path, content stream, metadata, content type
+- [x] Implementação local (filesystem) como default
+- [x] Interface preparada para swap para cloud (S3, Azure Blob, GCS)
+- [x] Integração com Document Pipeline (RAG) para armazenamento de documentos ingeridos
+
+---
+
+### Agent Runtime Platform (ML29–ML33)
+
+#### ML29 — Agent Execution Workflow
+
+**Como** arquitetura de execução,
+**quero** centralizar o pipeline operacional em um workflow dedicado,
+**para que** o MetaAgent atue como fachada de sessão/streaming/governança e não como orquestrador monolítico.
+
+| Item | Detalhe |
+|------|---------|
+| Serviço | `IAgentExecutionWorkflow`, `AgentExecutionWorkflow` |
+| Responsabilidade | Fluxo principal e direto (análise, routing, handoff, execução, reflexão, persistência) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] `MetaAgentOrchestrator` delega execução para `IAgentExecutionWorkflow`
+- [x] Fluxo principal e fluxo direto usam o mesmo contrato operacional
+- [x] Consolidação de sessão e persistência de artefatos ficam no workflow
+
+---
+
+#### ML30 — End-to-End Streaming Runtime
+
+**Como** consumidor de API em tempo real,
+**quero** streaming fim a fim por SignalR e SSE,
+**para que** eu acompanhe status, tokens e eventos operacionais durante a execução.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `IAgentRuntimeCoordinator`, `AgentRuntimeCoordinator`, `ChatHub`, `/api/chat/stream` |
+| Responsabilidade | Eventos de sessão, planejamento, steps, tools, RAG, revisão, aprovação e término |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] `ProcessRequestStreamAsync` e `ProcessDirectRequestStreamAsync` disponíveis no `IMetaAgent`
+- [x] SSE `/api/chat/stream` transmite eventos estruturados
+- [x] SignalR `StreamEvent` transmite o mesmo contrato de evento
+
+---
+
+#### ML31 — Governed Capabilities
+
+**Como** plataforma de agentes em produção,
+**quero** governança de capabilities por risco e escopo,
+**para que** chamadas sensíveis tenham proteção operacional e auditoria.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `IToolGovernanceService`, `ToolGovernanceService`, `InMemoryToolManager` |
+| Responsabilidade | Whitelist por agent scope, timeout, retry, idempotência, cache, aprovação de tool |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Avaliação de política por tool/action antes da execução
+- [x] Aprovação humana para operações de maior risco
+- [x] Metadados e artefatos de auditoria registrados no runtime
+
+---
+
+#### ML32 — Operational Artifacts & Runtime Metrics
+
+**Como** time de operação,
+**quero** observabilidade semântica do ciclo de execução,
+**para que** debugging, resume e governança sejam objetivos e rastreáveis.
+
+| Item | Detalhe |
+|------|---------|
+| Modelos/Serviços | `AgentExecutionArtifact`, `AgentRuntimeMetricsSnapshot`, `RuntimeEvaluationResult`, `AgentRuntimeCoordinator`, `IRuntimeEvaluator` |
+| Responsabilidade | Persistir plano, step, review, handoff, tool output, approvals, métricas de runtime e scores contínuos de avaliação |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Endpoint para artefatos de sessão
+- [x] Endpoint para métricas de runtime
+- [x] Endpoint para avaliações e regressões de runtime
+- [x] Scores de avaliação persistidos no operational store
+- [x] Eventos persistidos para replay operacional
+
+---
+
+#### ML33 — Human-in-the-Loop Final Approval
+
+**Como** governança de produção,
+**quero** aprovação humana antes da resposta final em cenários sensíveis,
+**para que** operações de alto impacto não sejam publicadas automaticamente.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `IFinalResponseApprovalService`, `FinalResponseApprovalService` |
+| API | `GET /api/agent/sessions/{sessionId}/final-approvals`, `POST /api/agent/final-approvals/{approvalId}/approve`, `POST /api/agent/final-approvals/{approvalId}/reject` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Resposta final pode ser bloqueada e marcada como pending approval
+- [x] Aprovação/rejeição gera evento e artefato operacional
+- [x] Estado de aprovação final é consultável por sessão
+
+---
+
 ## Backend — Resumo de Cobertura
 
 | Camada | MLs | Serviços | Testes |
@@ -731,8 +1182,12 @@ TriggerEngine.EvaluateAsync(rule)
 | Infrastructure | ML16–ML19 | 5 | ✅ |
 | Resilience | ML20–ML21 | 5 | ✅ |
 | Config & Embedding | ML22–ML23 | 4 | ✅ |
-| Transversal | — | 3 | ✅ |
-| **Total** | **23** | **34 serviços** | **432+ testes** |
+| Observability & Self-Healing | ML24–ML25 | 3 | ✅ |
+| Vision | ML26 | 1 | ✅ |
+| MCP & Extensibility | ML27–ML28 | 3 | ✅ |
+| Agent Runtime Platform | ML29–ML33 | 5 | ✅ |
+| Transversal | T1–T10 | 10 | ✅ |
+| **Total** | **33 MLs + 10 Transversais** | **53 serviços** | **549+ testes** |
 
 ---
 
@@ -1021,19 +1476,21 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 #### US-15 — Gerenciar providers de LLM
 
 **Como** administrador,
-**quero** ver e gerenciar providers de LLM configurados,
-**para que** eu controle quais modelos estão disponíveis.
+**quero** ver e gerenciar providers de LLM configurados em uma área dedicada,
+**para que** eu controle quais modelos estão disponíveis e qual IA abre pré-selecionada no chat.
 
 | Item | Detalhe |
 |------|---------|
-| Componente | `ProvidersPage` |
-| API | `GET /api/admin/llm/providers` |
+| Componente | `ProvidersPage` (rota `/ai`) |
+| API | `GET /api/admin/llm/configuration` + `PUT /api/admin/llm/default-selection` |
 | Status | ✅ Implementado |
 
 **Critérios de Aceite:**
 - [x] Lista de providers com status (enabled/disabled)
-- [x] Informações: nome, modelo default, prioridade
+- [x] Informações: nome, modelo default, prioridade, disponibilidade e flag de default
 - [x] Ação de editar configuração
+- [x] Área para definir provider + modelo default do chat
+- [x] Rota legada `/providers` redireciona para `/ai`
 
 ---
 
@@ -1053,6 +1510,26 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 - [x] Botão "Testar" por provider
 - [x] Feedback visual: sucesso/falha
 - [x] Mensagem de erro detalhada em caso de falha
+
+---
+
+#### US-01A — Selecionar IA no chat
+
+**Como** usuário,
+**quero** escolher provider e modelo diretamente no topo do chat,
+**para que** eu altere a IA da conversa sem abrir telas técnicas.
+
+| Item | Detalhe |
+|------|---------|
+| Componentes | `ChatPage` · `AgentChatPage` · `AISelectorBar` |
+| APIs | `GET /api/admin/llm/configuration` + `POST /api/chat` / `ChatHub.SendMessage(...)` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Chat principal e chat dedicado exibem seletor de provider e modelo
+- [x] Seleção é persistida localmente para reaproveitar a última IA usada
+- [x] Envio REST e SignalR propagam provider/model selecionados
+- [x] Ação "Configurar IA" leva da conversa para a rota `/ai`
 
 ---
 
@@ -1245,11 +1722,11 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 | Item | Detalhe |
 |------|---------|
 | Componente | `Sidebar` |
-| Router | 12 rotas em `App.tsx` |
+| Router | 16 rotas em `App.tsx` |
 | Status | ✅ Implementado |
 
 **Critérios de Aceite:**
-- [x] 12 itens: Chat, Dashboard, Agents, Tools, Skills, RAG, Gateway, Saúde, Custos, Providers, Plugins, Config
+- [x] 16 itens: Chat, Dashboard, Agents, AgentChat, Tools, Skills, RAG, Gateway, GatewayHealth, Costs, IAs, Plugins, ScheduledTasks, Config, ConfigAdvanced, EmbeddingMigration
 - [x] Ícones (lucide-react) por item
 - [x] Item ativo destacado visualmente
 - [x] Navegação via react-router-dom
@@ -1337,7 +1814,7 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 | Épico | Stories | IDs | Componentes | Status |
 |-------|:-------:|-----|:-----------:|:------:|
-| Chat Interface | 4 | US-01 a US-04 | 5 | ✅ |
+| Chat Interface | 5 | US-01, US-01A, US-02 a US-04 | 6 | ✅ |
 | Gateway Dashboard | 4 | US-05 a US-08 | 4 | ✅ |
 | Agent Management | 6 | US-09 a US-14 | 4 | ✅ |
 | LLM Providers | 2 | US-15, US-16 | 1 | ✅ |
@@ -1346,7 +1823,7 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 | Real-time (SignalR) | 3 | US-23 a US-25 | 2 | ✅ |
 | Transversal | 5 | US-26 a US-30 | 5 | ✅ |
 | Chat Dedicado | 3 | US-31 a US-33 | 2 | ✅ |
-| **Total** | **33** | | **27 componentes** | **✅** |
+| **Total** | **34** | | **28 componentes** | **✅** |
 
 ---
 

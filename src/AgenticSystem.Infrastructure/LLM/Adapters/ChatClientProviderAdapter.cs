@@ -2,6 +2,7 @@ using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.LLM.Models;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using System.Text;
 using System.Diagnostics;
 
 namespace AgenticSystem.Infrastructure.LLM.Adapters;
@@ -14,9 +15,13 @@ public class ChatClientProviderAdapter : ILLMProvider
 {
     private readonly IChatClient _chatClient;
     private readonly ILogger<ChatClientProviderAdapter> _logger;
-    private string _defaultModel;
-    private bool _enabled;
-    private int _priority;
+    private readonly bool _enableStreaming;
+    private volatile string _defaultModel;
+    private volatile bool _enabled;
+    private volatile int _priority;
+    private DateTime _lastSuccessAt = DateTime.UtcNow;
+    private DateTime _lastFailureAt = DateTime.MinValue;
+    private static readonly TimeSpan CircuitBreakerWindow = TimeSpan.FromMinutes(2);
 
     public ChatClientProviderAdapter(
         IChatClient chatClient,
@@ -24,10 +29,12 @@ public class ChatClientProviderAdapter : ILLMProvider
         string name = "M.E.AI",
         string defaultModel = "gpt-4o",
         bool enabled = true,
-        int priority = 0)
+        int priority = 0,
+        bool enableStreaming = false)
     {
         _chatClient = chatClient;
         _logger = logger;
+        _enableStreaming = enableStreaming;
         Name = name;
         _defaultModel = defaultModel;
         _enabled = enabled;
@@ -66,44 +73,64 @@ public class ChatClientProviderAdapter : ILLMProvider
                 ModelId = model
             };
 
-            var response = await _chatClient.GetResponseAsync(messages, options, ct);
-            sw.Stop();
+            var (content, usage) = _enableStreaming
+                ? await GenerateWithStreamingAsync(messages, options, ct)
+                : await GenerateWithSingleResponseAsync(messages, options, ct);
 
-            var content = response.Text ?? string.Empty;
-            var usage = MapUsage(response.Usage);
+            sw.Stop();
 
             _logger.LogDebug("🤖 M.E.AI [{Model}] {Tokens} tokens in {Latency}ms",
                 model, usage.TotalTokens, sw.ElapsedMilliseconds);
 
+            _lastSuccessAt = DateTime.UtcNow;
             return LLMResponse.Ok(content, model, Name, usage);
         }
         catch (Exception ex)
         {
             sw.Stop();
+            _lastFailureAt = DateTime.UtcNow;
             _logger.LogError(ex, "❌ M.E.AI [{Model}] failed after {Latency}ms", model, sw.ElapsedMilliseconds);
             return LLMResponse.Fail(ex.Message, Name);
         }
     }
 
-    public async Task<bool> IsAvailableAsync(CancellationToken ct = default)
+    private async Task<(string Content, UsageInfo Usage)> GenerateWithSingleResponseAsync(
+        List<Microsoft.Extensions.AI.ChatMessage> messages,
+        ChatOptions options,
+        CancellationToken ct)
     {
-        if (!_enabled) return false;
+        var response = await _chatClient.GetResponseAsync(messages, options, ct);
+        return (response.Text ?? string.Empty, MapUsage(response.Usage));
+    }
 
-        try
+    private async Task<(string Content, UsageInfo Usage)> GenerateWithStreamingAsync(
+        List<Microsoft.Extensions.AI.ChatMessage> messages,
+        ChatOptions options,
+        CancellationToken ct)
+    {
+        var sb = new StringBuilder();
+
+        await foreach (var update in _chatClient.GetStreamingResponseAsync(messages, options, ct))
         {
-            // Simple ping: send a minimal message to verify connectivity
-            var messages = new List<Microsoft.Extensions.AI.ChatMessage>
+            if (!string.IsNullOrEmpty(update.Text))
             {
-                new(ChatRole.User, "ping")
-            };
-            var options = new ChatOptions { MaxOutputTokens = 1 };
-            await _chatClient.GetResponseAsync(messages, options, ct);
-            return true;
+                sb.Append(update.Text);
+            }
         }
-        catch
-        {
-            return false;
-        }
+
+        return (sb.ToString(), new UsageInfo());
+    }
+
+    public Task<bool> IsAvailableAsync(CancellationToken ct = default)
+    {
+        if (!_enabled) return Task.FromResult(false);
+
+        // Circuit breaker: if last call succeeded recently, assume available
+        // If last failure is more recent than last success and within window, assume unavailable
+        if (_lastFailureAt > _lastSuccessAt && (DateTime.UtcNow - _lastFailureAt) < CircuitBreakerWindow)
+            return Task.FromResult(false);
+
+        return Task.FromResult(true);
     }
 
     private static List<Microsoft.Extensions.AI.ChatMessage> MapMessages(LLMRequest request)

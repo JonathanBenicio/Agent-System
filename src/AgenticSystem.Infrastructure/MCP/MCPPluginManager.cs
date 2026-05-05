@@ -117,6 +117,35 @@ public class MCPPluginManager : IMCPPluginManager
         return _plugins.Values.Select(p => (p.Id, p.Name, p.Status, p.ProvidedTools.Count));
     }
 
+    /// <summary>
+    /// Auto-starts all plugins that have AutoStart = true.
+    /// </summary>
+    public async Task AutoStartPluginsAsync(IEnumerable<MCPPluginConfig> configs, CancellationToken ct = default)
+    {
+        var autoStartConfigs = configs.Where(c => c.AutoStart).ToList();
+
+        if (autoStartConfigs.Count == 0)
+        {
+            _logger.LogDebug("No MCP plugins configured for auto-start");
+            return;
+        }
+
+        _logger.LogInformation("Auto-starting {Count} MCP plugin(s)", autoStartConfigs.Count);
+
+        foreach (var config in autoStartConfigs)
+        {
+            try
+            {
+                await LoadPluginFromConfigAsync(config, ct);
+                _logger.LogInformation("Auto-started MCP plugin: {Name}", config.Name);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to auto-start MCP plugin: {Name}", config.Name);
+            }
+        }
+    }
+
     private MCPPluginConfig ParsePluginConfig(string pluginPath)
     {
         // Se é um path para arquivo JSON, ler e deserializar

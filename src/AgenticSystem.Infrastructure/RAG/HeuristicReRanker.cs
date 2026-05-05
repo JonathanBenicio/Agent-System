@@ -13,6 +13,14 @@ public class HeuristicReRanker : IReRanker
 {
     private readonly ILogger<HeuristicReRanker> _logger;
 
+    // Scoring weights
+    private const double VectorScoreWeight = 0.4;
+    private const double TfScoreWeight = 0.3;
+    private const double ExactPhraseBonus = 0.2;
+    private const double SectionMatchBonus = 0.1;
+    private const double TagMatchBonus = 0.05;
+    private const double OverlapPenalty = -0.05;
+
     public HeuristicReRanker(ILogger<HeuristicReRanker> logger)
     {
         _logger = logger;
@@ -32,20 +40,20 @@ public class HeuristicReRanker : IReRanker
             var tfScore = CalculateTFScore(queryTerms, contentTerms);
 
             // Exact phrase bonus
-            var phraseBonus = candidate.Content.Contains(query, StringComparison.OrdinalIgnoreCase) ? 0.2 : 0.0;
+            var phraseBonus = candidate.Content.Contains(query, StringComparison.OrdinalIgnoreCase) ? ExactPhraseBonus : 0.0;
 
             // Metadata bonus (has section title, source, type match)
             var metaBonus = CalculateMetadataBonus(candidate.Metadata, queryTerms);
 
             // Original vector score weight
-            var vectorWeight = candidate.Score * 0.4;
+            var vectorWeight = candidate.Score * VectorScoreWeight;
 
             // Overlap penalty (if chunk indicates overlap, slight penalty to prefer original chunks)
             var overlapPenalty = 0.0;
             if (candidate.Metadata.TryGetValue("has_overlap", out var ov) && ov == "True")
-                overlapPenalty = -0.05;
+                overlapPenalty = OverlapPenalty;
 
-            var finalScore = Math.Min(vectorWeight + tfScore * 0.3 + phraseBonus + metaBonus + overlapPenalty, 1.0);
+            var finalScore = Math.Min(vectorWeight + tfScore * TfScoreWeight + phraseBonus + metaBonus + overlapPenalty, 1.0);
 
             scored.Add(new RankedChunk
             {
@@ -86,14 +94,14 @@ public class HeuristicReRanker : IReRanker
         {
             var sectionTerms = Tokenize(section);
             if (queryTerms.Any(q => sectionTerms.Contains(q)))
-                bonus += 0.1;
+                bonus += SectionMatchBonus;
         }
 
         if (metadata.TryGetValue("tags", out var tags) && !string.IsNullOrEmpty(tags))
         {
             var tagTerms = Tokenize(tags);
             if (queryTerms.Any(q => tagTerms.Contains(q)))
-                bonus += 0.05;
+                bonus += TagMatchBonus;
         }
 
         return bonus;

@@ -17,11 +17,15 @@ public interface IMetaAgent
     /// </summary>
     Task<AgentResponse> ProcessRequestAsync(string input, UserContext context);
 
+    IAsyncEnumerable<AgentStreamEvent> ProcessRequestStreamAsync(string input, UserContext context, CancellationToken ct = default);
+
     /// <summary>
     /// Processa uma requisição direcionada a um agent específico, 
     /// bypassing a análise de contexto e seleção automática do MetaAgent.
     /// </summary>
     Task<AgentResponse> ProcessDirectRequestAsync(string input, UserContext context, string targetAgent);
+
+    IAsyncEnumerable<AgentStreamEvent> ProcessDirectRequestStreamAsync(string input, UserContext context, string targetAgent, CancellationToken ct = default);
     
     /// <summary>
     /// Lista todos os agents ativos no sistema

@@ -14,6 +14,7 @@ public interface IConfigManager
     Task DeleteAsync(string key);
     Task<ConfigValidationResult> ValidateAsync(string key);
     Task<IEnumerable<ConfigChangeLog>> GetAuditLogAsync(string? key = null, int limit = 50);
+    Task<string?> ResolveValueAsync(string key);
 }
 
 /// <summary>

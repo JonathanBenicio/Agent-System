@@ -126,6 +126,7 @@ public interface ISemanticCompressor
 {
     Task<SemanticSummary> CompressSessionAsync(string sessionId);
     Task<SemanticSummary> CompressChunksAsync(IEnumerable<string> chunkIds, string label);
+    Task<SemanticSummary> CompressRankedChunksAsync(IEnumerable<RankedChunk> chunks, string label);
     Task<IEnumerable<SemanticSummary>> GetInsightsAsync(string? sourceType = null, int count = 10);
 }
 

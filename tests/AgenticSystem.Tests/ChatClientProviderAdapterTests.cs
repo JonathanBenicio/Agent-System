@@ -136,6 +136,9 @@ public class ChatClientProviderAdapterTests
             .GetResponseAsync(Arg.Any<IList<MEAIChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
             .Returns<MEAIChatResponse>(_ => throw new Exception("down"));
 
+        // Trigger a failure to activate the circuit breaker
+        await _sut.GenerateAsync(new LLMRequest { Prompt = "ping" });
+
         (await _sut.IsAvailableAsync()).Should().BeFalse();
     }
 }

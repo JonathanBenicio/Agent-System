@@ -30,6 +30,12 @@ public interface IAgent
     /// Tools disponíveis para este agent
     /// </summary>
     IEnumerable<string> AvailableTools { get; }
+
+    /// <summary>
+    /// System prompt / instruções base do agent.
+    /// Usado pelo Agent Framework para configurar o ChatClientAgent.
+    /// </summary>
+    string Instructions { get; }
     
     /// <summary>
     /// Atualiza última utilização (para cleanup)

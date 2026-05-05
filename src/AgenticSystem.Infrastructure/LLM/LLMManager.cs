@@ -1,55 +1,177 @@
-using Microsoft.Extensions.Logging;
+﻿using System.Diagnostics;
+using System.Globalization;
+using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.LLM.Models;
+using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Services;
+using AgenticSystem.Infrastructure.Configuration;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using MChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 namespace AgenticSystem.Infrastructure.LLM;
 
 public class LLMManager : ILLMManager
 {
-    private readonly Dictionary<string, ILLMProvider> _providers;
-    private readonly Dictionary<string, ILLMProvider> _allProviders;
-    private readonly Dictionary<string, AgentLLMProfile> _profiles;
-    private readonly ILogger<LLMManager> _logger;
-
-    public LLMManager(IEnumerable<ILLMProvider> providers, ILogger<LLMManager> logger)
+    private const string DefaultProviderConfigKey = "llm.default.provider";
+    private const string DefaultModelConfigKey = "llm.default.model";
+    private static readonly IReadOnlyDictionary<string, string[]> ProviderModelCatalog = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
     {
-        var providerList = providers.ToList();
-        _allProviders = providerList.ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
-        _providers = providerList
-            .Where(p => p.IsEnabled)
-            .ToDictionary(p => p.Name, StringComparer.OrdinalIgnoreCase);
-        _profiles = new Dictionary<string, AgentLLMProfile>(StringComparer.OrdinalIgnoreCase);
-        _logger = logger;
+        ["OpenAI"] = ["gpt-4o", "gpt-4o-mini", "o4-mini", "o3"],
+        ["Gemini"] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
+        ["Claude"] = ["claude-sonnet-4-20250514", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"],
+        ["Ollama"] = ["llama3", "llama3.1", "mistral", "qwen2.5"]
+    };
 
-        _logger.LogInformation("🧠 LLMManager initialized with {Count} provider(s): {Providers}",
-            _providers.Count, string.Join(", ", _providers.Keys));
+    private readonly AgenticSystemSettings _settings;
+    private readonly ILogger<LLMManager> _logger;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILLMRuntimeContextAccessor _llmRuntimeContextAccessor;
+    private readonly ITenantStore _tenantStore;
+    private readonly ISessionStore _sessionStore;
+    private readonly IConfigManager? _configManager;
+    private readonly IConfigReloadNotifier? _configReloadNotifier;
+
+    private readonly Dictionary<string, ILLMProvider> _providers = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IChatClient> _chatClientRegistry = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, AgentLLMProfile> _profiles = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim _configSync = new(1, 1);
+
+    private volatile bool _runtimeConfigDirty = true;
+    private string? _defaultProviderOverride;
+    private string? _defaultModelOverride;
+
+    public LLMManager(
+        IEnumerable<ILLMProvider> providers,
+        ILogger<LLMManager> logger)
+    {
+        _settings = new AgenticSystemSettings();
+        _logger = logger;
+        _loggerFactory = LoggerFactory.Create(_ => { });
+        _llmRuntimeContextAccessor = new LLMRuntimeContextAccessor();
+        _tenantStore = new InMemoryTenantStore();
+        _sessionStore = new InMemorySessionStore();
+        _configManager = null;
+        _configReloadNotifier = null;
+
+        foreach (var provider in providers)
+        {
+            _providers[provider.Name] = provider;
+            _chatClientRegistry[provider.Name] = BuildChatClient(provider);
+        }
+
+        _logger.LogInformation(
+            "🧠 LLMManager initialized with {ProviderCount} providers ({Providers})",
+            _providers.Count,
+            string.Join(", ", _providers.Keys));
+    }
+
+    public LLMManager(
+        IOptions<AgenticSystemSettings> settingsOptions,
+        ILogger<LLMManager> logger,
+        ILoggerFactory loggerFactory,
+        ILLMRuntimeContextAccessor llmRuntimeContextAccessor,
+        ITenantStore tenantStore,
+        ISessionStore sessionStore,
+        IConfigManager? configManager = null,
+        IConfigReloadNotifier? configReloadNotifier = null)
+    {
+        _settings = settingsOptions.Value;
+        _logger = logger;
+        _loggerFactory = loggerFactory;
+        _llmRuntimeContextAccessor = llmRuntimeContextAccessor;
+        _tenantStore = tenantStore;
+        _sessionStore = sessionStore;
+        _configManager = configManager;
+        _configReloadNotifier = configReloadNotifier;
+
+        RegisterProvidersFromSettings(_settings);
+
+        if (_configReloadNotifier is not null)
+        {
+            _configReloadNotifier.OnChange(key =>
+            {
+                if (key.StartsWith("llm.", StringComparison.OrdinalIgnoreCase))
+                {
+                    _runtimeConfigDirty = true;
+                }
+            });
+        }
+
+        _logger.LogInformation(
+            "🧠 LLMManager initialized with {ProviderCount} providers ({Providers})",
+            _providers.Count,
+            string.Join(", ", _providers.Keys));
     }
 
     public async Task<LLMResponse> GenerateAsync(LLMRequest request, CancellationToken ct = default)
     {
-        var provider = !string.IsNullOrWhiteSpace(request.Provider)
-            ? GetProvider(request.Provider)
-            : GetDefaultProvider();
+        var selection = await ResolveSelectionAsync(request, ct);
+        var chatClient = await ResolveChatClientAsync(selection.Provider, selection.Model, selection.ApiKey, ct);
 
-        return await provider.GenerateAsync(request, ct);
+        var messages = MapMessages(request);
+        if (messages.Count == 0)
+        {
+            return LLMResponse.Fail("The request does not contain any prompt or chat messages.", selection.Provider);
+        }
+
+        var options = new ChatOptions
+        {
+            Temperature = (float?)request.Parameters.Temperature,
+            MaxOutputTokens = request.Parameters.MaxTokens,
+            TopP = (float?)request.Parameters.TopP,
+            FrequencyPenalty = (float?)request.Parameters.FrequencyPenalty,
+            PresencePenalty = (float?)request.Parameters.PresencePenalty,
+            StopSequences = request.Parameters.Stop,
+            ModelId = selection.Model
+        };
+
+        var sw = Stopwatch.StartNew();
+
+        try
+        {
+            var response = await chatClient.GetResponseAsync(messages, options, ct);
+            sw.Stop();
+
+            var llmResponse = LLMResponse.Ok(
+                response.Text ?? string.Empty,
+                selection.Model,
+                selection.Provider,
+                MapUsage(response.Usage));
+
+            llmResponse.Latency = sw.Elapsed;
+            return llmResponse;
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex,
+                "❌ Chat request via {Provider} failed after {Latency}ms",
+                selection.Provider,
+                sw.ElapsedMilliseconds);
+
+            var failedResponse = LLMResponse.Fail(ex.Message, selection.Provider);
+            failedResponse.Latency = sw.Elapsed;
+            return failedResponse;
+        }
     }
 
     public async Task<LLMResponse> GenerateWithProfileAsync(string agentName, string taskType, string prompt, CancellationToken ct = default)
     {
         var profile = GetProfileOrDefault(agentName);
-        var provider = !string.IsNullOrWhiteSpace(profile.PreferredProvider)
-            ? GetProvider(profile.PreferredProvider)
-            : GetDefaultProvider();
-
         var parameters = profile.GetParametersForTask(taskType);
+
         var request = new LLMRequest
         {
             Prompt = prompt,
-            Model = profile.PreferredModel,
+            Provider = string.IsNullOrWhiteSpace(profile.PreferredProvider) ? null : profile.PreferredProvider,
+            Model = string.IsNullOrWhiteSpace(profile.PreferredModel) ? null : profile.PreferredModel,
             Parameters = parameters
         };
 
-        return await provider.GenerateAsync(request, ct);
+        return await GenerateAsync(request, ct);
     }
 
     public ILLMProvider GetProvider(string name)
@@ -57,36 +179,69 @@ public class LLMManager : ILLMManager
         if (_providers.TryGetValue(name, out var provider))
             return provider;
 
-        _logger.LogWarning("⚠️ Provider '{Provider}' not found, falling back to default", name);
+        _logger.LogWarning("⚠️ Provider '{Provider}' not found. Falling back to default provider.", name);
         return GetDefaultProvider();
     }
 
     public ILLMProvider GetDefaultProvider()
     {
-        var provider = _providers.Values
+        if (!string.IsNullOrWhiteSpace(_defaultProviderOverride)
+            && _providers.TryGetValue(_defaultProviderOverride, out var configuredDefault)
+            && configuredDefault.IsEnabled)
+        {
+            return configuredDefault;
+        }
+
+        var best = _providers.Values
+            .Where(p => p.IsEnabled)
             .OrderBy(p => p.Priority)
             .FirstOrDefault();
 
-        return provider ?? throw new InvalidOperationException("No LLM providers are available.");
+        if (best is not null)
+            return best;
+
+        throw new InvalidOperationException("No LLM providers are available.");
     }
 
-    public IEnumerable<ILLMProvider> GetEnabledProviders() => _providers.Values;
+    public IEnumerable<ILLMProvider> GetEnabledProviders()
+        => _providers.Values.Where(p => p.IsEnabled);
 
     public IEnumerable<LLMProviderInfo> GetAllProviderInfo()
     {
-        return _allProviders.Values.Select(p => new LLMProviderInfo
+        var defaultProviderName = ResolveDefaultProviderName();
+
+        return _providers.Values
+            .OrderBy(p => p.Priority)
+            .Select(p => new LLMProviderInfo
+            {
+                Name = p.Name,
+                DefaultModel = p.DefaultModel,
+                IsEnabled = p.IsEnabled,
+                Priority = p.Priority,
+                HasApiKey = IsProviderConfigured(p),
+                IsDefault = p.Name.Equals(defaultProviderName, StringComparison.OrdinalIgnoreCase),
+                IsAvailable = p.IsEnabled && IsProviderConfigured(p),
+                Models = BuildModelList(p.Name, p.DefaultModel)
+            });
+    }
+
+    public async Task<LLMConfigurationInfo> GetConfigurationAsync(CancellationToken ct = default)
+    {
+        await EnsureRuntimeConfigLoadedAsync(ct);
+
+        var defaultProvider = GetDefaultProvider();
+
+        return new LLMConfigurationInfo
         {
-            Name = p.Name,
-            DefaultModel = p.DefaultModel,
-            IsEnabled = p.IsEnabled,
-            Priority = p.Priority,
-            HasApiKey = p.IsEnabled
-        });
+            DefaultProvider = ResolveDefaultProviderName(),
+            DefaultModel = ResolveDefaultModel(defaultProvider),
+            Providers = GetAllProviderInfo().ToList()
+        };
     }
 
     public async Task<bool> TestProviderAsync(string name, CancellationToken ct = default)
     {
-        if (!_allProviders.TryGetValue(name, out var provider))
+        if (!_providers.TryGetValue(name, out var provider))
             return false;
 
         try
@@ -100,27 +255,77 @@ public class LLMManager : ILLMManager
         }
     }
 
-    public bool UpdateProvider(string name, UpdateProviderRequest request)
+    public async Task<bool> UpdateProviderAsync(string name, UpdateProviderRequest request, CancellationToken ct = default)
     {
-        if (!_allProviders.TryGetValue(name, out var provider))
+        if (!_providers.TryGetValue(name, out var provider))
             return false;
 
         provider.Configure(request.ApiKey, request.DefaultModel, request.Enabled, request.Priority);
+        _chatClientRegistry[name] = BuildChatClient(provider);
+        await PersistProviderConfigurationAsync(name, request, provider);
 
-        if (provider.IsEnabled)
-            _providers[name] = provider;
-        else
-            _providers.Remove(name);
-
-        _logger.LogInformation("✅ Provider '{Provider}' updated — Enabled={Enabled}, Priority={Priority}, Model={Model}",
-            name, provider.IsEnabled, provider.Priority, provider.DefaultModel);
+        _logger.LogInformation(
+            "✅ Provider '{Provider}' updated — Enabled={Enabled}, Priority={Priority}, Model={Model}",
+            name,
+            provider.IsEnabled,
+            provider.Priority,
+            provider.DefaultModel);
 
         return true;
+    }
+
+    public async Task<LLMConfigurationInfo> UpdateDefaultSelectionAsync(UpdateDefaultLlmSelectionRequest request, CancellationToken ct = default)
+    {
+        await EnsureRuntimeConfigLoadedAsync(ct);
+
+        if (!_providers.TryGetValue(request.ProviderName, out var provider))
+            throw new InvalidOperationException($"Provider '{request.ProviderName}' not found.");
+
+        if (!provider.IsEnabled)
+            throw new InvalidOperationException($"Provider '{request.ProviderName}' is disabled.");
+
+        var model = string.IsNullOrWhiteSpace(request.Model)
+            ? provider.DefaultModel
+            : request.Model;
+
+        _defaultProviderOverride = provider.Name;
+        _defaultModelOverride = model;
+        _runtimeConfigDirty = false;
+
+        if (_configManager is not null)
+        {
+            await UpsertConfigEntryAsync(
+                DefaultProviderConfigKey,
+                provider.Name,
+                isSecret: false,
+                ConfigCategory.Provider,
+                provider.Name,
+                "Provider default utilizado no chat.");
+
+            await UpsertConfigEntryAsync(
+                DefaultModelConfigKey,
+                model,
+                isSecret: false,
+                ConfigCategory.Provider,
+                provider.Name,
+                "Modelo default utilizado no chat.");
+        }
+
+        return await GetConfigurationAsync(ct);
     }
 
     public void RegisterProfile(AgentLLMProfile profile)
     {
         _profiles[profile.AgentName] = profile;
+    }
+
+    internal async Task<(IChatClient ChatClient, string ResolvedModel)> ResolveChatClientForCurrentContextAsync(
+        string? requestedModel,
+        CancellationToken ct = default)
+    {
+        var selection = await ResolveSelectionAsync(new LLMRequest { Model = requestedModel }, ct);
+        var chatClient = await ResolveChatClientAsync(selection.Provider, selection.Model, selection.ApiKey, ct);
+        return (chatClient, selection.Model);
     }
 
     private AgentLLMProfile GetProfileOrDefault(string agentName)
@@ -134,4 +339,440 @@ public class LLMManager : ILLMManager
             PreferredModel = GetDefaultProvider().DefaultModel
         };
     }
+
+    private async Task EnsureRuntimeConfigLoadedAsync(CancellationToken ct)
+    {
+        if (!_runtimeConfigDirty || _configManager is null)
+            return;
+
+        await _configSync.WaitAsync(ct);
+        try
+        {
+            if (!_runtimeConfigDirty)
+                return;
+
+            var defaultProvider = await _configManager.ResolveValueAsync(DefaultProviderConfigKey);
+            if (!string.IsNullOrWhiteSpace(defaultProvider) && _providers.ContainsKey(defaultProvider))
+                _defaultProviderOverride = defaultProvider;
+
+            var defaultModel = await _configManager.ResolveValueAsync(DefaultModelConfigKey);
+            _defaultModelOverride = string.IsNullOrWhiteSpace(defaultModel) ? null : defaultModel;
+
+            foreach (var provider in _providers.Values)
+            {
+                var prefix = GetProviderConfigPrefix(provider.Name);
+                var apiKey = await _configManager.ResolveValueAsync($"{prefix}.apiKey");
+                var model = await _configManager.ResolveValueAsync($"{prefix}.model");
+                var enabledRaw = await _configManager.ResolveValueAsync($"{prefix}.enabled");
+                var priorityRaw = await _configManager.ResolveValueAsync($"{prefix}.priority");
+
+                bool? enabled = TryParseBool(enabledRaw);
+                int? priority = TryParseInt(priorityRaw);
+
+                provider.Configure(apiKey, model, enabled, priority);
+                _chatClientRegistry[provider.Name] = BuildChatClient(provider);
+            }
+
+            _runtimeConfigDirty = false;
+        }
+        finally
+        {
+            _configSync.Release();
+        }
+    }
+
+    private async Task<ResolvedSelection> ResolveSelectionAsync(LLMRequest request, CancellationToken ct)
+    {
+        await EnsureRuntimeConfigLoadedAsync(ct);
+
+        var runtime = _llmRuntimeContextAccessor.Current;
+        var session = await ResolveSessionAsync(runtime?.SessionId, ct);
+        var tenant = await ResolveTenantAsync(runtime?.TenantId, ct);
+
+        var requestProvider = FirstNonEmpty(request.Provider, runtime?.RequestProvider);
+        var sessionProvider = FirstNonEmpty(runtime?.SessionProvider, ReadSessionSetting(session, "llm.session.provider"));
+        var tenantProvider = ReadTenantSetting(tenant, "llm.provider");
+
+        var providerName = FirstNonEmpty(
+            requestProvider,
+            sessionProvider,
+            tenantProvider,
+            _defaultProviderOverride,
+            GetDefaultProvider().Name)
+            ?? GetDefaultProvider().Name;
+
+        var provider = _providers.TryGetValue(providerName, out var selected)
+            ? selected
+            : GetDefaultProvider();
+
+        var requestModel = FirstNonEmpty(request.Model, runtime?.RequestModel);
+        var sessionModel = FirstNonEmpty(runtime?.SessionModel, ReadSessionSetting(session, "llm.session.model"));
+        var tenantModel = ReadTenantSetting(tenant, "llm.model");
+
+        var model = FirstNonEmpty(
+            requestModel,
+            sessionModel,
+            tenantModel,
+            _defaultModelOverride,
+            provider.DefaultModel)
+            ?? provider.DefaultModel;
+
+        var requestApiKey = runtime?.RequestApiKey;
+        var sessionApiKey = FirstNonEmpty(runtime?.SessionApiKey, ReadSessionSetting(session, "llm.session.apiKey"));
+        var tenantApiKey = ReadTenantApiKey(tenant, provider.Name);
+        var configApiKey = _configManager is null
+            ? null
+            : await _configManager.ResolveValueAsync($"{GetProviderConfigPrefix(provider.Name)}.apiKey");
+
+        var apiKey = FirstNonEmpty(requestApiKey, sessionApiKey, tenantApiKey, configApiKey);
+
+        return new ResolvedSelection(provider.Name, model, apiKey);
+    }
+
+    private async Task<IChatClient> ResolveChatClientAsync(string providerName, string model, string? apiKey, CancellationToken ct)
+    {
+        await EnsureRuntimeConfigLoadedAsync(ct);
+
+        if (!string.IsNullOrWhiteSpace(apiKey))
+        {
+            var ephemeralProvider = CreateEphemeralProvider(providerName, apiKey, model);
+            return BuildChatClient(ephemeralProvider);
+        }
+
+        if (_chatClientRegistry.TryGetValue(providerName, out var client))
+            return client;
+
+        var fallback = GetDefaultProvider();
+        return _chatClientRegistry[fallback.Name];
+    }
+
+    private static string? FirstNonEmpty(params string?[] candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            if (!string.IsNullOrWhiteSpace(candidate))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private static bool? TryParseBool(string? raw)
+    {
+        if (bool.TryParse(raw, out var parsed))
+            return parsed;
+
+        return null;
+    }
+
+    private static int? TryParseInt(string? raw)
+    {
+        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+            return parsed;
+
+        return null;
+    }
+
+    private static string GetProviderConfigPrefix(string providerName)
+        => $"llm.providers.{providerName.ToLowerInvariant()}";
+
+    private string ResolveDefaultProviderName()
+    {
+        if (!string.IsNullOrWhiteSpace(_defaultProviderOverride)
+            && _providers.ContainsKey(_defaultProviderOverride))
+        {
+            return _defaultProviderOverride;
+        }
+
+        return GetDefaultProvider().Name;
+    }
+
+    private string ResolveDefaultModel(ILLMProvider provider)
+        => string.IsNullOrWhiteSpace(_defaultModelOverride) ? provider.DefaultModel : _defaultModelOverride;
+
+    private static IReadOnlyList<string> BuildModelList(string providerName, string defaultModel)
+    {
+        var models = ProviderModelCatalog.TryGetValue(providerName, out var knownModels)
+            ? new List<string>(knownModels)
+            : new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(defaultModel) && !models.Contains(defaultModel, StringComparer.OrdinalIgnoreCase))
+        {
+            models.Insert(0, defaultModel);
+        }
+
+        return models;
+    }
+
+    private async Task PersistProviderConfigurationAsync(string providerName, UpdateProviderRequest request, ILLMProvider provider)
+    {
+        if (_configManager is null)
+            return;
+
+        var prefix = GetProviderConfigPrefix(providerName);
+
+        if (request.ApiKey is not null)
+        {
+            await UpsertConfigEntryAsync(
+                $"{prefix}.apiKey",
+                request.ApiKey,
+                isSecret: true,
+                ConfigCategory.Credentials,
+                providerName,
+                $"API key do provider {providerName}.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.DefaultModel))
+        {
+            await UpsertConfigEntryAsync(
+                $"{prefix}.model",
+                provider.DefaultModel,
+                isSecret: false,
+                ConfigCategory.Provider,
+                providerName,
+                $"Modelo default do provider {providerName}.");
+        }
+
+        if (request.Enabled.HasValue)
+        {
+            await UpsertConfigEntryAsync(
+                $"{prefix}.enabled",
+                provider.IsEnabled.ToString(),
+                isSecret: false,
+                ConfigCategory.Provider,
+                providerName,
+                $"Flag de habilitação do provider {providerName}.");
+        }
+
+        if (request.Priority.HasValue)
+        {
+            await UpsertConfigEntryAsync(
+                $"{prefix}.priority",
+                provider.Priority.ToString(CultureInfo.InvariantCulture),
+                isSecret: false,
+                ConfigCategory.Provider,
+                providerName,
+                $"Prioridade de roteamento do provider {providerName}.");
+        }
+    }
+
+    private async Task UpsertConfigEntryAsync(
+        string key,
+        string value,
+        bool isSecret,
+        ConfigCategory category,
+        string? provider,
+        string description)
+    {
+        if (_configManager is null)
+            return;
+
+        var request = new ConfigEntryRequest
+        {
+            Key = key,
+            Value = value,
+            IsSecret = isSecret,
+            Category = category,
+            Provider = provider,
+            Description = description
+        };
+
+        try
+        {
+            await _configManager.GetAsync(key);
+            await _configManager.UpdateAsync(key, request);
+        }
+        catch (KeyNotFoundException)
+        {
+            await _configManager.SetAsync(request);
+        }
+    }
+
+    private static string? ReadSessionSetting(SessionData? session, string key)
+    {
+        if (session?.RuntimeSettings is null)
+            return null;
+
+        if (!session.RuntimeSettings.TryGetValue(key, out var value))
+            return null;
+
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static string? ReadTenantApiKey(Tenant? tenant, string providerName)
+    {
+        if (tenant is null)
+            return null;
+
+        if (!tenant.ProviderApiKeys.TryGetValue(providerName, out var value))
+            return null;
+
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
+    private static string? ReadTenantSetting(Tenant? tenant, string key)
+    {
+        if (tenant?.Settings is null)
+            return null;
+
+        if (!tenant.Settings.TryGetValue(key, out var value) || value is null)
+            return null;
+
+        var text = value.ToString();
+        return string.IsNullOrWhiteSpace(text) ? null : text;
+    }
+
+    private async Task<SessionData?> ResolveSessionAsync(string? sessionId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return null;
+
+        return await _sessionStore.GetAsync(sessionId, ct);
+    }
+
+    private async Task<Tenant?> ResolveTenantAsync(string? tenantId, CancellationToken ct)
+    {
+        var normalizedTenantId = string.IsNullOrWhiteSpace(tenantId) ? Tenant.DefaultTenantId : tenantId;
+        return await _tenantStore.GetByIdAsync(normalizedTenantId, ct);
+    }
+
+    private ILLMProvider CreateEphemeralProvider(string providerName, string apiKey, string model)
+    {
+        if (!_providers.TryGetValue(providerName, out var existingProvider))
+            existingProvider = GetDefaultProvider();
+
+        return providerName.ToLowerInvariant() switch
+        {
+            "openai" or "gpt" => CreateOpenAiProvider(new OpenAISettings
+            {
+                ApiKey = apiKey,
+                BaseUrl = _settings.OpenAI.BaseUrl,
+                DefaultModel = model,
+                Enabled = true,
+                Priority = existingProvider.Priority
+            }),
+            "gemini" => CreateGeminiProvider(new GeminiSettings
+            {
+                ApiKey = apiKey,
+                BaseUrl = _settings.Gemini.BaseUrl,
+                DefaultModel = model,
+                Enabled = true,
+                Priority = existingProvider.Priority
+            }),
+            "claude" => CreateClaudeProvider(new ClaudeSettings
+            {
+                ApiKey = apiKey,
+                BaseUrl = _settings.Claude.BaseUrl,
+                DefaultModel = model,
+                Enabled = true,
+                Priority = existingProvider.Priority
+            }),
+            _ => existingProvider
+        };
+    }
+
+    private void RegisterProvidersFromSettings(AgenticSystemSettings settings)
+    {
+        RegisterProvider(CreateOpenAiProvider(settings.OpenAI));
+        RegisterProvider(CreateGeminiProvider(settings.Gemini));
+        RegisterProvider(CreateClaudeProvider(settings.Claude));
+        RegisterProvider(CreateOllamaProvider(settings.Ollama));
+    }
+
+    private void RegisterProvider(ILLMProvider provider)
+    {
+        _providers[provider.Name] = provider;
+        _chatClientRegistry[provider.Name] = BuildChatClient(provider);
+    }
+
+    private static IChatClient BuildChatClient(ILLMProvider provider)
+    {
+        return new ProviderBackedChatClient(provider);
+    }
+
+    private bool IsProviderConfigured(ILLMProvider provider)
+    {
+        return provider.Name.Equals("Ollama", StringComparison.OrdinalIgnoreCase)
+            || provider.IsEnabled;
+    }
+
+    private ILLMProvider CreateOpenAiProvider(OpenAISettings settings)
+    {
+        return new OpenAIProvider(
+            new HttpClient(),
+            Options.Create(settings),
+            _loggerFactory.CreateLogger<OpenAIProvider>());
+    }
+
+    private ILLMProvider CreateGeminiProvider(GeminiSettings settings)
+    {
+        return new GeminiProvider(
+            new HttpClient(),
+            Options.Create(settings),
+            _loggerFactory.CreateLogger<GeminiProvider>());
+    }
+
+    private ILLMProvider CreateClaudeProvider(ClaudeSettings settings)
+    {
+        return new ClaudeProvider(
+            new HttpClient(),
+            Options.Create(settings),
+            _loggerFactory.CreateLogger<ClaudeProvider>());
+    }
+
+    private ILLMProvider CreateOllamaProvider(OllamaSettings settings)
+    {
+        return new OllamaProvider(
+            new HttpClient(),
+            Options.Create(settings),
+            _loggerFactory.CreateLogger<OllamaProvider>());
+    }
+
+    private static List<MChatMessage> MapMessages(LLMRequest request)
+    {
+        var messages = new List<MChatMessage>();
+
+        if (!string.IsNullOrWhiteSpace(request.SystemPrompt))
+        {
+            messages.Add(new MChatMessage(ChatRole.System, request.SystemPrompt));
+        }
+
+        if (request.Messages.Count > 0)
+        {
+            foreach (var message in request.Messages)
+            {
+                var role = message.Role.ToLowerInvariant() switch
+                {
+                    "system" => ChatRole.System,
+                    "assistant" => ChatRole.Assistant,
+                    _ => ChatRole.User
+                };
+
+                messages.Add(new MChatMessage(role, message.Content));
+            }
+
+            return messages;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Prompt))
+        {
+            messages.Add(new MChatMessage(ChatRole.User, request.Prompt));
+        }
+
+        return messages;
+    }
+
+    private static UsageInfo MapUsage(UsageDetails? usage)
+    {
+        if (usage is null)
+            return new UsageInfo();
+
+        return new UsageInfo
+        {
+            PromptTokens = (int)(usage.InputTokenCount ?? 0),
+            CompletionTokens = (int)(usage.OutputTokenCount ?? 0)
+        };
+    }
+
+    private sealed record ResolvedSelection(string Provider, string Model, string? ApiKey);
 }

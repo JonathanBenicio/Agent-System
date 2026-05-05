@@ -35,8 +35,15 @@ public enum RetrievalStrategy
 public class RAGContext
 {
     public string Query { get; set; } = string.Empty;
+    public string EffectiveQuery { get; set; } = string.Empty;
+    public List<string> QueryVariants { get; set; } = new();
+    public bool UsedHydeExpansion { get; set; }
+    public string? HydeVariant { get; set; }
     public List<RankedChunk> Chunks { get; set; } = new();
     public string BuiltContext { get; set; } = string.Empty;
+    public string? SemanticSummary { get; set; }
+    public bool UsedSemanticCompression { get; set; }
+    public int OriginalContextTokens { get; set; }
     public int TotalTokensUsed { get; set; }
     public int CandidatesRetrieved { get; set; }
     public int CandidatesAfterReRank { get; set; }

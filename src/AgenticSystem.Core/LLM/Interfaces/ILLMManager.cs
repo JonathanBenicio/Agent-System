@@ -10,8 +10,10 @@ public interface ILLMManager
     ILLMProvider GetDefaultProvider();
     IEnumerable<ILLMProvider> GetEnabledProviders();
     IEnumerable<LLMProviderInfo> GetAllProviderInfo();
+    Task<LLMConfigurationInfo> GetConfigurationAsync(CancellationToken ct = default);
     Task<bool> TestProviderAsync(string name, CancellationToken ct = default);
-    bool UpdateProvider(string name, UpdateProviderRequest request);
+    Task<bool> UpdateProviderAsync(string name, UpdateProviderRequest request, CancellationToken ct = default);
+    Task<LLMConfigurationInfo> UpdateDefaultSelectionAsync(UpdateDefaultLlmSelectionRequest request, CancellationToken ct = default);
 }
 
 public class LLMProviderInfo
@@ -21,6 +23,16 @@ public class LLMProviderInfo
     public bool IsEnabled { get; set; }
     public int Priority { get; set; }
     public bool HasApiKey { get; set; }
+    public bool IsDefault { get; set; }
+    public bool IsAvailable { get; set; }
+    public IReadOnlyList<string> Models { get; set; } = [];
+}
+
+public class LLMConfigurationInfo
+{
+    public string DefaultProvider { get; set; } = string.Empty;
+    public string DefaultModel { get; set; } = string.Empty;
+    public IReadOnlyList<LLMProviderInfo> Providers { get; set; } = [];
 }
 
 public class UpdateProviderRequest
@@ -29,4 +41,10 @@ public class UpdateProviderRequest
     public string? DefaultModel { get; set; }
     public bool? Enabled { get; set; }
     public int? Priority { get; set; }
+}
+
+public class UpdateDefaultLlmSelectionRequest
+{
+    public string ProviderName { get; set; } = string.Empty;
+    public string? Model { get; set; }
 }

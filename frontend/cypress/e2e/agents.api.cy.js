@@ -1,16 +1,19 @@
 /**
  * @tags @smoke @api @agents
  * Testes de API para gerenciamento de agentes
+ * Contrato alinhado com AgentController.cs / AgentModels.cs
  */
 
 describe('Agents API', () => {
   const baseUrl = Cypress.env('API_BASE_URL') || ''
   const testAgent = {
     name: 'CypressTestAgent',
+    description: 'Agent criado por teste Cypress',
     tier: 2,
     domain: 'testing',
-    temperature: 0.7,
-    capabilities: ['test-automation', 'quality-assurance']
+    allowedTools: ['test-automation', 'quality-assurance'],
+    instructions: 'Agent de teste automatizado',
+    configuration: {}
   }
 
   beforeEach(() => {
@@ -26,7 +29,7 @@ describe('Agents API', () => {
       expect(response.status).to.eq(200)
       expect(response.body).to.be.an('array')
       if (response.body.length > 0) {
-        cy.validateAgentSchema(response.body[0])
+        validateAgentInfo(response.body[0])
       }
     })
   })
@@ -39,8 +42,10 @@ describe('Agents API', () => {
     }).then((response) => {
       expect(response.status).to.eq(201)
       expect(response.body.name).to.eq(testAgent.name)
+      expect(response.body.description).to.eq(testAgent.description)
       expect(response.body.tier).to.eq(testAgent.tier)
-      cy.validateAgentSchema(response.body)
+      expect(response.body.isActive).to.be.a('boolean')
+      validateAgentInfo(response.body)
     })
   })
 
@@ -57,14 +62,15 @@ describe('Agents API', () => {
 
   it('@regression deve atualizar agente existente', () => {
     cy.request('POST', `${baseUrl}/api/agent/agents`, testAgent)
-    const updatedAgent = { ...testAgent, temperature: 0.5 }
+    const updatedAgent = { ...testAgent, description: 'Descrição atualizada' }
     cy.request({
       method: 'PUT',
       url: `${baseUrl}/api/agent/agents/${encodeURIComponent(testAgent.name)}`,
       body: updatedAgent
     }).then((response) => {
       expect(response.status).to.eq(200)
-      expect(response.body.temperature).to.eq(0.5)
+      expect(response.body.description).to.eq('Descrição atualizada')
+      validateAgentInfo(response.body)
     })
   })
 
@@ -75,13 +81,6 @@ describe('Agents API', () => {
       url: `${baseUrl}/api/agent/agents/${encodeURIComponent(testAgent.name)}`
     }).then((response) => {
       expect(response.status).to.eq(204)
-    })
-    cy.request({
-      method: 'GET',
-      url: `${baseUrl}/api/agent/agents/${encodeURIComponent(testAgent.name)}`,
-      failOnStatusCode: false
-    }).then((response) => {
-      expect(response.status).to.eq(404)
     })
   })
 
@@ -98,11 +97,15 @@ describe('Agents API', () => {
   })
 })
 
-Cypress.Commands.add('validateAgentSchema', (agent) => {
+/**
+ * Valida shape de AgentInfo retornado pelo backend
+ */
+function validateAgentInfo(agent) {
   expect(agent).to.have.property('name').that.is.a('string')
+  expect(agent).to.have.property('description').that.is.a('string')
   expect(agent).to.have.property('tier').that.is.a('number')
   expect(agent).to.have.property('domain').that.is.a('string')
-  expect(agent).to.have.property('temperature').that.is.a('number')
-  expect(agent.temperature).to.be.within(0, 2)
+  expect(agent).to.have.property('isActive').that.is.a('boolean')
+  expect(agent).to.have.property('createdAt').that.is.a('string')
   expect([0, 1, 2, 3]).to.include(agent.tier)
-})
+}

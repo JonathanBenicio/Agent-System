@@ -22,6 +22,18 @@ public class CorrectionLoopService : ICorrectionLoop
 
     public Task<CorrectionRule> AddRuleAsync(string userId, string rule, string? scope = null, string? targetAgent = null)
     {
+        var existingRule = _rules.Values.FirstOrDefault(existing =>
+            existing.IsActive
+            && existing.UserId.Equals(userId, StringComparison.OrdinalIgnoreCase)
+            && existing.Rule.Equals(rule, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(existing.Scope, scope, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(existing.TargetAgent, targetAgent, StringComparison.OrdinalIgnoreCase));
+
+        if (existingRule is not null)
+        {
+            return Task.FromResult(existingRule);
+        }
+
         var correctionRule = new CorrectionRule
         {
             UserId = userId,

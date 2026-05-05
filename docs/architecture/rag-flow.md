@@ -35,20 +35,22 @@ Remove candidatos abaixo de `MinRelevanceScore` (default: 0.3) antes do re-ranki
 
 ### 3. Re-Ranking (`HeuristicReRanker`)
 
-Re-ordena candidatos sem modelo ML. Fórmula:
+Re-ordena candidatos sem modelo ML. Fórmula (valores definidos como named constants em `HeuristicReRanker`):
 
 ```
-FinalScore = VectorScore × 0.4 + TF × 0.3 + PhraseBonus + MetaBonus + OverlapPenalty
+FinalScore = VectorScore × VectorScoreWeight(0.4) + TF × TfScoreWeight(0.3) 
+           + ExactPhraseBonus(0.2) + SectionMatchBonus(0.1) 
+           + TagMatchBonus(0.05) + OverlapPenalty(-0.05)
 ```
 
-| Componente      | Peso  | Descrição                              |
-| --------------- | ----- | -------------------------------------- |
-| Vector Score    | 0.4   | Score original da busca vetorial       |
-| TF Score        | 0.3   | Term frequency (query terms no chunk)  |
-| Phrase Bonus    | +0.2  | Se query aparece literalmente          |
-| Meta Bonus      | +0.1  | Se section title contém query terms    |
-| Tags Bonus      | +0.05 | Se tags contêm query terms             |
-| Overlap Penalty | -0.05 | Chunks com overlap (prefere originais) |
+| Componente      | Constante            | Peso  | Descrição                              |
+| --------------- | -------------------- | ----- | -------------------------------------- |
+| Vector Score    | `VectorScoreWeight`  | 0.4   | Score original da busca vetorial       |
+| TF Score        | `TfScoreWeight`      | 0.3   | Term frequency (query terms no chunk)  |
+| Phrase Bonus    | `ExactPhraseBonus`   | +0.2  | Se query aparece literalmente          |
+| Section Match   | `SectionMatchBonus`  | +0.1  | Se section title contém query terms    |
+| Tags Bonus      | `TagMatchBonus`      | +0.05 | Se tags contêm query terms             |
+| Overlap Penalty | `OverlapPenalty`     | -0.05 | Chunks com overlap (prefere originais) |
 
 ### 4. Context Builder
 
@@ -97,6 +99,6 @@ Segundo chunk mais relevante...
 
 1. **Score filter antes do re-rank** — evita processar candidatos irrelevantes
 2. **Heuristic re-ranker** — zero custo de API (sem cross-encoder externo)
-3. **Token estimation** — `~text.Length / 4` para estimativa rápida
+3. **Token estimation** — `~text.Length / CharsPerToken` (3.5) — otimizado para conteúdo multilingual
 4. **Batch embeddings** — geração em lote na ingestão
 5. **Sequential batch ingestion** — evita sobrecarga de memória em lotes grandes

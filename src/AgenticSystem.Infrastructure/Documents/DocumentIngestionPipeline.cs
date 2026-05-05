@@ -1,10 +1,12 @@
 using System.Diagnostics;
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.Models;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
 namespace AgenticSystem.Infrastructure.Documents;
+
+using TextEmbeddingGenerator = Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>;
 
 /// <summary>
 /// Pipeline de ingestão: detect type → parse → chunk → embed → index no VectorStore.
@@ -13,20 +15,20 @@ public class DocumentIngestionPipeline : IDocumentIngestionPipeline
 {
     private readonly Dictionary<DocumentType, IDocumentParser> _parsers;
     private readonly IChunkingStrategy _chunkingStrategy;
-    private readonly IEmbeddingProvider _embeddingProvider;
+    private readonly TextEmbeddingGenerator? _embeddingGenerator;
     private readonly IVectorStore _vectorStore;
     private readonly ILogger<DocumentIngestionPipeline> _logger;
 
     public DocumentIngestionPipeline(
         IEnumerable<IDocumentParser> parsers,
         IChunkingStrategy chunkingStrategy,
-        IEmbeddingProvider embeddingProvider,
+        TextEmbeddingGenerator? embeddingGenerator,
         IVectorStore vectorStore,
         ILogger<DocumentIngestionPipeline> logger)
     {
         _parsers = parsers.ToDictionary(p => p.SupportedType);
         _chunkingStrategy = chunkingStrategy;
-        _embeddingProvider = embeddingProvider;
+        _embeddingGenerator = embeddingGenerator;
         _vectorStore = vectorStore;
         _logger = logger;
     }
@@ -57,16 +59,23 @@ public class DocumentIngestionPipeline : IDocumentIngestionPipeline
                     "Document produced 0 chunks after parsing");
             }
 
+            if (_embeddingGenerator is null)
+            {
+                return IngestionResult.Fail(document.Id, document.FileName,
+                    "No embedding generator is configured for document ingestion");
+            }
+
             // 3. Embed (batch)
             var texts = chunks.Select(c => c.Content).ToList();
-            var embeddings = await _embeddingProvider.GenerateEmbeddingsAsync(texts, ct);
+            var embeddings = await _embeddingGenerator.GenerateAsync(texts, cancellationToken: ct);
+            var embeddingVectors = embeddings.Select(item => item.Vector.ToArray()).ToList();
 
             // 4. Index no VectorStore
             var totalTokens = 0;
             for (var i = 0; i < chunks.Count; i++)
             {
                 var chunk = chunks[i];
-                chunk.Embedding = embeddings[i];
+                chunk.Embedding = embeddingVectors[i];
                 totalTokens += chunk.TokenCount;
 
                 var embDoc = chunk.ToEmbeddingDocument();

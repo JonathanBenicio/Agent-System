@@ -20,16 +20,21 @@ public class LLMControllerTests
     }
 
     [Fact]
-    public void GetProviders_ReturnsOkWithProviderList()
+    public async Task GetProviders_ReturnsOkWithProviderList()
     {
         var providers = new List<LLMProviderInfo>
         {
             new() { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = true, Priority = 1, HasApiKey = true },
             new() { Name = "Claude", DefaultModel = "claude-sonnet-4-20250514", IsEnabled = false, Priority = 3, HasApiKey = false }
         };
-        _llmManager.GetAllProviderInfo().Returns(providers);
+        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
+        {
+            DefaultProvider = "OpenAI",
+            DefaultModel = "gpt-4o",
+            Providers = providers
+        });
 
-        var result = _sut.GetProviders();
+        var result = await _sut.GetProviders(CancellationToken.None);
 
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;
         var data = ok.Value as IEnumerable<LLMProviderInfo>;
@@ -37,49 +42,67 @@ public class LLMControllerTests
     }
 
     [Fact]
-    public void GetProvider_WhenExists_ReturnsOk()
+    public async Task GetProvider_WhenExists_ReturnsOk()
     {
-        _llmManager.GetAllProviderInfo().Returns(new List<LLMProviderInfo>
+        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
         {
-            new() { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = true, Priority = 1 }
+            DefaultProvider = "OpenAI",
+            DefaultModel = "gpt-4o",
+            Providers = new List<LLMProviderInfo>
+            {
+                new() { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = true, Priority = 1 }
+            }
         });
 
-        var result = _sut.GetProvider("OpenAI");
+        var result = await _sut.GetProvider("OpenAI", CancellationToken.None);
 
         result.Should().BeOfType<OkObjectResult>();
     }
 
     [Fact]
-    public void GetProvider_WhenNotExists_ReturnsNotFound()
+    public async Task GetProvider_WhenNotExists_ReturnsNotFound()
     {
-        _llmManager.GetAllProviderInfo().Returns(new List<LLMProviderInfo>());
+        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
+        {
+            DefaultProvider = "OpenAI",
+            DefaultModel = "gpt-4o",
+            Providers = new List<LLMProviderInfo>()
+        });
 
-        var result = _sut.GetProvider("NonExistent");
+        var result = await _sut.GetProvider("NonExistent", CancellationToken.None);
 
         result.Should().BeOfType<NotFoundObjectResult>();
     }
 
     [Fact]
-    public void GetDefaultProvider_WhenAvailable_ReturnsOk()
+    public async Task GetDefaultProvider_WhenAvailable_ReturnsOk()
     {
-        var provider = Substitute.For<ILLMProvider>();
-        provider.Name.Returns("OpenAI");
-        provider.DefaultModel.Returns("gpt-4o");
-        provider.IsEnabled.Returns(true);
-        provider.Priority.Returns(1);
-        _llmManager.GetDefaultProvider().Returns(provider);
+        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
+        {
+            DefaultProvider = "OpenAI",
+            DefaultModel = "gpt-4o",
+            Providers = new List<LLMProviderInfo>
+            {
+                new() { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = true, Priority = 1 }
+            }
+        });
 
-        var result = _sut.GetDefaultProvider();
+        var result = await _sut.GetDefaultProvider(CancellationToken.None);
 
         result.Should().BeOfType<OkObjectResult>();
     }
 
     [Fact]
-    public void GetDefaultProvider_WhenNoneAvailable_ReturnsNotFound()
+    public async Task GetDefaultProvider_WhenNoneAvailable_ReturnsNotFound()
     {
-        _llmManager.GetDefaultProvider().Returns(x => throw new InvalidOperationException("No providers"));
+        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
+        {
+            DefaultProvider = "OpenAI",
+            DefaultModel = "gpt-4o",
+            Providers = new List<LLMProviderInfo>()
+        });
 
-        var result = _sut.GetDefaultProvider();
+        var result = await _sut.GetDefaultProvider(CancellationToken.None);
 
         result.Should().BeOfType<NotFoundObjectResult>();
     }
@@ -95,16 +118,21 @@ public class LLMControllerTests
     }
 
     [Fact]
-    public void UpdateProvider_WhenExists_ReturnsOkWithInfo()
+    public async Task UpdateProvider_WhenExists_ReturnsOkWithInfo()
     {
         var request = new UpdateProviderRequest { Enabled = false, Priority = 5 };
-        _llmManager.UpdateProvider("OpenAI", request).Returns(true);
-        _llmManager.GetAllProviderInfo().Returns(new List<LLMProviderInfo>
+        _llmManager.UpdateProviderAsync("OpenAI", request, Arg.Any<CancellationToken>()).Returns(true);
+        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
         {
-            new() { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = false, Priority = 5 }
+            DefaultProvider = "OpenAI",
+            DefaultModel = "gpt-4o",
+            Providers = new List<LLMProviderInfo>
+            {
+                new() { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = false, Priority = 5 }
+            }
         });
 
-        var result = _sut.UpdateProvider("OpenAI", request);
+        var result = await _sut.UpdateProvider("OpenAI", request, CancellationToken.None);
 
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;
         var info = ok.Value as LLMProviderInfo;
@@ -113,12 +141,12 @@ public class LLMControllerTests
     }
 
     [Fact]
-    public void UpdateProvider_WhenNotExists_ReturnsNotFound()
+    public async Task UpdateProvider_WhenNotExists_ReturnsNotFound()
     {
         var request = new UpdateProviderRequest { Enabled = true };
-        _llmManager.UpdateProvider("NonExistent", request).Returns(false);
+        _llmManager.UpdateProviderAsync("NonExistent", request, Arg.Any<CancellationToken>()).Returns(false);
 
-        var result = _sut.UpdateProvider("NonExistent", request);
+        var result = await _sut.UpdateProvider("NonExistent", request, CancellationToken.None);
 
         result.Should().BeOfType<NotFoundObjectResult>();
     }

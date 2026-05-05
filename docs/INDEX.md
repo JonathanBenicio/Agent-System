@@ -9,7 +9,7 @@
 | Documento | Descrição |
 |-----------|-----------|
 | [PRD-Sistema-Agentic.md](PRD-Sistema-Agentic.md) | Product Requirements Document — visão de produto para stakeholders |
-| [USER-STORIES.md](USER-STORIES.md) | Catálogo completo de User Stories (ML1–ML21 backend + US-01–US-33 frontend) |
+| [USER-STORIES.md](USER-STORIES.md) | Catálogo completo de User Stories (ML1–ML33 backend + US-01–US-33 frontend) |
 | [agentic-design-manifesto.md](agentic-design-manifesto.md) | 10 princípios de design do sistema |
 
 ---
@@ -55,6 +55,18 @@ Cenários Gherkin para validação funcional. Ver [bdd/README.md](bdd/README.md)
 |-----------|-----------|
 | [extension-examples.md](extension-examples.md) | Exemplos de código para estender o sistema (agents, skills, tools) |
 | [obsidian-vault.md](obsidian-vault.md) | Subsistema de memória com Obsidian Vault |
+
+---
+
+## Arquitetura & Governança
+
+| Documento | Descrição |
+|-----------|-----------|
+| [TECHNICAL_ARCHITECTURE_GUIDE.md](TECHNICAL_ARCHITECTURE_GUIDE.md) | Guia técnico detalhado — Orchestrator, Agent Framework, LLM, RAG, MCP, Multi-Tenant, Auth, SignalR, Gateway, Frontend React |
+| [AI_Capabilities_Gaps.md](AI_Capabilities_Gaps.md) | Diagnóstico vivo de gaps, itens parciais, backlog e capacidades fechadas recentemente |
+| [architecture/overengineering-assessment.md](architecture/overengineering-assessment.md) | Avaliação de over-engineering com hotspots, impacto e plano de simplificação |
+| [DSA-AgenticSystem.md](DSA-AgenticSystem.md) | Documento de Solução de Arquitetura (segurança, observabilidade, deploy) |
+| [../PIPELINE_REPORT.md](../PIPELINE_REPORT.md) | Pipeline Reports — In-Memory Persistence + Architectural Review & Security Fixes |
 
 ---
 

@@ -11,13 +11,34 @@ services:
       - AgenticSystem__OpenAI__DefaultModel=gpt-4o-mini
       - AgenticSystem__Ollama__BaseUrl=http://ollama:11434
       - AgenticSystem__Ollama__Enabled=true
+      - ConnectionStrings__SessionStore=Host=postgres;Port=5432;Database=agentic;Username=agentic;Password=${POSTGRES_PASSWORD:-agentic_dev}
     depends_on:
-      - ollama
+      postgres:
+        condition: service_healthy
+      ollama:
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8080/health"]
       interval: 30s
       timeout: 3s
       retries: 3
+    networks:
+      - agentic-net
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=agentic
+      - POSTGRES_USER=agentic
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-agentic_dev}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentic"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     networks:
       - agentic-net
 
@@ -37,6 +58,7 @@ services:
 
 volumes:
   ollama-data:
+  postgres-data:
 
 networks:
   agentic-net:

@@ -11,14 +11,16 @@ namespace AgenticSystem.Core.Services;
 public class ReflectionEngine : IReflectionEngine
 {
     private readonly ConcurrentBag<Reflection> _reflections = new();
+    private readonly IOperationalStore? _operationalStore;
     private readonly ILogger<ReflectionEngine> _logger;
 
-    public ReflectionEngine(ILogger<ReflectionEngine> logger)
+    public ReflectionEngine(ILogger<ReflectionEngine> logger, IOperationalStore? operationalStore = null)
     {
         _logger = logger;
+        _operationalStore = operationalStore;
     }
 
-    public Task<Reflection> ReflectAsync(string sessionId, string agentName, string action, string outcome, double confidence)
+    public async Task<Reflection> ReflectAsync(string sessionId, string agentName, string action, string outcome, double confidence)
     {
         var reflection = new Reflection
         {
@@ -55,30 +57,64 @@ public class ReflectionEngine : IReflectionEngine
         }
 
         _reflections.Add(reflection);
+
+        // Persist to operational store
+        if (_operationalStore is not null)
+        {
+            try
+            {
+                await _operationalStore.SaveReflectionAsync(reflection);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to persist reflection {ReflectionId} to operational store", reflection.Id);
+            }
+        }
+
         _logger.LogDebug("Reflection created for session {SessionId}: confidence={Confidence:F2}, severity={Severity}",
             sessionId, confidence, reflection.Severity);
 
-        return Task.FromResult(reflection);
+        return reflection;
     }
 
-    public Task<IEnumerable<Reflection>> GetSessionReflectionsAsync(string sessionId)
+    public async Task<IEnumerable<Reflection>> GetSessionReflectionsAsync(string sessionId)
     {
-        var reflections = _reflections
+        if (_operationalStore is not null)
+        {
+            try
+            {
+                var stored = await _operationalStore.GetReflectionsAsync(sessionId);
+                if (stored.Count > 0) return stored;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to read reflections from operational store, falling back to in-memory");
+            }
+        }
+
+        return _reflections
             .Where(r => r.SessionId == sessionId)
-            .OrderByDescending(r => r.CreatedAt)
-            .AsEnumerable();
-
-        return Task.FromResult(reflections);
+            .OrderByDescending(r => r.CreatedAt);
     }
 
-    public Task<IEnumerable<Reflection>> GetRecentLearningsAsync(int count = 10)
+    public async Task<IEnumerable<Reflection>> GetRecentLearningsAsync(int count = 10)
     {
-        var learnings = _reflections
+        if (_operationalStore is not null)
+        {
+            try
+            {
+                var stored = await _operationalStore.GetRecentLearningsAsync(count);
+                if (stored.Count > 0) return stored;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to read learnings from operational store, falling back to in-memory");
+            }
+        }
+
+        return _reflections
             .Where(r => r.LessonsLearned.Count > 0)
             .OrderByDescending(r => r.CreatedAt)
-            .Take(count)
-            .AsEnumerable();
-
-        return Task.FromResult(learnings);
+            .Take(count);
     }
 }

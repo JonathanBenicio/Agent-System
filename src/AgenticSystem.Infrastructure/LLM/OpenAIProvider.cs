@@ -33,7 +33,13 @@ public class OpenAIProvider : ILLMProvider
 
     public void Configure(string? apiKey, string? defaultModel, bool? enabled, int? priority)
     {
-        if (apiKey is not null) _settings.ApiKey = apiKey;
+        if (apiKey is not null)
+        {
+            _settings.ApiKey = apiKey;
+            _httpClient.DefaultRequestHeaders.Remove("Authorization");
+            _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_settings.ApiKey}");
+        }
+
         if (defaultModel is not null) _settings.DefaultModel = defaultModel;
         if (enabled.HasValue) _settings.Enabled = enabled.Value;
         if (priority.HasValue) _settings.Priority = priority.Value;
