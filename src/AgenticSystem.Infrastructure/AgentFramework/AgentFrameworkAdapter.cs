@@ -49,6 +49,11 @@ public class AgentFrameworkAdapter : IAgent
     public IEnumerable<string> AvailableTools => _innerAgent.AvailableTools;
     public string Instructions => _innerAgent.Instructions;
 
+    internal IAgent InnerAgent => _innerAgent;
+
+    internal static IAgent Unwrap(IAgent agent)
+        => agent is AgentFrameworkAdapter adapter ? adapter.InnerAgent : agent;
+
     /// <summary>
     /// Executa via Agent Framework pipeline (ChatClientAgent → logging → telemetry → IChatClient).
     /// Reutiliza AgentSession via SessionBridge para manter contexto de conversa.

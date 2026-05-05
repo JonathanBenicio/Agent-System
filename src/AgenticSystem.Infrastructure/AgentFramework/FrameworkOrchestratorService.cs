@@ -1,8 +1,12 @@
 using System.Diagnostics;
+using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using CoreAgentResponse = AgenticSystem.Core.Models.AgentResponse;
 using FrameworkAgentResponse = Microsoft.Agents.AI.AgentResponse;
 
 namespace AgenticSystem.Infrastructure.AgentFramework;
@@ -14,41 +18,48 @@ namespace AgenticSystem.Infrastructure.AgentFramework;
 /// </summary>
 public class FrameworkOrchestratorService : IFrameworkOrchestratorService
 {
-    private readonly OrchestratorAgentBuilder _builder;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly AgentSessionBridge _sessionBridge;
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
+    private readonly ILLMRuntimeContextAccessor _runtimeContextAccessor;
     private readonly ILogger<FrameworkOrchestratorService> _logger;
 
     public FrameworkOrchestratorService(
-        OrchestratorAgentBuilder builder,
+        IServiceScopeFactory scopeFactory,
         AgentSessionBridge sessionBridge,
         IAgentRuntimeCoordinator runtimeCoordinator,
+        ILLMRuntimeContextAccessor runtimeContextAccessor,
         ILogger<FrameworkOrchestratorService> logger)
     {
-        _builder = builder ?? throw new ArgumentNullException(nameof(builder));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _sessionBridge = sessionBridge ?? throw new ArgumentNullException(nameof(sessionBridge));
         _runtimeCoordinator = runtimeCoordinator ?? throw new ArgumentNullException(nameof(runtimeCoordinator));
+        _runtimeContextAccessor = runtimeContextAccessor ?? throw new ArgumentNullException(nameof(runtimeContextAccessor));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<AgentResponse> ExecuteAsync(
+    public async Task<CoreAgentResponse> ExecuteAsync(
         string sessionId,
         string input,
         UserContext context,
         CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
+        using var runtimeScope = _runtimeContextAccessor.BeginScope(context, sessionId);
+        using var serviceScope = _scopeFactory.CreateScope();
+        var scopedServices = serviceScope.ServiceProvider;
 
         _logger.LogInformation(
-            "🎯 Orchestrator processing request via framework: {Input}",
+            "🎯 Orchestrator processing request via hosted framework agent: {Input}",
             input[..Math.Min(50, input.Length)]);
 
-        // 1. Obter ou criar o orquestrador com tool bindings dos especialistas
-        var orchestratorCtx = await _builder.GetOrCreateOrchestratorAsync(sessionId, ct);
-        var orchestrator = orchestratorCtx.OrchestratorAgent;
+        // 1. Resolver o hosted agent nativo e o contexto de specialist bindings da execução atual
+        var orchestratorCtx = scopedServices.GetRequiredService<HostedOrchestratorResolution>().Context;
+        var orchestrator = scopedServices.GetRequiredKeyedService<AIAgent>(HostedOrchestratorResolution.AgentName);
+        var sessionStore = scopedServices.GetRequiredKeyedService<AgentSessionStore>(HostedOrchestratorResolution.AgentName);
 
-        // 2. Obter ou criar sessão do framework para o orquestrador
-        var session = await _sessionBridge.GetOrCreateFrameworkSessionAsync(orchestrator, sessionId, ct);
+        // 2. Obter ou criar sessão do framework via AgentSessionStore do hosting
+        var session = await sessionStore.GetSessionAsync(orchestrator, sessionId, ct);
 
         await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
         {
@@ -71,7 +82,7 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Framework orchestrator execution failed");
-            return AgentResponse.Error(
+            return CoreAgentResponse.Error(
                 "Erro ao processar via orquestrador do framework.", "Orchestrator");
         }
 
@@ -83,7 +94,7 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
 
         sw.Stop();
 
-        var response = new AgentResponse
+        var response = new CoreAgentResponse
         {
             Content = content,
             AgentName = calledAgent ?? "Orchestrator",
@@ -92,6 +103,7 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             Metadata = new Dictionary<string, object>
             {
                 ["executionMode"] = "framework-orchestration",
+                ["hostingMode"] = "native",
                 ["frameworkAgentId"] = orchestrator.Id,
                 ["latencyMs"] = sw.ElapsedMilliseconds
             }
@@ -102,8 +114,8 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             response.Metadata["delegatedTo"] = calledAgent;
         }
 
-        // 6. Persistir sessão do framework para continuidade
-        await _sessionBridge.PersistFrameworkSessionAsync(sessionId, orchestrator, session, ct);
+        // 6. Persistir sessão do framework para continuidade via hosting nativo
+        await sessionStore.SaveSessionAsync(orchestrator, sessionId, session, ct);
 
         // 7. Sincronizar evento de volta para o SessionManager
         await _sessionBridge.SyncResponseAsync(sessionId, response.AgentName, input, response);

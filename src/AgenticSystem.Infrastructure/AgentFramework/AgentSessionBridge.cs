@@ -17,19 +17,19 @@ public class AgentSessionBridge
 {
     private readonly ISessionManager _sessionManager;
     private readonly ISessionStore? _sessionStore;
+    private readonly AgentFrameworkSessionStoreAdapter? _hostedSessionStore;
     private readonly ILogger<AgentSessionBridge> _logger;
-
-    private const string FrameworkSessionStateKey = "frameworkSessionState";
-    private const string FrameworkAgentIdKey = "frameworkAgentId";
 
     public AgentSessionBridge(
         ISessionManager sessionManager,
         ILogger<AgentSessionBridge> logger,
-        ISessionStore? sessionStore = null)
+        ISessionStore? sessionStore = null,
+        AgentFrameworkSessionStoreAdapter? hostedSessionStore = null)
     {
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _sessionStore = sessionStore;
+        _hostedSessionStore = hostedSessionStore;
     }
 
     /// <summary>
@@ -40,7 +40,14 @@ public class AgentSessionBridge
         string sessionId,
         CancellationToken ct = default)
     {
-        var persistedState = await GetPersistedStateAsync(sessionId, agent.Id);
+        var stableAgentName = FrameworkSessionStateKeyResolver.ResolveAgentName(agent.Name, agent.Id);
+
+        if (_hostedSessionStore is not null)
+        {
+            return await _hostedSessionStore.GetSessionAsync(agent, sessionId, ct);
+        }
+
+        var persistedState = await GetPersistedStateAsync(sessionId, stableAgentName, agent.Id, ct);
         if (!string.IsNullOrWhiteSpace(persistedState))
         {
             try
@@ -94,8 +101,15 @@ public class AgentSessionBridge
         FrameworkAgentSession session,
         CancellationToken ct = default)
     {
+        if (_hostedSessionStore is not null)
+        {
+            await _hostedSessionStore.SaveSessionAsync(agent, sessionId, session, ct);
+            return;
+        }
+
         try
         {
+            var stableAgentName = FrameworkSessionStateKeyResolver.ResolveAgentName(agent.Name, agent.Id);
             var serialized = await agent.SerializeSessionAsync(session, cancellationToken: ct);
             var stateJson = serialized.GetRawText();
 
@@ -105,10 +119,13 @@ public class AgentSessionBridge
                 var sessionData = await _sessionStore.GetAsync(sessionId, ct);
                 if (sessionData != null)
                 {
-                    var runtimeKey = $"{FrameworkSessionStateKey}:{agent.Id}";
+                    var runtimeKey = FrameworkSessionStateKeyResolver.BuildRuntimeKey(stableAgentName);
                     sessionData.RuntimeSettings[runtimeKey] = stateJson;
                     await _sessionStore.SaveAsync(sessionData, ct);
-                    _logger.LogDebug("Framework session state persisted via ISessionStore: {SessionId}, AgentId={AgentId}", sessionId, agent.Id);
+                    _logger.LogDebug(
+                        "Framework session state persisted via ISessionStore: {SessionId}, AgentName={AgentName}",
+                        sessionId,
+                        stableAgentName);
                     return;
                 }
             }
@@ -123,8 +140,9 @@ public class AgentSessionBridge
                 Context = new Dictionary<string, object>
                 {
                     ["source"] = "AgentFramework",
-                    [FrameworkAgentIdKey] = agent.Id,
-                    [FrameworkSessionStateKey] = stateJson
+                    [FrameworkSessionStateKeyResolver.FrameworkAgentIdKey] = agent.Id,
+                    [FrameworkSessionStateKeyResolver.FrameworkAgentNameKey] = stableAgentName,
+                    [FrameworkSessionStateKeyResolver.FrameworkSessionStateKey] = stateJson
                 }
             };
 
@@ -142,19 +160,36 @@ public class AgentSessionBridge
 
     public int ActiveSessionCount => 0;
 
-    private async Task<string?> GetPersistedStateAsync(string sessionId, string agentId)
+    private async Task<string?> GetPersistedStateAsync(
+        string sessionId,
+        string agentName,
+        string agentId,
+        CancellationToken ct)
     {
         // Prioridade: ISessionStore.RuntimeSettings (Fase 3+)
         if (_sessionStore != null)
         {
-            var sessionData = await _sessionStore.GetAsync(sessionId);
+            var sessionData = await _sessionStore.GetAsync(sessionId, ct);
             if (sessionData != null)
             {
-                var runtimeKey = $"{FrameworkSessionStateKey}:{agentId}";
+                var runtimeKey = FrameworkSessionStateKeyResolver.BuildRuntimeKey(agentName);
                 if (sessionData.RuntimeSettings.TryGetValue(runtimeKey, out var stateFromStore))
                 {
-                    _logger.LogDebug("Framework session state found via ISessionStore: {SessionId}, AgentId={AgentId}", sessionId, agentId);
+                    _logger.LogDebug(
+                        "Framework session state found via ISessionStore: {SessionId}, AgentName={AgentName}",
+                        sessionId,
+                        agentName);
                     return stateFromStore;
+                }
+
+                var legacyRuntimeKey = FrameworkSessionStateKeyResolver.BuildLegacyRuntimeKey(agentId);
+                if (sessionData.RuntimeSettings.TryGetValue(legacyRuntimeKey, out var legacyStateFromStore))
+                {
+                    _logger.LogDebug(
+                        "Legacy framework session state found via ISessionStore: {SessionId}, AgentId={AgentId}",
+                        sessionId,
+                        agentId);
+                    return legacyStateFromStore;
                 }
             }
         }
@@ -165,34 +200,26 @@ public class AgentSessionBridge
         var stateEvent = recentEvents
             .Where(e => e.Context is not null)
             .OrderByDescending(e => e.Timestamp)
-            .FirstOrDefault(e => HasPersistedStateForAgent(e.Context, agentId))
+            .FirstOrDefault(e => HasPersistedStateForAgent(e.Context, agentName, agentId))
             ?? recentEvents
                 .Where(e => e.Context is not null)
                 .OrderByDescending(e => e.Timestamp)
-                .FirstOrDefault(e => e.Context.ContainsKey(FrameworkSessionStateKey)
-                    && !e.Context.ContainsKey(FrameworkAgentIdKey));
+                .FirstOrDefault(e => e.Context.ContainsKey(FrameworkSessionStateKeyResolver.FrameworkSessionStateKey)
+                    && !e.Context.ContainsKey(FrameworkSessionStateKeyResolver.FrameworkAgentIdKey)
+                    && !e.Context.ContainsKey(FrameworkSessionStateKeyResolver.FrameworkAgentNameKey));
 
         if (stateEvent?.Context is null)
             return null;
 
-        if (stateEvent.Context.TryGetValue(FrameworkSessionStateKey, out var value) && value is string serialized)
+        if (stateEvent.Context.TryGetValue(FrameworkSessionStateKeyResolver.FrameworkSessionStateKey, out var value)
+            && value is string serialized)
             return serialized;
 
         return null;
     }
 
-    private static bool HasPersistedStateForAgent(Dictionary<string, object> context, string agentId)
+    private static bool HasPersistedStateForAgent(Dictionary<string, object> context, string agentName, string agentId)
     {
-        if (!context.ContainsKey(FrameworkSessionStateKey))
-        {
-            return false;
-        }
-
-        if (!context.TryGetValue(FrameworkAgentIdKey, out var rawAgentId) || rawAgentId is null)
-        {
-            return false;
-        }
-
-        return string.Equals(rawAgentId.ToString(), agentId, StringComparison.Ordinal);
+        return FrameworkSessionStateKeyResolver.HasPersistedStateForAgent(context, agentName, agentId);
     }
 }

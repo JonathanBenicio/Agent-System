@@ -126,6 +126,27 @@ public class AgentFrameworkAdapterTests
     }
 
     [Fact]
+    public void Unwrap_ReturnsInnerAgent_WhenAdapterProvided()
+    {
+        var inner = Substitute.For<IAgent>();
+        var sut = new AgentFrameworkAdapter(
+            inner,
+            Substitute.For<Microsoft.Agents.AI.AIAgent>(),
+            new AgentSessionBridge(Substitute.For<ISessionManager>(), Substitute.For<ILogger<AgentSessionBridge>>()),
+            Substitute.For<ILogger<AgentFrameworkAdapter>>());
+
+        AgentFrameworkAdapter.Unwrap(sut).Should().BeSameAs(inner);
+    }
+
+    [Fact]
+    public void Unwrap_ReturnsOriginalAgent_WhenAdapterNotProvided()
+    {
+        var inner = Substitute.For<IAgent>();
+
+        AgentFrameworkAdapter.Unwrap(inner).Should().BeSameAs(inner);
+    }
+
+    [Fact]
     public void UpdateLastUsed_DelegatesToInnerAgent()
     {
         var inner = Substitute.For<IAgent>();

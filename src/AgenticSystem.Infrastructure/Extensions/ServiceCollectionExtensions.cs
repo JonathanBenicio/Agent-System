@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -97,8 +98,20 @@ public static class ServiceCollectionExtensions
         if (hasChatClient)
         {
             services.AddSingleton<AgentFrameworkFactory>();
+            services.AddSingleton<AgentFrameworkSessionStoreAdapter>();
             services.AddSingleton<AgentSessionBridge>();
             services.AddSingleton<OrchestratorAgentBuilder>();
+            services.AddScoped(CreateHostedOrchestratorResolution);
+
+            var hostedOrchestratorBuilder = services.AddAIAgent(
+                HostedOrchestratorResolution.AgentName,
+                static (sp, _) => sp.GetRequiredService<HostedOrchestratorResolution>().Context.OrchestratorAgent,
+                ServiceLifetime.Scoped);
+
+            hostedOrchestratorBuilder.WithSessionStore(
+                static (sp, _) => sp.GetRequiredService<AgentFrameworkSessionStoreAdapter>(),
+                ServiceLifetime.Singleton);
+
             services.AddSingleton<IFrameworkOrchestratorService, FrameworkOrchestratorService>();
 
             // Protocol-facing IChatClient: delega ao pipeline completo do orquestrador
@@ -195,6 +208,26 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient();
 
         return services;
+    }
+
+    private static HostedOrchestratorResolution CreateHostedOrchestratorResolution(IServiceProvider serviceProvider)
+    {
+        var runtimeContext = serviceProvider.GetRequiredService<ILLMRuntimeContextAccessor>().Current;
+        var sessionId = runtimeContext?.SessionId;
+
+        if (string.IsNullOrWhiteSpace(sessionId))
+        {
+            throw new InvalidOperationException(
+                "Hosted orchestrator resolution requires an active runtime context with a session id.");
+        }
+
+        var orchestratorBuilder = serviceProvider.GetRequiredService<OrchestratorAgentBuilder>();
+        var orchestratorContext = orchestratorBuilder
+            .GetOrCreateOrchestratorAsync(sessionId, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        return new HostedOrchestratorResolution(orchestratorContext);
     }
 
     /// <summary>

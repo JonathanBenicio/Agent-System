@@ -13,6 +13,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI" Version="1.4.0" />
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.4.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.4.0-preview.260505.1" />
     <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.4.0" />
 
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.7">

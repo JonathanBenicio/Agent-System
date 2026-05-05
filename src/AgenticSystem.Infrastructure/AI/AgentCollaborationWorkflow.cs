@@ -1,10 +1,14 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.AgentFramework;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Agents.AI.Workflows;
+using WorkflowAgent = Microsoft.Agents.AI.AIAgent;
+using WorkflowChatAgent = Microsoft.Agents.AI.ChatClientAgent;
 
 namespace AgenticSystem.Infrastructure.AI;
 
@@ -52,6 +56,204 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
     }
 
     public async Task<AgentResponse> ExecuteAsync(string sessionId, string input, UserContext context, AnalysisResult analysis, CancellationToken ct = default)
+        => _agentFrameworkFactory is not null
+            ? await ExecuteWithWorkflowBuilderAsync(sessionId, input, context, analysis, ct)
+            : await ExecuteLegacyAsync(sessionId, input, context, analysis, ct);
+
+    private async Task<AgentResponse> ExecuteWithWorkflowBuilderAsync(
+        string sessionId,
+        string input,
+        UserContext context,
+        AnalysisResult analysis,
+        CancellationToken ct)
+    {
+        var state = new CollaborationWorkflowState(sessionId, input, context, analysis);
+        var workflow = BuildCollaborationWorkflow(state);
+
+        try
+        {
+            var messages = new List<ChatMessage>
+            {
+                new(ChatRole.User, input)
+            };
+
+            await using var run = await InProcessExecution.RunAsync(workflow, messages, sessionId, ct);
+
+            if (state.FailedResponse is not null)
+            {
+                return state.FailedResponse;
+            }
+
+            if (state.FinalResponse is not null)
+            {
+                return state.FinalResponse;
+            }
+
+            var workflowError = run.OutgoingEvents.OfType<WorkflowErrorEvent>().FirstOrDefault();
+            var executorFailure = run.OutgoingEvents.OfType<ExecutorFailedEvent>().FirstOrDefault();
+
+            if (workflowError is not null)
+            {
+                _logger.LogWarning(workflowError.Exception,
+                    "AgentWorkflowBuilder collaboration run failed for session {SessionId}", sessionId);
+            }
+            else if (executorFailure?.Data is Exception executorException)
+            {
+                _logger.LogWarning(executorException,
+                    "AgentWorkflowBuilder collaboration executor failed for session {SessionId}", sessionId);
+            }
+
+            return AgentResponse.Error("Erro ao executar workflow colaborativo.", "CollaborativeWorkflow");
+        }
+        catch (CollaborationWorkflowStageFailedException)
+        {
+            return state.FailedResponse ?? AgentResponse.Error(
+                "Erro ao executar workflow colaborativo.", "CollaborativeWorkflow");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "AgentWorkflowBuilder collaboration pipeline failed for session {SessionId}", sessionId);
+            return AgentResponse.Error("Erro ao executar workflow colaborativo.", "CollaborativeWorkflow");
+        }
+    }
+
+    private async Task<AgentResponse> ExecuteLegacyAsync(
+        string sessionId,
+        string input,
+        UserContext context,
+        AnalysisResult analysis,
+        CancellationToken ct)
+    {
+        var plan = await CreatePlanAsync(sessionId, input, context, analysis, ct);
+        var stepExecution = await ExecutePlanStepsAsync(sessionId, input, context, analysis, plan, ct);
+
+        if (stepExecution.FailedResponse is not null)
+        {
+            return stepExecution.FailedResponse;
+        }
+
+        var review = await ReviewPlanAsync(sessionId, input, context, plan, stepExecution.StepOutputs, ct);
+        return BuildCollaborativeResponse(
+            plan,
+            stepExecution.StepOutputs,
+            review.ReviewResponse,
+            review.Reviewer.Name,
+            "planner-executor-reviewer",
+            "LegacyLoop");
+    }
+
+    private Workflow BuildCollaborationWorkflow(CollaborationWorkflowState state)
+    {
+        var agents = new WorkflowAgent[]
+        {
+            CreateWorkflowStageAgent(
+                "CollaborationPlanner",
+                "Planeja os steps do workflow colaborativo.",
+                (_, cancellationToken) => ExecutePlanningStageAsync(state, cancellationToken)),
+            CreateWorkflowStageAgent(
+                "CollaborationExecutor",
+                "Executa os steps do workflow colaborativo.",
+                (_, cancellationToken) => ExecuteExecutionStageAsync(state, cancellationToken)),
+            CreateWorkflowStageAgent(
+                "CollaborationReviewer",
+                "Revisa os resultados do workflow colaborativo.",
+                (_, cancellationToken) => ExecuteReviewerStageAsync(state, cancellationToken))
+        };
+
+        return AgentWorkflowBuilder.BuildSequential("collaboration-workflow", agents);
+    }
+
+    private WorkflowAgent CreateWorkflowStageAgent(
+        string name,
+        string description,
+        Func<IEnumerable<ChatMessage>, CancellationToken, Task<string>> executeAsync)
+    {
+        var stageClient = new CollaborationWorkflowStageChatClient(executeAsync);
+        return new WorkflowChatAgent(
+            stageClient,
+            description,
+            name,
+            description,
+            null,
+            _agentFrameworkFactory!.LoggerFactory,
+            _agentFrameworkFactory.ServiceProvider);
+    }
+
+    private async Task<string> ExecutePlanningStageAsync(
+        CollaborationWorkflowState state,
+        CancellationToken ct)
+    {
+        state.Plan = await CreatePlanAsync(state.SessionId, state.OriginalInput, state.Context, state.Analysis, ct);
+        return $"Plan {state.Plan.Id} created with {state.Plan.Steps.Count} steps.";
+    }
+
+    private async Task<string> ExecuteExecutionStageAsync(
+        CollaborationWorkflowState state,
+        CancellationToken ct)
+    {
+        if (state.Plan is null)
+        {
+            throw new InvalidOperationException("Collaboration workflow execution requires a plan.");
+        }
+
+        var stepExecution = await ExecutePlanStepsAsync(
+            state.SessionId,
+            state.OriginalInput,
+            state.Context,
+            state.Analysis,
+            state.Plan,
+            ct);
+
+        state.StepOutputs.Clear();
+        state.StepOutputs.AddRange(stepExecution.StepOutputs);
+
+        if (stepExecution.FailedResponse is not null)
+        {
+            state.FailedResponse = stepExecution.FailedResponse;
+            throw new CollaborationWorkflowStageFailedException(stepExecution.FailedResponse.Content);
+        }
+
+        return stepExecution.StepOutputs.Count == 0
+            ? "No steps were executed."
+            : string.Join("\n\n", stepExecution.StepOutputs.Select(output =>
+                $"Step {output.Step.Index + 1}: {output.Response.Content}"));
+    }
+
+    private async Task<string> ExecuteReviewerStageAsync(
+        CollaborationWorkflowState state,
+        CancellationToken ct)
+    {
+        if (state.Plan is null)
+        {
+            throw new InvalidOperationException("Collaboration workflow review requires a plan.");
+        }
+
+        var review = await ReviewPlanAsync(
+            state.SessionId,
+            state.OriginalInput,
+            state.Context,
+            state.Plan,
+            state.StepOutputs,
+            ct);
+
+        state.ReviewResponse = review.ReviewResponse;
+        state.FinalResponse = BuildCollaborativeResponse(
+            state.Plan,
+            state.StepOutputs,
+            review.ReviewResponse,
+            review.Reviewer.Name,
+            "planner-executor-reviewer-workflow",
+            "AgentWorkflowBuilder");
+
+        return state.FinalResponse.Content;
+    }
+
+    private async Task<TaskPlan> CreatePlanAsync(
+        string sessionId,
+        string input,
+        UserContext context,
+        AnalysisResult analysis,
+        CancellationToken ct)
     {
         var plannerSw = Stopwatch.StartNew();
         await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
@@ -67,6 +269,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
 
         var plan = await _planner.PlanAsync(context.UserId, input, ct)
             ?? await BuildFallbackPlanAsync(context.UserId, input, analysis, ct);
+
         plan.SessionId = sessionId;
         plan.Status = TaskPlanStatus.InProgress;
 
@@ -111,6 +314,17 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             }
         }, ct);
 
+        return plan;
+    }
+
+    private async Task<StepExecutionResult> ExecutePlanStepsAsync(
+        string sessionId,
+        string input,
+        UserContext context,
+        AnalysisResult analysis,
+        TaskPlan plan,
+        CancellationToken ct)
+    {
         var stepOutputs = new List<(TaskStep Step, IAgent Agent, AgentResponse Response)>();
 
         foreach (var step in plan.Steps.OrderBy(step => step.Index))
@@ -158,7 +372,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
                     }
                 }, ct);
 
-                return response;
+                return new StepExecutionResult(stepOutputs, response);
             }
 
             step.Status = TaskStepStatus.Completed;
@@ -198,6 +412,17 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             }, ct);
         }
 
+        return new StepExecutionResult(stepOutputs, null);
+    }
+
+    private async Task<ReviewExecutionResult> ReviewPlanAsync(
+        string sessionId,
+        string input,
+        UserContext context,
+        TaskPlan plan,
+        IReadOnlyList<(TaskStep Step, IAgent Agent, AgentResponse Response)> stepOutputs,
+        CancellationToken ct)
+    {
         await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
         {
             Type = AgentStreamEventType.ReviewStarted,
@@ -221,57 +446,67 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         var reviewPrompt = BuildReviewPrompt(input, plan, stepOutputs);
         reviewPrompt = await BuildChannelAwareReviewInputAsync(sessionId, reviewer.Name, reviewPrompt, ct);
         var reviewSw = Stopwatch.StartNew();
-        using (var reviewerScope = _runtimeCoordinator.BeginAgentScope(reviewer.Name, reviewer.AvailableTools))
+
+        using var reviewerScope = _runtimeCoordinator.BeginAgentScope(reviewer.Name, reviewer.AvailableTools);
+        var reviewResponse = await ExecuteReviewAsync(sessionId, reviewPrompt, reviewer, stepOutputs, context, ct);
+        reviewSw.Stop();
+
+        await _runtimeCoordinator.RecordArtifactAsync(new AgentExecutionArtifact
         {
-            var reviewResponse = await ExecuteReviewAsync(sessionId, reviewPrompt, reviewer, stepOutputs, context, ct);
-            reviewSw.Stop();
-
-            await _runtimeCoordinator.RecordArtifactAsync(new AgentExecutionArtifact
+            SessionId = sessionId,
+            Type = AgentExecutionArtifactType.Review,
+            Name = $"Review for {plan.Title}",
+            AgentName = reviewer.Name,
+            Status = reviewResponse.Success ? "Completed" : "Failed",
+            Summary = reviewResponse.Content,
+            Data = new Dictionary<string, object>
             {
-                SessionId = sessionId,
-                Type = AgentExecutionArtifactType.Review,
-                Name = $"Review for {plan.Title}",
-                AgentName = reviewer.Name,
-                Status = reviewResponse.Success ? "Completed" : "Failed",
-                Summary = reviewResponse.Content,
-                Data = new Dictionary<string, object>
-                {
-                    ["latencyMs"] = reviewSw.Elapsed.TotalMilliseconds,
-                    ["planId"] = plan.Id
-                }
-            }, ct);
+                ["latencyMs"] = reviewSw.Elapsed.TotalMilliseconds,
+                ["planId"] = plan.Id
+            }
+        }, ct);
 
-            await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
+        await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
+        {
+            Type = AgentStreamEventType.ReviewCompleted,
+            AgentName = reviewer.Name,
+            Message = reviewResponse.Content,
+            Data = new Dictionary<string, object>
             {
-                Type = AgentStreamEventType.ReviewCompleted,
-                AgentName = reviewer.Name,
-                Message = reviewResponse.Content,
-                Data = new Dictionary<string, object>
-                {
-                    ["latencyMs"] = reviewSw.Elapsed.TotalMilliseconds,
-                    ["planId"] = plan.Id
-                }
-            }, ct);
+                ["latencyMs"] = reviewSw.Elapsed.TotalMilliseconds,
+                ["planId"] = plan.Id
+            }
+        }, ct);
 
-            var finalContent = BuildFinalResponse(plan, stepOutputs, reviewResponse);
-            return new AgentResponse
+        return new ReviewExecutionResult(reviewer, reviewResponse);
+    }
+
+    private static AgentResponse BuildCollaborativeResponse(
+        TaskPlan plan,
+        IReadOnlyList<(TaskStep Step, IAgent Agent, AgentResponse Response)> stepOutputs,
+        AgentResponse reviewResponse,
+        string reviewerName,
+        string executionMode,
+        string workflowEngine)
+    {
+        return new AgentResponse
+        {
+            Content = BuildFinalResponse(plan, stepOutputs, reviewResponse),
+            AgentName = "CollaborativeWorkflow",
+            AgentTier = AgentTier.Chief,
+            Success = reviewResponse.Success,
+            ActionsPerformed = stepOutputs.Select(output => output.Step.Description).ToList(),
+            ToolsUsed = stepOutputs.SelectMany(output => output.Response.ToolsUsed).Distinct().ToList(),
+            Metadata = new Dictionary<string, object>
             {
-                Content = finalContent,
-                AgentName = "CollaborativeWorkflow",
-                AgentTier = AgentTier.Chief,
-                Success = reviewResponse.Success,
-                ActionsPerformed = stepOutputs.Select(output => output.Step.Description).ToList(),
-                ToolsUsed = stepOutputs.SelectMany(output => output.Response.ToolsUsed).Distinct().ToList(),
-                Metadata = new Dictionary<string, object>
-                {
-                    ["executionMode"] = "planner-executor-reviewer",
-                    ["planId"] = plan.Id,
-                    ["reviewer"] = reviewer.Name,
-                    ["stepCount"] = stepOutputs.Count,
-                    ["nativeAgentTools"] = reviewResponse.Metadata.GetValueOrDefault("nativeAgentTools", false)
-                }
-            };
-        }
+                ["executionMode"] = executionMode,
+                ["workflowEngine"] = workflowEngine,
+                ["planId"] = plan.Id,
+                ["reviewer"] = reviewerName,
+                ["stepCount"] = stepOutputs.Count,
+                ["nativeAgentTools"] = reviewResponse.Metadata.GetValueOrDefault("nativeAgentTools", false)
+            }
+        };
     }
 
     private async Task<AgentResponse> ExecuteReviewAsync(
@@ -533,4 +768,72 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         sb.AppendLine(reviewResponse.Content);
         return sb.ToString().TrimEnd();
     }
+
+    private sealed class CollaborationWorkflowState
+    {
+        public CollaborationWorkflowState(string sessionId, string originalInput, UserContext context, AnalysisResult analysis)
+        {
+            SessionId = sessionId;
+            OriginalInput = originalInput;
+            Context = context;
+            Analysis = analysis;
+        }
+
+        public string SessionId { get; }
+        public string OriginalInput { get; }
+        public UserContext Context { get; }
+        public AnalysisResult Analysis { get; }
+        public TaskPlan? Plan { get; set; }
+        public List<(TaskStep Step, IAgent Agent, AgentResponse Response)> StepOutputs { get; } = [];
+        public AgentResponse? FailedResponse { get; set; }
+        public AgentResponse? FinalResponse { get; set; }
+        public AgentResponse? ReviewResponse { get; set; }
+    }
+
+    private sealed class CollaborationWorkflowStageChatClient(
+        Func<IEnumerable<ChatMessage>, CancellationToken, Task<string>> executeAsync) : IChatClient
+    {
+        private readonly Func<IEnumerable<ChatMessage>, CancellationToken, Task<string>> _executeAsync = executeAsync;
+
+        public async Task<ChatResponse> GetResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default)
+        {
+            var content = await _executeAsync(messages, cancellationToken);
+            return new ChatResponse(new ChatMessage(ChatRole.Assistant, content));
+        }
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
+            IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
+        {
+            var response = await GetResponseAsync(messages, options, cancellationToken);
+            var text = response.Text ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                yield break;
+            }
+
+            yield return new ChatResponseUpdate(ChatRole.Assistant, text);
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null)
+            => serviceType == typeof(IChatClient) ? this : null;
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class CollaborationWorkflowStageFailedException(string message) : Exception(message);
+
+    private sealed record StepExecutionResult(
+        List<(TaskStep Step, IAgent Agent, AgentResponse Response)> StepOutputs,
+        AgentResponse? FailedResponse);
+
+    private sealed record ReviewExecutionResult(IAgent Reviewer, AgentResponse ReviewResponse);
 }

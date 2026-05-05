@@ -527,11 +527,11 @@ return builder
 |---|---|---|
 | `UseReflection()` nativo | ❌ | Continua via extensões custom (`ReflectionDelegatingAgent` + `AgentBuilderMiddlewareExtensions`) |
 | `UseQualityGates()` nativo | ❌ | Continua via extensões custom (`QualityGateDelegatingAgent` + `AgentBuilderMiddlewareExtensions`) |
-| `AgentWorkflowBuilder` | ✅ | Package presente, mas `AgentCollaborationWorkflow` ainda não foi migrado |
-| `BuildSequential` / `BuildConcurrent` | ✅ | Disponíveis, ainda não usados no código da aplicação |
+| `AgentWorkflowBuilder` | ✅ | Package presente e integrado no `AgentCollaborationWorkflow` via `BuildSequential` + `InProcessExecution` |
+| `BuildSequential` / `BuildConcurrent` | ✅ | `BuildSequential` já usado no workflow colaborativo; `BuildConcurrent` segue disponível para futuras etapas paralelas |
 | Session store de hosting (`WithInMemorySessionStore` / `WithSessionStore`) | ✅ | Não adotado no fluxo principal; `AgentSessionBridge` ainda persiste estado em `ISessionStore.RuntimeSettings` |
 | `AddAIAgent()` / `IHostedAgentBuilder` | ✅ | Já usado nos endpoints A2A/AG-UI; orquestrador principal segue manual |
-| `WithSessionStore(...)` | ✅ | Exige adapter local para o store PostgreSQL atual; ainda não implementado |
+| `WithSessionStore(...)` | ✅ | Adapter local já implementado (`AgentFrameworkSessionStoreAdapter`); `AgentSessionBridge` ainda cobre paths legados e tool bindings |
 
 #### Arquivos Criados/Modificados
 
@@ -542,16 +542,17 @@ return builder
 | `Infrastructure/AgentFramework/AgentBuilderMiddlewareExtensions.cs` | **Criado** — `UseReflection()` e `UseQualityGates()` extension methods em `AIAgentBuilder` | 12 |
 | `Infrastructure/AgentFramework/AgentFrameworkAdapter.cs` | `ExecuteAsync` marcado `[Obsolete]` | 11 |
 | `Infrastructure/AgentFramework/OrchestratorAgentBuilder.cs` | Constructor aceita `IReflectionEngine?` e `IQualityGateService?`; pipeline: QualityGates → Reflection → Logging → OpenTelemetry | 7 |
+| `Infrastructure/AgentFramework/AgentFrameworkSessionStoreAdapter.cs` | **Criado** — adapter local para `WithSessionStore(...)` do hosting nativo | 14 |
 | `Infrastructure/AgentFramework/AgentSessionBridge.cs` | Refatorado para usar `ISessionStore.RuntimeSettings` em vez de eventos falsos; fallback para eventos mantido | 14 |
+| `Infrastructure/AI/AgentCollaborationWorkflow.cs` | **Migrado** — planner/executor/reviewer agora executam via `AgentWorkflowBuilder.BuildSequential(...)` com fallback legado | 13 |
 | `Core/Services/HierarchicalAgentFactory.cs` | `GetOrCreateAgentAsync` e `ResolveAgentName` marcados `[Obsolete]` | 15 |
 
 #### Tech Debt Remanescente para Fase 4+
 
-1. **`AgentCollaborationWorkflow`** — já implementável com `AgentWorkflowBuilder`, mas ainda não migrado por custo local de integração e compatibilidade.
-2. **`AgentSessionBridge`** — já removível com session store de hosting + adapter local, mas ainda central ao fluxo atual.
-3. **`AgentFrameworkAdapter.ExecuteAsync`** — limpeza local; pode ser removido quando o path direto for isolado em `ExecuteDirectAsync`.
-4. **`HierarchicalAgentFactory.GetOrCreateAgentAsync`** — limpeza local; ainda existe por compatibilidade com fluxos legados.
-5. **Middleware nativo de reflection/quality gates** — este continua sendo bloqueio real do framework; por isso as extensões custom permanecem necessárias.
+1. **`AgentSessionBridge`** — adapter de hosting já existe, mas a bridge ainda permanece central nos paths legados e nos tool bindings.
+2. **`AgentFrameworkAdapter.ExecuteAsync`** — limpeza local; o unwrap no orquestrador já ficou explícito e sem reflection, mas o adapter ainda é decorador global do factory.
+3. **`HierarchicalAgentFactory.GetOrCreateAgentAsync`** — limpeza local; ainda existe por compatibilidade com fluxos legados.
+4. **Middleware nativo de reflection/quality gates** — este continua sendo bloqueio real do framework; por isso as extensões custom permanecem necessárias.
 
 ### Objetivo
 
@@ -600,9 +601,9 @@ agentBuilder
 
 **CorrectionLoop como AIFunction (complemento):** `CorrectionLoop` pode ser exposta como `AIFunction` que o orquestrador chama para aplicar regras de correção antes de enviar ao especialista. Isso complementa (não substitui) o middleware.
 
-#### Step 13 — Migrar `AgentCollaborationWorkflow` para `AgentWorkflowBuilder`
+#### Step 13 — Migrar `AgentCollaborationWorkflow` para `AgentWorkflowBuilder` ✅ Implementado
 
-O fluxo planner-executor-reviewer hoje é custom. O MAF oferece `AgentWorkflowBuilder` com `BuildSequential` e `BuildConcurrent` como mecanismos nativos de orquestração multi-agent:
+O fluxo planner-executor-reviewer foi migrado incrementalmente. O projeto agora monta um `BuildSequential` com planner, executor e reviewer, executa o workflow via `InProcessExecution` e preserva um fallback legado quando `AgentFrameworkFactory` não está disponível. O MAF segue oferecendo `BuildSequential` e `BuildConcurrent` como mecanismos nativos de orquestração multi-agent:
 
 ```csharp
 // ANTES — Custom workflow
@@ -702,10 +703,10 @@ agentBuilder.WithSessionStore<PostgresSessionStore>();
 | `Infrastructure/AgentFramework/AgentFrameworkAdapter.cs` | Simplificar / deprecar |
 | `Infrastructure/AgentFramework/ReflectionMiddleware.cs` | **Criar** — middleware wrapper para `ReflectionEngine` |
 | `Infrastructure/AgentFramework/QualityGateMiddleware.cs` | **Criar** — middleware de quality gates |
-| `Infrastructure/AgentFramework/PostgresSessionStore.cs` | **Criar** — `ISessionStore` implementação PostgreSQL |
-| `Infrastructure/AI/AgentCollaborationWorkflow.cs` | Migrar para `AgentWorkflowBuilder` |
-| `Infrastructure/AgentFramework/AgentSessionBridge.cs` | **Eliminar** — substituída por `PostgresSessionStore` |
-| `Infrastructure/AgentFramework/AgentFrameworkAgentFactory.cs` | Pode ser removido quando adapter for obsoleto |
+| `Infrastructure/AgentFramework/AgentFrameworkSessionStoreAdapter.cs` | **Criado** — adapter local para `WithSessionStore(...)` do hosting nativo |
+| `Infrastructure/AI/AgentCollaborationWorkflow.cs` | ✅ Migrado para `AgentWorkflowBuilder` com fallback legado |
+| `Infrastructure/AgentFramework/AgentSessionBridge.cs` | Reduzir / eliminar após migração dos paths legados e tool bindings |
+| `Infrastructure/AgentFramework/AgentFrameworkAgentFactory.cs` | Reduzir acoplamento do decorator ao path direto |
 | `Core/Services/CorrectionLoopService.cs` | Reposicionar como AIFunction complementar |
 
 ---
@@ -898,7 +899,7 @@ O `AI_Capabilities_Gaps.md` referencia como backlog, mas são abstrações do Se
 
 #### 2. MAF Workflows é o mecanismo nativo de orquestração multi-agent
 
-`AgentWorkflowBuilder` + executors + edges formam grafos tipados com checkpointing, human-in-the-loop (via `RequestInfoExecutor`), streaming e parallel execution. No estado atual do projeto, essa capacidade já está disponível no pacote 1.4, mas ainda não foi integrada para substituir `AgentCollaborationWorkflow`.
+`AgentWorkflowBuilder` + executors + edges formam grafos tipados com checkpointing, human-in-the-loop (via `RequestInfoExecutor`), streaming e parallel execution. No estado atual do projeto, essa capacidade já foi integrada ao `AgentCollaborationWorkflow` no caminho planner → executor → reviewer; os ganhos incrementais restantes estão em ampliar paralelismo e checkpointing onde fizer sentido.
 
 #### 3. Sessões são agent-specific
 
@@ -916,7 +917,7 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 ### Recomendação Consolidada
 
 - **Implementar agora:** migrar o orquestrador principal para `AddAIAgent()` + `IHostedAgentBuilder`, introduzir um adapter para `WithSessionStore(...)` e reduzir/eliminar `AgentSessionBridge`.
-- **Implementar se houver ROI claro:** migrar `AgentCollaborationWorkflow` para `AgentWorkflowBuilder` para ganhar checkpointing, paralelismo e grafo explícito.
+- **Implementar se houver ROI claro:** simplificar `AgentFrameworkAdapter` / `AgentFrameworkAgentFactory` para restringir o wrapper ao `ExecuteDirectAsync` e continuar drenando o legado.
 - **Manter como KEEP:** `FinalResponseApprovalService` e `SmartRouter`/`PersistentSmartRouter`, pois seguem em uso e agregam valor no desenho atual.
 - **Adiar por bloqueio real do framework:** substituição por middleware nativo de reflection/quality gates; hoje isso continua dependendo de extensões da aplicação.
 
@@ -969,7 +970,7 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 - [ ] Especialistas são chamados pelo framework, não pelo workflow
 - [ ] Reflection via middleware nativo (`.UseReflection()`)
 - [ ] Quality gates via middleware nativo (`.UseQualityGates()`)
-- [ ] `AgentCollaborationWorkflow` migrado para `AgentWorkflowBuilder.BuildSequential`
+- [x] `AgentCollaborationWorkflow` migrado para `AgentWorkflowBuilder.BuildSequential`
 - [ ] `AgentFrameworkAdapter` é usado apenas para `ExecuteDirectAsync`
 
 > **Revalidação 2026-05:** `AgentWorkflowBuilder` e `WithSessionStore(...)` existem no MAF 1.4. Os itens ainda pendentes desta fase são majoritariamente backlog local; a exceção real de framework continua sendo a ausência de `UseReflection()` / `UseQualityGates()` nativos.
@@ -1006,7 +1007,7 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 | **`AddAIAgent()` como target de hosting** | Disponível no MAF 1.4 e já usado no protocolo; migração do orquestrador principal permanece como dívida local |
 | **`ChatHistoryProvider` para RAG** | Injeção automática e determinística de contexto; AIFunction como complemento |
 | **Middleware de reflection/quality gates** | Hoje continua custom sobre o builder; o MAF 1.4 não expõe `.UseReflection()` / `.UseQualityGates()` nativos |
-| **`AgentWorkflowBuilder` para collaboration** | Disponível no MAF 1.4; migração ainda não realizada no projeto |
+| **`AgentWorkflowBuilder` para collaboration** | Disponível no MAF 1.4 e já integrado ao fluxo planner-executor-reviewer |
 | **Session store de hosting** | `WithSessionStore(...)` existe no MAF 1.4; o projeto ainda usa `AgentSessionBridge` + store da aplicação |
 | **Protocol hosting na Fase 4** | A2A, AG-UI, OpenAI-compatible para interoperabilidade externa |
 
@@ -1044,7 +1045,7 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 |---|---|---|---|
 | `UseReflection()` / `UseQualityGates()` nativos | **Bloqueio real do MAF** | APIs nativas não aparecem no MAF 1.4 instalado | Continuar com extensões custom da aplicação |
 | Hosting principal via `AddAIAgent()` + `IHostedAgentBuilder` | **Dívida local implementável agora** | APIs existem e `AddAIAgent()` já é usado no protocolo A2A/AG-UI | Orquestrador principal ainda usa `OrchestratorAgentBuilder` |
-| `AgentWorkflowBuilder` / `BuildSequential` | **Dívida local implementável agora** | Package 1.4 instalado com APIs documentadas | `AgentCollaborationWorkflow` ainda não foi migrado |
+| `AgentWorkflowBuilder` / `BuildSequential` | **✅ Resolvido** | Package 1.4 instalado com APIs documentadas | `AgentCollaborationWorkflow` já usa `BuildSequential` no path principal |
 | Session store de hosting via `WithSessionStore(...)` | **Dívida local implementável agora** | Capability existe no MAF 1.4 | Fluxo principal ainda usa `AgentSessionBridge` + `ISessionStore.RuntimeSettings` |
 | `AgentFrameworkAdapter.ExecuteAsync` / `HierarchicalAgentFactory` obsolete paths | **Dívida local implementável agora** | Código já está marcado obsolete | Remoção depende de auditoria e corte do legado |
 | Migração remanescente de `ILLMManager` | **Dívida local implementável agora** | Não depende de nova API do MAF | Ainda há consumidores em `BaseAgent`, `LLMController`, `DynamicAgentService` e factory |
@@ -1056,13 +1057,13 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 
 1. **Migrar o orquestrador principal para hosting nativo** com `AddAIAgent()` + `IHostedAgentBuilder`, reduzindo a necessidade de construção manual em `OrchestratorAgentBuilder`.
 2. **Introduzir session store de hosting** via `WithSessionStore(...)`, criando um adapter local para o store PostgreSQL e reduzindo ou eliminando `AgentSessionBridge`.
-3. **Migrar `AgentCollaborationWorkflow` para `AgentWorkflowBuilder`** usando `BuildSequential` ou `BuildConcurrent`, se houver ganho real com checkpointing e paralelismo.
+3. **Remover caminhos obsolete** de `AgentFrameworkAdapter.ExecuteAsync` e `HierarchicalAgentFactory.GetOrCreateAgentAsync` após isolar o wrapper no `ExecuteDirectAsync`.
 4. **Remover caminhos obsolete** de `AgentFrameworkAdapter.ExecuteAsync` e `HierarchicalAgentFactory.GetOrCreateAgentAsync` após a migração do fluxo principal.
 
 ### Recomendação Objetiva
 
 1. **Vale implementar agora:** hosting nativo do orquestrador principal, session store de hosting e backlog de protocolo (rate limiting + testes).
-2. **Vale implementar agora se houver ROI claro:** migração de `AgentCollaborationWorkflow` para `AgentWorkflowBuilder`.
+2. **Vale implementar agora se houver ROI claro:** simplificação do `AgentFrameworkAdapter` / `AgentFrameworkAgentFactory` e redução adicional do legado de sessão.
 3. **Deve continuar como KEEP:** `FinalResponseApprovalService` e `SmartRouter`/`PersistentSmartRouter`.
 4. **Deve continuar como workaround local:** reflection e quality gates, até o MAF oferecer middleware nativo para isso.
 
@@ -1195,3 +1196,4 @@ Manual (qualquer momento):
 | 2026-05-05 | Fase 4b | Finding 11 resolvido — `ProtocolOrchestratorChatClient` criado, keyed registration `"protocol-orchestrator"`, `AddAIAgent` usa pipeline completo via `IFrameworkOrchestratorService` |
 | 2026-05-06 | Seção 14 | Resolução em lote dos findings: F1 (EfSessionStore removido), F3 (workflow simplificado), F4 (providers removidos), F5 parcial (ContextAnalyzer/SessionConsolidator → IChatClient), F8 (PostgresMigrationJobStore/PostgresEmbeddingModelStore criados + V002 SQL), F9 (InMemoryRuntimeEvaluator), F10 (validado como design correto). 12 arquivos deletados, 5 criados, 8+ modificados. Build: 0 errors. |
 | 2026-05-06 | Seções 10, 12 e 14 | Revalidação contra MAF 1.4: separação explícita entre bloqueio real do framework e dívida local; lista de tech debts já implementáveis; recomendação objetiva do que vale fazer agora e do que deve permanecer como KEEP. |
+| 2026-05-06 | Fase 3 | `AgentCollaborationWorkflow` migrado para `AgentWorkflowBuilder.BuildSequential` com execução via `InProcessExecution`; `OrchestratorAgentBuilder` deixou de usar reflection para desembrulhar `AgentFrameworkAdapter`. |

@@ -203,10 +203,8 @@ public class OrchestratorAgentBuilder
 
                 var agent = await _agentFactory.GetOrCreateAgentAsync(analysis);
 
-                // Desembrulha o adapter se necessário — precisamos do IAgent puro
-                var rawAgent = agent is AgentFrameworkAdapter adapter
-                    ? GetInnerAgent(adapter)
-                    : agent;
+                // Tool bindings precisam do agente de domínio, não do wrapper de execução direta.
+                var rawAgent = AgentFrameworkAdapter.Unwrap(agent);
 
                 var binding = await _frameworkFactory.CreateToolBindingAsync(rawAgent, sessionId, ct);
                 if (binding is not null)
@@ -280,14 +278,6 @@ public class OrchestratorAgentBuilder
             .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
             .Select(a => a.Name);
         return string.Join("|", names);
-    }
-
-    private static IAgent GetInnerAgent(AgentFrameworkAdapter adapter)
-    {
-        // Usa reflection para acessar o _innerAgent privado do adapter
-        var field = typeof(AgentFrameworkAdapter).GetField("_innerAgent",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        return field?.GetValue(adapter) as IAgent ?? (IAgent)adapter;
     }
 
     private sealed record CachedOrchestrator(string Instructions);
