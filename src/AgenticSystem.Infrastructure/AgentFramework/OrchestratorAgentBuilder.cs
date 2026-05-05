@@ -21,17 +21,68 @@ public class OrchestratorAgentBuilder
     private readonly IAgentFactory _agentFactory;
     private readonly ILogger<OrchestratorAgentBuilder> _logger;
 
+    // Middleware de domínio (Reflection + QualityGates)
+    private readonly IReflectionEngine? _reflectionEngine;
+    private readonly IQualityGateService? _qualityGateService;
+
+    // RAG context provider — injeção automática de contexto antes de cada LLM call
+    private readonly RAGContextProvider? _ragContextProvider;
+
+    // Tools auxiliares — on-demand via tool calling (RAG, SmartRouter, ContextAnalyzer)
+    private readonly List<AITool> _auxiliaryTools = [];
+
     // Cache invalidado quando a lista de agentes muda (por hash dos nomes)
     private readonly ConcurrentDictionary<string, CachedOrchestrator> _cache = new();
 
     public OrchestratorAgentBuilder(
         AgentFrameworkFactory frameworkFactory,
         IAgentFactory agentFactory,
-        ILogger<OrchestratorAgentBuilder> logger)
+        ILogger<OrchestratorAgentBuilder> logger,
+        IRAGService? ragService = null,
+        IContextBudgetManager? contextBudgetManager = null,
+        ISmartRouter? smartRouter = null,
+        IContextAnalyzer? contextAnalyzer = null,
+        IReflectionEngine? reflectionEngine = null,
+        IQualityGateService? qualityGateService = null)
     {
         _frameworkFactory = frameworkFactory ?? throw new ArgumentNullException(nameof(frameworkFactory));
         _agentFactory = agentFactory ?? throw new ArgumentNullException(nameof(agentFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _reflectionEngine = reflectionEngine;
+        _qualityGateService = qualityGateService;
+
+        // RAG Context Provider — injeção automática de contexto via MessageAIContextProvider
+        if (ragService != null)
+        {
+            _ragContextProvider = new RAGContextProvider(
+                ragService,
+                contextBudgetManager,
+                _frameworkFactory.LoggerFactory.CreateLogger<RAGContextProvider>());
+
+            _auxiliaryTools.Add(
+                OrchestratorAuxiliaryTools.CreateRetrieveContextTool(ragService, contextBudgetManager));
+        }
+
+        // SmartRouter como tool — o LLM consulta para sugestão de roteamento
+        if (smartRouter != null)
+        {
+            _auxiliaryTools.Add(
+                OrchestratorAuxiliaryTools.CreateRouteToAgentTool(smartRouter));
+        }
+
+        // ContextAnalyzer como tool — o LLM analisa domínio/intenção on-demand
+        if (contextAnalyzer != null)
+        {
+            _auxiliaryTools.Add(
+                OrchestratorAuxiliaryTools.CreateAnalyzeRequestTool(contextAnalyzer));
+        }
+
+        if (_auxiliaryTools.Count > 0)
+        {
+            _logger.LogInformation(
+                "Orchestrator auxiliary tools registered: {Tools}",
+                string.Join(", ", _auxiliaryTools.Select(t => t.Name)));
+        }
     }
 
     /// <summary>
@@ -49,24 +100,29 @@ public class OrchestratorAgentBuilder
         var toolBindings = await CreateToolBindingsAsync(agents, sessionId, ct);
         var tools = toolBindings.Select(tb => tb.Tool).ToList();
 
+        // Merge auxiliary tools (RAG, SmartRouter, ContextAnalyzer) com specialist tools
+        var allTools = new List<AITool>(tools);
+        allTools.AddRange(_auxiliaryTools);
+
         if (_cache.TryGetValue(cacheKey, out var cached))
         {
             _logger.LogDebug(
-                "Orchestrator agent reused from cache (key={CacheKey}, tools={ToolCount})",
-                cacheKey, tools.Count);
+                "Orchestrator agent reused from cache (key={CacheKey}, tools={ToolCount}, auxiliary={AuxCount})",
+                cacheKey, tools.Count, _auxiliaryTools.Count);
 
             // Recria o orchestrator com novos tool bindings (session-specific)
-            var refreshedAgent = await CreateOrchestratorAgentAsync(cached.Instructions, tools, ct);
+            var refreshedAgent = await CreateOrchestratorAgentAsync(cached.Instructions, allTools, ct);
             return new OrchestratorContext(refreshedAgent, toolBindings);
         }
 
-        var instructions = BuildOrchestratorInstructions(agents);
+        var instructions = BuildOrchestratorInstructions(agents, _auxiliaryTools);
 
         _cache[cacheKey] = new CachedOrchestrator(instructions);
         _logger.LogInformation(
-            "Orchestrator agent built with {AgentCount} specialist tools", agents.Count);
+            "Orchestrator agent built with {AgentCount} specialist tools + {AuxCount} auxiliary tools",
+            agents.Count, _auxiliaryTools.Count);
 
-        var orchestratorAgent = await CreateOrchestratorAgentAsync(instructions, tools, ct);
+        var orchestratorAgent = await CreateOrchestratorAgentAsync(instructions, allTools, ct);
         return new OrchestratorContext(orchestratorAgent, toolBindings);
     }
 
@@ -93,7 +149,31 @@ public class OrchestratorAgentBuilder
             _frameworkFactory.LoggerFactory,
             _frameworkFactory.ServiceProvider);
 
-        return chatAgent.AsBuilder()
+        var builder = chatAgent.AsBuilder();
+
+        // Injetar RAG context provider se disponível (MessageAIContextProvider)
+        if (_ragContextProvider != null)
+        {
+            builder = builder.UseAIContextProviders(_ragContextProvider);
+        }
+
+        // Middleware de domínio — QualityGates (pré/pós execução)
+        if (_qualityGateService != null)
+        {
+            builder = builder.UseQualityGates(
+                _qualityGateService,
+                _frameworkFactory.LoggerFactory.CreateLogger<QualityGateDelegatingAgent>());
+        }
+
+        // Middleware de domínio — Reflection (pós-ação)
+        if (_reflectionEngine != null)
+        {
+            builder = builder.UseReflection(
+                _reflectionEngine,
+                _frameworkFactory.LoggerFactory.CreateLogger<ReflectionDelegatingAgent>());
+        }
+
+        return builder
             .UseLogging(_frameworkFactory.LoggerFactory)
             .UseOpenTelemetry("AgenticSystem.Orchestrator")
             .Build(_frameworkFactory.ServiceProvider);
@@ -144,7 +224,8 @@ public class OrchestratorAgentBuilder
         return bindings;
     }
 
-    private static string BuildOrchestratorInstructions(List<AgentInfo> agents)
+    private static string BuildOrchestratorInstructions(
+        List<AgentInfo> agents, IReadOnlyList<AITool> auxiliaryTools)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Você é o orquestrador central do sistema Baianinho-Labs.");
@@ -158,6 +239,22 @@ public class OrchestratorAgentBuilder
         sb.AppendLine("5. Retorne a resposta do especialista ao usuário, sem adicionar comentários desnecessários.");
         sb.AppendLine("6. Sempre responda no mesmo idioma do usuário.");
         sb.AppendLine();
+
+        if (auxiliaryTools.Count > 0)
+        {
+            sb.AppendLine("## Ferramentas Auxiliares");
+            sb.AppendLine("Você tem acesso a ferramentas auxiliares que ajudam na tomada de decisão:");
+            foreach (var tool in auxiliaryTools)
+            {
+                var description = (tool as AIFunction)?.Description ?? tool.Name;
+                sb.AppendLine($"- **{tool.Name}**: {description}");
+            }
+            sb.AppendLine();
+            sb.AppendLine("Use `retrieve_context` quando precisar de informações da base de conhecimento.");
+            sb.AppendLine("Use `analyze_request` ou `route_to_best_agent` se tiver dúvida sobre qual especialista delegar.");
+            sb.AppendLine();
+        }
+
         sb.AppendLine("## Especialistas Disponíveis");
 
         foreach (var agent in agents.Where(a => a.IsActive))

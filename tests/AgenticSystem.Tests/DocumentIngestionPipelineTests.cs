@@ -1,8 +1,8 @@
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Documents;
 using FluentAssertions;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
@@ -12,7 +12,7 @@ namespace AgenticSystem.Tests;
 public class DocumentIngestionPipelineTests
 {
     private readonly IChunkingStrategy _chunkingStrategy;
-    private readonly IEmbeddingProvider _embeddingProvider;
+    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
     private readonly IVectorStore _vectorStore;
     private readonly DocumentIngestionPipeline _pipeline;
 
@@ -23,11 +23,11 @@ public class DocumentIngestionPipelineTests
         var parsers = new IDocumentParser[] { markdownParser, plainTextParser };
 
         _chunkingStrategy = Substitute.For<IChunkingStrategy>();
-        _embeddingProvider = Substitute.For<IEmbeddingProvider>();
+        _embeddingGenerator = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
         _vectorStore = Substitute.For<IVectorStore>();
 
         _pipeline = new DocumentIngestionPipeline(
-            parsers, _chunkingStrategy, _embeddingProvider, _vectorStore,
+            parsers, _chunkingStrategy, _embeddingGenerator, _vectorStore,
             Substitute.For<ILogger<DocumentIngestionPipeline>>());
     }
 
@@ -78,8 +78,9 @@ public class DocumentIngestionPipelineTests
 
         await _pipeline.IngestAsync(doc);
 
-        await _embeddingProvider.Received(1).GenerateEmbeddingsAsync(
+        await _embeddingGenerator.Received(1).GenerateAsync(
             Arg.Is<IEnumerable<string>>(texts => texts.Count() == 2),
+            Arg.Any<EmbeddingGenerationOptions?>(),
             Arg.Any<CancellationToken>());
     }
 
@@ -149,11 +150,11 @@ public class DocumentIngestionPipelineTests
             .Returns(Task.FromResult<IReadOnlyList<DocumentChunk>>(chunks));
 
         var embeddings = Enumerable.Range(0, chunkCount)
-            .Select(_ => new float[] { 0.1f, 0.2f, 0.3f })
+            .Select(_ => new Embedding<float>(new float[] { 0.1f, 0.2f, 0.3f }))
             .ToList();
 
-        _embeddingProvider.GenerateEmbeddingsAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult<IReadOnlyList<float[]>>(embeddings));
+        _embeddingGenerator.GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromResult<GeneratedEmbeddings<Embedding<float>>>(new GeneratedEmbeddings<Embedding<float>>(embeddings)));
     }
 
     private static RawDocument CreateRawDocument(string text, string fileName, DocumentType type)

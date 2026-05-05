@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.AI;
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
-using AgenticSystem.Core.LLM.Models;
 using AgenticSystem.Core.Models;
 using System.Text.Json;
 
@@ -13,12 +12,12 @@ namespace AgenticSystem.Core.Services;
 /// </summary>
 public class ContextAnalyzer : IContextAnalyzer
 {
-    private readonly ILLMManager _llmManager;
+    private readonly IChatClient _chatClient;
     private readonly ILogger<ContextAnalyzer> _logger;
     
-    public ContextAnalyzer(ILLMManager llmManager, ILogger<ContextAnalyzer> logger)
+    public ContextAnalyzer(IChatClient chatClient, ILogger<ContextAnalyzer> logger)
     {
-        _llmManager = llmManager;
+        _chatClient = chatClient;
         _logger = logger;
     }
     
@@ -28,22 +27,23 @@ public class ContextAnalyzer : IContextAnalyzer
         {
             var analysisPrompt = CreateAnalysisPrompt(input, userContext);
             
-            var request = new LLMRequest
+            var messages = new List<ChatMessage>
             {
-                Prompt = analysisPrompt,
-                SystemPrompt = "You are a request analyzer. Return ONLY valid JSON, no markdown, no explanation.",
-                Parameters = new LLMParameters { Temperature = 0.1, MaxTokens = 500 }
+                new(ChatRole.System, "You are a request analyzer. Return ONLY valid JSON, no markdown, no explanation."),
+                new(ChatRole.User, analysisPrompt)
             };
+            var options = new ChatOptions { Temperature = 0.1f, MaxOutputTokens = 500 };
             
-            var response = await _llmManager.GenerateAsync(request);
+            var response = await _chatClient.GetResponseAsync(messages, options);
+            var content = response.Text;
             
-            if (!response.Success)
+            if (string.IsNullOrWhiteSpace(content))
             {
-                _logger.LogWarning("LLM analysis failed: {Error}", response.ErrorMessage);
+                _logger.LogWarning("LLM analysis returned empty response");
                 return CreateFallbackAnalysis(input);
             }
             
-            var analysis = ParseAnalysisResult(response.Content);
+            var analysis = ParseAnalysisResult(content);
             
             _logger.LogDebug("Análise concluída: {Domain} | {Intent} | Confidence: {Confidence:P}", 
                 analysis.PrimaryDomain, analysis.Intent, analysis.Confidence);
@@ -80,21 +80,22 @@ public class ContextAnalyzer : IContextAnalyzer
         </user_input>
         ";
         
-        var request = new LLMRequest
+        var messages = new List<ChatMessage>
         {
-            Prompt = entityPrompt,
-            SystemPrompt = "You are an entity extractor. Return ONLY valid JSON array.",
-            Parameters = new LLMParameters { Temperature = 0.1, MaxTokens = 500 }
+            new(ChatRole.System, "You are an entity extractor. Return ONLY valid JSON array."),
+            new(ChatRole.User, entityPrompt)
         };
+        var options = new ChatOptions { Temperature = 0.1f, MaxOutputTokens = 500 };
         
-        var response = await _llmManager.GenerateAsync(request);
+        var response = await _chatClient.GetResponseAsync(messages, options);
+        var content = response.Text;
         
-        if (!response.Success)
+        if (string.IsNullOrWhiteSpace(content))
             return new List<ExtractedEntity>();
         
         try
         {
-            return JsonSerializer.Deserialize<List<ExtractedEntity>>(response.Content) ?? new();
+            return JsonSerializer.Deserialize<List<ExtractedEntity>>(content) ?? new();
         }
         catch
         {

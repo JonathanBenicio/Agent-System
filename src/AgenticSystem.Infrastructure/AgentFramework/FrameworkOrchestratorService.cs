@@ -149,15 +149,25 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             return null;
         }
 
+        // Filtrar tool calls auxiliares (RAG, SmartRouter, ContextAnalyzer) — não são especialistas
+        var specialistCalls = functionCalls
+            .Where(name => !OrchestratorAuxiliaryTools.AllToolNames.Contains(name))
+            .ToList();
+
+        if (specialistCalls.Count == 0)
+        {
+            return null;
+        }
+
         // Mapear tool name de volta para agent name
         foreach (var binding in orchestratorCtx.SpecialistBindings)
         {
-            if (functionCalls.Contains(binding.Tool.Name, StringComparer.OrdinalIgnoreCase))
+            if (specialistCalls.Contains(binding.Tool.Name, StringComparer.OrdinalIgnoreCase))
             {
                 return binding.Agent.Name;
             }
         }
 
-        return functionCalls.FirstOrDefault();
+        return specialistCalls.FirstOrDefault();
     }
 }

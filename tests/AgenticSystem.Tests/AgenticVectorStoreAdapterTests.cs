@@ -1,7 +1,7 @@
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.AI;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.VectorData;
 
 namespace AgenticSystem.Tests;
@@ -9,14 +9,14 @@ namespace AgenticSystem.Tests;
 public class AgenticVectorStoreAdapterTests
 {
     private readonly IVectorStore _agenticStore;
-    private readonly IEmbeddingProvider _embeddingProvider;
+    private readonly IEmbeddingGenerator<string, Embedding<float>> _embeddingGenerator;
     private readonly AgenticVectorStoreAdapter _sut;
 
     public AgenticVectorStoreAdapterTests()
     {
         _agenticStore = Substitute.For<IVectorStore>();
-        _embeddingProvider = Substitute.For<IEmbeddingProvider>();
-        _sut = new AgenticVectorStoreAdapter(_agenticStore, _embeddingProvider);
+        _embeddingGenerator = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
+        _sut = new AgenticVectorStoreAdapter(_agenticStore, _embeddingGenerator);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class AgenticVectorStoreAdapterTests
     [Fact]
     public void GetService_ReturnsNull_ForOtherTypes()
     {
-        var result = _sut.GetService(typeof(IEmbeddingProvider));
+        var result = _sut.GetService(typeof(string));
 
         result.Should().BeNull();
     }
@@ -119,12 +119,13 @@ public class AgenticVectorStoreAdapterTests
     public async Task UpsertAsync_GeneratesEmbedding_AndDelegates()
     {
         var embedding = new float[] { 0.1f, 0.2f, 0.3f };
-        _embeddingProvider.GenerateEmbeddingAsync("test content", Arg.Any<CancellationToken>())
-            .Returns(embedding);
+        var generatedEmbedding = new GeneratedEmbeddings<Embedding<float>>(new[] { new Embedding<float>(embedding) });
+        _embeddingGenerator.GenerateAsync(Arg.Is<IEnumerable<string>>(s => s.Contains("test content")), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(generatedEmbedding);
 
         await _sut.UpsertAsync("doc-1", "test content", "my-collection", "text", new Dictionary<string, string> { ["key"] = "val" });
 
-        await _embeddingProvider.Received(1).GenerateEmbeddingAsync("test content", Arg.Any<CancellationToken>());
+        await _embeddingGenerator.Received(1).GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>());
         await _agenticStore.Received(1).UpsertAsync(Arg.Is<EmbeddingDocument>(d =>
             d.Id == "doc-1" &&
             d.Content == "test content" &&
@@ -137,8 +138,9 @@ public class AgenticVectorStoreAdapterTests
     [Fact]
     public async Task UpsertAsync_UsesEmptyMetadata_WhenNull()
     {
-        _embeddingProvider.GenerateEmbeddingAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new float[] { 0.1f });
+        var generatedEmbedding = new GeneratedEmbeddings<Embedding<float>>(new[] { new Embedding<float>(new float[] { 0.1f }) });
+        _embeddingGenerator.GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(generatedEmbedding);
 
         await _sut.UpsertAsync("doc-2", "content", "col", "type");
 

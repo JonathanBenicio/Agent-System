@@ -3,7 +3,6 @@ using AgenticSystem.Infrastructure.Configuration;
 using AgenticSystem.Infrastructure.RAG;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace AgenticSystem.Tests;
 
@@ -19,25 +18,27 @@ public class LlmReRankerTests
             ["2"] = 0.98,
             ["1"] = 0.12
         });
-        var options = Options.Create(new ReRankingOptions
-        {
-            Enabled = true,
-            UseDedicatedProvider = true,
-            DedicatedProvider = dedicatedProvider.Name,
-            UseEmbeddingReRanking = false,
-            UseLlmReRanking = false,
-            CandidatePoolSize = 2,
-            MinCandidateCountForLlm = 2,
-            HeuristicConfidenceThreshold = 1.0,
-            HeuristicConfidenceGap = 1.0,
-            NeuralScoreWeight = 1.0
-        });
+        var settingsAccessor = Substitute.For<IRerankingSettingsAccessor>();
+        settingsAccessor.GetCurrentOptionsAsync(Arg.Any<CancellationToken>())
+            .Returns(new ReRankingOptions
+            {
+                Enabled = true,
+                UseDedicatedProvider = true,
+                DedicatedProvider = dedicatedProvider.Name,
+                UseEmbeddingReRanking = false,
+                UseLlmReRanking = false,
+                CandidatePoolSize = 2,
+                MinCandidateCountForLlm = 2,
+                HeuristicConfidenceThreshold = 1.0,
+                HeuristicConfidenceGap = 1.0,
+                NeuralScoreWeight = 1.0
+            });
         var sut = new LlmReRanker(
             heuristicReRanker,
             chatClient,
             [dedicatedProvider],
             embeddingGenerator: null,
-            options,
+            settingsAccessor,
             Substitute.For<ILogger<LlmReRanker>>());
 
         var candidates = new List<SearchMatch>

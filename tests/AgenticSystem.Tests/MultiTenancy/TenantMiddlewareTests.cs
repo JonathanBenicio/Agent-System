@@ -13,12 +13,15 @@ public class TenantMiddlewareTests
 {
     private readonly ITenantStore _store;
     private readonly ITenantResolver _resolver;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
     private readonly ILogger<TenantMiddleware> _logger;
 
     public TenantMiddlewareTests()
     {
         _store = new InMemoryTenantStore();
         _resolver = new TenantResolver(_store, Substitute.For<ILogger<TenantResolver>>());
+        _tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
+        _tenantContextAccessor.BeginScope(Arg.Any<TenantContext>()).Returns(Substitute.For<IDisposable>());
         _logger = Substitute.For<ILogger<TenantMiddleware>>();
     }
 
@@ -35,7 +38,7 @@ public class TenantMiddlewareTests
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = Tenant.DefaultTenantId;
 
-        await middleware.InvokeAsync(httpContext, tenantContext, _resolver);
+        await middleware.InvokeAsync(httpContext, tenantContext, _resolver, _tenantContextAccessor);
 
         tenantContext.TenantId.Should().Be(Tenant.DefaultTenantId);
         tenantContext.IsAuthenticated.Should().BeTrue();
@@ -67,7 +70,7 @@ public class TenantMiddlewareTests
         }, "TestAuth");
         httpContext.User = new ClaimsPrincipal(identity);
 
-        await middleware.InvokeAsync(httpContext, tenantContext, _resolver);
+        await middleware.InvokeAsync(httpContext, tenantContext, _resolver, _tenantContextAccessor);
 
         tenantContext.TenantId.Should().Be("jwt-tenant");
         tenantContext.TenantName.Should().Be("JWT Corp");
@@ -100,7 +103,7 @@ public class TenantMiddlewareTests
         httpContext.User = new ClaimsPrincipal(identity);
         httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = Tenant.DefaultTenantId;
 
-        await middleware.InvokeAsync(httpContext, tenantContext, _resolver);
+        await middleware.InvokeAsync(httpContext, tenantContext, _resolver, _tenantContextAccessor);
 
         tenantContext.TenantId.Should().Be("claim-tenant");
     }
@@ -112,7 +115,7 @@ public class TenantMiddlewareTests
         var tenantContext = new TenantContext();
         var httpContext = new DefaultHttpContext();
 
-        await middleware.InvokeAsync(httpContext, tenantContext, _resolver);
+        await middleware.InvokeAsync(httpContext, tenantContext, _resolver, _tenantContextAccessor);
 
         // Default values from TenantContext constructor
         tenantContext.TenantId.Should().Be(Tenant.DefaultTenantId);
@@ -127,7 +130,7 @@ public class TenantMiddlewareTests
         var httpContext = new DefaultHttpContext();
         httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = "unknown-tenant";
 
-        await middleware.InvokeAsync(httpContext, tenantContext, _resolver);
+        await middleware.InvokeAsync(httpContext, tenantContext, _resolver, _tenantContextAccessor);
 
         tenantContext.TenantId.Should().Be(Tenant.DefaultTenantId);
     }
@@ -142,7 +145,7 @@ public class TenantMiddlewareTests
             return Task.CompletedTask;
         });
 
-        await middleware.InvokeAsync(new DefaultHttpContext(), new TenantContext(), _resolver);
+        await middleware.InvokeAsync(new DefaultHttpContext(), new TenantContext(), _resolver, _tenantContextAccessor);
 
         nextCalled.Should().BeTrue();
     }

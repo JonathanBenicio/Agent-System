@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using NSubstitute;
 using AgenticSystem.Api.Controllers;
 using AgenticSystem.Infrastructure.Configuration;
+using AgenticSystem.Infrastructure.RAG;
 
 namespace AgenticSystem.Tests;
 
@@ -27,15 +28,18 @@ public class SettingsControllerTests
 
         var options = Substitute.For<IOptions<AgenticSystemSettings>>();
         options.Value.Returns(_settings);
+        var rerankingAccessor = Substitute.For<IRerankingSettingsAccessor>();
+        rerankingAccessor.GetCurrentStateAsync(Arg.Any<CancellationToken>())
+            .Returns(new RerankingSettingsState());
         var logger = Substitute.For<ILogger<SettingsController>>();
 
-        _sut = new SettingsController(options, logger);
+        _sut = new SettingsController(options, rerankingAccessor, logger);
     }
 
     [Fact]
-    public void GetSettings_ReturnsOk()
+    public async Task GetSettings_ReturnsOk()
     {
-        var result = _sut.GetSettings();
+        var result = await _sut.GetSettings(CancellationToken.None);
 
         result.Should().BeOfType<OkObjectResult>();
     }
@@ -71,9 +75,9 @@ public class SettingsControllerTests
     }
 
     [Fact]
-    public void GetSettings_MasksApiKeys()
+    public async Task GetSettings_MasksApiKeys()
     {
-        var result = _sut.GetSettings();
+        var result = await _sut.GetSettings(CancellationToken.None);
 
         var ok = result.Should().BeOfType<OkObjectResult>().Subject;
         var json = System.Text.Json.JsonSerializer.Serialize(ok.Value);

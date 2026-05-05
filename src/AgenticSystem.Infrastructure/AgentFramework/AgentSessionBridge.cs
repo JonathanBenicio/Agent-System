@@ -9,21 +9,27 @@ namespace AgenticSystem.Infrastructure.AgentFramework;
 
 /// <summary>
 /// Ponte entre ISessionManager e AgentSession do Microsoft Agent Framework.
-/// O estado de sessão do framework é serializado e persistido em eventos da sessão,
-/// eliminando dependência de cache in-memory entre requests.
+/// O estado de sessão do framework é persistido via ISessionStore.RuntimeSettings,
+/// usando chaves dedicadas (frameworkSessionState:{agentId}) — não mais como eventos falsos.
+/// Fallback: busca em eventos para compatibilidade com sessões pré-Fase 3.
 /// </summary>
 public class AgentSessionBridge
 {
     private readonly ISessionManager _sessionManager;
+    private readonly ISessionStore? _sessionStore;
     private readonly ILogger<AgentSessionBridge> _logger;
 
     private const string FrameworkSessionStateKey = "frameworkSessionState";
     private const string FrameworkAgentIdKey = "frameworkAgentId";
 
-    public AgentSessionBridge(ISessionManager sessionManager, ILogger<AgentSessionBridge> logger)
+    public AgentSessionBridge(
+        ISessionManager sessionManager,
+        ILogger<AgentSessionBridge> logger,
+        ISessionStore? sessionStore = null)
     {
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _sessionStore = sessionStore;
     }
 
     /// <summary>
@@ -79,7 +85,8 @@ public class AgentSessionBridge
     }
 
     /// <summary>
-    /// Persiste o estado serializado do AgentSession para continuidade entre requests.
+    /// Persiste o estado serializado do AgentSession.
+    /// Prioriza ISessionStore.RuntimeSettings; fallback para evento se ISessionStore indisponível.
     /// </summary>
     public async Task PersistFrameworkSessionAsync(
         string sessionId,
@@ -90,7 +97,23 @@ public class AgentSessionBridge
         try
         {
             var serialized = await agent.SerializeSessionAsync(session, cancellationToken: ct);
+            var stateJson = serialized.GetRawText();
 
+            // Prioridade: ISessionStore (RuntimeSettings) — acesso direto, sem poluir eventos
+            if (_sessionStore != null)
+            {
+                var sessionData = await _sessionStore.GetAsync(sessionId, ct);
+                if (sessionData != null)
+                {
+                    var runtimeKey = $"{FrameworkSessionStateKey}:{agent.Id}";
+                    sessionData.RuntimeSettings[runtimeKey] = stateJson;
+                    await _sessionStore.SaveAsync(sessionData, ct);
+                    _logger.LogDebug("Framework session state persisted via ISessionStore: {SessionId}, AgentId={AgentId}", sessionId, agent.Id);
+                    return;
+                }
+            }
+
+            // Fallback: persistir como evento (compatibilidade pré-Fase 3)
             var stateEvent = new AgentEvent
             {
                 SessionId = sessionId,
@@ -101,7 +124,7 @@ public class AgentSessionBridge
                 {
                     ["source"] = "AgentFramework",
                     [FrameworkAgentIdKey] = agent.Id,
-                    [FrameworkSessionStateKey] = serialized.GetRawText()
+                    [FrameworkSessionStateKey] = stateJson
                 }
             };
 
@@ -121,6 +144,22 @@ public class AgentSessionBridge
 
     private async Task<string?> GetPersistedStateAsync(string sessionId, string agentId)
     {
+        // Prioridade: ISessionStore.RuntimeSettings (Fase 3+)
+        if (_sessionStore != null)
+        {
+            var sessionData = await _sessionStore.GetAsync(sessionId);
+            if (sessionData != null)
+            {
+                var runtimeKey = $"{FrameworkSessionStateKey}:{agentId}";
+                if (sessionData.RuntimeSettings.TryGetValue(runtimeKey, out var stateFromStore))
+                {
+                    _logger.LogDebug("Framework session state found via ISessionStore: {SessionId}, AgentId={AgentId}", sessionId, agentId);
+                    return stateFromStore;
+                }
+            }
+        }
+
+        // Fallback: busca em eventos (compatibilidade pré-Fase 3)
         var recentEvents = await _sessionManager.GetRecentEventsAsync(sessionId, 200);
 
         var stateEvent = recentEvents

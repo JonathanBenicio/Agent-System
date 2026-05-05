@@ -53,6 +53,14 @@ public class AgentFrameworkAdapter : IAgent
     /// Executa via Agent Framework pipeline (ChatClientAgent → logging → telemetry → IChatClient).
     /// Reutiliza AgentSession via SessionBridge para manter contexto de conversa.
     /// </summary>
+    /// <remarks>
+    /// [Fase 3] Com o FrameworkOrchestratorService como ponto central de orquestração,
+    /// especialistas são chamados via tool bindings — não mais via ExecuteAsync.
+    /// Este método permanece apenas para chamada direta a agentes nomeados (ExecuteDirectAsync).
+    /// Prefira usar IFrameworkOrchestratorService.ExecuteAsync para fluxos orquestrados.
+    /// </remarks>
+    [Obsolete("Especialistas devem ser chamados via tool bindings do FrameworkOrchestratorService. " +
+              "Este método será removido na Fase 4. Use IFrameworkOrchestratorService.ExecuteAsync.", error: false)]
     public async Task<AgentResponse> ExecuteAsync(string input, UserContext context)
     {
         UpdateLastUsed();

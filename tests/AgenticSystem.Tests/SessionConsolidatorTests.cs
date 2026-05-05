@@ -1,26 +1,26 @@
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
-using AgenticSystem.Core.LLM.Models;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
-using System.Threading;
 using FluentAssertions;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
+using MChatMessage = Microsoft.Extensions.AI.ChatMessage;
+using MChatResponse = Microsoft.Extensions.AI.ChatResponse;
 
 namespace AgenticSystem.Tests;
 
 public class SessionConsolidatorTests
 {
-    private readonly ILLMManager _llmManager;
+    private readonly IChatClient _chatClient;
     private readonly SessionConsolidator _sut;
 
     public SessionConsolidatorTests()
     {
-        _llmManager = Substitute.For<ILLMManager>();
+        _chatClient = Substitute.For<IChatClient>();
         var logger = Substitute.For<ILogger<SessionConsolidator>>();
-        _sut = new SessionConsolidator(_llmManager, logger);
+        _sut = new SessionConsolidator(_chatClient, logger);
     }
 
     [Fact]
@@ -53,8 +53,8 @@ public class SessionConsolidatorTests
             ""topicsDiscussed"": [""coding"", ""debugging""],
             ""agentsUsed"": [""WorkAgent""]
         }";
-        _llmManager.GenerateAsync(Arg.Any<LLMRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LLMResponse { Success = true, Content = llmJson });
+        _chatClient.GetResponseAsync(Arg.Any<IList<MChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(new MChatResponse(new MChatMessage(ChatRole.Assistant, llmJson)));
 
         var result = await _sut.SummarizeSessionAsync("s1", events);
 
@@ -89,8 +89,8 @@ public class SessionConsolidatorTests
             }
         };
 
-        _llmManager.GenerateAsync(Arg.Any<LLMRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LLMResponse { Success = false });
+        _chatClient.GetResponseAsync(Arg.Any<IList<MChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(new MChatResponse(new MChatMessage(ChatRole.Assistant, "")));
 
         var result = await _sut.SummarizeSessionAsync("s1", events);
 
@@ -120,8 +120,8 @@ public class SessionConsolidatorTests
             ""preferences"": [""Prefers CLI over UI""],
             ""actionItems"": [""Set up monitoring""]
         }";
-        _llmManager.GenerateAsync(Arg.Any<LLMRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LLMResponse { Success = true, Content = llmJson });
+        _chatClient.GetResponseAsync(Arg.Any<IList<MChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(new MChatResponse(new MChatMessage(ChatRole.Assistant, llmJson)));
 
         var result = await _sut.ExtractInsightsAsync("s1", events);
 
@@ -144,8 +144,8 @@ public class SessionConsolidatorTests
             }
         };
 
-        _llmManager.GenerateAsync(Arg.Any<LLMRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LLMResponse { Success = false });
+        _chatClient.GetResponseAsync(Arg.Any<IList<MChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(new MChatResponse(new MChatMessage(ChatRole.Assistant, "")));
 
         var result = await _sut.ExtractInsightsAsync("s1", events);
 
@@ -172,8 +172,8 @@ public class SessionConsolidatorTests
             ""summary"": ""User needed help with Kubernetes deployment to production"",
             ""topics"": [""kubernetes"", ""deployment""]
         }";
-        _llmManager.GenerateAsync(Arg.Any<LLMRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LLMResponse { Success = true, Content = llmJson });
+        _chatClient.GetResponseAsync(Arg.Any<IList<MChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(new MChatResponse(new MChatMessage(ChatRole.Assistant, llmJson)));
 
         await _sut.SummarizeSessionAsync("s1", events);
         var results = await _sut.GetRelevantSummariesAsync("kubernetes", 5);

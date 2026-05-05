@@ -90,6 +90,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEmbeddingGenerator, HttpEmbeddingGenerator>();
         services.AddSingleton<IEmbeddingMigrationManager, EmbeddingMigrationManager>();
 
+        // Runtime Evaluator — InMemory fallback (overridden by UsePostgresOperationalStore when Postgres is configured)
+        services.AddSingleton<IRuntimeEvaluator, InMemoryRuntimeEvaluator>();
+
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ServiceCollectionExtensions).Assembly));
 
         return services;

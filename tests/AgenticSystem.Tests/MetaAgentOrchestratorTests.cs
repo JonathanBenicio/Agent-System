@@ -9,34 +9,25 @@ namespace AgenticSystem.Tests;
 
 public class MetaAgentOrchestratorTests
 {
-    private readonly IContextAnalyzer _contextAnalyzer;
+    private readonly IAgentExecutionWorkflow _executionWorkflow;
     private readonly IAgentFactory _agentFactory;
     private readonly ISessionManager _sessionManager;
-    private readonly IDynamicAgentService _dynamicAgentService;
-    private readonly IHandoffManager _handoffManager;
-    private readonly IToolAvailabilityGuard _toolGuard;
-    private readonly IConfidenceScoreCalculator _confidenceCalculator;
+    private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
     private readonly ILogger<MetaAgentOrchestrator> _logger;
     private readonly MetaAgentOrchestrator _sut;
 
     public MetaAgentOrchestratorTests()
     {
-        _contextAnalyzer = Substitute.For<IContextAnalyzer>();
+        _executionWorkflow = Substitute.For<IAgentExecutionWorkflow>();
         _agentFactory = Substitute.For<IAgentFactory>();
         _sessionManager = Substitute.For<ISessionManager>();
-        _dynamicAgentService = Substitute.For<IDynamicAgentService>();
-        _handoffManager = Substitute.For<IHandoffManager>();
-        _toolGuard = Substitute.For<IToolAvailabilityGuard>();
-        _confidenceCalculator = Substitute.For<IConfidenceScoreCalculator>();
+        _runtimeCoordinator = Substitute.For<IAgentRuntimeCoordinator>();
         _logger = Substitute.For<ILogger<MetaAgentOrchestrator>>();
 
-        // Default: all tools available
-        _toolGuard.CheckAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
-            .Returns(ToolAvailabilityResult.FullCoverage(Array.Empty<string>()));
-        _confidenceCalculator.Calculate(Arg.Any<AgentResponse>(), Arg.Any<RAGContext?>(), Arg.Any<IEnumerable<Reflection>?>(), Arg.Any<ToolAvailabilityResult?>())
-            .Returns(new ConfidenceScore { Value = 0.8, Level = ConfidenceLevel.High, Label = "✅ Alta confiança" });
+        _runtimeCoordinator.BeginExecutionScope(Arg.Any<string>(), Arg.Any<UserContext>())
+            .Returns(Substitute.For<IDisposable>());
 
-        _sut = new MetaAgentOrchestrator(_contextAnalyzer, _agentFactory, _sessionManager, _dynamicAgentService, _handoffManager, _toolGuard, _confidenceCalculator, _logger);
+        _sut = new MetaAgentOrchestrator(_executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
     }
 
     [Fact]
@@ -46,24 +37,10 @@ public class MetaAgentOrchestratorTests
         var input = "What time is it?";
         var userContext = new UserContext { UserId = "user1", Name = "Test" };
         var sessionId = "session-1";
-        var analysis = new AnalysisResult
-        {
-            Intent = IntentType.Chat,
-            PrimaryDomain = "general",
-            Complexity = ComplexityLevel.Simple,
-            RecommendedTier = AgentTier.Support,
-            Confidence = 0.9
-        };
-        var agent = Substitute.For<IAgent>();
-        agent.Name.Returns("GeneralAgent");
-        agent.Tier.Returns(AgentTier.Support);
-        agent.ExecuteAsync(input, userContext).Returns(AgentResponse.Ok("It's 10 AM", "GeneralAgent", AgentTier.Support));
 
         _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
-        _contextAnalyzer.AnalyzeAsync(input, userContext).Returns(analysis);
-        _agentFactory.GetOrCreateAgentAsync(analysis).Returns(agent);
-        _dynamicAgentService.IsAgentCreationRequestAsync(input, analysis).Returns(false);
-        _handoffManager.EvaluateHandoffAsync(analysis, agent).Returns(new HandoffDecision { ShouldHandoff = false });
+        _executionWorkflow.ExecuteAsync(sessionId, input, userContext, Arg.Any<CancellationToken>())
+            .Returns(AgentResponse.Ok("It's 10 AM", "GeneralAgent", AgentTier.Support));
 
         // Act
         var result = await _sut.ProcessRequestAsync(input, userContext);
@@ -72,44 +49,45 @@ public class MetaAgentOrchestratorTests
         result.Success.Should().BeTrue();
         result.Content.Should().Be("It's 10 AM");
         result.AgentName.Should().Be("GeneralAgent");
-        result.SessionId.Should().Be(sessionId);
     }
 
     [Fact]
-    public async Task ProcessRequestAsync_WithEmptyInput_ReturnsError()
+    public async Task ProcessRequestAsync_DelegatesToExecutionWorkflow()
     {
         // Arrange
+        var input = "some request";
         var userContext = new UserContext { UserId = "user1" };
-        var analysis = new AnalysisResult { Confidence = 0.9 };
+        var sessionId = "session-1";
 
-        _sessionManager.StartSessionAsync(userContext).Returns("session-1");
-        _contextAnalyzer.AnalyzeAsync("", userContext).Returns(analysis);
+        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        _executionWorkflow.ExecuteAsync(sessionId, input, userContext, Arg.Any<CancellationToken>())
+            .Returns(AgentResponse.Ok("response", "Agent", AgentTier.Support));
 
         // Act
-        var result = await _sut.ProcessRequestAsync("", userContext);
+        await _sut.ProcessRequestAsync(input, userContext);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("vazio");
+        await _executionWorkflow.Received(1).ExecuteAsync(sessionId, input, userContext, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task ProcessRequestAsync_WithLowConfidence_ReturnsError()
+    public async Task ProcessRequestAsync_StartsSession_AndBeginsScope()
     {
         // Arrange
-        var input = "asdfgh";
+        var input = "test";
         var userContext = new UserContext { UserId = "user1" };
-        var analysis = new AnalysisResult { Confidence = 0.1 };
+        var sessionId = "session-1";
 
-        _sessionManager.StartSessionAsync(userContext).Returns("session-1");
-        _contextAnalyzer.AnalyzeAsync(input, userContext).Returns(analysis);
+        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        _executionWorkflow.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
+            .Returns(AgentResponse.Ok("ok", "Agent", AgentTier.Support));
 
         // Act
-        var result = await _sut.ProcessRequestAsync(input, userContext);
+        await _sut.ProcessRequestAsync(input, userContext);
 
         // Assert
-        result.Success.Should().BeFalse();
-        result.ErrorMessage.Should().Contain("específico");
+        await _sessionManager.Received(1).StartSessionAsync(userContext);
+        _runtimeCoordinator.Received(1).BeginExecutionScope(sessionId, userContext);
     }
 
     [Fact]

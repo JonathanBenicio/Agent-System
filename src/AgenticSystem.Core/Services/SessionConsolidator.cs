@@ -2,9 +2,8 @@ using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.AI;
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
-using AgenticSystem.Core.LLM.Models;
 using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Core.Services;
@@ -14,13 +13,13 @@ namespace AgenticSystem.Core.Services;
 /// </summary>
 public class SessionConsolidator : ISessionConsolidator
 {
-    private readonly ILLMManager _llmManager;
+    private readonly IChatClient _chatClient;
     private readonly ILogger<SessionConsolidator> _logger;
     private readonly ConcurrentBag<SessionSummary> _summaries = [];
 
-    public SessionConsolidator(ILLMManager llmManager, ILogger<SessionConsolidator> logger)
+    public SessionConsolidator(IChatClient chatClient, ILogger<SessionConsolidator> logger)
     {
-        _llmManager = llmManager;
+        _chatClient = chatClient;
         _logger = logger;
     }
 
@@ -50,15 +49,16 @@ Return ONLY a valid JSON object:
   ""agentsUsed"": [""agent1"", ""agent2""]
 }}";
 
-        var request = new LLMRequest
+        var request = new List<ChatMessage>
         {
-            Prompt = prompt,
-            SystemPrompt = "You are a session summarizer. Return ONLY valid JSON.",
-            Parameters = new LLMParameters { Temperature = 0.1 }
+            new(ChatRole.System, "You are a session summarizer. Return ONLY valid JSON."),
+            new(ChatRole.User, prompt)
         };
-        var response = await _llmManager.GenerateAsync(request);
+        var options = new ChatOptions { Temperature = 0.1f };
+        var response = await _chatClient.GetResponseAsync(request, options);
+        var content = response.Text;
 
-        if (!response.Success || string.IsNullOrWhiteSpace(response.Content))
+        if (string.IsNullOrWhiteSpace(content))
         {
             _logger.LogWarning("LLM summarization failed for session {SessionId}, using fallback", sessionId);
             return BuildFallbackSummary(sessionId, events);
@@ -66,7 +66,7 @@ Return ONLY a valid JSON object:
 
         try
         {
-            var summary = ParseSummary(sessionId, response.Content, events);
+            var summary = ParseSummary(sessionId, content, events);
             _summaries.Add(summary);
             _logger.LogInformation("📋 Session {SessionId} summarized: {Topics}",
                 sessionId, string.Join(", ", summary.TopicsDiscussed));
@@ -109,22 +109,23 @@ RULES:
 - ActionItems: things that need to be done after the session
 ";
 
-        var insightRequest = new LLMRequest
+        var insightRequest = new List<ChatMessage>
         {
-            Prompt = prompt,
-            SystemPrompt = "You are a session insight extractor. Return ONLY valid JSON.",
-            Parameters = new LLMParameters { Temperature = 0.1 }
+            new(ChatRole.System, "You are a session insight extractor. Return ONLY valid JSON."),
+            new(ChatRole.User, prompt)
         };
-        var response = await _llmManager.GenerateAsync(insightRequest);
+        var insightOptions = new ChatOptions { Temperature = 0.1f };
+        var response = await _chatClient.GetResponseAsync(insightRequest, insightOptions);
+        var content = response.Text;
 
-        if (!response.Success || string.IsNullOrWhiteSpace(response.Content))
+        if (string.IsNullOrWhiteSpace(content))
         {
             return BuildFallbackInsights(sessionId, events);
         }
 
         try
         {
-            return ParseInsights(sessionId, response.Content);
+            return ParseInsights(sessionId, content);
         }
         catch
         {

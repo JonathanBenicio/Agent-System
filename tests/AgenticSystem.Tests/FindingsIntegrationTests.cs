@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
 using AgenticSystem.Infrastructure.AgentFramework;
@@ -20,18 +19,25 @@ public class InMemoryVectorStoreSemanticTests
 {
     private readonly ILogger<InMemoryVectorStore> _logger = Substitute.For<ILogger<InMemoryVectorStore>>();
 
+    private static IEmbeddingGenerator<string, Embedding<float>> CreateEmbeddingGenerator(float[] defaultEmbedding)
+    {
+        var generator = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
+        generator.GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var inputs = callInfo.ArgAt<IEnumerable<string>>(0);
+                var results = inputs.Select(_ => new Embedding<float>(defaultEmbedding)).ToList();
+                return Task.FromResult<GeneratedEmbeddings<Embedding<float>>>(new GeneratedEmbeddings<Embedding<float>>(results));
+            });
+        return generator;
+    }
+
     [Fact]
     public async Task CosineSimilarity_IdenticalVectors_ReturnsOne()
     {
-        // CalculateRelevance is private-static, test via SearchAsync with known embeddings
-        var provider = Substitute.For<IEmbeddingProvider>();
-        provider.IsEnabled.Returns(true);
-        provider.GenerateEmbeddingAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new float[] { 1, 0, 0 });
+        var generator = CreateEmbeddingGenerator(new float[] { 1, 0, 0 });
+        var sut = new InMemoryVectorStore(_logger, generator);
 
-        var sut = new InMemoryVectorStore(_logger, provider);
-
-        // Upsert doc with same embedding as query → cosine = 1.0 → score = 1.0
         await sut.UpsertAsync(new EmbeddingDocument
         {
             Id = "d1",
@@ -49,14 +55,9 @@ public class InMemoryVectorStoreSemanticTests
     [Fact]
     public async Task CosineSimilarity_OrthogonalVectors_ReturnsHalf()
     {
-        var provider = Substitute.For<IEmbeddingProvider>();
-        provider.IsEnabled.Returns(true);
-        provider.GenerateEmbeddingAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new float[] { 1, 0, 0 });
+        var generator = CreateEmbeddingGenerator(new float[] { 1, 0, 0 });
+        var sut = new InMemoryVectorStore(_logger, generator);
 
-        var sut = new InMemoryVectorStore(_logger, provider);
-
-        // Orthogonal vectors → cosine = 0.0 → normalized score = (0+1)/2 = 0.5
         await sut.UpsertAsync(new EmbeddingDocument
         {
             Id = "d1",
@@ -74,15 +75,9 @@ public class InMemoryVectorStoreSemanticTests
     [Fact]
     public async Task SearchAsync_UsesEmbeddingWhenProviderAvailable()
     {
-        var provider = Substitute.For<IEmbeddingProvider>();
-        provider.IsEnabled.Returns(true);
-        // Return embedding for query
-        provider.GenerateEmbeddingAsync("semantic query", Arg.Any<CancellationToken>())
-            .Returns(new float[] { 0.9f, 0.1f, 0f });
+        var generator = CreateEmbeddingGenerator(new float[] { 0.9f, 0.1f, 0f });
+        var sut = new InMemoryVectorStore(_logger, generator);
 
-        var sut = new InMemoryVectorStore(_logger, provider);
-
-        // Doc with embedding close to query embedding
         await sut.UpsertAsync(new EmbeddingDocument
         {
             Id = "d1",
@@ -93,19 +88,14 @@ public class InMemoryVectorStoreSemanticTests
 
         var result = await sut.SearchAsync("semantic query", SearchScope.All, 5);
 
-        // Should find doc via embedding, despite no lexical match
         result.Matches.Should().NotBeEmpty();
         result.Matches[0].Id.Should().Be("d1");
         result.Matches[0].Score.Should().BeGreaterThan(0.9);
-
-        // Verify provider was called
-        await provider.Received(1).GenerateEmbeddingAsync("semantic query", Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task SearchAsync_FallsBackToLexical_WhenNoEmbeddingProvider()
     {
-        // No embedding provider → lexical search
         var sut = new InMemoryVectorStore(_logger);
 
         await sut.UpsertAsync(new EmbeddingDocument
@@ -128,12 +118,10 @@ public class InMemoryVectorStoreSemanticTests
     }
 
     [Fact]
-    public async Task SearchAsync_FallsBackToLexical_WhenProviderDisabled()
+    public async Task SearchAsync_FallsBackToLexical_WhenGeneratorIsNull()
     {
-        var provider = Substitute.For<IEmbeddingProvider>();
-        provider.IsEnabled.Returns(false);
-
-        var sut = new InMemoryVectorStore(_logger, provider);
+        // No embedding generator (null) → lexical search
+        var sut = new InMemoryVectorStore(_logger, embeddingGenerator: null);
 
         await sut.UpsertAsync(new EmbeddingDocument
         {
@@ -145,19 +133,16 @@ public class InMemoryVectorStoreSemanticTests
         var result = await sut.SearchAsync("calendar", SearchScope.All, 5);
 
         result.Matches.Should().Contain(m => m.Id == "d1");
-        // Provider should not be called
-        await provider.DidNotReceive().GenerateEmbeddingAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task GenerateQueryEmbedding_ReturnsNull_OnProviderFailure()
     {
-        var provider = Substitute.For<IEmbeddingProvider>();
-        provider.IsEnabled.Returns(true);
-        provider.GenerateEmbeddingAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+        var generator = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
+        generator.GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("Provider crash"));
 
-        var sut = new InMemoryVectorStore(_logger, provider);
+        var sut = new InMemoryVectorStore(_logger, generator);
 
         await sut.UpsertAsync(new EmbeddingDocument
         {
@@ -175,14 +160,9 @@ public class InMemoryVectorStoreSemanticTests
     [Fact]
     public async Task SearchAsync_SemanticRanksHigherThanLexical()
     {
-        var provider = Substitute.For<IEmbeddingProvider>();
-        provider.IsEnabled.Returns(true);
-        provider.GenerateEmbeddingAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new float[] { 1.0f, 0, 0 });
+        var generator = CreateEmbeddingGenerator(new float[] { 1.0f, 0, 0 });
+        var sut = new InMemoryVectorStore(_logger, generator);
 
-        var sut = new InMemoryVectorStore(_logger, provider);
-
-        // Doc WITH embedding matching query → cosine similarity = 1.0 → score = (1+1)/2 = 1.0
         await sut.UpsertAsync(new EmbeddingDocument
         {
             Id = "semantic-hit",
@@ -191,19 +171,15 @@ public class InMemoryVectorStoreSemanticTests
             Embedding = new float[] { 1.0f, 0, 0 }
         });
 
-        // Doc WITHOUT embedding → falls back to lexical with partial word match
-        // "specialized" only matches 1 of 2 words → score = 0.5
         await sut.UpsertAsync(new EmbeddingDocument
         {
             Id = "lexical-hit",
             Content = "this is specialized information",
             Collection = "test"
-            // No Embedding set
         });
 
         var result = await sut.SearchAsync("specialized query", SearchScope.All, 5);
 
-        // Semantic hit should rank higher (1.0 vs 0.5)
         var semanticMatch = result.Matches.FirstOrDefault(m => m.Id == "semantic-hit");
         var lexicalMatch = result.Matches.FirstOrDefault(m => m.Id == "lexical-hit");
 
@@ -215,12 +191,8 @@ public class InMemoryVectorStoreSemanticTests
     [Fact]
     public async Task SearchWithFiltersAsync_UsesEmbedding()
     {
-        var provider = Substitute.For<IEmbeddingProvider>();
-        provider.IsEnabled.Returns(true);
-        provider.GenerateEmbeddingAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new float[] { 0.8f, 0.6f, 0 });
-
-        var sut = new InMemoryVectorStore(_logger, provider);
+        var generator = CreateEmbeddingGenerator(new float[] { 0.8f, 0.6f, 0 });
+        var sut = new InMemoryVectorStore(_logger, generator);
 
         await sut.UpsertAsync(new EmbeddingDocument
         {
@@ -236,238 +208,123 @@ public class InMemoryVectorStoreSemanticTests
 
         result.Matches.Should().ContainSingle();
         result.Matches[0].Id.Should().Be("d1");
-        await provider.Received().GenerateEmbeddingAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 }
 
 #endregion
 
-#region Finding 2+3 — MetaAgentOrchestrator RAG + ContextBudget Integration
+#region Finding 2+3 — MetaAgentOrchestrator delegates to ExecutionWorkflow
 
 public class MetaAgentOrchestratorRAGTests
 {
-    private readonly IContextAnalyzer _contextAnalyzer;
+    private readonly IAgentExecutionWorkflow _executionWorkflow;
     private readonly IAgentFactory _agentFactory;
     private readonly ISessionManager _sessionManager;
-    private readonly IDynamicAgentService _dynamicAgentService;
-    private readonly IHandoffManager _handoffManager;
-    private readonly IToolAvailabilityGuard _toolGuard;
-    private readonly IConfidenceScoreCalculator _confidenceCalculator;
+    private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
     private readonly ILogger<MetaAgentOrchestrator> _logger;
 
     public MetaAgentOrchestratorRAGTests()
     {
-        _contextAnalyzer = Substitute.For<IContextAnalyzer>();
+        _executionWorkflow = Substitute.For<IAgentExecutionWorkflow>();
         _agentFactory = Substitute.For<IAgentFactory>();
         _sessionManager = Substitute.For<ISessionManager>();
-        _dynamicAgentService = Substitute.For<IDynamicAgentService>();
-        _handoffManager = Substitute.For<IHandoffManager>();
-        _toolGuard = Substitute.For<IToolAvailabilityGuard>();
-        _confidenceCalculator = Substitute.For<IConfidenceScoreCalculator>();
+        _runtimeCoordinator = Substitute.For<IAgentRuntimeCoordinator>();
         _logger = Substitute.For<ILogger<MetaAgentOrchestrator>>();
 
-        // Defaults
-        _toolGuard.CheckAsync(Arg.Any<IReadOnlyList<string>>(), Arg.Any<CancellationToken>())
-            .Returns(ToolAvailabilityResult.FullCoverage(Array.Empty<string>()));
-        _confidenceCalculator.Calculate(Arg.Any<AgentResponse>(), Arg.Any<RAGContext?>(), Arg.Any<IEnumerable<Reflection>?>(), Arg.Any<ToolAvailabilityResult?>())
-            .Returns(new ConfidenceScore { Value = 0.8, Level = ConfidenceLevel.High, Label = "✅ Alta confiança" });
-    }
-
-    private void SetupDefaultMocks(string input, IAgent agent)
-    {
-        var analysis = new AnalysisResult
-        {
-            Intent = IntentType.Chat,
-            PrimaryDomain = "general",
-            Complexity = ComplexityLevel.Simple,
-            RecommendedTier = AgentTier.Support,
-            Confidence = 0.9
-        };
-
         _sessionManager.StartSessionAsync(Arg.Any<UserContext>()).Returns("session-1");
-        _contextAnalyzer.AnalyzeAsync(input, Arg.Any<UserContext>()).Returns(analysis);
-        _agentFactory.GetOrCreateAgentAsync(analysis).Returns(agent);
-        _dynamicAgentService.IsAgentCreationRequestAsync(input, analysis).Returns(false);
-        _handoffManager.EvaluateHandoffAsync(analysis, agent)
-            .Returns(new HandoffDecision { ShouldHandoff = false });
+        _runtimeCoordinator.BeginExecutionScope(Arg.Any<string>(), Arg.Any<UserContext>())
+            .Returns(Substitute.For<IDisposable>());
     }
 
     [Fact]
-    public async Task ProcessRequestAsync_EnrichesInput_WhenRAGServiceAvailable()
+    public async Task ProcessRequestAsync_DelegatesToExecutionWorkflow()
     {
         // Arrange
-        var ragService = Substitute.For<IRAGService>();
-        ragService.RetrieveContextAsync(Arg.Any<RAGQuery>(), Arg.Any<CancellationToken>())
-            .Returns(new RAGContext
-            {
-                BuiltContext = "Relevant context about scheduling",
-                CandidatesAfterReRank = 3,
-                TotalTokensUsed = 100
-            });
-
-        var agent = Substitute.For<IAgent>();
-        agent.Name.Returns("TestAgent");
-        agent.Tier.Returns(AgentTier.Support);
-        // Agent will receive enriched input containing both context and original input
-        agent.ExecuteAsync(Arg.Is<string>(s => s.Contains("[Contexto Relevante]") && s.Contains("What time is it?")), Arg.Any<UserContext>())
+        _executionWorkflow.ExecuteAsync("session-1", "What time is it?", Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("10 AM", "TestAgent", AgentTier.Support));
 
-        SetupDefaultMocks("What time is it?", agent);
-
         var sut = new MetaAgentOrchestrator(
-            _contextAnalyzer, _agentFactory, _sessionManager, _dynamicAgentService,
-            _handoffManager, _toolGuard, _confidenceCalculator, _logger,
-            ragService: ragService);
+            _executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
 
         // Act
         var result = await sut.ProcessRequestAsync("What time is it?", new UserContext { UserId = "u1", Name = "Test" });
 
         // Assert
         result.Success.Should().BeTrue();
-        await ragService.Received(1).RetrieveContextAsync(Arg.Any<RAGQuery>(), Arg.Any<CancellationToken>());
+        await _executionWorkflow.Received(1).ExecuteAsync("session-1", "What time is it?", Arg.Any<UserContext>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task ProcessRequestAsync_WorksWithoutRAGService()
+    public async Task ProcessRequestAsync_WorksWithSuccessfulExecution()
     {
-        // Arrange — no RAG service (null)
-        var agent = Substitute.For<IAgent>();
-        agent.Name.Returns("TestAgent");
-        agent.Tier.Returns(AgentTier.Support);
-        agent.ExecuteAsync(Arg.Any<string>(), Arg.Any<UserContext>())
+        // Arrange
+        _executionWorkflow.ExecuteAsync(Arg.Any<string>(), "Hello", Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("Response", "TestAgent", AgentTier.Support));
 
-        SetupDefaultMocks("Hello", agent);
-
         var sut = new MetaAgentOrchestrator(
-            _contextAnalyzer, _agentFactory, _sessionManager, _dynamicAgentService,
-            _handoffManager, _toolGuard, _confidenceCalculator, _logger);
-        // ragService defaults to null
+            _executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
 
         // Act
         var result = await sut.ProcessRequestAsync("Hello", new UserContext { UserId = "u1", Name = "Test" });
 
         // Assert
         result.Success.Should().BeTrue();
-        // Agent should receive original input without enrichment
-        await agent.Received(1).ExecuteAsync("Hello", Arg.Any<UserContext>());
+        result.Content.Should().Be("Response");
     }
 
     [Fact]
-    public async Task ProcessRequestAsync_AppliesContextBudget_WhenManagerAvailable()
+    public async Task ProcessRequestAsync_StartsSessionBeforeExecution()
     {
         // Arrange
-        var ragService = Substitute.For<IRAGService>();
-        var budgetManager = Substitute.For<IContextBudgetManager>();
-
-        var originalContext = new RAGContext
-        {
-            BuiltContext = "Very long context that needs trimming",
-            CandidatesAfterReRank = 10,
-            TotalTokensUsed = 5000
-        };
-        var trimmedContext = new RAGContext
-        {
-            BuiltContext = "Trimmed context",
-            CandidatesAfterReRank = 3,
-            TotalTokensUsed = 500
-        };
-
-        ragService.RetrieveContextAsync(Arg.Any<RAGQuery>(), Arg.Any<CancellationToken>())
-            .Returns(originalContext);
-        budgetManager.ResolveBudget(Arg.Any<AnalysisResult>())
-            .Returns(new ContextBudget { MaxTokens = 1000 });
-        budgetManager.TrimContextToBudgetAsync(originalContext, Arg.Any<ContextBudget>())
-            .Returns(trimmedContext);
-
-        var agent = Substitute.For<IAgent>();
-        agent.Name.Returns("TestAgent");
-        agent.Tier.Returns(AgentTier.Support);
-        agent.ExecuteAsync(Arg.Is<string>(s => s.Contains("Trimmed context")), Arg.Any<UserContext>())
+        _executionWorkflow.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("OK", "TestAgent", AgentTier.Support));
 
-        SetupDefaultMocks("question", agent);
-
         var sut = new MetaAgentOrchestrator(
-            _contextAnalyzer, _agentFactory, _sessionManager, _dynamicAgentService,
-            _handoffManager, _toolGuard, _confidenceCalculator, _logger,
-            ragService: ragService, contextBudgetManager: budgetManager);
+            _executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
 
         // Act
-        var result = await sut.ProcessRequestAsync("question", new UserContext { UserId = "u1", Name = "Test" });
+        await sut.ProcessRequestAsync("question", new UserContext { UserId = "u1", Name = "Test" });
 
         // Assert
-        result.Success.Should().BeTrue();
-        budgetManager.Received(1).ResolveBudget(Arg.Any<AnalysisResult>());
-        await budgetManager.Received(1).TrimContextToBudgetAsync(originalContext, Arg.Any<ContextBudget>());
+        await _sessionManager.Received(1).StartSessionAsync(Arg.Any<UserContext>());
+        _runtimeCoordinator.Received(1).BeginExecutionScope("session-1", Arg.Any<UserContext>());
     }
 
     [Fact]
-    public async Task ProcessRequestAsync_GracefullyHandlesRAGFailure()
+    public async Task ProcessRequestAsync_PropagatesWorkflowFailure()
     {
-        // Arrange — RAG throws exception
-        var ragService = Substitute.For<IRAGService>();
-        ragService.RetrieveContextAsync(Arg.Any<RAGQuery>(), Arg.Any<CancellationToken>())
-            .ThrowsAsync(new InvalidOperationException("RAG service down"));
-
-        var agent = Substitute.For<IAgent>();
-        agent.Name.Returns("TestAgent");
-        agent.Tier.Returns(AgentTier.Support);
-        agent.ExecuteAsync(Arg.Any<string>(), Arg.Any<UserContext>())
-            .Returns(AgentResponse.Ok("Fallback response", "TestAgent", AgentTier.Support));
-
-        SetupDefaultMocks("query", agent);
+        // Arrange — workflow returns error
+        _executionWorkflow.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
+            .Returns(AgentResponse.Error("Execution failed", "TestAgent"));
 
         var sut = new MetaAgentOrchestrator(
-            _contextAnalyzer, _agentFactory, _sessionManager, _dynamicAgentService,
-            _handoffManager, _toolGuard, _confidenceCalculator, _logger,
-            ragService: ragService);
+            _executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
 
-        // Act — should NOT throw
+        // Act
         var result = await sut.ProcessRequestAsync("query", new UserContext { UserId = "u1", Name = "Test" });
 
         // Assert
-        result.Success.Should().BeTrue();
-        // Should receive original input (no enrichment since RAG failed)
-        await agent.Received(1).ExecuteAsync("query", Arg.Any<UserContext>());
+        result.Success.Should().BeFalse();
     }
 
     [Fact]
-    public async Task ProcessRequestAsync_PassesRAGContextToConfidenceCalculator()
+    public async Task ProcessRequestAsync_SetsSessionIdInContext()
     {
         // Arrange
-        var ragService = Substitute.For<IRAGService>();
-        var ragContext = new RAGContext
-        {
-            BuiltContext = "context data",
-            CandidatesAfterReRank = 2,
-            TotalTokensUsed = 50
-        };
-        ragService.RetrieveContextAsync(Arg.Any<RAGQuery>(), Arg.Any<CancellationToken>())
-            .Returns(ragContext);
-
-        var agent = Substitute.For<IAgent>();
-        agent.Name.Returns("TestAgent");
-        agent.Tier.Returns(AgentTier.Support);
-        agent.ExecuteAsync(Arg.Any<string>(), Arg.Any<UserContext>())
+        _executionWorkflow.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("response", "TestAgent", AgentTier.Support));
 
-        SetupDefaultMocks("input", agent);
-
         var sut = new MetaAgentOrchestrator(
-            _contextAnalyzer, _agentFactory, _sessionManager, _dynamicAgentService,
-            _handoffManager, _toolGuard, _confidenceCalculator, _logger,
-            ragService: ragService);
+            _executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
+
+        var userContext = new UserContext { UserId = "u1", Name = "Test" };
 
         // Act
-        await sut.ProcessRequestAsync("input", new UserContext { UserId = "u1", Name = "Test" });
+        await sut.ProcessRequestAsync("input", userContext);
 
-        // Assert — confidence calculator should receive the RAG context, not null
-        _confidenceCalculator.Received(1).Calculate(
-            Arg.Any<AgentResponse>(),
-            Arg.Is<RAGContext?>(r => r != null && r.BuiltContext == "context data"),
-            Arg.Any<IEnumerable<Reflection>?>(),
-            Arg.Any<ToolAvailabilityResult?>());
+        // Assert — session ID should be set in context preferences
+        userContext.Preferences.Should().ContainKey("sessionId");
+        userContext.Preferences["sessionId"].Should().Be("session-1");
     }
 }
 
@@ -523,7 +380,7 @@ public class AgentFrameworkFactoryMcpTests
         pluginManager.GetLoadedPlugins().Returns(new List<IMCPPlugin> { plugin });
 
         var adapter = new McpToolsAIFunctionAdapter(pluginManager, adapterLogger);
-        var sut = new AgentFrameworkFactory(_chatClient, _loggerFactory, _serviceProvider, adapter);
+        var sut = new AgentFrameworkFactory(_chatClient, _loggerFactory, _serviceProvider, mcpToolsAdapter: adapter);
 
         var agent = Substitute.For<IAgent>();
         agent.Name.Returns("test");
@@ -552,7 +409,7 @@ public class AgentFrameworkFactoryMcpTests
         pluginManager.GetLoadedPlugins().Returns(new List<IMCPPlugin> { plugin });
 
         var adapter = new McpToolsAIFunctionAdapter(pluginManager, adapterLogger);
-        var sut = new AgentFrameworkFactory(_chatClient, _loggerFactory, _serviceProvider, adapter);
+        var sut = new AgentFrameworkFactory(_chatClient, _loggerFactory, _serviceProvider, mcpToolsAdapter: adapter);
 
         var spec = new AgentSpecification
         {
@@ -577,7 +434,7 @@ public class AgentFrameworkFactoryMcpTests
         pluginManager.GetLoadedPlugins().Returns(new List<IMCPPlugin>());
 
         var adapter = new McpToolsAIFunctionAdapter(pluginManager, adapterLogger);
-        var sut = new AgentFrameworkFactory(_chatClient, _loggerFactory, _serviceProvider, adapter);
+        var sut = new AgentFrameworkFactory(_chatClient, _loggerFactory, _serviceProvider, mcpToolsAdapter: adapter);
 
         var agent = Substitute.For<IAgent>();
         agent.Name.Returns("test");

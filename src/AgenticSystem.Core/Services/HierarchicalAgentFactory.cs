@@ -31,6 +31,8 @@ public class HierarchicalAgentFactory : IAgentFactory
         InitializeDefaultAgents();
     }
 
+    [Obsolete("Orquestração agora é feita via FrameworkOrchestratorService com tool bindings. " +
+               "Este método será removido na Fase 4. Use IFrameworkOrchestratorService.ExecuteAsync.")]
     public async Task<IAgent> GetOrCreateAgentAsync(AnalysisResult context)
     {
         var agentName = ResolveAgentName(context);
@@ -120,6 +122,8 @@ public class HierarchicalAgentFactory : IAgentFactory
         return Task.FromResult(removed);
     }
 
+    [Obsolete("Seleção de agente agora é feita pelo LLM via tool bindings no FrameworkOrchestratorService. " +
+               "Este método será removido na Fase 4. Use IFrameworkOrchestratorService.ExecuteAsync.")]
     private string ResolveAgentName(AnalysisResult context)
     {
         // Check estimated agent first — may be a dynamic agent name

@@ -6,6 +6,8 @@ using AgenticSystem.Core.Extensions;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Extensions;
+using Microsoft.Agents.AI.Hosting;
+using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol.AspNetCore;
@@ -39,6 +41,36 @@ builder.Services.AddMcpServer()
 builder.Services.UseLocalExecutionStorageMode(builder.Configuration);
 
 // ============================================================================
+// 🔌 PROTOCOL HOSTING — A2A + AG-UI
+// ============================================================================
+
+var protocolHosting = builder.Configuration.GetSection("ProtocolHosting");
+var a2aEnabled = protocolHosting.GetValue<bool>("A2A:Enabled");
+var agUiEnabled = protocolHosting.GetValue<bool>("AgUI:Enabled");
+
+if (a2aEnabled || agUiEnabled)
+{
+    // Protocol-facing agent uses the full orchestrator pipeline via keyed IChatClient.
+    // O ProtocolOrchestratorChatClient delega para IFrameworkOrchestratorService.ExecuteAsync,
+    // garantindo acesso a tools, RAG, especialistas e middleware (Finding 11 resolved).
+    builder.Services.AddAIAgent(
+        "AgenticSystem",
+        "You are the Agentic System orchestrator. Route requests to the appropriate specialist agent.",
+        "Multi-agent orchestrator for A2A and AG-UI protocol interoperability",
+        chatClientServiceKey: "protocol-orchestrator");
+
+    if (a2aEnabled)
+    {
+        builder.Services.AddA2AServer("AgenticSystem");
+    }
+
+    if (agUiEnabled)
+    {
+        builder.Services.AddAGUI();
+    }
+}
+
+// ============================================================================
 // 🌐 WEB API
 // ============================================================================
 
@@ -59,34 +91,27 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1",
         Description = "Sistema Agentic Generalista com Meta-Agent dinamico"
     });
-    options.AddSecurityDefinition("ApiKey", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    options.AddSecurityDefinition("ApiKey", new Microsoft.OpenApi.OpenApiSecurityScheme
     {
         Name = "X-Api-Key",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
+        In = Microsoft.OpenApi.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.SecuritySchemeType.ApiKey,
         Description = "Admin API Key"
     });
-    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    options.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.OpenApiSecurityScheme
     {
         Name = "Authorization",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        In = Microsoft.OpenApi.ParameterLocation.Header,
+        Type = Microsoft.OpenApi.SecuritySchemeType.Http,
         Scheme = "bearer",
         BearerFormat = "JWT",
         Description = "JWT token com claim tenant_id"
     });
-    options.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
+    options.AddSecurityRequirement(doc => new Microsoft.OpenApi.OpenApiSecurityRequirement
     {
         {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-            {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "ApiKey"
-                }
-            },
-            Array.Empty<string>()
+            new Microsoft.OpenApi.OpenApiSecuritySchemeReference("ApiKey", doc),
+            Array.Empty<string>().ToList()
         }
     });
 });
@@ -204,6 +229,16 @@ app.MapHub<GatewayHub>("/hubs/gateway").RequireAuthorization();
 
 app.MapGet("/health", () => new { Status = "Healthy", Timestamp = DateTime.UtcNow });
 app.MapGet("/version", () => new { Version = "1.0.0", Build = DateTime.UtcNow.ToString("yyyyMMdd-HHmm") });
+
+// Protocol hosting endpoints — A2A + AG-UI
+if (a2aEnabled)
+{
+    app.MapA2AHttpJson("AgenticSystem", "/a2a").RequireAuthorization();
+}
+if (agUiEnabled)
+{
+    app.MapAGUI("AgenticSystem", "/agui").RequireAuthorization();
+}
 
 app.MapPost("/api/chat", async (ChatRequest request, IMetaAgent metaAgent, TenantContext tenantContext, HttpContext httpContext) =>
 {

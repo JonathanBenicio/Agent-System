@@ -19,9 +19,7 @@ using AgenticSystem.Infrastructure.RAG;
 using AgenticSystem.Infrastructure.Skills;
 using AgenticSystem.Infrastructure.AgentFramework;
 using AgenticSystem.Infrastructure.AI;
-using AgenticSystem.Infrastructure.Integrations;
 using AgenticSystem.Infrastructure.Sync;
-using AgenticSystem.Infrastructure.Vision;
 
 namespace AgenticSystem.Infrastructure.Extensions;
 
@@ -41,7 +39,7 @@ public static class ServiceCollectionExtensions
         services.Configure<ChatClientMiddlewareOptions>(configuration.GetSection("AgenticSystem:ChatClientMiddleware"));
         services.Configure<ReRankingOptions>(configuration.GetSection("AgenticSystem:RAG:ReRanking"));
         services.Configure<DynamicSkillsOptions>(configuration.GetSection("AgenticSystem:Skills"));
-        services.Configure<IntegrationProviderOptions>(configuration.GetSection("AgenticSystem:Integrations"));
+
 
         // ─── Microsoft.Extensions.AI — registry contextual de IChatClient ───
         var openAiSettings = configuration.GetSection("AgenticSystem:OpenAI");
@@ -69,19 +67,9 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatClientMiddlewareOptions>>(),
             sp.GetRequiredService<ILogger<GovernedChatClient>>()));
 
-        // Vision Provider
-        services.AddHttpClient<OpenAIVisionProvider>();
-        services.AddSingleton<IVisionProvider, OpenAIVisionProvider>();
-
         // Gateway
         services.AddSingleton<ICostTracker, CostTracker>();
         services.AddSingleton<IServiceGateway, ServiceGateway>();
-
-        // Integration providers
-        services.AddSingleton<ICalendarProvider, LocalCalendarProvider>();
-        services.AddSingleton<IEmailProvider, LocalEmailProvider>();
-        services.AddSingleton<INotesProvider, ObsidianNotesProvider>();
-        services.AddSingleton<IStorageProvider, LocalStorageProvider>();
 
         // Quality Gates
         services.AddSingleton<IQualityGate, InputValidationGate>();
@@ -112,6 +100,13 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<AgentSessionBridge>();
             services.AddSingleton<OrchestratorAgentBuilder>();
             services.AddSingleton<IFrameworkOrchestratorService, FrameworkOrchestratorService>();
+
+            // Protocol-facing IChatClient: delega ao pipeline completo do orquestrador
+            // Usado pelo AddAIAgent para A2A/AG-UI (Finding 11 — protocol agent integration)
+            services.AddKeyedSingleton<IChatClient>("protocol-orchestrator", (sp, _) =>
+                new ProtocolOrchestratorChatClient(
+                    sp.GetRequiredService<IFrameworkOrchestratorService>(),
+                    sp.GetRequiredService<ILogger<ProtocolOrchestratorChatClient>>()));
 
             // Decorator: wraps IAgentFactory (HierarchicalAgentFactory) with Agent Framework pipeline
             var innerFactoryDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IAgentFactory));
@@ -222,31 +217,6 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registra EF Core com PostgreSQL + EfSessionStore (produção).
-    /// Chamar após AddAgenticSystemCore().
-    /// </summary>
-    public static IServiceCollection UseEntityFramework(this IServiceCollection services, string connectionString)
-    {
-        services.AddDbContext<AgenticDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__ef_migrations_history")));
-
-        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Core.Interfaces.ISessionStore));
-        if (descriptor is not null)
-            services.Remove(descriptor);
-
-        services.AddScoped<Core.Interfaces.ISessionStore, EfSessionStore>();
-
-        var memoryDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IAgentMemoryStore));
-        if (memoryDescriptor is not null)
-            services.Remove(memoryDescriptor);
-
-        services.AddSingleton<IAgentMemoryStore, EfAgentMemoryStore>();
-
-        return services;
-    }
-
-    /// <summary>
     /// Substitui o InMemoryVectorStore pelo PostgresVectorStore (produção).
     /// Chamar após AddAgenticSystemInfrastructure().
     /// </summary>
@@ -321,6 +291,26 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Substitui InMemoryMigrationJobStore pelo PostgresMigrationJobStore.
+    /// </summary>
+    public static IServiceCollection UsePostgresMigrationJobStore(this IServiceCollection services, string connectionString)
+    {
+        ReplaceSingleton<IMigrationJobStore>(services, sp =>
+            new PostgresMigrationJobStore(connectionString, sp.GetRequiredService<ILogger<PostgresMigrationJobStore>>()));
+        return services;
+    }
+
+    /// <summary>
+    /// Substitui InMemoryEmbeddingModelStore pelo PostgresEmbeddingModelStore.
+    /// </summary>
+    public static IServiceCollection UsePostgresEmbeddingModelStore(this IServiceCollection services, string connectionString)
+    {
+        ReplaceSingleton<IEmbeddingModelStore>(services, sp =>
+            new PostgresEmbeddingModelStore(connectionString, sp.GetRequiredService<ILogger<PostgresEmbeddingModelStore>>()));
+        return services;
+    }
+
     public static IServiceCollection UseLocalExecutionStorageMode(this IServiceCollection services, IConfiguration configuration)
     {
         var configuredMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
@@ -363,6 +353,8 @@ public static class ServiceCollectionExtensions
         services.UsePostgresCostTracker(connectionString);
         services.UsePostgresSmartRouter(connectionString);
         services.UsePostgresOperationalStore();
+        services.UsePostgresMigrationJobStore(connectionString);
+        services.UsePostgresEmbeddingModelStore(connectionString);
 
         return services;
     }
