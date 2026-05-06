@@ -23,6 +23,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILLMRuntimeContextAccessor, LLMRuntimeContextAccessor>();
         services.AddSingleton<IAgentRuntimeCoordinator, AgentRuntimeCoordinator>();
         services.AddSingleton<IFinalResponseApprovalService, FinalResponseApprovalService>();
+        services.AddSingleton<IAgentExecutionPreProcessingPipeline, AgentExecutionPreProcessingPipeline>();
+        services.AddSingleton<IAgentExecutionPostProcessingPipeline, AgentExecutionPostProcessingPipeline>();
+        services.AddSingleton<IDirectAgentRequestExecutor, DirectAgentRequestExecutor>();
         services.AddSingleton<IAgentExecutionWorkflow, AgentExecutionWorkflow>();
         services.AddSingleton<ISkillManager, InMemorySkillManager>();
         services.AddSingleton<IToolManager, InMemoryToolManager>();
@@ -48,7 +51,6 @@ public static class ServiceCollectionExtensions
 
         // ML11-ML15 — Roadmap Services
         services.AddSingleton<IDynamicAgentService, DynamicAgentService>();
-        services.AddSingleton<IHandoffManager, HandoffManager>();
         services.AddSingleton<ISessionConsolidator, SessionConsolidator>();
         services.AddSingleton<ISmartRouter, SmartRouter>();
         services.AddSingleton<ISetupFlowManager, SetupFlowManager>();

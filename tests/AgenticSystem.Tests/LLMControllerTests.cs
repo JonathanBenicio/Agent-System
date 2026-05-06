@@ -9,14 +9,13 @@ namespace AgenticSystem.Tests;
 
 public class LLMControllerTests
 {
-    private readonly ILLMManager _llmManager;
+    private readonly ILLMAdministrationService _llmAdministrationService;
     private readonly LLMController _sut;
 
     public LLMControllerTests()
     {
-        _llmManager = Substitute.For<ILLMManager>();
-        var logger = Substitute.For<ILogger<LLMController>>();
-        _sut = new LLMController(_llmManager, logger);
+        _llmAdministrationService = Substitute.For<ILLMAdministrationService>();
+        _sut = new LLMController(_llmAdministrationService);
     }
 
     [Fact]
@@ -27,7 +26,7 @@ public class LLMControllerTests
             new() { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = true, Priority = 1, HasApiKey = true },
             new() { Name = "Claude", DefaultModel = "claude-sonnet-4-20250514", IsEnabled = false, Priority = 3, HasApiKey = false }
         };
-        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
+        _llmAdministrationService.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
         {
             DefaultProvider = "OpenAI",
             DefaultModel = "gpt-4o",
@@ -44,15 +43,8 @@ public class LLMControllerTests
     [Fact]
     public async Task GetProvider_WhenExists_ReturnsOk()
     {
-        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
-        {
-            DefaultProvider = "OpenAI",
-            DefaultModel = "gpt-4o",
-            Providers = new List<LLMProviderInfo>
-            {
-                new() { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = true, Priority = 1 }
-            }
-        });
+        _llmAdministrationService.GetProviderAsync("OpenAI", Arg.Any<CancellationToken>()).Returns(
+            new LLMProviderInfo { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = true, Priority = 1 });
 
         var result = await _sut.GetProvider("OpenAI", CancellationToken.None);
 
@@ -62,12 +54,8 @@ public class LLMControllerTests
     [Fact]
     public async Task GetProvider_WhenNotExists_ReturnsNotFound()
     {
-        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
-        {
-            DefaultProvider = "OpenAI",
-            DefaultModel = "gpt-4o",
-            Providers = new List<LLMProviderInfo>()
-        });
+        _llmAdministrationService.GetProviderAsync("NonExistent", Arg.Any<CancellationToken>())
+            .Returns((LLMProviderInfo?)null);
 
         var result = await _sut.GetProvider("NonExistent", CancellationToken.None);
 
@@ -77,15 +65,8 @@ public class LLMControllerTests
     [Fact]
     public async Task GetDefaultProvider_WhenAvailable_ReturnsOk()
     {
-        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
-        {
-            DefaultProvider = "OpenAI",
-            DefaultModel = "gpt-4o",
-            Providers = new List<LLMProviderInfo>
-            {
-                new() { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = true, Priority = 1 }
-            }
-        });
+        _llmAdministrationService.GetDefaultProviderAsync(Arg.Any<CancellationToken>()).Returns(
+            new LLMProviderInfo { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = true, Priority = 1 });
 
         var result = await _sut.GetDefaultProvider(CancellationToken.None);
 
@@ -95,12 +76,8 @@ public class LLMControllerTests
     [Fact]
     public async Task GetDefaultProvider_WhenNoneAvailable_ReturnsNotFound()
     {
-        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
-        {
-            DefaultProvider = "OpenAI",
-            DefaultModel = "gpt-4o",
-            Providers = new List<LLMProviderInfo>()
-        });
+        _llmAdministrationService.GetDefaultProviderAsync(Arg.Any<CancellationToken>())
+            .Returns((LLMProviderInfo?)null);
 
         var result = await _sut.GetDefaultProvider(CancellationToken.None);
 
@@ -110,7 +87,7 @@ public class LLMControllerTests
     [Fact]
     public async Task TestProvider_ReturnsAvailability()
     {
-        _llmManager.TestProviderAsync("OpenAI", Arg.Any<CancellationToken>()).Returns(true);
+        _llmAdministrationService.TestProviderAsync("OpenAI", Arg.Any<CancellationToken>()).Returns(true);
 
         var result = await _sut.TestProvider("OpenAI", CancellationToken.None);
 
@@ -121,16 +98,8 @@ public class LLMControllerTests
     public async Task UpdateProvider_WhenExists_ReturnsOkWithInfo()
     {
         var request = new UpdateProviderRequest { Enabled = false, Priority = 5 };
-        _llmManager.UpdateProviderAsync("OpenAI", request, Arg.Any<CancellationToken>()).Returns(true);
-        _llmManager.GetConfigurationAsync(Arg.Any<CancellationToken>()).Returns(new LLMConfigurationInfo
-        {
-            DefaultProvider = "OpenAI",
-            DefaultModel = "gpt-4o",
-            Providers = new List<LLMProviderInfo>
-            {
-                new() { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = false, Priority = 5 }
-            }
-        });
+        _llmAdministrationService.UpdateProviderAsync("OpenAI", request, Arg.Any<CancellationToken>()).Returns(
+            new LLMProviderInfo { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = false, Priority = 5 });
 
         var result = await _sut.UpdateProvider("OpenAI", request, CancellationToken.None);
 
@@ -144,7 +113,8 @@ public class LLMControllerTests
     public async Task UpdateProvider_WhenNotExists_ReturnsNotFound()
     {
         var request = new UpdateProviderRequest { Enabled = true };
-        _llmManager.UpdateProviderAsync("NonExistent", request, Arg.Any<CancellationToken>()).Returns(false);
+        _llmAdministrationService.UpdateProviderAsync("NonExistent", request, Arg.Any<CancellationToken>())
+            .Returns((LLMProviderInfo?)null);
 
         var result = await _sut.UpdateProvider("NonExistent", request, CancellationToken.None);
 

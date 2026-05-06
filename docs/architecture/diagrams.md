@@ -10,7 +10,7 @@ graph TB
         API_CLIENT[API Client]
     end
 
-    subgraph System["Sistema Agentic (.NET 8)"]
+    subgraph System["Sistema Agentic (.NET 10)"]
         subgraph Api["AgenticSystem.Api"]
             REST[REST Controllers]
             VOICE[VoiceController<br/>POST /api/voice/ask]
@@ -32,7 +32,7 @@ graph TB
             end
 
             subgraph Maturity["Maturity Services (ML11-18)"]
-                HANDOFF[HandoffManager<br/>ML12]
+                CHANNELS[Agent Channels<br/>ML12]
                 SESSION[SessionConsolidator<br/>ML13]
                 SETUP[SetupFlowManager<br/>ML15]
                 SESSSTORE[ISessionStore<br/>ML16]
@@ -81,11 +81,11 @@ graph TB
     QG --> T3
     QG --> DYN
 
-    T1 --> HANDOFF
-    T2 --> HANDOFF
-    HANDOFF --> T1
-    HANDOFF --> T2
-    HANDOFF --> T3
+    T1 --> CHANNELS
+    T2 --> CHANNELS
+    CHANNELS --> T1
+    CHANNELS --> T2
+    CHANNELS --> T3
 
     T1 --> GW
     T2 --> GW

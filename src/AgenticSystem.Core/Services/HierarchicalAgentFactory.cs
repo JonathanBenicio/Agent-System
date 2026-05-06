@@ -1,7 +1,7 @@
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Agents;
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.Models;
 using System.Collections.Concurrent;
 
@@ -10,20 +10,20 @@ namespace AgenticSystem.Core.Services;
 public class HierarchicalAgentFactory : IAgentFactory
 {
     private readonly ConcurrentDictionary<string, IAgent> _agentPool = new();
-    private readonly ILLMManager _llmManager;
+    private readonly IChatClient _chatClient;
     private readonly ISkillManager _skillManager;
     private readonly IAgentMemoryService? _agentMemoryService;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<HierarchicalAgentFactory> _logger;
 
     public HierarchicalAgentFactory(
-        ILLMManager llmManager,
+        IChatClient chatClient,
         ISkillManager skillManager,
         ILoggerFactory loggerFactory,
         ILogger<HierarchicalAgentFactory> logger,
         IAgentMemoryService? agentMemoryService = null)
     {
-        _llmManager = llmManager;
+        _chatClient = chatClient;
         _skillManager = skillManager;
         _agentMemoryService = agentMemoryService;
         _loggerFactory = loggerFactory;
@@ -31,28 +31,38 @@ public class HierarchicalAgentFactory : IAgentFactory
         InitializeDefaultAgents();
     }
 
-    [Obsolete("Orquestração agora é feita via FrameworkOrchestratorService com tool bindings. " +
-               "Este método será removido na Fase 4. Use IFrameworkOrchestratorService.ExecuteAsync.")]
-    public async Task<IAgent> GetOrCreateAgentAsync(AnalysisResult context)
+    public Task<IAgent> ResolveAgentAsync(AnalysisResult context)
     {
-        var agentName = ResolveAgentName(context);
+        ArgumentNullException.ThrowIfNull(context);
+        return ResolveAgentByIdentityAsync(context.EstimatedAgent, context.PrimaryDomain);
+    }
+
+    public Task<IAgent> ResolveAgentAsync(AgentInfo agentInfo)
+    {
+        ArgumentNullException.ThrowIfNull(agentInfo);
+        return ResolveAgentByIdentityAsync(agentInfo.Name, agentInfo.Domain);
+    }
+
+    private Task<IAgent> ResolveAgentByIdentityAsync(string? requestedAgentName, string? fallbackDomain)
+    {
+        var agentName = ResolveAgentPoolKey(requestedAgentName, fallbackDomain);
 
         if (_agentPool.TryGetValue(agentName, out var existingAgent) && existingAgent.IsActive)
         {
             _logger.LogDebug("♻️ Reusing agent: {Agent}", agentName);
-            return existingAgent;
+            return Task.FromResult(existingAgent);
         }
 
         var agent = CreateAgentForDomain(agentName);
         _agentPool[agentName] = agent;
         _logger.LogInformation("🆕 Created agent: {Agent} (Tier {Tier})", agent.Name, agent.Tier);
-        return await Task.FromResult(agent);
+        return Task.FromResult(agent);
     }
 
     public async Task<IAgent> CreateCustomAgentAsync(AgentSpecification specification)
     {
         var agent = new CustomAgent(
-            _llmManager,
+            _chatClient,
             _skillManager,
             _loggerFactory.CreateLogger<CustomAgent>(),
             specification,
@@ -122,32 +132,30 @@ public class HierarchicalAgentFactory : IAgentFactory
         return Task.FromResult(removed);
     }
 
-    [Obsolete("Seleção de agente agora é feita pelo LLM via tool bindings no FrameworkOrchestratorService. " +
-               "Este método será removido na Fase 4. Use IFrameworkOrchestratorService.ExecuteAsync.")]
-    private string ResolveAgentName(AnalysisResult context)
+    private string ResolveAgentPoolKey(string? requestedAgentName, string? fallbackDomain)
     {
         // Check estimated agent first — may be a dynamic agent name
-        if (!string.IsNullOrEmpty(context.EstimatedAgent))
+        if (!string.IsNullOrEmpty(requestedAgentName))
         {
             // If it exists in the pool (dynamic or built-in), use it directly
-            if (_agentPool.ContainsKey(context.EstimatedAgent))
-                return context.EstimatedAgent;
+            if (_agentPool.ContainsKey(requestedAgentName))
+                return requestedAgentName;
         }
 
         // Check pool for domain-matching dynamic agents
         var domainMatch = _agentPool.Values
             .FirstOrDefault(a => a.IsActive &&
-                a.Domain.Equals(context.PrimaryDomain, StringComparison.OrdinalIgnoreCase) &&
+                a.Domain.Equals(fallbackDomain, StringComparison.OrdinalIgnoreCase) &&
                 a is CustomAgent);
 
         if (domainMatch != null)
             return domainMatch.Name;
 
         // Fallback to built-in mapping
-        if (!string.IsNullOrEmpty(context.EstimatedAgent))
-            return context.EstimatedAgent;
+        if (!string.IsNullOrEmpty(requestedAgentName))
+            return requestedAgentName;
 
-        return context.PrimaryDomain?.ToLowerInvariant() switch
+        return fallbackDomain?.ToLowerInvariant() switch
         {
             "personal" => "PersonalAgent",
             "work" => "WorkAgent",
@@ -165,15 +173,15 @@ public class HierarchicalAgentFactory : IAgentFactory
     {
         return name switch
         {
-            "PersonalAgent" or "personal" => new PersonalAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<PersonalAgent>(), _agentMemoryService),
-            "WorkAgent" or "work" => new WorkAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<WorkAgent>(), _agentMemoryService),
-            "LearningAgent" or "learning" => new LearningAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<LearningAgent>(), _agentMemoryService),
-            "CreativeAgent" or "creative" => new CreativeAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<CreativeAgent>(), _agentMemoryService),
-            "CalendarAgent" or "calendar" => new CalendarAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<CalendarAgent>(), _agentMemoryService),
-            "AnalysisAgent" or "analysis" => new AnalysisAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<AnalysisAgent>(), _agentMemoryService),
-            "NotificationAgent" or "notification" => new NotificationAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<NotificationAgent>(), _agentMemoryService),
-            "APIAgent" or "api" => new APIAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<APIAgent>(), _agentMemoryService),
-            _ => new GeneralAgent(_llmManager, _skillManager, _loggerFactory.CreateLogger<GeneralAgent>(), _agentMemoryService)
+            "PersonalAgent" or "personal" => new PersonalAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<PersonalAgent>(), _agentMemoryService),
+            "WorkAgent" or "work" => new WorkAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<WorkAgent>(), _agentMemoryService),
+            "LearningAgent" or "learning" => new LearningAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<LearningAgent>(), _agentMemoryService),
+            "CreativeAgent" or "creative" => new CreativeAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<CreativeAgent>(), _agentMemoryService),
+            "CalendarAgent" or "calendar" => new CalendarAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<CalendarAgent>(), _agentMemoryService),
+            "AnalysisAgent" or "analysis" => new AnalysisAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<AnalysisAgent>(), _agentMemoryService),
+            "NotificationAgent" or "notification" => new NotificationAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<NotificationAgent>(), _agentMemoryService),
+            "APIAgent" or "api" => new APIAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<APIAgent>(), _agentMemoryService),
+            _ => new GeneralAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<GeneralAgent>(), _agentMemoryService)
         };
     }
 
@@ -192,12 +200,12 @@ internal class CustomAgent : BaseAgent
     private readonly AgentSpecification _spec;
 
     public CustomAgent(
-        ILLMManager llmManager,
+        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger logger,
         AgentSpecification specification,
         IAgentMemoryService? agentMemoryService = null)
-        : base(llmManager, skillManager, logger, agentMemoryService)
+        : base(chatClient, skillManager, logger, agentMemoryService)
     {
         _spec = specification;
     }

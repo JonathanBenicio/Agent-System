@@ -46,9 +46,9 @@ Além dos agents fixos acima, o sistema suporta criação dinâmica de agents vi
 
 Agents dinâmicos herdam o mesmo contrato (`IAgent`) e são registrados em runtime no `HierarchicalAgentFactory`. Use `IDynamicAgentService.GetDynamicAgentsAsync()` para listar e `RemoveAgentAsync()` para remover.
 
-### Handoff Strategies (ML12)
+### Delegation Strategies (ML12)
 
-O `IHandoffManager` permite delegação mid-conversation entre agents:
+O orquestrador permite delegação mid-conversation entre agents por tool bindings e contexto de sessão compartilhado:
 
 | Strategy | Comportamento |
 |----------|--------------|
@@ -71,7 +71,7 @@ Tier 3 — Support    │ Notification, API — operações utilitárias
 - Tier 0 → Tier 1 (sempre) — primeiro nível de delegação
 - Tier 1 → Tier 2 (quando necessário) — especialização
 - Tier 2 → Tier 3 (utilitário) — suporte a operações
-- Handoff reverso (returnToSource) retorna contexto ao chamador
+- Retorno ao chamador preserva contexto da subtarefa na mesma sessão
 
 ## LLM Profile
 
@@ -101,7 +101,7 @@ Cada agent tem parâmetros otimizados para sua função:
 | 0.6 – 0.8 | Exploratório, diversidade controlada | LearningAgent |
 | 0.9 – 1.1 | Criativo, máxima variação | CreativeAgent |
 
-## Handoff Rules
+## Delegation Paths
 
 ```mermaid
 graph LR

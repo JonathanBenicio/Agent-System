@@ -46,7 +46,7 @@ public class InMemoryToolManagerTests
         _sut.RegisterTool(CreateMockTool("t2", "Tool 2", ToolCategory.Api));
 
         var tools = await _sut.GetAvailableToolsAsync(null);
-        tools.Should().HaveCountGreaterOrEqualTo(2);
+        tools.Should().HaveCountGreaterThanOrEqualTo(2);
     }
 
     [Fact]

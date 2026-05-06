@@ -9,34 +9,31 @@ namespace AgenticSystem.Api.Controllers;
 [Route("api/admin/llm")]
 public class LLMController : ControllerBase
 {
-    private readonly ILLMManager _llmManager;
-    private readonly ILogger<LLMController> _logger;
+    private readonly ILLMAdministrationService _llmAdministrationService;
 
-    public LLMController(ILLMManager llmManager, ILogger<LLMController> logger)
+    public LLMController(ILLMAdministrationService llmAdministrationService)
     {
-        _llmManager = llmManager;
-        _logger = logger;
+        _llmAdministrationService = llmAdministrationService;
     }
 
     [HttpGet("configuration")]
     public async Task<IActionResult> GetConfiguration(CancellationToken ct)
     {
-        var configuration = await _llmManager.GetConfigurationAsync(ct);
+        var configuration = await _llmAdministrationService.GetConfigurationAsync(ct);
         return Ok(configuration);
     }
 
     [HttpGet("providers")]
     public async Task<IActionResult> GetProviders(CancellationToken ct)
     {
-        var configuration = await _llmManager.GetConfigurationAsync(ct);
+        var configuration = await _llmAdministrationService.GetConfigurationAsync(ct);
         return Ok(configuration.Providers);
     }
 
     [HttpGet("providers/{name}")]
     public async Task<IActionResult> GetProvider(string name, CancellationToken ct)
     {
-        var configuration = await _llmManager.GetConfigurationAsync(ct);
-        var provider = configuration.Providers.FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        var provider = await _llmAdministrationService.GetProviderAsync(name, ct);
         if (provider is null)
             return NotFound(new { error = $"Provider '{name}' not found." });
 
@@ -44,48 +41,28 @@ public class LLMController : ControllerBase
     }
 
     [HttpGet("providers/enabled")]
-    public IActionResult GetEnabledProviders()
+    public async Task<IActionResult> GetEnabledProviders(CancellationToken ct)
     {
-        var providers = _llmManager.GetEnabledProviders()
-            .Select(p => new
-            {
-                p.Name,
-                p.DefaultModel,
-                p.IsEnabled,
-                p.Priority
-            });
-
+        var providers = await _llmAdministrationService.GetEnabledProvidersAsync(ct);
         return Ok(providers);
     }
 
     [HttpGet("providers/default")]
     public async Task<IActionResult> GetDefaultProvider(CancellationToken ct)
     {
-        try
+        var provider = await _llmAdministrationService.GetDefaultProviderAsync(ct);
+        if (provider is null)
         {
-            var configuration = await _llmManager.GetConfigurationAsync(ct);
-            var provider = configuration.Providers.FirstOrDefault(p => p.Name.Equals(configuration.DefaultProvider, StringComparison.OrdinalIgnoreCase));
-            if (provider is null)
-                return NotFound(new { error = "No default provider configured." });
+            return NotFound(new { error = "No default provider configured." });
+        }
 
-            return Ok(new
-            {
-                provider.Name,
-                DefaultModel = configuration.DefaultModel,
-                provider.IsEnabled,
-                provider.Priority
-            });
-        }
-        catch (InvalidOperationException ex)
-        {
-            return NotFound(new { error = ex.Message });
-        }
+        return Ok(provider);
     }
 
     [HttpPost("providers/{name}/test")]
     public async Task<IActionResult> TestProvider(string name, CancellationToken ct)
     {
-        var available = await _llmManager.TestProviderAsync(name, ct);
+        var available = await _llmAdministrationService.TestProviderAsync(name, ct);
         return Ok(new { provider = name, available });
     }
 
@@ -95,20 +72,16 @@ public class LLMController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.ProviderName))
             return BadRequest(new { error = "ProviderName is required." });
 
-        var configuration = await _llmManager.UpdateDefaultSelectionAsync(request, ct);
+        var configuration = await _llmAdministrationService.UpdateDefaultSelectionAsync(request, ct);
         return Ok(configuration);
     }
 
     [HttpPut("providers/{name}")]
     public async Task<IActionResult> UpdateProvider(string name, [FromBody] UpdateProviderRequest request, CancellationToken ct)
     {
-        var updated = await _llmManager.UpdateProviderAsync(name, request, ct);
-        if (!updated)
+        var info = await _llmAdministrationService.UpdateProviderAsync(name, request, ct);
+        if (info is null)
             return NotFound(new { error = $"Provider '{name}' not found." });
-
-        var configuration = await _llmManager.GetConfigurationAsync(ct);
-        var info = configuration.Providers
-            .FirstOrDefault(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
 
         return Ok(info);
     }

@@ -202,7 +202,7 @@ public class SecurityAndQualityFixesTests
 
         var result = await reRanker.ReRankAsync("test query about architecture design patterns", candidates, topK: 1);
 
-        result[0].ReRankedScore.Should().BeLessOrEqualTo(1.0);
+        result[0].ReRankedScore.Should().BeLessThanOrEqualTo(1.0);
     }
 
     #endregion

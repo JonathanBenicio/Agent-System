@@ -145,7 +145,7 @@ public class ConfigManagerTests
 
         var logs = await _sut.GetAuditLogAsync("audit-test");
 
-        logs.Should().HaveCountGreaterOrEqualTo(2);
+        logs.Should().HaveCountGreaterThanOrEqualTo(2);
         logs.Should().AllSatisfy(l => l.ConfigKey.Should().Be("audit-test"));
     }
 

@@ -37,7 +37,7 @@ public class LLMManagerUpdateTests
 
         var result = await _sut.UpdateProviderAsync("OpenAI", request);
 
-        result.Should().BeTrue();
+        result.Should().NotBeNull();
         _openAi.Received(1).Configure(null, null, false, 5);
     }
 
@@ -48,7 +48,7 @@ public class LLMManagerUpdateTests
 
         var result = await _sut.UpdateProviderAsync("NonExistent", request);
 
-        result.Should().BeFalse();
+        result.Should().BeNull();
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public class LLMManagerUpdateTests
 
         var result = await _sut.UpdateProviderAsync("openai", request);
 
-        result.Should().BeTrue();
+        result.Should().NotBeNull();
         _openAi.Received(1).Configure(null, null, null, 2);
     }
 
@@ -71,7 +71,7 @@ public class LLMManagerUpdateTests
         var request = new UpdateProviderRequest { Enabled = false };
         await _sut.UpdateProviderAsync("OpenAI", request);
 
-        _sut.GetEnabledProviders().Should().NotContain(p => p.Name == "OpenAI");
+        (await _sut.GetEnabledProvidersAsync()).Should().NotContain(p => p.Name == "OpenAI");
     }
 
     [Fact]
@@ -83,7 +83,7 @@ public class LLMManagerUpdateTests
         var request = new UpdateProviderRequest { Enabled = true };
         await _sut.UpdateProviderAsync("Claude", request);
 
-        _sut.GetEnabledProviders().Should().Contain(p => p.Name == "Claude");
+        (await _sut.GetEnabledProvidersAsync()).Should().Contain(p => p.Name == "Claude");
     }
 
     [Fact]

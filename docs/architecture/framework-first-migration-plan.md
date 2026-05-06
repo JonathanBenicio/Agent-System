@@ -1,7 +1,7 @@
 # Plano de Migração: Framework-First Orchestration
 
 > **Criado:** 2026-05-05  
-> **Status:** Fase 1 ✅ completa | Fase 2 ✅ completa | Fase 3 ✅ completa | Fase 4 ✅ completa (A2A, AG-UI e OpenAI-compatible implementados)  
+> **Status:** Fase 1 ✅ completa | Fase 2 ✅ completa | Fase 3 🟡 núcleo concluído, com bloqueio real do framework em reflection/quality gates nativos | Fase 4 ✅ núcleo concluído, com backlog operacional local  
 > **Escopo:** Inverter controle de orquestração do `AgentExecutionWorkflow` para o Microsoft Agent Framework  
 > **Referências:** [TECHNICAL_ARCHITECTURE_GUIDE.md](../TECHNICAL_ARCHITECTURE_GUIDE.md), [AI_Capabilities_Gaps.md](../AI_Capabilities_Gaps.md), [design-philosophy.md](design-philosophy.md)
 
@@ -41,18 +41,21 @@ Isso gera:
 
 ### Objetivo
 
-Inverter a direção de controle: o **framework orquestrador** decide *qual agente chamar*, *quando buscar contexto*, *se precisa de handoff*. O `AgentExecutionWorkflow` vira **casca fina** (escopo, sessão, persistência, feature flag de rollback).
+Inverter a direção de controle: o **framework orquestrador** decide *qual agente chamar*, *quando buscar contexto*, *se precisa de handoff*. O `AgentExecutionWorkflow` vira **casca fina** (escopo, sessão e persistência).
 
 ### Princípios
 
-1. **Migração incremental** — 3 fases, cada uma independente e com rollback
+1. **Migração incremental** — 3 fases, cada uma independente e reversível durante o desenvolvimento pré-v1
 2. **Zero breaking change externo** — `IAgentExecutionWorkflow` mantém sua interface; controllers e hubs não mudam
-3. **Feature flag por design** — se `IFrameworkOrchestratorService` não estiver registrado, o fluxo legado continua funcionando
+3. **Cutover curto e removível** — o fallback para o caminho anterior foi tratado como etapa transitória de migração e já saiu do `ExecuteAsync` principal
 4. **`ExecuteDirectAsync` preservado** — seleção manual de agente pelo frontend continua via escape hatch
+5. **Coexistência curta** — como o produto ainda está pré-v1, caminhos anteriores e wrappers transitórios devem ser removidos assim que cada slice estiver validado
 
 ---
 
 ## 2. Estado Atual (AS-IS)
+
+> **Nota:** esta seção descreve o ponto de partida histórico do plano, não uma obrigação de compatibilidade com versões já lançadas. Como o produto ainda está pré-v1, as referências a caminhos anteriores devem ser lidas como transição interna de desenvolvimento.
 
 ### Fluxo de Execução
 
@@ -66,19 +69,19 @@ MetaAgentOrchestrator (fachada de sessão/streaming)
 AgentExecutionWorkflow.ExecuteAsync (cérebro)
     │
     ├─ 1. ContextAnalyzer.AnalyzeAsync()
-    ├─ 2. QualityGateService.ValidateRequestAsync()
+    ├─ 2. AgentExecutionPreProcessingPipeline.ProcessAsync()
     ├─ 3. ToolAvailabilityGuard.CheckAsync()
     ├─ 4. DynamicAgentService.IsAgentCreationRequestAsync()
     ├─ 5. SmartRouter.RouteAsync()
     ├─ 6. AgentCollaborationWorkflow.ShouldRunAsync()
-    ├─ 7. AgentFactory.GetOrCreateAgentAsync() + RAG + Correction + Handoff
+    ├─ 7. AgentFactory.ResolveAgentAsync() + RAG + Correction + Handoff
     ├─ 8. QualityGateService + ReflectionEngine
     ├─ 9. ConfidenceScoreCalculator.Calculate()
     ├─ 10. FinalResponseApprovalService.EvaluateAsync()
     └─ 11. Persist Artifacts + Metrics
     │
     ▼
-AgentFrameworkAdapter.ExecuteAsync (subordinado)
+AgentFrameworkAdapter.ExecuteAsync (apenas path direto explícito)
     │
     ▼
 ChatClientAgent.RunAsync (framework)
@@ -104,7 +107,7 @@ ChatClientAgent.RunAsync (framework)
 
 ### Fluxo de Execução (Evolução em 4 estágios)
 
-**Estágio atual (pós-Fase 1):** construção manual via `OrchestratorAgentBuilder`
+**Estágio atual (revalidado):** resolução hosted via `OrchestratorContextFactory` sobre `AddAIAgent()`
 
 ```
 User Input
@@ -122,7 +125,7 @@ AgentExecutionWorkflow.ExecuteAsync (casca fina)
 FrameworkOrchestratorService
     │
     ▼
-OrchestratorAgentBuilder → ChatClientAgent (orquestrador)
+OrchestratorContextFactory → ChatClientAgent (orquestrador)
     │
     ├─ System prompt: lista de especialistas + domínios + critérios
     ├─ Tool bindings: cada agente exposto via AsAIFunction()
@@ -199,7 +202,7 @@ graph TB
 
     subgraph "Infrastructure — Framework Hosting"
         Orch[FrameworkOrchestratorService]
-        Builder["AddAIAgent() / OrchestratorAgentBuilder"]
+        Builder["AddAIAgent() / OrchestratorContextFactory"]
         SessStore["ISessionStore (PostgreSQL)"]
     end
 
@@ -231,10 +234,10 @@ graph TB
 
 ### Visão Geral das Fases
 
-| Fase | Objetivo | Impacto no Workflow | Rollback |
+| Fase | Objetivo | Impacto no Workflow | Saída segura |
 |:---:|---|---|---|
-| **1** | Centralizar entrada no framework | Delega para orquestrador; mantém fallback legado completo | `IFrameworkOrchestratorService == null` → fluxo legado |
-| **2** | Mover cross-cutting concerns + hosting nativo | Remove RAG manual, handoff manual; migra para `AddAIAgent()` | Remover tools auxiliares do builder → volta a Fase 1 |
+| **1** | Centralizar entrada no framework | Delega para orquestrador e elimina a decisão imperativa do workflow principal | Cutover concluído no runtime principal |
+| **2** | Mover cross-cutting concerns + hosting nativo | Remove RAG manual, handoff manual; migra para `AddAIAgent()` | Remover tools auxiliares do builder → volta ao builder manual atual por tempo limitado |
 | **3** | Eliminar duplicidade | Simplifica Adapter, unifica sessão via `ISessionStore`, middleware nativo | Restaurar steps removidos do workflow |
 | **4** | Protocol hosting e interoperabilidade | Expor agentes via A2A, AG-UI, OpenAI-compatible | Remover endpoints de protocolo |
 
@@ -242,8 +245,8 @@ graph TB
 
 - .NET 10 com Microsoft.Agents.AI 1.4.0 no estado atual do projeto
 - `IChatClient` configurado (registro condicional)
-- Agentes já decorados com `AgentFrameworkAdapter` via `AgentFrameworkAgentFactory`
-- `AgentSessionBridge` funcional para persistência de sessões do framework
+- `IAgentFactory` permanece cru para orquestração, colaboração e handoff
+- O path direto explicita o uso de `AgentFrameworkAdapter` via `IDirectAgentExecutionFactory`
 - `CreateToolBindingAsync` já existe em `AgentFrameworkFactory`
 - **`AddAIAgent()` + `IHostedAgentBuilder`** disponíveis no MAF 1.4.0 para hosting nativo (DI, session store e tools resolvidos automaticamente)
 - **`AgentWorkflowBuilder`** disponível no MAF 1.4.0 para orquestração multi-agent (`.BuildSequential`, `.BuildConcurrent`)
@@ -265,16 +268,16 @@ Toda execução passa por um agente orquestrador `ChatClientAgent` do framework.
 | Arquivo | Descrição |
 |---|---|
 | [`Core/Interfaces/IFrameworkOrchestratorService.cs`](../../src/AgenticSystem.Core/Interfaces/IFrameworkOrchestratorService.cs) | Interface com `ExecuteAsync(sessionId, input, context, ct)` → `AgentResponse` |
-| [`Infrastructure/AgentFramework/OrchestratorAgentBuilder.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorAgentBuilder.cs) | Constrói e cacheia o `ChatClientAgent` orquestrador com tool bindings dos especialistas |
-| [`Infrastructure/AgentFramework/FrameworkOrchestratorService.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs) | Implementação: monta orquestrador → sessão → RunAsync → extrai conteúdo → identifica agente |
+| [`Infrastructure/AgentFramework/OrchestratorContextFactory.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorContextFactory.cs) | Resolve o contexto ativo do runtime e compõe o `OrchestratorContext` com specialist bindings, tools auxiliares, instruções e `AIAgent` hospedado |
+| [`Infrastructure/AgentFramework/FrameworkOrchestratorService.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs) | Implementação: resolve agent hosted + session store keyed → `RunAsync` → extrai conteúdo → identifica agente → sincroniza evento de negócio |
 
 ### Arquivos Modificados
 
 | Arquivo | Mudança |
 |---|---|
 | [`Infrastructure/AgentFramework/AgentFrameworkFactory.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/AgentFrameworkFactory.cs) | Expôs `ChatClient`, `LoggerFactory`, `ServiceProvider` como propriedades `internal` |
-| [`Core/Services/AgentExecutionWorkflow.cs`](../../src/AgenticSystem.Core/Services/AgentExecutionWorkflow.cs) | Adicionou `IFrameworkOrchestratorService?` opcional; `ExecuteAsync` delega quando disponível |
-| [`Infrastructure/Extensions/ServiceCollectionExtensions.cs`](../../src/AgenticSystem.Infrastructure/Extensions/ServiceCollectionExtensions.cs) | Registra `OrchestratorAgentBuilder` + `IFrameworkOrchestratorService` no bloco `if (hasChatClient)` |
+| [`Core/Services/AgentExecutionWorkflow.cs`](../../src/AgenticSystem.Core/Services/AgentExecutionWorkflow.cs) | `ExecuteAsync` delega diretamente ao `IFrameworkOrchestratorService` no runtime atual |
+| [`Infrastructure/Extensions/ServiceCollectionExtensions.cs`](../../src/AgenticSystem.Infrastructure/Extensions/ServiceCollectionExtensions.cs) | Resolve `OrchestratorContext` direto do `OrchestratorContextFactory` e registra `IFrameworkOrchestratorService` no bloco `if (hasChatClient)` |
 
 ### Steps Detalhados
 
@@ -293,27 +296,24 @@ public interface IFrameworkOrchestratorService
 - Fica no Core para que o workflow (também no Core) possa referenciar
 - Retorna `AgentResponse` — mesma assinatura que `IAgent.ExecuteAsync`
 
-#### Step 2 — `OrchestratorAgentBuilder`
+#### Step 2 — `OrchestratorContextFactory`
 
 Responsável por:
 
-1. **Listar agentes ativos** via `IAgentFactory.GetAllAgentsAsync()`
-2. **Criar tool bindings** para cada especialista via `AgentFrameworkFactory.CreateToolBindingAsync(agent, sessionId, ct)`
-3. **Gerar system prompt dinâmico** descrevendo especialistas (nome, domínio, tier, descrição, tools)
-4. **Montar `ChatClientAgent`** com `AsBuilder().UseLogging().UseOpenTelemetry().Build()`
-5. **Cachear** o orquestrador (chave = hash dos nomes de agentes ativos), com `InvalidateCache()`
+1. **Ler o `sessionId` atual** do `ILLMRuntimeContextAccessor`
+2. **Listar agentes ativos** via `IAgentFactory.GetAllAgentsAsync()`
+3. **Criar tool bindings** dos especialistas por sessão
+4. **Gerar instruções dinâmicas** com base nos especialistas e tools auxiliares
+5. **Montar `ChatClientAgent`** hospedado e devolver `OrchestratorContext`
 
 ```
-OrchestratorAgentBuilder
-    ├─ GetOrCreateOrchestratorAsync(sessionId, ct)
-    │   ├─ _agentFactory.GetAllAgentsAsync() → AgentInfo[]
-    │   ├─ Para cada agente:
-    │   │   ├─ AnalysisResult mock → _agentFactory.GetOrCreateAgentAsync(analysis) → IAgent
-    │   │   ├─ Unwrap AgentFrameworkAdapter → IAgent inner
-    │   │   └─ _frameworkFactory.CreateToolBindingAsync(inner, sessionId, ct) → AgentToolBinding
-    │   ├─ Gera system prompt com lista de especialistas
-    │   └─ Cria ChatClientAgent com tools = bindings + AIFunctions
-    └─ InvalidateCache()
+OrchestratorContextFactory
+  ├─ _runtimeContextAccessor.Current.SessionId
+  ├─ _agentFactory.GetAllAgentsAsync() → AgentInfo[]
+  └─ CreateAsync(agents, sessionId, ct)
+     ├─ _toolBindingService.CreateSpecialistBindingsAsync(...)
+     ├─ _instructionService.GetInstructions(...)
+     └─ _hostedAgentFactory.Create(...)
 ```
 
 #### Step 3 — `FrameworkOrchestratorService`
@@ -323,14 +323,16 @@ Fluxo de execução:
 ```
 ExecuteAsync(sessionId, input, context, ct)
     │
-    ├─ builder.GetOrCreateOrchestratorAsync(sessionId, ct) → OrchestratorContext
-    ├─ bridge.GetOrCreateFrameworkSessionAsync(sessionId, "orchestrator") → AgentSession
+    ├─ scopedServices.GetRequiredService<OrchestratorContext>()
+    ├─ scopedServices.GetRequiredKeyedService<AIAgent>(_orchestratorMetadata.Name)
+    ├─ scopedServices.GetRequiredKeyedService<AgentSessionStore>(_orchestratorMetadata.Name)
+    ├─ sessionStore.GetSessionAsync(orchestrator, sessionId, ct) → AgentSession
     ├─ coordinator.PublishRuntimeEventAsync("AgentSelected", ...)
     ├─ orchestrator.RunAsync(input, session)  ← 2 args, SEM CancellationToken
     ├─ ExtractContent(response) → string
     ├─ IdentifyCalledAgent(response, bindings) → agentName?
-    ├─ bridge.PersistFrameworkSessionAsync(sessionId, "orchestrator", session)
-    └─ bridge.SyncResponseAsync(sessionId, agentName, content)
+    ├─ sessionStore.SaveSessionAsync(orchestrator, sessionId, session, ct)
+    └─ sessionManager.AddEventAsync(sessionId, agentEvent)
 ```
 
 **Pontos importantes:**
@@ -341,23 +343,21 @@ ExecuteAsync(sessionId, input, context, ct)
 #### Step 4 — Reduzir `AgentExecutionWorkflow.ExecuteAsync`
 
 ```csharp
-// Construtor: parâmetro opcional no final
+// Runtime atual: dependência obrigatória do orquestrador de framework
 public AgentExecutionWorkflow(
-    ... 19 dependências existentes ...,
-    IFrameworkOrchestratorService? frameworkOrchestrator = null)
+    IDirectAgentRequestExecutor directAgentRequestExecutor,
+    ISessionManager sessionManager,
+    IAgentRuntimeCoordinator runtimeCoordinator,
+    ILLMRuntimeContextAccessor llmRuntimeContextAccessor,
+    IFrameworkOrchestratorService frameworkOrchestrator,
+    ILogger<AgentExecutionWorkflow> logger)
 
-// ExecuteAsync: delegação no início
+// ExecuteAsync: casca fina sem fallback imperativo
 public async Task<AgentResponse> ExecuteAsync(...)
 {
-    // Mantém: BeginScope, LLM context
-    
-    if (_frameworkOrchestrator is not null)
-    {
-        _logger.LogDebug("Delegating to Framework Orchestrator");
-        return await _frameworkOrchestrator.ExecuteAsync(sessionId, input, context, ct);
-    }
-    
-    // Fallback: fluxo legado completo (11 steps inalterados)
+    using var llmScope = _llmRuntimeContextAccessor.BeginScope(context, sessionId);
+    _logger.LogDebug("Delegating to Framework Orchestrator");
+    return await _frameworkOrchestrator.ExecuteAsync(sessionId, input, context, ct);
 }
 ```
 
@@ -368,11 +368,12 @@ public async Task<AgentResponse> ExecuteAsync(...)
 Em `ServiceCollectionExtensions.cs`, dentro de `if (hasChatClient)`:
 
 ```csharp
-services.AddSingleton<OrchestratorAgentBuilder>();
+services.AddSingleton<OrchestratorContextFactory>();
+services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
 services.AddSingleton<IFrameworkOrchestratorService, FrameworkOrchestratorService>();
 ```
 
-Registros condicionais: se `IChatClient` não existir, `IFrameworkOrchestratorService` não é registrado → workflow usa fallback legado.
+O desenho original previa registro condicional. No runtime atual, `IFrameworkOrchestratorService` integra o caminho principal e `ExecuteAsync` já não mantém o caminho anterior.
 
 ### Decisões Fase 1
 
@@ -381,14 +382,14 @@ Registros condicionais: se `IChatClient` não existir, `IFrameworkOrchestratorSe
 | Orquestrador é `ChatClientAgent` com system prompt de coordenação | Padrão supervisor-with-tools documentado no MAF |
 | Especialistas expostos como `AIFunction` via `AsAIFunction()` | Base já existia em `CreateToolBindingAsync` |
 | `IAgentExecutionWorkflow` mantém interface | Zero impacto em consumidores externos |
-| Parâmetro opcional no construtor | Feature flag natural — sem `IFrameworkOrchestratorService`, usa legado |
+| Dependência obrigatória de `IFrameworkOrchestratorService` | O cutover do caminho principal foi concluído; o fallback não permanece no runtime atual |
 | `ExecuteDirectAsync` continua bypassando orquestrador | Preserva seleção direta de agente pelo frontend |
 
 ### Débito Técnico Fase 1
 
-> **Steps 2-3 usam construção manual do agente orquestrador.**
+> **Steps 2-3 ainda usam uma composição local do agente orquestrador.**
 > O MAF oferece `AddAIAgent()` + `IHostedAgentBuilder` como modelo de hosting nativo que resolve DI, session store, tools e middleware automaticamente.
-> A construção manual via `OrchestratorAgentBuilder` funciona e está comprovada, porém deve migrar para hosting nativo na **Fase 2** (Step 5b) para alinhar com a direção do framework.
+> A composição atual via `OrchestratorContextFactory` funciona e está comprovada, porém ainda é um arranjo local que pode encolher mais para alinhar com a direção do framework.
 >
 > ```csharp
 > // Fase 1 (atual — manual)
@@ -408,21 +409,21 @@ Registros condicionais: se `IChatClient` não existir, `IFrameworkOrchestratorSe
 
 ## 6. Fase 2 — Mover Cross-Cutting Concerns para o Framework
 
-> **Status: ✅ COMPLETA — compilando com 0 erros, 1 warning pré-existente (McpClientPlugin.cs)**
+> **Status: ✅ COMPLETA — compilando com 0 erros; warning local de `McpClientPlugin.cs` já resolvido**
 
 ### Objetivo
 
-RAG vira tool do framework + context provider automático. Handoff vira delegação nativa via tool binding. SmartRouter e ContextAnalyzer expostos como tools auxiliares. O workflow não monta mais `enrichedInput` nem decide handoff manualmente (path legado bypassado pelo early return do framework).
+RAG vira tool do framework + context provider automático. Handoff vira delegação nativa via tool binding. SmartRouter e ContextAnalyzer expostos como tools auxiliares. O workflow não monta mais `enrichedInput` nem decide handoff manualmente no caminho principal (o path anterior é bypassado pelo early return do framework).
 
 ### Decisões de Implementação vs. Plano Original
 
 | Aspecto | Plano Original | Implementação Real | Justificativa |
 |---|---|---|---|
-| **Step 5b** — `AddAIAgent()` hosting | Migrar para `AddAIAgent()` + `IHostedAgentBuilder` | **Disponível no MAF 1.4** — adotado hoje só na superfície de protocolo; fluxo principal segue com `OrchestratorAgentBuilder` | Débito local de migração do path principal, não limitação atual do framework |
+| **Step 5b** — `AddAIAgent()` hosting | Migrar para `AddAIAgent()` + `IHostedAgentBuilder` | **Disponível no MAF 1.4** — já adotado no fluxo principal e na superfície de protocolo; a resolução scoped já foi absorvida pelo `OrchestratorContextFactory` | Resta apenas enxugar a composição por sessão que ainda vive dentro do `OrchestratorContextFactory` |
 | **Step 6** — RAG | `ChatHistoryProvider` (primário) + `AIFunction` (complemento) | `MessageAIContextProvider` (primário) + `AIFunction` (complemento) | MAF 1.3.0 usa `MessageAIContextProvider` (não `ChatHistoryProvider`); pipeline: ChatHistoryProvider → AIContextProviders → IChatClient |
 | **Step 7** — Handoff | Simplificar `HandoffManager` | Delegação via tool bindings + instructions do orquestrador | Handoff agora é implícito — LLM decide qual tool/agente chamar |
-| **Step 8** — SmartRouter/ContextAnalyzer | Tools auxiliares | Implementado via `OrchestratorAuxiliaryTools` (fábrica estática) | `AIFunctionFactory.Create(Delegate, AIFunctionFactoryOptions)` — pattern validado |
-| **Step 9** — Remover `enrichedInput` | Remover do workflow | **Preservado** — path legado bypassado por early return quando framework ativo | Zero breaking change; código legado intacto para rollback |
+| **Step 8** — SmartRouter/ContextAnalyzer | Tools auxiliares | Implementado via `OrchestratorAuxiliaryToolService` + `OrchestratorAuxiliaryTools` | `AIFunctionFactory.Create(Delegate, AIFunctionFactoryOptions)` — pattern validado |
+| **Step 9** — Remover `enrichedInput` | Remover do workflow | **Concluído** — `AgentExecutionWorkflow.ExecuteAsync` virou casca fina sem montagem manual de input | O caminho principal delega direto ao framework; o path direto mantém pré-processamento próprio e compartilhado |
 
 ### Arquivos Criados
 
@@ -430,21 +431,22 @@ RAG vira tool do framework + context provider automático. Handoff vira delegaç
 |---|---|
 | [`Infrastructure/AgentFramework/RAGContextProvider.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/RAGContextProvider.cs) | `MessageAIContextProvider` que injeta contexto RAG automaticamente antes de cada LLM call; guard contra re-injeção em loops de tool-calling via marker `[Contexto Relevante da Base de Conhecimento]` |
 | [`Infrastructure/AgentFramework/OrchestratorAuxiliaryTools.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorAuxiliaryTools.cs) | Fábrica estática com 3 `AITool` auxiliares: `retrieve_context` (RAG on-demand), `route_to_best_agent` (SmartRouter), `analyze_request` (ContextAnalyzer); expõe `AllToolNames` para filtragem |
+| [`Infrastructure/AgentFramework/OrchestratorAuxiliaryToolService.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorAuxiliaryToolService.cs) | Materializa o catálogo estável de tools auxiliares do orquestrador e remove essa montagem do construtor do builder |
+| [`Core/Services/AgentExecutionPostProcessingPipeline.cs`](../../src/AgenticSystem.Core/Services/AgentExecutionPostProcessingPipeline.cs) | Novo pipeline compartilhado que centraliza reflection, confidence, final approval, persistência e agent memory para os fluxos direto e hosted |
 
 ### Arquivos Modificados
 
 | Arquivo | Mudança |
 |---|---|
-| [`Infrastructure/AgentFramework/OrchestratorAgentBuilder.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorAgentBuilder.cs) | Construtor recebe `IRAGService?`, `IContextBudgetManager?`, `ISmartRouter?`, `IContextAnalyzer?` (opcionais via DI); cria `RAGContextProvider` e auxiliary tools; merge auxiliary tools com specialist tools em `GetOrCreateOrchestratorAsync`; `UseAIContextProviders(_ragContextProvider)` no builder chain; `BuildOrchestratorInstructions` inclui seção de ferramentas auxiliares |
+| [`Infrastructure/AgentFramework/OrchestratorContextFactory.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorContextFactory.cs) | Resolve o `sessionId` do runtime context, lista agentes ativos e compõe o `OrchestratorContext` por sessão |
 | [`Infrastructure/AgentFramework/FrameworkOrchestratorService.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs) | `IdentifyCalledAgent` filtra `OrchestratorAuxiliaryTools.AllToolNames` antes de mapear specialist bindings — evita que tool calls auxiliares sejam interpretadas como delegação a especialista |
 
 ### Arquivos Inalterados (decisão consciente)
 
 | Arquivo | Motivo |
 |---|---|
-| `Infrastructure/Extensions/ServiceCollectionExtensions.cs` | Parâmetros opcionais com `= null` no construtor do `OrchestratorAgentBuilder` são resolvidos automaticamente pelo DI container (pattern validado em `AgentFrameworkFactory`) |
-| `Core/Services/AgentExecutionWorkflow.cs` | Path legado preservado intacto; framework path já bypassa via early return (linhas 83-86); `enrichedInput` mantido para rollback |
-| `Core/Services/HandoffManager.cs` | Não simplificado — mantido para rollback e métricas via `RecordHandoffAsync` |
+| `Infrastructure/Extensions/ServiceCollectionExtensions.cs` | O DI agora resolve `OrchestratorContext` direto do `OrchestratorContextFactory` e centraliza nome/descrição do orquestrador em `OrchestratorMetadata` |
+| `Core/Services/AgentExecutionWorkflow.cs` | O workflow principal já é casca fina e delega diretamente ao framework; `ExecuteDirectAsync` permanece como escape hatch explícito |
 
 ### Detalhes Técnicos da Implementação
 
@@ -482,38 +484,32 @@ route_to_best_agent(domain, intent) → ISmartRouter.RouteAsync → PrimaryAgent
 analyze_request(input)      → IContextAnalyzer.AnalyzeAsync → Domain/Intent/Complexity/Agent
 ```
 
-#### Builder Chain (OrchestratorAgentBuilder)
+#### Resolution Chain (OrchestratorContextFactory)
 
 ```csharp
-// Construção do orchestrator:
-var chatAgent = new ChatClientAgent(client, instructions, "Orchestrator", desc, allTools, loggerFactory, sp);
-var builder = chatAgent.AsBuilder();
+// OrchestratorContextFactory agora resolve a sessao ativa e o catalogo de agentes:
+var sessionId = _runtimeContextAccessor.Current?.SessionId;
+var agents = (await _agentFactory.GetAllAgentsAsync()).ToList();
 
-if (_ragContextProvider != null)
-    builder = builder.UseAIContextProviders(_ragContextProvider);  // ← NOVO em Fase 2
-
-return builder
-    .UseLogging(loggerFactory)
-    .UseOpenTelemetry("AgenticSystem.Orchestrator")
-    .Build(serviceProvider);
+// A composicao final do contexto hospedado por sessao continua concentrada no proprio factory:
+return await CreateAsync(agents, sessionId, ct);
 ```
 
 ### Débito Técnico Fase 2
 
 > **`AddAIAgent()` + `IHostedAgentBuilder` já estão disponíveis no MAF 1.4 e já são usados no protocolo A2A/AG-UI.**
-> A construção manual via `OrchestratorAgentBuilder` permanece apenas no fluxo principal.
-> A migração desse path para hosting nativo é, agora, dívida local implementável imediatamente.
+> A cadeia local do fluxo principal encolheu para o `OrchestratorContextFactory`.
+> A dívida remanescente é reduzir ainda mais essa composição por sessão, não mais migrar o hosting principal em si.
 >
-> **Path legado do `AgentExecutionWorkflow` preservado.**
-> O `enrichedInput`, `HandoffManager` e steps manuais continuam no código, mas nunca executam quando
-> `IFrameworkOrchestratorService` está registrado (early return na linha ~83).
-> Remoção do dead code planejada para Fase 3.
+> **`AgentExecutionWorkflow` já é casca fina no caminho principal.**
+> O legado imperativo de `ExecuteAsync` e o `HandoffManager` saíram do runtime.
+> A dívida restante ficou concentrada no builder local do orquestrador e nos middlewares nativos ainda indisponíveis no MAF.
 
 ---
 
 ## 7. Fase 3 — Remover Duplicidade Arquitetural
 
-> **Status: ✅ Completa**
+> **Status: 🟡 Parcial — collaboration migrado; hosting principal e sessão via framework já estão no runtime; permanecem em aberto apenas reflection/quality gates nativos, ainda indisponíveis no MAF**
 
 ### Notas de Implementação e Revalidação (MAF 1.4)
 
@@ -529,9 +525,9 @@ return builder
 | `UseQualityGates()` nativo | ❌ | Continua via extensões custom (`QualityGateDelegatingAgent` + `AgentBuilderMiddlewareExtensions`) |
 | `AgentWorkflowBuilder` | ✅ | Package presente e integrado no `AgentCollaborationWorkflow` via `BuildSequential` + `InProcessExecution` |
 | `BuildSequential` / `BuildConcurrent` | ✅ | `BuildSequential` já usado no workflow colaborativo; `BuildConcurrent` segue disponível para futuras etapas paralelas |
-| Session store de hosting (`WithInMemorySessionStore` / `WithSessionStore`) | ✅ | Não adotado no fluxo principal; `AgentSessionBridge` ainda persiste estado em `ISessionStore.RuntimeSettings` |
-| `AddAIAgent()` / `IHostedAgentBuilder` | ✅ | Já usado nos endpoints A2A/AG-UI; orquestrador principal segue manual |
-| `WithSessionStore(...)` | ✅ | Adapter local já implementado (`AgentFrameworkSessionStoreAdapter`); `AgentSessionBridge` ainda cobre paths legados e tool bindings |
+| Session store de hosting (`WithInMemorySessionStore` / `WithSessionStore`) | ✅ | Já adotado no fluxo principal via `AgentFrameworkSessionStoreAdapter`; o runtime já não depende mais de bridge dedicada |
+| `AddAIAgent()` / `IHostedAgentBuilder` | ✅ | Já usado no fluxo principal e nos endpoints A2A/AG-UI; a resolução scoped foi absorvida pelo `OrchestratorContextFactory`, restando apenas a composição local por sessão dentro dele |
+| `WithSessionStore(...)` | ✅ | Adapter local já implementado (`AgentFrameworkSessionStoreAdapter`) e já usado no fluxo principal e nos tool bindings |
 
 #### Arquivos Criados/Modificados
 
@@ -540,19 +536,16 @@ return builder
 | `Infrastructure/AgentFramework/ReflectionDelegatingAgent.cs` | **Criado** — `DelegatingAIAgent` que chama `IReflectionEngine.ReflectAsync` pós-resposta | 12 |
 | `Infrastructure/AgentFramework/QualityGateDelegatingAgent.cs` | **Criado** — `DelegatingAIAgent` com pre/post validation via `IQualityGateService` | 12 |
 | `Infrastructure/AgentFramework/AgentBuilderMiddlewareExtensions.cs` | **Criado** — `UseReflection()` e `UseQualityGates()` extension methods em `AIAgentBuilder` | 12 |
-| `Infrastructure/AgentFramework/AgentFrameworkAdapter.cs` | `ExecuteAsync` marcado `[Obsolete]` | 11 |
-| `Infrastructure/AgentFramework/OrchestratorAgentBuilder.cs` | Constructor aceita `IReflectionEngine?` e `IQualityGateService?`; pipeline: QualityGates → Reflection → Logging → OpenTelemetry | 7 |
+| `Infrastructure/AgentFramework/AgentFrameworkAdapter.cs` | `ExecuteAsync` mantido como executor explícito do path direto | 11 |
+| `Infrastructure/AgentFramework/OrchestratorContextFactory.cs` | Novo factory que compõe `OrchestratorContext` por sessão, incluindo bindings, instruções, tools auxiliares e hosted agent | 7 |
 | `Infrastructure/AgentFramework/AgentFrameworkSessionStoreAdapter.cs` | **Criado** — adapter local para `WithSessionStore(...)` do hosting nativo | 14 |
-| `Infrastructure/AgentFramework/AgentSessionBridge.cs` | Refatorado para usar `ISessionStore.RuntimeSettings` em vez de eventos falsos; fallback para eventos mantido | 14 |
-| `Infrastructure/AI/AgentCollaborationWorkflow.cs` | **Migrado** — planner/executor/reviewer agora executam via `AgentWorkflowBuilder.BuildSequential(...)` com fallback legado | 13 |
-| `Core/Services/HierarchicalAgentFactory.cs` | `GetOrCreateAgentAsync` e `ResolveAgentName` marcados `[Obsolete]` | 15 |
+| `Infrastructure/AI/AgentCollaborationWorkflow.cs` | **Migrado** — planner/executor/reviewer agora executam via `AgentWorkflowBuilder.BuildSequential(...)` com fallback transitório | 13 |
+| `Core/Services/HierarchicalAgentFactory.cs` | `ResolveAgentAsync` explicita resolução/materialização do agent; seleção deixou de ser responsabilidade do factory | 15 |
 
 #### Tech Debt Remanescente para Fase 4+
 
-1. **`AgentSessionBridge`** — adapter de hosting já existe, mas a bridge ainda permanece central nos paths legados e nos tool bindings.
-2. **`AgentFrameworkAdapter.ExecuteAsync`** — limpeza local; o unwrap no orquestrador já ficou explícito e sem reflection, mas o adapter ainda é decorador global do factory.
-3. **`HierarchicalAgentFactory.GetOrCreateAgentAsync`** — limpeza local; ainda existe por compatibilidade com fluxos legados.
-4. **Middleware nativo de reflection/quality gates** — este continua sendo bloqueio real do framework; por isso as extensões custom permanecem necessárias.
+1. **Composição manual remanescente do orquestrador** — o fluxo principal já resolve `OrchestratorContext` direto do `OrchestratorContextFactory`, mas ainda mantém nessa classe a montagem por sessão de specialist bindings, instruções e hosted agent.
+2. **Quality gates no builder continuam locais** — o framework ainda não expõe essas políticas nativamente como parte do hosting atual; reflection, confidence, final approval, persistência e agent memory já convergiram para o `IAgentExecutionPostProcessingPipeline` compartilhado.
 
 ### Objetivo
 
@@ -562,48 +555,45 @@ Eliminar caminhos paralelos. O framework é a autoridade de decisão. O `AgentEx
 
 #### Step 11 — Simplificar `AgentFrameworkAdapter`
 
-- Com o orquestrador no centro, `AgentFrameworkAdapter` perde o papel de wrapper de compatibilidade
+- `AgentExecutionWorkflow.ExecuteDirectAsync` agora delega para `IDirectAgentRequestExecutor`, mantendo o workflow como casca fina também no escape hatch direto
+- `IDirectAgentRequestExecutor` e `FrameworkOrchestratorService` agora convergem no `IAgentExecutionPostProcessingPipeline` para a fase final da execução
+- Com o orquestrador no centro, `AgentFrameworkAdapter` perde o papel de wrapper de transição geral
 - Especialistas são chamados diretamente como tool bindings — nunca como `IAgent.ExecuteAsync` pelo workflow
-- Mantido apenas para `ExecuteDirectAsync` (chamada direta ao agente nomeado)
+- Mantido apenas dentro do executor dedicado do `ExecuteDirectAsync` (chamada direta ao agente nomeado)
 - Marcar como `[Obsolete]` os caminhos que não passam pelo orquestrador
 
-#### Step 12 — Reflection e QualityGates via Middleware do Framework
+#### Step 12 — Pós-processamento compartilhado no Core
 
-O MAF oferece pipeline de middleware (`AsBuilder().Use*().Build()`) que já inclui extensões para reflection e quality gates. Em vez de chamar `ReflectionEngine` como pós-processamento manual no `FrameworkOrchestratorService`, utilizar middleware nativo:
+O pós-processamento final não fica mais espalhado entre `DirectAgentRequestExecutor` e variações do path hosted. A fronteira nova é o `IAgentExecutionPostProcessingPipeline`:
 
 ```csharp
-// Middleware nativo do MAF
-var orchestrator = new ChatClientAgent(chatClient, "orchestrator", options)
-    .AsBuilder()
-    .UseLogging()
-    .UseOpenTelemetry()
-    .UseReflection()          // ← avalia qualidade da resposta
-    .UseQualityGates()        // ← valida critérios mínimos antes de retornar
-    .Build();
+// Path direto
+response = await executableAgent.ExecuteAsync(enrichedInput, context);
+return await _postProcessingPipeline.ProcessAsync(contexto, ct);
 
-// Com AddAIAgent() (hosting nativo):
-agentBuilder
-    .UseReflection()
-    .UseQualityGates(gates => {
-        gates.MinConfidence = 0.7;
-        gates.RequireSourceCitation = true;
-    });
+// Path hosted
+frameworkResponse = await orchestrator.RunAsync(input, session);
+await sessionStore.SaveSessionAsync(orchestrator, sessionId, session, ct);
+return await _postProcessingPipeline.ProcessAsync(contexto, ct);
 ```
 
-| Componente | Antes (workflow/service) | Depois (middleware) |
-|---|---|---|
-| `ReflectionEngine.ReflectAsync` | Chamado manualmente pós-resposta no `FrameworkOrchestratorService` | `.UseReflection()` no pipeline do agent |
-| `CorrectionLoop.ApplyRulesToPromptAsync` | Altera `enrichedInput` no workflow | `.UseQualityGates()` no pipeline ou `ChatHistoryProvider` |
-| `CorrectionLoop.AddRuleAsync` | Chamado quando reflection gera suggestion | Mantido como está |
-| Quality gate check | Não existia | `.UseQualityGates()` valida resposta antes de retornar |
+| Responsabilidade | Dono atual |
+|---|---|
+| Reflection com `sessionId` de negócio | `AgentExecutionPostProcessingPipeline` |
+| `CorrectionLoop.AddRuleAsync` a partir da reflection | `AgentExecutionPostProcessingPipeline` |
+| Aplicação de correction rules antes da execução | `AgentExecutionPreProcessingPipeline` |
+| Confidence score | `AgentExecutionPostProcessingPipeline` |
+| Final approval | `AgentExecutionPostProcessingPipeline` |
+| Persistência de sessão de negócio + artifacts | `AgentExecutionPostProcessingPipeline` |
+| Agent memory | `AgentExecutionPostProcessingPipeline` |
+| Quality gate de request | `AgentExecutionPreProcessingPipeline` |
+| Quality gate de response | `AgentExecutionPostProcessingPipeline` quando habilitado pelo caller; middleware/chat client seguem como defesa em profundidade |
 
-**Vantagem:** middleware intercepta a resposta de forma transparente, sem acoplamento no service. O `FrameworkOrchestratorService` fica mais limpo.
-
-**CorrectionLoop como AIFunction (complemento):** `CorrectionLoop` pode ser exposta como `AIFunction` que o orquestrador chama para aplicar regras de correção antes de enviar ao especialista. Isso complementa (não substitui) o middleware.
+O `OrchestratorContextFactory` mantém AI context, quality gates, logging e OpenTelemetry na montagem do hosted orchestrator. A reflection final do fluxo principal deixou de depender do middleware específico do orquestrador hosted.
 
 #### Step 13 — Migrar `AgentCollaborationWorkflow` para `AgentWorkflowBuilder` ✅ Implementado
 
-O fluxo planner-executor-reviewer foi migrado incrementalmente. O projeto agora monta um `BuildSequential` com planner, executor e reviewer, executa o workflow via `InProcessExecution` e preserva um fallback legado quando `AgentFrameworkFactory` não está disponível. O MAF segue oferecendo `BuildSequential` e `BuildConcurrent` como mecanismos nativos de orquestração multi-agent:
+O fluxo planner-executor-reviewer foi migrado incrementalmente. O projeto agora monta um `BuildSequential` com planner, executor e reviewer, executa o workflow via `InProcessExecution` e preserva um fallback transitório quando `AgentFrameworkFactory` não está disponível. O MAF segue oferecendo `BuildSequential` e `BuildConcurrent` como mecanismos nativos de orquestração multi-agent:
 
 ```csharp
 // ANTES — Custom workflow
@@ -691,7 +681,7 @@ agentBuilder.WithSessionStore<PostgresSessionStore>();
 
 #### Step 15 — Remover `IAgentFactory` como cérebro de seleção
 
-- `IAgentFactory.GetOrCreateAgentAsync` perde o papel de "escolher agente baseado em analysis"
+- `IAgentFactory.ResolveAgentAsync` perde o papel de "escolher agente baseado em analysis"
 - Passa a ser apenas "criar agente dado nome/spec" — sem lógica de seleção
 - A seleção é feita pelo LLM do orquestrador via tool bindings
 - `HierarchicalAgentFactory` pode ser simplificado
@@ -704,9 +694,8 @@ agentBuilder.WithSessionStore<PostgresSessionStore>();
 | `Infrastructure/AgentFramework/ReflectionMiddleware.cs` | **Criar** — middleware wrapper para `ReflectionEngine` |
 | `Infrastructure/AgentFramework/QualityGateMiddleware.cs` | **Criar** — middleware de quality gates |
 | `Infrastructure/AgentFramework/AgentFrameworkSessionStoreAdapter.cs` | **Criado** — adapter local para `WithSessionStore(...)` do hosting nativo |
-| `Infrastructure/AI/AgentCollaborationWorkflow.cs` | ✅ Migrado para `AgentWorkflowBuilder` com fallback legado |
-| `Infrastructure/AgentFramework/AgentSessionBridge.cs` | Reduzir / eliminar após migração dos paths legados e tool bindings |
-| `Infrastructure/AgentFramework/AgentFrameworkAgentFactory.cs` | Reduzir acoplamento do decorator ao path direto |
+| `Infrastructure/AI/AgentCollaborationWorkflow.cs` | ✅ Migrado para `AgentWorkflowBuilder` com fallback transitório |
+| `Infrastructure/AgentFramework/AgentFrameworkAgentFactory.cs` | ✅ Restrito ao path direto via `IDirectAgentExecutionFactory` |
 | `Core/Services/CorrectionLoopService.cs` | Reposicionar como AIFunction complementar |
 
 ---
@@ -779,7 +768,7 @@ app.MapOpenAIChatCompletionServer();
 Step 1 — IFrameworkOrchestratorService interface
   │
   ▼
-Step 2 — OrchestratorAgentBuilder ◄── Step 3 — FrameworkOrchestratorService
+Step 2 — OrchestratorContextFactory ◄── Step 3 — FrameworkOrchestratorService
   │
   ▼
 Step 4 — Reduzir AgentExecutionWorkflow
@@ -874,7 +863,7 @@ Step 16 — Protocol Hosting (A2A, AG-UI, OpenAI-compatible)
 #### 5. Step 14 (Sessão) mantinha `AgentSessionBridge` simplificada
 
 - **Problema:** Bridge seria simplificada para forward-only, mas continuava existindo
-- **Correção:** Reclassificado: o MAF 1.4 já oferece session store de hosting via `WithSessionStore(...)`; falta integrar um adapter local para o store PostgreSQL e migrar o fluxo principal
+- **Correção:** Reclassificado: o MAF 1.4 já oferece session store de hosting via `WithSessionStore(...)`; o adapter local já está integrado no fluxo principal e o trabalho restante é drenar a bridge dos paths residuais
 - **Impacto:** a eliminação da bridge deixou de ser bloqueio do framework e virou backlog local de integração
 
 #### 6. Protocol hosting não existia no plano
@@ -916,8 +905,8 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 
 ### Recomendação Consolidada
 
-- **Implementar agora:** migrar o orquestrador principal para `AddAIAgent()` + `IHostedAgentBuilder`, introduzir um adapter para `WithSessionStore(...)` e reduzir/eliminar `AgentSessionBridge`.
-- **Implementar se houver ROI claro:** simplificar `AgentFrameworkAdapter` / `AgentFrameworkAgentFactory` para restringir o wrapper ao `ExecuteDirectAsync` e continuar drenando o legado.
+- **Implementar agora:** simplificar a composição manual que ainda existe sobre `AddAIAgent()` + `IHostedAgentBuilder` e cortar o código anterior já bypassado assim que cada slice estiver validado.
+- **Implementado no corte atual:** `AgentFrameworkAdapter` / `AgentFrameworkAgentFactory` ficaram restritos ao `ExecuteDirectAsync`, e o código transitório de sessão saiu do runtime.
 - **Manter como KEEP:** `FinalResponseApprovalService` e `SmartRouter`/`PersistentSmartRouter`, pois seguem em uso e agregam valor no desenho atual.
 - **Adiar por bloqueio real do framework:** substituição por middleware nativo de reflection/quality gates; hoje isso continua dependendo de extensões da aplicação.
 
@@ -934,7 +923,7 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 | 5 | Sessão do orquestrador cresce demais | Baixa | Médio | Context budget management; truncar histórico do orquestrador |
 | 6 | Reflection/CorrectionLoop perdem eficácia fora do workflow | Baixa | Baixo | Middleware nativo (`.UseReflection()`, `.UseQualityGates()`) na Fase 3 |
 | 7 | `ChatHistoryProvider` injeta contexto excessivo | Média | Médio | Implementar budget/relevance filter no provider; monitorar token usage |
-| 8 | Migração `AddAIAgent()` quebra construção manual existente | Baixa | Alto | Step 5b é opt-in; construção manual funciona como fallback durante migração |
+| 8 | Migração `AddAIAgent()` quebra construção manual existente | Baixa | Alto | Step 5b deve conviver por pouco tempo com a construção manual; validar por slice e cortar o builder manual em seguida |
 | 9 | `ISessionStore` PostgreSQL performance com sessões grandes | Baixa | Médio | Serialização compacta; TTL para sessões inativas; índice por `sessionId` |
 | 10 | Protocol hosting (A2A) expõe superfície de ataque | Média | Alto | Autenticação obrigatória em endpoints de protocolo; rate limiting; audit logging |
 
@@ -944,36 +933,36 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 
 ### Fase 1 ✅
 
-- [x] `AgentExecutionWorkflow.ExecuteAsync` não chama mais `_contextAnalyzer.AnalyzeAsync` nem `_agentFactory.GetOrCreateAgentAsync` diretamente (quando orquestrador disponível)
+- [x] `AgentExecutionWorkflow.ExecuteAsync` não chama mais `_contextAnalyzer.AnalyzeAsync` nem `_agentFactory.ResolveAgentAsync` diretamente (quando orquestrador disponível)
 - [x] Toda requisição passa por `IFrameworkOrchestratorService.ExecuteAsync`
-- [x] Feature flag permite rollback para caminho legado
+- [x] `ExecuteAsync` do runtime principal já não mantém fallback imperativo para o caminho anterior
 - [x] `ExecuteDirectAsync` inalterado
 - [x] Build compila sem erros
 
 ### Fase 2
 
-- [ ] Não existe mais `enrichedInput` montado manualmente no workflow
-- [ ] `ChatHistoryProvider` injeta contexto RAG automaticamente antes de cada request
-- [ ] `AIFunction` RAG disponível como complemento para buscas ad-hoc
-- [ ] Handoff acontece por tool binding, não por `HandoffManager.ExecuteHandoffAsync` chamado pelo workflow
-- [ ] SmartRouter e ContextAnalyzer disponíveis como tools auxiliares
-- [ ] Orquestrador registrado via `AddAIAgent()` (hosting nativo, Step 5b)
-- [ ] Tests existentes continuam passando
+- [x] Não existe mais `enrichedInput` montado manualmente no workflow
+- [x] `MessageAIContextProvider` injeta contexto RAG automaticamente antes de cada request
+- [x] `AIFunction` RAG disponível como complemento para buscas ad-hoc
+- [x] Handoff acontece por tool binding; o `HandoffManager` legado foi removido do runtime
+- [x] SmartRouter e ContextAnalyzer disponíveis como tools auxiliares
+- [x] Orquestrador registrado via `AddAIAgent()` (hosting nativo, Step 5b), ainda com composição local via `OrchestratorContextFactory`
+- [x] Tests existentes continuam passando
 
-> **Revalidação 2026-05:** o item de hosting nativo do orquestrador principal não está mais bloqueado pelo MAF 1.4; permanece como dívida local de migração do fluxo principal.
+> **Revalidação 2026-05:** o item de hosting nativo do orquestrador principal não está mais bloqueado pelo MAF 1.4 e já está no runtime; a dívida local remanescente ficou restrita à composição por sessão do orquestrador.
 
 ### Fase 3
 
-- [ ] O workflow não escolhe mais agente
-- [ ] A sessão principal de conversa é a do framework via `ISessionStore` (`PostgresSessionStore`)
-- [ ] `AgentSessionBridge` eliminada
-- [ ] Especialistas são chamados pelo framework, não pelo workflow
+- [x] O workflow não escolhe mais agente
+- [x] A sessão principal de conversa é a do framework via `ISessionStore` (`PostgresSessionStore` quando configurado), usando `AgentFrameworkSessionStoreAdapter` no hosting nativo
+- [x] `AgentSessionBridge` eliminada do runtime
+- [x] Especialistas são chamados pelo framework no caminho principal; `ExecuteDirectAsync` permanece como escape hatch explícito
 - [ ] Reflection via middleware nativo (`.UseReflection()`)
 - [ ] Quality gates via middleware nativo (`.UseQualityGates()`)
 - [x] `AgentCollaborationWorkflow` migrado para `AgentWorkflowBuilder.BuildSequential`
-- [ ] `AgentFrameworkAdapter` é usado apenas para `ExecuteDirectAsync`
+- [x] `AgentFrameworkAdapter` é usado apenas para `ExecuteDirectAsync`
 
-> **Revalidação 2026-05:** `AgentWorkflowBuilder` e `WithSessionStore(...)` existem no MAF 1.4. Os itens ainda pendentes desta fase são majoritariamente backlog local; a exceção real de framework continua sendo a ausência de `UseReflection()` / `UseQualityGates()` nativos.
+> **Revalidação 2026-05:** `AgentWorkflowBuilder` e `WithSessionStore(...)` existem no MAF 1.4 e já estão no runtime principal. Os únicos itens realmente abertos desta fase são `UseReflection()` / `UseQualityGates()` nativos, ainda ausentes no framework.
 
 ### Fase 4
 
@@ -981,7 +970,7 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 - [x] AG-UI endpoints ativos para frontend — `AddAGUI()` + `MapAGUI("/agui")` via `Microsoft.Agents.AI.Hosting.AGUI.AspNetCore` 1.4.0-preview
 - [x] OpenAI-compatible endpoints para interoperabilidade — `POST /v1/chat/completions` + `GET /v1/models`
 - [x] Autenticação em endpoints de protocolo — Bearer token validado contra `AdminApiKey` + `.RequireAuthorization()` em A2A/AG-UI
-- [ ] Rate limiting em endpoints de protocolo
+- [x] Rate limiting em endpoints de protocolo — policy `ProtocolEndpoints` aplicada em A2A, AG-UI e OpenAI-compatible
 - [ ] Tests de integração para cada protocolo
 - [x] ✅ Agent do protocolo integrado com orquestrador completo via `ProtocolOrchestratorChatClient` (Finding 11 resolvido)
 - [x] MAF atualizado para 1.4.0 + Workflows package adicionado
@@ -990,7 +979,7 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 - [x] Target framework .NET 10 (net10.0)
 - [x] Build compila sem erros
 
-> **Pendências locais desta fase:** rate limiting dos endpoints de protocolo e testes de integração. Nenhuma dessas pendências depende de limitação atual do MAF.
+> **Pendências locais desta fase:** testes de integração dos endpoints de protocolo. Nenhuma dessas pendências depende de limitação atual do MAF.
 
 ---
 
@@ -998,17 +987,17 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 
 | Decisão | Detalhes |
 |---|---|
-| **Feature flag para rollback** | Fases 1 e 2 têm fallback para caminho legado (`if orchestratorService is null, use old workflow`) |
+| **Feature flag para cutover seguro** | Foi usada apenas durante a transição. O runtime principal atual exige `IFrameworkOrchestratorService` e não mantém mais o caminho anterior em `ExecuteAsync` |
 | **Escopo excluído** | Autenticação, controllers, telemetria cross-cutting, persistência EF — continuam fora do framework |
 | **Interface pública inalterada** | `IAgentExecutionWorkflow` não muda — consumidores (controllers, hubs) não são afetados |
 | **Testes devem continuar passando** | Behavior externo não muda em cada fase; apenas orquestração interna |
 | **`ExecuteDirectAsync` preservado** | Escape hatch para seleção manual de agente pelo frontend |
-| **Supervisor-with-tools para Fases 1-2** | Padrão documentado no MAF; simples de implementar e rollback |
-| **`AddAIAgent()` como target de hosting** | Disponível no MAF 1.4 e já usado no protocolo; migração do orquestrador principal permanece como dívida local |
+| **Supervisor-with-tools para Fases 1-2** | Padrão documentado no MAF; simples de implementar e reverter internamente durante o desenvolvimento |
+| **`AddAIAgent()` como target de hosting** | Disponível no MAF 1.4 e já usado no protocolo e no fluxo principal; a dívida local remanescente é só a composição por sessão no `OrchestratorContextFactory` |
 | **`ChatHistoryProvider` para RAG** | Injeção automática e determinística de contexto; AIFunction como complemento |
 | **Middleware de reflection/quality gates** | Hoje continua custom sobre o builder; o MAF 1.4 não expõe `.UseReflection()` / `.UseQualityGates()` nativos |
 | **`AgentWorkflowBuilder` para collaboration** | Disponível no MAF 1.4 e já integrado ao fluxo planner-executor-reviewer |
-| **Session store de hosting** | `WithSessionStore(...)` existe no MAF 1.4; o projeto ainda usa `AgentSessionBridge` + store da aplicação |
+| **Session store de hosting** | `WithSessionStore(...)` existe no MAF 1.4; o projeto já usa `AgentFrameworkSessionStoreAdapter` + store da aplicação |
 | **Protocol hosting na Fase 4** | A2A, AG-UI, OpenAI-compatible para interoperabilidade externa |
 
 ---
@@ -1019,23 +1008,23 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 > **Status:** ✅ Revalidação completa — 9 de 11 findings resolvidos  
 > **Análise anterior:** 2026-05-05 (Pós-Fase 1) — 10 findings originais
 >
-> ✅ **Findings 1, 3, 4, 5 (parcial), 8, 9, 10, 11 resolvidos.** Finding 2 (AgentSessionBridge) e Findings 6-7 (FinalResponseApprovalService, SmartRouter) mantidos como ativamente usados.
+> ✅ **Findings 1, 2, 3, 4, 5 (parcial), 8, 9, 10, 11 resolvidos.** Findings 6-7 (FinalResponseApprovalService, SmartRouter) mantidos como ativamente usados.
 
 ### Resumo Executivo
 
 | # | Item | Tipo | Severidade | Status | Resolvido por |
 |---|------|------|:----------:|:------:|:------------:|
 | 1 | `EfSessionStore` + `UseEntityFramework()` | Dead code | 🔴 Alta | ✅ Resolvido | Remoção direta — `EfSessionStore.cs`, `UseEntityFramework()` e `EfSessionStoreTests.cs` deletados |
-| 2 | `AgentSessionBridge` vs `ISessionStore` | Duplicidade ativa | 🟡 Média | ⬜ Pendente | Fase 3 — eliminar bridge (SKIP: muito central, usado em 6+ arquivos) |
-| 3 | `ContextAnalyzer`, `SmartRouter`, `HandoffManager` (legado) | Dead code com framework ativo | 🔴 Alta | ✅ Resolvido | Dependências legadas removidas do `AgentExecutionWorkflow`; `ExecuteAsync` delega diretamente ao framework |
+| 2 | `AgentSessionBridge` vs `ISessionStore` | Duplicidade ativa | 🟡 Média | ✅ Resolvido | Runtime migrado para `AgentFrameworkSessionStoreAdapter`; bridge removida |
+| 3 | `ContextAnalyzer`, `SmartRouter`, `HandoffManager` (caminho anterior) | Dead code com framework ativo | 🔴 Alta | ✅ Resolvido | Dependências do caminho anterior removidas do `AgentExecutionWorkflow`; `ExecuteAsync` delega diretamente ao framework e o `HandoffManager` legado foi deletado |
 | 4 | Integration Providers (Calendar, Email, Notes, Storage, Vision) | Dead code — nunca injetados | 🔴 Alta | ✅ Resolvido | Remoção completa — 5 providers + interfaces + models + config + testes deletados |
-| 5 | `ILLMManager` paralelo a `IChatClient` | Duplicidade de abstração LLM | 🟠 Média-Alta ⬆️ | ✅ Parcial | `ContextAnalyzer` e `SessionConsolidator` migrados para `IChatClient`; `ILLMManager` mantido em `BaseAgent` e `LLMController` |
-| 6 | `FinalResponseApprovalService` | Dead code com framework ativo | 🟠 Média-Alta | ⬜ Pendente | KEEP — ativamente usado no `AgentController` e `AgentExecutionWorkflow` |
+| 5 | `ILLMManager` paralelo a `IChatClient` | Duplicidade de abstração LLM | 🟢 Baixa ⬇️ | ✅ Resolvido | Runtime migrou para `IChatClient`; a superfície administrativa foi separada em `ILLMAdministrationService`, consumida pelo `LLMController` |
+| 6 | `FinalResponseApprovalService` | Dead code com framework ativo | 🟠 Média-Alta | ⬜ Pendente | KEEP — ativamente usado no `AgentController` e no `AgentExecutionPostProcessingPipeline` |
 | 7 | `PersistentSmartRouter` + `SmartRouter` | Dead code com framework ativo | 🟠 Média-Alta | ⬜ Pendente | KEEP — ambos ativamente usados no pipeline de roteamento |
 | 8 | `InMemory*` stores sem equivalente PostgreSQL | Gap de persistência | 🟡 Média | ✅ Resolvido | `PostgresMigrationJobStore` e `PostgresEmbeddingModelStore` criados + migração SQL V002 + registro em `UseLocalExecutionStorageMode()` |
 | 9 | `IRuntimeEvaluator` null em dev | Gap de ambiente | 🟢 Baixa ⬇️ | ✅ Resolvido | `InMemoryRuntimeEvaluator` criado + registro incondicional em `AddAgenticSystemCore()` |
 | 10 | `InMemorySkillManager` / `InMemoryToolManager` | Sem persistência | 🟡 Média | ✅ Resolvido (análise) | InMemory É o design correto — runtime services re-seeded via `SeedAgenticDefaults()` |
-| **11** | **`AddAIAgent` vs `OrchestratorAgentBuilder`** | **Duplicidade funcional** | **🟠 Média-Alta** | **✅ Resolvido** | **`ProtocolOrchestratorChatClient` integra protocol agent com orquestrador** |
+| **11** | **`AddAIAgent` vs composição local do orquestrador** | **Duplicidade funcional** | **🟠 Média-Alta** | **✅ Resolvido** | **`ProtocolOrchestratorChatClient` integra protocol agent com orquestrador** |
 
 ### Classificação Atual — Bloqueio Real do MAF vs Dívida Local
 
@@ -1044,26 +1033,26 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 | Item | Classificação | Evidência / motivo | Situação atual |
 |---|---|---|---|
 | `UseReflection()` / `UseQualityGates()` nativos | **Bloqueio real do MAF** | APIs nativas não aparecem no MAF 1.4 instalado | Continuar com extensões custom da aplicação |
-| Hosting principal via `AddAIAgent()` + `IHostedAgentBuilder` | **Dívida local implementável agora** | APIs existem e `AddAIAgent()` já é usado no protocolo A2A/AG-UI | Orquestrador principal ainda usa `OrchestratorAgentBuilder` |
+| Hosting principal via `AddAIAgent()` + `IHostedAgentBuilder` | **✅ Resolvido no runtime** | APIs existem e já estão no fluxo principal | A resolução scoped foi absorvida pelo `OrchestratorContextFactory`; resta apenas enxugar a composição por sessão dentro dele |
 | `AgentWorkflowBuilder` / `BuildSequential` | **✅ Resolvido** | Package 1.4 instalado com APIs documentadas | `AgentCollaborationWorkflow` já usa `BuildSequential` no path principal |
-| Session store de hosting via `WithSessionStore(...)` | **Dívida local implementável agora** | Capability existe no MAF 1.4 | Fluxo principal ainda usa `AgentSessionBridge` + `ISessionStore.RuntimeSettings` |
-| `AgentFrameworkAdapter.ExecuteAsync` / `HierarchicalAgentFactory` obsolete paths | **Dívida local implementável agora** | Código já está marcado obsolete | Remoção depende de auditoria e corte do legado |
-| Migração remanescente de `ILLMManager` | **Dívida local implementável agora** | Não depende de nova API do MAF | Ainda há consumidores em `BaseAgent`, `LLMController`, `DynamicAgentService` e factory |
-| `FinalResponseApprovalService` | **KEEP** | Continua em uso no controller e no path legado do workflow | Não remover agora |
-| `SmartRouter` / `PersistentSmartRouter` | **KEEP** | Continua em uso como tool auxiliar do orquestrador | Não remover agora |
+| Session store de hosting via `WithSessionStore(...)` | **✅ Resolvido** | Capability existe no MAF 1.4 e já está no fluxo principal | `AgentFrameworkSessionStoreAdapter` atende fluxo principal e tool bindings |
+| `AgentFrameworkAdapter.ExecuteAsync` / `HierarchicalAgentFactory` obsolete paths | **✅ Resolvido** | O adapter ficou explícito no direct path e o factory passou a expor `ResolveAgentAsync` | Os caminhos obsoletos foram removidos do runtime |
+| Superfície administrativa do LLM | **✅ Resolvido** | Não dependia de nova API do MAF | `LLMController` agora consome `ILLMAdministrationService`; o contrato público `ILLMManager` foi removido |
+| `FinalResponseApprovalService` | **KEEP** | Continua em uso no controller e no `AgentExecutionPostProcessingPipeline` compartilhado | Manter enquanto o fluxo de aprovação humana continuar válido |
+| `SmartRouter` / `PersistentSmartRouter` | **KEEP** | Continua em uso como tool auxiliar do orquestrador | Manter enquanto continuar agregando valor no roteamento e nas métricas |
 | Rate limiting e testes de integração de protocolo | **Backlog local** | Checklist da Fase 4 ainda aberto | Não depende do MAF |
 
 ### Tech Debts já Implementáveis com o MAF 1.4 Atual
 
-1. **Migrar o orquestrador principal para hosting nativo** com `AddAIAgent()` + `IHostedAgentBuilder`, reduzindo a necessidade de construção manual em `OrchestratorAgentBuilder`.
-2. **Introduzir session store de hosting** via `WithSessionStore(...)`, criando um adapter local para o store PostgreSQL e reduzindo ou eliminando `AgentSessionBridge`.
-3. **Remover caminhos obsolete** de `AgentFrameworkAdapter.ExecuteAsync` e `HierarchicalAgentFactory.GetOrCreateAgentAsync` após isolar o wrapper no `ExecuteDirectAsync`.
-4. **Remover caminhos obsolete** de `AgentFrameworkAdapter.ExecuteAsync` e `HierarchicalAgentFactory.GetOrCreateAgentAsync` após a migração do fluxo principal.
+1. **Continuar enxugando a composição por sessão do orquestrador**, hoje concentrada no `OrchestratorContextFactory`.
+2. **Manter o hosting principal em `AddAIAgent()`**, agora já revalidado no runtime, e evitar recriar uma cadeia paralela de resolução scoped.
+3. **Manter `LLMManager` como detalhe concreto de infraestrutura**; a antiga interface pública de runtime já foi removida.
+4. **Apagar código anterior já bypassado** no `AgentExecutionWorkflow` e nas integrações associadas assim que cada fatia estiver revalidada.
 
 ### Recomendação Objetiva
 
-1. **Vale implementar agora:** hosting nativo do orquestrador principal, session store de hosting e backlog de protocolo (rate limiting + testes).
-2. **Vale implementar agora se houver ROI claro:** simplificação do `AgentFrameworkAdapter` / `AgentFrameworkAgentFactory` e redução adicional do legado de sessão.
+1. **Vale implementar agora:** enxugar a composição por sessão do orquestrador, backlog de protocolo (rate limiting + testes) e qualquer limpeza documental residual do legado já removido.
+2. **Já implementado:** `AgentFrameworkAdapter` / `AgentFrameworkAgentFactory` ficaram explícitos no `ExecuteDirectAsync`, e o código transitório de sessão saiu do runtime.
 3. **Deve continuar como KEEP:** `FinalResponseApprovalService` e `SmartRouter`/`PersistentSmartRouter`.
 4. **Deve continuar como workaround local:** reflection e quality gates, até o MAF oferecer middleware nativo para isso.
 
@@ -1077,15 +1066,15 @@ Doc oficial: *"Sessions are agent/service-specific. Reusing a session with a dif
 
 #### Finding 2 — 🟡 `AgentSessionBridge` vs `ISessionStore`
 
-**Status atual: ⬜ PENDENTE (SKIP por enquanto)**
+**Status atual: ✅ RESOLVIDO**
 
-O bridge continua ativo e central em múltiplos componentes. A eliminação dele não está bloqueada pelo MAF 1.4, mas exige migração local para session store de hosting e ajuste cuidadoso do fluxo principal.
+O runtime passou a usar apenas `AgentFrameworkSessionStoreAdapter`. `AgentSessionBridge` foi removida depois que o fluxo principal, tool bindings e o path direto deixaram de depender dela.
 
-#### Finding 3 — 🔴 Serviços legados bypassed pelo framework
+#### Finding 3 — 🔴 Serviços do caminho anterior bypassed pelo framework
 
 **Status atual: ✅ RESOLVIDO**
 
-`AgentExecutionWorkflow.ExecuteAsync()` delega diretamente ao framework. A simplificação principal foi concluída; o restante do legado ficou apenas como compatibilidade e rollback.
+`AgentExecutionWorkflow.ExecuteAsync()` delega diretamente ao framework. O `HandoffManager`, sua interface pública e seus testes foram removidos do runtime; o restante da dívida local está concentrado na composição hosted do orquestrador, não mais no fluxo imperativo antigo.
 
 #### Finding 4 — 🔴 Integration Providers sem consumidores
 
@@ -1095,15 +1084,15 @@ Os providers de Calendar, Email, Storage, Notes e Vision foram removidos junto d
 
 #### Finding 5 — 🟠 `ILLMManager` vs `IChatClient`
 
-**Status atual: ✅ PARCIAL**
+**Status atual: ✅ RESOLVIDO**
 
-`ContextAnalyzer` e `SessionConsolidator` já migraram para `IChatClient`. A dívida remanescente está concentrada em `BaseAgent`, `LLMController`, `DynamicAgentService` e factorys legadas.
+`ContextAnalyzer`, `SessionConsolidator`, `BaseAgent`, `DynamicAgentService` e `HierarchicalAgentFactory` já migraram para `IChatClient`. O `LLMController` agora consome `ILLMAdministrationService`, e o contrato público `ILLMManager` foi removido do código.
 
 #### Finding 6 — 🟠 `FinalResponseApprovalService`
 
 **Status atual: KEEP**
 
-Não é dead code. Continua em uso no `AgentController` e ainda participa do path legado do workflow. Não há motivo objetivo para remover agora.
+Não é dead code. Continua em uso no `AgentController`. Quando o path anterior do workflow for cortado, a ligação restante deve ficar limitada ao uso real de controller.
 
 #### Finding 7 — 🟠 `PersistentSmartRouter` + `SmartRouter`
 
@@ -1142,7 +1131,7 @@ A2A/AG-UI request
   → MAF ChatClientAgent (AddAIAgent)
     → ProtocolOrchestratorChatClient (keyed IChatClient: "protocol-orchestrator")
       → IFrameworkOrchestratorService.ExecuteAsync
-        → OrchestratorAgentBuilder (tools, RAG, specialists, middleware)
+        → OrchestratorContextFactory (tools, RAG, specialists, middleware)
           → Resposta com capacidades completas
 ```
 
@@ -1163,9 +1152,10 @@ Fase 2 — Mover Cross-Cutting Concerns
 
 Fase 3 — Remover Duplicidade Arquitetural
 ├─ Finding 1: EfSessionStore → ✅ REMOVIDO
-├─ Finding 2: AgentSessionBridge → reduzir/eliminar via `WithSessionStore(...)` + adapter local
-├─ Finding 3: HandoffManager, ConfidenceScoreCalculator → remover apenas quando o legado for desligado
-├─ Finding 5: consumidores remanescentes de ILLMManager → migrar para IChatClient
+├─ Finding 2: AgentSessionBridge → ✅ resolvido via `WithSessionStore(...)` + `AgentFrameworkSessionStoreAdapter`
+├─ Finding 3: HandoffManager → ✅ removido do runtime e dos testes
+├─ ConfidenceScoreCalculator → KEEP no `AgentExecutionPostProcessingPipeline`
+├─ Finding 5: runtime migrado para IChatClient + superfície administrativa separada em ILLMAdministrationService
 ├─ Finding 8: InMemoryMigrationJobStore, InMemoryEmbeddingModelStore → ✅ PostgreSQL criado
 ├─ Finding 9: IRuntimeEvaluator → ✅ registro incondicional
 └─ Finding 10: InMemorySkillManager, InMemoryToolManager → ✅ sem ação (design validado)
@@ -1181,7 +1171,10 @@ Manual (qualquer momento):
 
 > ✅ **Revalidação Fase 4 concluída** (2026-05-05) — 10 findings originais revalidados, 1 novo finding identificado
 > ✅ **Resolução em lote** (2026-05-06) — Findings 1, 3, 4, 5 (parcial), 8, 9, 10 resolvidos. 12 arquivos deletados, 5 criados.
-> 🔲 **Pendentes:** Finding 2 (AgentSessionBridge — SKIP), Findings 6-7 (KEEP — ativamente usados)
+> ✅ **Revalidação de suíte** (2026-05-06) — 553 de 553 testes passando após remoção do `HandoffManager` legado e correções do slice final da suíte.
+> ✅ **Simplificação local do hosting principal** (2026-05-06) — `OrchestratorContextResolver` foi absorvido pelo `OrchestratorContextFactory`; o DI agora resolve `OrchestratorContext` direto do factory.
+> ✅ **Rate limiting de protocolo** (2026-05-06) — policy `ProtocolEndpoints` aplicada em A2A, AG-UI e OpenAI-compatible com configuração em `ProtocolHosting:RateLimiting`.
+> 🔲 **Pendentes:** Findings 6-7 (KEEP — ativamente usados)
 > ✅ **Fase 4b concluída** (Finding 11 resolvido) — `ProtocolOrchestratorChatClient` integra protocol agent com orquestrador completo
 
 ---
@@ -1196,4 +1189,7 @@ Manual (qualquer momento):
 | 2026-05-05 | Fase 4b | Finding 11 resolvido — `ProtocolOrchestratorChatClient` criado, keyed registration `"protocol-orchestrator"`, `AddAIAgent` usa pipeline completo via `IFrameworkOrchestratorService` |
 | 2026-05-06 | Seção 14 | Resolução em lote dos findings: F1 (EfSessionStore removido), F3 (workflow simplificado), F4 (providers removidos), F5 parcial (ContextAnalyzer/SessionConsolidator → IChatClient), F8 (PostgresMigrationJobStore/PostgresEmbeddingModelStore criados + V002 SQL), F9 (InMemoryRuntimeEvaluator), F10 (validado como design correto). 12 arquivos deletados, 5 criados, 8+ modificados. Build: 0 errors. |
 | 2026-05-06 | Seções 10, 12 e 14 | Revalidação contra MAF 1.4: separação explícita entre bloqueio real do framework e dívida local; lista de tech debts já implementáveis; recomendação objetiva do que vale fazer agora e do que deve permanecer como KEEP. |
-| 2026-05-06 | Fase 3 | `AgentCollaborationWorkflow` migrado para `AgentWorkflowBuilder.BuildSequential` com execução via `InProcessExecution`; `OrchestratorAgentBuilder` deixou de usar reflection para desembrulhar `AgentFrameworkAdapter`. |
+| 2026-05-06 | Fase 3 | `AgentCollaborationWorkflow` migrado para `AgentWorkflowBuilder.BuildSequential` com execução via `InProcessExecution`; o path hosted do orquestrador deixou de depender de reflection para desembrulhar `AgentFrameworkAdapter`. |
+| 2026-05-06 | Fase 3 | `HandoffManager` legado removido do runtime e dos testes; `AgentExecutionWorkflow` segue fino, a suíte completa ficou verde (553/553), e o legado remanescente ficou concentrado na composição local do orquestrador hosted. |
+| 2026-05-06 | Fase 3 | `OrchestratorContextResolver` foi removido; a resolução scoped do `OrchestratorContext` ficou concentrada no `OrchestratorContextFactory`, e os checks da Fase 3 foram atualizados para manter em aberto apenas os middlewares nativos ainda ausentes no MAF. |
+| 2026-05-06 | Fases 3 e 4 | `OrchestratorHostedAgentFactory` foi absorvido pelo `OrchestratorContextFactory`, e os endpoints de protocolo passaram a usar rate limiting nativo (`ProtocolEndpoints`) em A2A, AG-UI e OpenAI-compatible. |

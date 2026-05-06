@@ -68,7 +68,7 @@ public class InMemoryTenantStoreTests
         await _store.SaveAsync(t2);
 
         var all = await _store.GetAllAsync();
-        all.Should().HaveCountGreaterOrEqualTo(3); // default + t1 + t2
+        all.Should().HaveCountGreaterThanOrEqualTo(3); // default + t1 + t2
     }
 
     [Fact]

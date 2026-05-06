@@ -70,7 +70,7 @@ public class AgentCollaborationWorkflowTests
             });
 
         var agentFactory = Substitute.For<IAgentFactory>();
-        agentFactory.GetOrCreateAgentAsync(Arg.Any<AnalysisResult>())
+        agentFactory.ResolveAgentAsync(Arg.Any<AnalysisResult>())
             .Returns(callInfo =>
             {
                 var analysis = callInfo.Arg<AnalysisResult>();

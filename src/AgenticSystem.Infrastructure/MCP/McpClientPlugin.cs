@@ -93,9 +93,12 @@ public class McpClientPlugin : IMCPPlugin, IAsyncDisposable
         {
             _logger.LogDebug("Executing tool '{Tool}' on plugin '{Plugin}'", toolName, Name);
 
+            IReadOnlyDictionary<string, object?> arguments = parameters
+                .ToDictionary(static pair => pair.Key, static pair => (object?)pair.Value);
+
             var result = await _client.CallToolAsync(
                 toolName,
-                parameters as IReadOnlyDictionary<string, object> ?? new Dictionary<string, object>(parameters),
+                arguments,
                 cancellationToken: ct);
 
             var content = result.Content

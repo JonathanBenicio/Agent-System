@@ -7,8 +7,8 @@ using FrameworkAgentResponse = Microsoft.Agents.AI.AgentResponse;
 namespace AgenticSystem.Infrastructure.AgentFramework;
 
 /// <summary>
-/// Middleware do Agent Framework que executa quality gates pré e pós-execução.
-/// Intercepta RunCoreAsync para validar input (pre) e output (post) via IQualityGateService.
+/// Middleware do Agent Framework que executa quality gate de resposta.
+/// Intercepta RunCoreAsync para validar output (post) via IQualityGateService.
 /// Registrado no pipeline via .UseQualityGates() extension method.
 /// </summary>
 public class QualityGateDelegatingAgent : DelegatingAIAgent
@@ -33,25 +33,6 @@ public class QualityGateDelegatingAgent : DelegatingAIAgent
         CancellationToken cancellationToken)
     {
         var userInput = ExtractLastUserMessage(messages);
-
-        // Pre-execution quality gate
-        try
-        {
-            var preReport = await _qualityGateService.ValidateRequestAsync(
-                userInput, metadata: null, ct: cancellationToken);
-
-            if (!preReport.OverallPassed)
-            {
-                _logger.LogWarning(
-                    "Quality gate pre-execution FAILED: score={Score:F1}, issues={Issues}",
-                    preReport.AverageScore,
-                    string.Join("; ", preReport.Results.SelectMany(r => r.Issues)));
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Quality gate pre-execution check error — proceeding with execution");
-        }
 
         // Delegate to inner agent
         var response = await base.RunCoreAsync(messages, session, options, cancellationToken);

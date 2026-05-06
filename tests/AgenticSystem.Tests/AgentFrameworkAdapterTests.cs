@@ -7,13 +7,19 @@ namespace AgenticSystem.Tests;
 
 public class AgentFrameworkAdapterTests
 {
+    private static AgentFrameworkSessionStoreAdapter CreateSessionStoreAdapter(ISessionManager? sessionManager = null)
+        => new(
+            sessionManager ?? Substitute.For<ISessionManager>(),
+            Substitute.For<ILogger<AgentFrameworkSessionStoreAdapter>>());
+
     [Fact]
     public void Constructor_ThrowsOnNullInnerAgent()
     {
         var act = () => new AgentFrameworkAdapter(
             null!,
             Substitute.For<Microsoft.Agents.AI.AIAgent>(),
-            new AgentSessionBridge(Substitute.For<ISessionManager>(), Substitute.For<ILogger<AgentSessionBridge>>()),
+            CreateSessionStoreAdapter(),
+            Substitute.For<ISessionManager>(),
             Substitute.For<ILogger<AgentFrameworkAdapter>>());
         act.Should().Throw<ArgumentNullException>().WithParameterName("innerAgent");
     }
@@ -24,20 +30,34 @@ public class AgentFrameworkAdapterTests
         var act = () => new AgentFrameworkAdapter(
             Substitute.For<IAgent>(),
             null!,
-            new AgentSessionBridge(Substitute.For<ISessionManager>(), Substitute.For<ILogger<AgentSessionBridge>>()),
+            CreateSessionStoreAdapter(),
+            Substitute.For<ISessionManager>(),
             Substitute.For<ILogger<AgentFrameworkAdapter>>());
         act.Should().Throw<ArgumentNullException>().WithParameterName("frameworkAgent");
     }
 
     [Fact]
-    public void Constructor_ThrowsOnNullSessionBridge()
+    public void Constructor_ThrowsOnNullSessionStore()
     {
         var act = () => new AgentFrameworkAdapter(
             Substitute.For<IAgent>(),
             Substitute.For<Microsoft.Agents.AI.AIAgent>(),
             null!,
+            Substitute.For<ISessionManager>(),
             Substitute.For<ILogger<AgentFrameworkAdapter>>());
-        act.Should().Throw<ArgumentNullException>().WithParameterName("sessionBridge");
+        act.Should().Throw<ArgumentNullException>().WithParameterName("sessionStore");
+    }
+
+    [Fact]
+    public void Constructor_ThrowsOnNullSessionManager()
+    {
+        var act = () => new AgentFrameworkAdapter(
+            Substitute.For<IAgent>(),
+            Substitute.For<Microsoft.Agents.AI.AIAgent>(),
+            CreateSessionStoreAdapter(),
+            null!,
+            Substitute.For<ILogger<AgentFrameworkAdapter>>());
+        act.Should().Throw<ArgumentNullException>().WithParameterName("sessionManager");
     }
 
     [Fact]
@@ -46,7 +66,8 @@ public class AgentFrameworkAdapterTests
         var act = () => new AgentFrameworkAdapter(
             Substitute.For<IAgent>(),
             Substitute.For<Microsoft.Agents.AI.AIAgent>(),
-            new AgentSessionBridge(Substitute.For<ISessionManager>(), Substitute.For<ILogger<AgentSessionBridge>>()),
+            CreateSessionStoreAdapter(),
+            Substitute.For<ISessionManager>(),
             null!);
         act.Should().Throw<ArgumentNullException>().WithParameterName("logger");
     }
@@ -66,7 +87,8 @@ public class AgentFrameworkAdapterTests
         var sut = new AgentFrameworkAdapter(
             inner,
             Substitute.For<Microsoft.Agents.AI.AIAgent>(),
-            new AgentSessionBridge(Substitute.For<ISessionManager>(), Substitute.For<ILogger<AgentSessionBridge>>()),
+            CreateSessionStoreAdapter(),
+            Substitute.For<ISessionManager>(),
             Substitute.For<ILogger<AgentFrameworkAdapter>>());
 
         sut.Name.Should().Be("TestAgent");
@@ -87,7 +109,8 @@ public class AgentFrameworkAdapterTests
         var sut = new AgentFrameworkAdapter(
             inner,
             Substitute.For<Microsoft.Agents.AI.AIAgent>(),
-            new AgentSessionBridge(Substitute.For<ISessionManager>(), Substitute.For<ILogger<AgentSessionBridge>>()),
+            CreateSessionStoreAdapter(),
+            Substitute.For<ISessionManager>(),
             Substitute.For<ILogger<AgentFrameworkAdapter>>());
 
         var result = await sut.CanHandleAsync(new AnalysisResult());
@@ -108,11 +131,9 @@ public class AgentFrameworkAdapterTests
         var frameworkAgent = Substitute.For<Microsoft.Agents.AI.AIAgent>();
 
         var sessionManager = Substitute.For<ISessionManager>();
-        var sessionBridge = new AgentSessionBridge(
-            sessionManager,
-            Substitute.For<ILogger<AgentSessionBridge>>());
+        var sessionStore = CreateSessionStoreAdapter(sessionManager);
 
-        var sut = new AgentFrameworkAdapter(inner, frameworkAgent, sessionBridge,
+        var sut = new AgentFrameworkAdapter(inner, frameworkAgent, sessionStore, sessionManager,
             Substitute.For<ILogger<AgentFrameworkAdapter>>());
 
         // Act
@@ -132,7 +153,8 @@ public class AgentFrameworkAdapterTests
         var sut = new AgentFrameworkAdapter(
             inner,
             Substitute.For<Microsoft.Agents.AI.AIAgent>(),
-            new AgentSessionBridge(Substitute.For<ISessionManager>(), Substitute.For<ILogger<AgentSessionBridge>>()),
+            CreateSessionStoreAdapter(),
+            Substitute.For<ISessionManager>(),
             Substitute.For<ILogger<AgentFrameworkAdapter>>());
 
         AgentFrameworkAdapter.Unwrap(sut).Should().BeSameAs(inner);
@@ -153,7 +175,8 @@ public class AgentFrameworkAdapterTests
         var sut = new AgentFrameworkAdapter(
             inner,
             Substitute.For<Microsoft.Agents.AI.AIAgent>(),
-            new AgentSessionBridge(Substitute.For<ISessionManager>(), Substitute.For<ILogger<AgentSessionBridge>>()),
+            CreateSessionStoreAdapter(),
+            Substitute.For<ISessionManager>(),
             Substitute.For<ILogger<AgentFrameworkAdapter>>());
 
         sut.UpdateLastUsed();

@@ -1,6 +1,6 @@
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Core.Agents;
@@ -8,11 +8,11 @@ namespace AgenticSystem.Core.Agents;
 public class NotificationAgent : BaseAgent
 {
     public NotificationAgent(
-        ILLMManager llmManager,
+        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger<NotificationAgent> logger,
         IAgentMemoryService? agentMemoryService = null)
-        : base(llmManager, skillManager, logger, agentMemoryService) { }
+        : base(chatClient, skillManager, logger, agentMemoryService) { }
 
     public override string Name => "NotificationAgent";
     public override string Description => "Triagem e priorização de notificações, alertas e comunicações.";
@@ -34,11 +34,11 @@ public class NotificationAgent : BaseAgent
 public class APIAgent : BaseAgent
 {
     public APIAgent(
-        ILLMManager llmManager,
+        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger<APIAgent> logger,
         IAgentMemoryService? agentMemoryService = null)
-        : base(llmManager, skillManager, logger, agentMemoryService) { }
+        : base(chatClient, skillManager, logger, agentMemoryService) { }
 
     public override string Name => "APIAgent";
     public override string Description => "Integração com serviços externos, APIs REST, webhooks e automação.";
@@ -60,11 +60,11 @@ public class APIAgent : BaseAgent
 public class GeneralAgent : BaseAgent
 {
     public GeneralAgent(
-        ILLMManager llmManager,
+        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger<GeneralAgent> logger,
         IAgentMemoryService? agentMemoryService = null)
-        : base(llmManager, skillManager, logger, agentMemoryService) { }
+        : base(chatClient, skillManager, logger, agentMemoryService) { }
 
     public override string Name => "GeneralAgent";
     public override string Description => "Fallback para solicitações que não se encaixam em nenhum domínio específico.";

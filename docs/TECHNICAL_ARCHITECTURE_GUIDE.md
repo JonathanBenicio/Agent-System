@@ -51,7 +51,8 @@ User Input
 ┌─────────────────────────────────────┐
 │ 1. Context Analysis                 │ ← IContextAnalyzer.AnalyzeAsync()
 ├─────────────────────────────────────┤
-│ 2. Validation & Quality Gate        │ ← IQualityGateService.ValidateRequestAsync()
+│ 2. Shared Pre-Processing Pipeline   │ ← IAgentExecutionPreProcessingPipeline.ProcessAsync()
+│    request validation + corrections │    IQualityGateService / ICorrectionLoop
 ├─────────────────────────────────────┤
 │ 3. Tool Availability Guard (ML20)   │ ← IToolAvailabilityGuard.CheckAsync()
 ├─────────────────────────────────────┤
@@ -62,10 +63,11 @@ User Input
 │ 6. Collaborative Flow Decision      │ ← IAgentCollaborationWorkflow.ShouldRunAsync()
 │    planner → specialist → reviewer  │    ExecuteAsync(sessionId, input, ...)
 ├─────────────────────────────────────┤
-│ 7. Single-Agent Path (fallback)     │ ← IAgentFactory.GetOrCreateAgentAsync()
-│    RAG + correction + handoff       │    IRAGService / ICorrectionLoop / IHandoffManager
+│ 7. Single-Agent Path (fallback)     │ ← IAgentFactory.ResolveAgentAsync()
+│    RAG + execução direta             │    IRAGService / IDirectAgentRequestExecutor
 ├─────────────────────────────────────┤
-│ 8. Post Validation + Reflection     │ ← IQualityGateService / IReflectionEngine
+│ 8. Shared Post-Processing Pipeline  │ ← IAgentExecutionPostProcessingPipeline
+│    response gate + reflection       │    IQualityGateService / IReflectionEngine
 ├─────────────────────────────────────┤
 │ 9. Confidence Score (ML7)           │ ← IConfidenceScoreCalculator.Calculate()
 ├─────────────────────────────────────┤
@@ -101,7 +103,6 @@ AgentResponse (com Confidence, SessionId, Metadata)
 | `IAgentFactory` | ✅ | Cria/seleciona agents por tier |
 | `ISessionManager` | ✅ | Gerencia sessões e eventos |
 | `IDynamicAgentService` | ✅ | Criação dinâmica de agents |
-| `IHandoffManager` | ✅ | Handoff multi-agent |
 | `IToolAvailabilityGuard` | ✅ | Verifica disponibilidade de tools |
 | `IConfidenceScoreCalculator` | ✅ | Calcula score de confiança |
 | `IAgentRuntimeCoordinator` | ✅ | Streaming, artefatos e métricas |
@@ -109,9 +110,9 @@ AgentResponse (com Confidence, SessionId, Metadata)
 | `IRAGService` | ❌ | Retrieval-Augmented Generation |
 | `IContextBudgetManager` | ❌ | Controla orçamento de tokens |
 | `ISmartRouter` | ❌ | Roteamento por performance |
-| `IQualityGateService` | ❌ | Quality gates pre/post |
+| `IQualityGateService` | ❌ | Quality gates usados no pre/post-processing e no chat client governado |
 | `IReflectionEngine` | ❌ | Reflexão pós-ação |
-| `ICorrectionLoop` | ❌ | Regras de correção de prompt |
+| `ICorrectionLoop` | ❌ | Regras aplicadas no pre-processing e aprendidas no post-processing |
 
 ---
 
@@ -119,18 +120,18 @@ AgentResponse (com Confidence, SessionId, Metadata)
 
 **Diretório**: `src/AgenticSystem.Infrastructure/AgentFramework/`
 
-O sistema usa o **Microsoft.Agents.AI** como runtime de execução de agents, integrado via padrão Decorator ao `IAgentFactory` existente.
+O sistema usa o **Microsoft.Agents.AI** como runtime de execução de agents. O `IAgentFactory` permanece cru, enquanto o path direto cria explicitamente um wrapper de framework quando precisa rodar um especialista fora do fluxo orquestrado.
 
 ### 2.1 Arquitetura do Framework
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ AgentFrameworkAgentFactory (Decorator)               │
-│   ↓ wraps                                           │
-│   IAgentFactory (inner — original factory)           │
-│   ↓ GetOrCreateAgentAsync()                         │
+│ IAgentFactory (raw)                                  │
+│   ↓ ResolveAgentAsync()                              │
 │   IAgent (original)                                  │
-│   ↓ WrapWithFramework()                             │
+│   ↓ ExecuteDirectAsync()                             │
+│   IDirectAgentExecutionFactory                       │
+│   ↓ CreateDirectExecutionAgentAsync()                │
 │   AgentFrameworkFactory.CreateFromAgent()            │
 │   ↓ creates                                         │
 │   ChatClientAgent (Microsoft.Agents.AI)              │
@@ -139,10 +140,10 @@ O sistema usa o **Microsoft.Agents.AI** como runtime de execução de agents, in
 │     ├─ MCP Tools (via McpToolsAIFunctionAdapter)     │
 │     └─ Logging + OpenTelemetry                       │
 │   ↓ wrapped in                                      │
-│   AgentFrameworkAdapter (implements IAgent)           │
+│   AgentFrameworkAdapter (implements IAgent)          │
 │     ├─ ExecuteAsync() → frameworkAgent.RunAsync()    │
 │     ├─ Fallback para innerAgent em caso de erro      │
-│     └─ AgentSessionBridge (gerencia sessões)         │
+│     └─ AgentFrameworkSessionStoreAdapter             │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -155,40 +156,56 @@ Fábrica que transforma `IAgent` em `ChatClientAgent` do Microsoft Agent Framewo
 - Recebe `IChatClient` (pipeline com logging + telemetry + function invocation)
 - Injeta `Instructions` do agent como system prompt
 - Conecta MCP tools via `McpToolsAIFunctionAdapter`
-- Também consegue expor agents especializados como tools nativas via `AIAgentExtensions.AsAIFunction(...)`, reaproveitando `AgentSessionBridge` para manter a sessão correta por `frameworkAgentId`
+- Também consegue expor agents especializados como tools nativas via `AIAgentExtensions.AsAIFunction(...)`, reaproveitando `AgentFrameworkSessionStoreAdapter` para restaurar e persistir a sessão correta
 - Aplica `.AsBuilder().UseLogging().UseOpenTelemetry().Build()`
 
 #### `AgentFrameworkAgentFactory`
 
-**Decorator** do `IAgentFactory` original. Intercepta toda criação de agent e envolve com `AgentFrameworkAdapter`:
+Fábrica explícita do path direto. Só entra quando `ExecuteDirectAsync` precisa envolver um `IAgent` cru com `AgentFrameworkAdapter`:
 
 ```csharp
-private IAgent WrapWithFramework(IAgent agent)
+public Task<IAgent> CreateDirectExecutionAgentAsync(IAgent agent, CancellationToken ct = default)
 {
-    if (agent is AgentFrameworkAdapter) return agent; // Evita duplo-wrap
-    var frameworkAgent = _frameworkFactory.CreateFromAgent(agent);
-    return new AgentFrameworkAdapter(agent, frameworkAgent, _sessionBridge, _adapterLogger);
+    if (agent is AgentFrameworkAdapter) return Task.FromResult<IAgent>(agent);
+    // cria frameworkAgent + AgentFrameworkAdapter apenas para o path direto
 }
 ```
+
+#### `DirectAgentRequestExecutor`
+
+Executor dedicado do escape hatch direto. O `AgentExecutionWorkflow` só abre o escopo de runtime/LLM e delega para esse serviço:
+
+1. Resolve o agent solicitado no catálogo ativo
+2. Materializa o wrapper direto via `IDirectAgentExecutionFactory` quando necessário
+3. Aplica quality gates e correction loop antes da execução
+4. Delega o pós-processamento final para o `IAgentExecutionPostProcessingPipeline`
+
+#### `AgentExecutionPostProcessingPipeline`
+
+Pipeline compartilhado do Core para o pós-processamento dos fluxos direto e hosted:
+
+1. Valida a resposta quando o caller habilita esse passo
+2. Executa reflection com o `sessionId` de negócio e aprende correction rules quando configurado
+3. Calcula confidence e avalia final approval
+4. Persiste sessão, artifacts e memória do agent
 
 #### `AgentFrameworkAdapter`
 
 Adapter que implementa `IAgent` e delega execução para o Agent Framework:
 
-1. Obtém `AgentSession` via `AgentSessionBridge`
+1. Obtém `AgentSession` via `AgentFrameworkSessionStoreAdapter`
 2. Executa `frameworkAgent.RunAsync(input, session)`
 3. Extrai conteúdo de `TextContent` das mensagens `Assistant`
-4. Sincroniza resultado via `AgentSessionBridge.SyncResponseAsync()`
+4. Sincroniza resultado via `ISessionManager` e persiste a sessão via `AgentFrameworkSessionStoreAdapter`
 5. **Fallback**: se o framework falhar, executa via `innerAgent.ExecuteAsync()` com metadata `frameworkFallback: true`
 
-#### `AgentSessionBridge`
+#### `AgentFrameworkSessionStoreAdapter`
 
-Ponte entre `ISessionManager` do AgenticSystem e `AgentSession` do framework:
+Adapter entre a sessão do framework e a sessão de negócio:
 
-- Persiste o estado serializado do `AgentSession` como evento da própria sessão de negócio
-- Restaura a thread nativa do framework por `frameworkAgentId`, evitando misturar estado entre agents diferentes na mesma sessão
+- Serializa e persiste o `AgentSession` no store da aplicação por nome estável do agent
+- Restaura a thread nativa do framework sem depender de cache in-memory entre requests
 - Faz fallback para criar nova `AgentSession` quando o estado persistido está ausente ou inválido
-- Mantém a continuidade do chat history do framework sem depender de cache in-memory entre requests
 
 #### `FrameworkAgentChannelService`
 
@@ -197,7 +214,7 @@ Canal estruturado entre agents, persistido na própria sessão de negócio:
 - Publica mensagens planner → specialist, handoff → target e workflow → reviewer como `AgentEvent`
 - Reidrata mensagens recentes por target agent
 - Constrói um bloco `[Native Agent Channel Context]` antes da execução do próximo agent
-- É usado por `HandoffManager` e `AgentCollaborationWorkflow` para compartilhar contexto entre agents sem depender apenas de concatenação manual de strings
+- É usado pelo `AgentCollaborationWorkflow` e pelos fluxos orquestrados para compartilhar contexto entre agents sem depender apenas de concatenação manual de strings
 
 #### `AgentCollaborationWorkflow`
 
@@ -214,7 +231,7 @@ Workflow planner-executor-reviewer com um corte híbrido de orquestração nativ
 
 Classe abstrata que todo agent herda:
 
-- Usa `ILLMManager.GenerateWithProfileAsync()` para execução
+- Usa `IChatClient.GetResponseAsync()` para execução contextual
 - `ISkillManager.BuildEnrichedPromptAsync()` para system prompts enriquecidos com skills
 - `IAgentMemoryService.GetRelevantMemoriesAsync()` injeta memórias persistentes relevantes por agent/usuário no system prompt
 - Skills built-in continuam seeded em startup e skills declarativas adicionais podem ser carregadas de `skills/*.yaml|*.yml|*.json`
@@ -241,7 +258,7 @@ Classe abstrata que todo agent herda:
 └───────────────────────────────────────────────────┘
 
 ┌───────────────────────────────────────────────────┐
-│              LLMManager (ILLMManager)              │
+│     LLMManager + ILLMAdministrationService         │
 │                                                    │
 │  Providers: OpenAI | Ollama | Gemini | Claude      │
 │  IChatClient registry por provider                 │
@@ -249,6 +266,7 @@ Classe abstrata que todo agent herda:
 │  Seleção contextual (request | sessão | tenant)    │
 │  ↓                                                 │
 │  Hot-reload de config + fallback por prioridade    │
+│  Superfície admin estreita consumida pelo controller│
 └───────────────────────────────────────────────────┘
 ```
 
@@ -262,7 +280,7 @@ Gerenciador centralizado de providers LLM com:
 - **Registry de `IChatClient` por provider**: cada provider tem seu próprio client reutilizável
 - **Seleção contextual**: resolve provider/model por request, sessão, tenant e default global
 - **Priority-based fallback**: se provider requisitado não existe, usa o de menor priority
-- **Agent profiles**: cada agent pode ter provider/modelo preferido e parâmetros por tipo de tarefa
+- **Superfície administrativa**: o `LLMManager` expõe catálogo de providers, atualização de configuração e seleção default por meio de `ILLMAdministrationService`
 - **Hot-update**: `UpdateProviderAsync()` permite alterar API key, modelo, enabled e priority em runtime
 - **Default selection runtime**: `UpdateDefaultSelectionAsync()` persiste a IA inicial usada no chat
 - **Health check**: `TestProviderAsync()` verifica disponibilidade de cada provider
@@ -310,7 +328,7 @@ GovernedChatClient                  // concurrency cap + queue timeout + quality
 Detalhes do decorator de governança:
 
 - `GovernedChatClient` aplica limite de concorrência configurável em `AgenticSystem:ChatClientMiddleware`.
-- Requests passam por `IQualityGateService.ValidateRequestAsync(...)` antes de chegar ao provider.
+- Requests ainda podem passar por `IQualityGateService.ValidateRequestAsync(...)` no `GovernedChatClient` como defense-in-depth, mas o dono de borda da validação de request agora é o `IAgentExecutionPreProcessingPipeline` no Core.
 - Respostas non-streaming passam por `ValidateResponseAsync(...)` antes de retornar ao chamador.
 - No streaming, a resposta é acumulada para validação pós-stream sem remover o comportamento de token streaming.
 

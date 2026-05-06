@@ -27,10 +27,12 @@ public class AgenticVectorStoreAdapterTests
     }
 
     [Fact]
-    public void GetDynamicCollection_ThrowsNotSupported()
+    public void GetDynamicCollection_ReturnsDynamicCollection()
     {
-        var act = () => _sut.GetDynamicCollection("test", new VectorStoreCollectionDefinition());
-        act.Should().Throw<NotSupportedException>();
+        var collection = _sut.GetDynamicCollection("test", new VectorStoreCollectionDefinition());
+
+        collection.Should().NotBeNull();
+        collection.Name.Should().Be("test");
     }
 
     [Fact]
@@ -131,7 +133,7 @@ public class AgenticVectorStoreAdapterTests
             d.Content == "test content" &&
             d.Collection == "my-collection" &&
             d.Type == "text" &&
-            d.Embedding == embedding &&
+            d.Embedding.SequenceEqual(embedding) &&
             d.Metadata["key"] == "val"));
     }
 

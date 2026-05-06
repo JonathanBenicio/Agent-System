@@ -13,7 +13,7 @@ using MChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 namespace AgenticSystem.Infrastructure.LLM;
 
-public class LLMManager : ILLMManager
+public class LLMManager : ILLMAdministrationService
 {
     private const string DefaultProviderConfigKey = "llm.default.provider";
     private const string DefaultModelConfigKey = "llm.default.model";
@@ -36,7 +36,6 @@ public class LLMManager : ILLMManager
 
     private readonly Dictionary<string, ILLMProvider> _providers = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IChatClient> _chatClientRegistry = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, AgentLLMProfile> _profiles = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _configSync = new(1, 1);
 
     private volatile bool _runtimeConfigDirty = true;
@@ -158,32 +157,38 @@ public class LLMManager : ILLMManager
         }
     }
 
-    public async Task<LLMResponse> GenerateWithProfileAsync(string agentName, string taskType, string prompt, CancellationToken ct = default)
+    public async Task<IReadOnlyList<LLMProviderInfo>> GetEnabledProvidersAsync(CancellationToken ct = default)
     {
-        var profile = GetProfileOrDefault(agentName);
-        var parameters = profile.GetParametersForTask(taskType);
-
-        var request = new LLMRequest
-        {
-            Prompt = prompt,
-            Provider = string.IsNullOrWhiteSpace(profile.PreferredProvider) ? null : profile.PreferredProvider,
-            Model = string.IsNullOrWhiteSpace(profile.PreferredModel) ? null : profile.PreferredModel,
-            Parameters = parameters
-        };
-
-        return await GenerateAsync(request, ct);
+        var configuration = await GetConfigurationAsync(ct);
+        return configuration.Providers.Where(provider => provider.IsEnabled).ToList();
     }
 
-    public ILLMProvider GetProvider(string name)
+    public async Task<LLMProviderInfo?> GetProviderAsync(string name, CancellationToken ct = default)
     {
-        if (_providers.TryGetValue(name, out var provider))
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var configuration = await GetConfigurationAsync(ct);
+        return configuration.Providers.FirstOrDefault(provider =>
+            provider.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public async Task<LLMProviderInfo?> GetDefaultProviderAsync(CancellationToken ct = default)
+    {
+        var configuration = await GetConfigurationAsync(ct);
+        return configuration.Providers.FirstOrDefault(provider =>
+            provider.Name.Equals(configuration.DefaultProvider, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private ILLMProvider GetDefaultProvider()
+    {
+        var provider = TryGetDefaultProvider();
+        if (provider is not null)
             return provider;
 
-        _logger.LogWarning("⚠️ Provider '{Provider}' not found. Falling back to default provider.", name);
-        return GetDefaultProvider();
+        throw new InvalidOperationException("No LLM providers are available.");
     }
 
-    public ILLMProvider GetDefaultProvider()
+    private ILLMProvider? TryGetDefaultProvider()
     {
         if (!string.IsNullOrWhiteSpace(_defaultProviderOverride)
             && _providers.TryGetValue(_defaultProviderOverride, out var configuredDefault)
@@ -197,16 +202,10 @@ public class LLMManager : ILLMManager
             .OrderBy(p => p.Priority)
             .FirstOrDefault();
 
-        if (best is not null)
-            return best;
-
-        throw new InvalidOperationException("No LLM providers are available.");
+        return best;
     }
 
-    public IEnumerable<ILLMProvider> GetEnabledProviders()
-        => _providers.Values.Where(p => p.IsEnabled);
-
-    public IEnumerable<LLMProviderInfo> GetAllProviderInfo()
+    private IEnumerable<LLMProviderInfo> GetAllProviderInfo()
     {
         var defaultProviderName = ResolveDefaultProviderName();
 
@@ -229,12 +228,16 @@ public class LLMManager : ILLMManager
     {
         await EnsureRuntimeConfigLoadedAsync(ct);
 
-        var defaultProvider = GetDefaultProvider();
+        var defaultProvider = TryGetDefaultProvider();
+        var fallbackProvider = defaultProvider
+            ?? _providers.Values.OrderBy(p => p.Priority).FirstOrDefault();
 
         return new LLMConfigurationInfo
         {
             DefaultProvider = ResolveDefaultProviderName(),
-            DefaultModel = ResolveDefaultModel(defaultProvider),
+            DefaultModel = fallbackProvider is not null
+                ? ResolveDefaultModel(fallbackProvider)
+                : _defaultModelOverride ?? string.Empty,
             Providers = GetAllProviderInfo().ToList()
         };
     }
@@ -255,10 +258,10 @@ public class LLMManager : ILLMManager
         }
     }
 
-    public async Task<bool> UpdateProviderAsync(string name, UpdateProviderRequest request, CancellationToken ct = default)
+    public async Task<LLMProviderInfo?> UpdateProviderAsync(string name, UpdateProviderRequest request, CancellationToken ct = default)
     {
         if (!_providers.TryGetValue(name, out var provider))
-            return false;
+            return null;
 
         provider.Configure(request.ApiKey, request.DefaultModel, request.Enabled, request.Priority);
         _chatClientRegistry[name] = BuildChatClient(provider);
@@ -271,7 +274,7 @@ public class LLMManager : ILLMManager
             provider.Priority,
             provider.DefaultModel);
 
-        return true;
+        return await GetProviderAsync(name, ct);
     }
 
     public async Task<LLMConfigurationInfo> UpdateDefaultSelectionAsync(UpdateDefaultLlmSelectionRequest request, CancellationToken ct = default)
@@ -314,11 +317,6 @@ public class LLMManager : ILLMManager
         return await GetConfigurationAsync(ct);
     }
 
-    public void RegisterProfile(AgentLLMProfile profile)
-    {
-        _profiles[profile.AgentName] = profile;
-    }
-
     internal async Task<(IChatClient ChatClient, string ResolvedModel)> ResolveChatClientForCurrentContextAsync(
         string? requestedModel,
         CancellationToken ct = default)
@@ -326,18 +324,6 @@ public class LLMManager : ILLMManager
         var selection = await ResolveSelectionAsync(new LLMRequest { Model = requestedModel }, ct);
         var chatClient = await ResolveChatClientAsync(selection.Provider, selection.Model, selection.ApiKey, ct);
         return (chatClient, selection.Model);
-    }
-
-    private AgentLLMProfile GetProfileOrDefault(string agentName)
-    {
-        if (_profiles.TryGetValue(agentName, out var profile))
-            return profile;
-
-        return new AgentLLMProfile
-        {
-            AgentName = agentName,
-            PreferredModel = GetDefaultProvider().DefaultModel
-        };
     }
 
     private async Task EnsureRuntimeConfigLoadedAsync(CancellationToken ct)
@@ -484,7 +470,9 @@ public class LLMManager : ILLMManager
             return _defaultProviderOverride;
         }
 
-        return GetDefaultProvider().Name;
+        return TryGetDefaultProvider()?.Name
+            ?? _providers.Values.OrderBy(p => p.Priority).FirstOrDefault()?.Name
+            ?? string.Empty;
     }
 
     private string ResolveDefaultModel(ILLMProvider provider)

@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -16,6 +17,7 @@ namespace AgenticSystem.Api.Controllers.OpenAI;
 /// </summary>
 [ApiController]
 [Route("v1")]
+[EnableRateLimiting("ProtocolEndpoints")]
 public class OpenAIChatCompletionController : ControllerBase
 {
     private readonly IFrameworkOrchestratorService _orchestrator;

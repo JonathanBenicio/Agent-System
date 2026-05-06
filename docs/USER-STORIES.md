@@ -264,7 +264,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML12 — Dynamic Handoffs
+#### ML12 — Dynamic Delegation
 
 **Como** sistema de orquestração,
 **quero** delegação mid-conversation entre agents,
@@ -272,7 +272,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 | Item | Detalhe |
 |------|---------|
-| Serviço | `IHandoffManager` |
+| Serviço | `IFrameworkOrchestratorService` + `AgentCollaborationWorkflow` |
 | Responsabilidade | Estratégias de delegação: SingleDelegate, FanOut (paralelo), Chain (sequencial) |
 | Testes | Unitários (xUnit) |
 | Status | ✅ Implementado |
@@ -281,8 +281,8 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] SingleDelegate: um agent sabe quem é melhor para a subtarefa
 - [x] FanOut: múltiplas perspectivas em paralelo
 - [x] Chain: pipeline sequencial (output → input)
-- [x] Contexto é preservado entre delegações (HandoffManager)
-- [x] Histórico de handoffs é rastreável
+- [x] Contexto é preservado entre delegações via sessão estruturada e bindings
+- [x] Histórico de delegações é rastreável
 
 ---
 
@@ -523,9 +523,9 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 | Item | Detalhe |
 |------|---------|
-| Serviços | `MetaAgentOrchestrator` · `HierarchicalAgentFactory` · `AgentFrameworkAgentFactory` (decorator) |
+| Serviços | `MetaAgentOrchestrator` · `HierarchicalAgentFactory` · `AgentFrameworkAgentFactory` (path direto explícito) |
 | DI | `IMetaAgent`, `IAgentFactory`, `IContextAnalyzer` |
-| Pattern | Factory + Decorator (Agent Framework wraps HierarchicalAgentFactory) |
+| Pattern | Factory + Adapter (o path direto cria um wrapper explícito quando precisa usar o framework) |
 
 | Tier | Papel | Agents |
 |:----:|-------|--------|
@@ -715,7 +715,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] Microsoft.Extensions.AI pipeline: `ChatClientBuilder` com OpenTelemetry + FunctionInvocation + Logging
 - [x] M.E.AI `IEmbeddingGenerator<string, Embedding<float>>` com OpenTelemetry
 - [x] Overrides por ambiente: InMemory (dev) → PostgreSQL (produção) via métodos `UsePostgres*`
-- [x] Agent Framework decorator: `AgentFrameworkAgentFactory` wraps `HierarchicalAgentFactory` condicionalmente
+- [x] Direct execution factory: `AgentFrameworkAgentFactory` cria explicitamente o wrapper do Agent Framework só no `ExecuteDirectAsync`
 - [x] Health endpoint: `/health` (anonymous) + `/version` (anonymous)
 - [x] CORS: permissivo em dev (`SetIsOriginAllowed(_ => true)`), restrito em produção (AllowedOrigins obrigatório)
 

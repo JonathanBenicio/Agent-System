@@ -9,9 +9,15 @@ namespace AgenticSystem.Core.Interfaces;
 public interface IAgentFactory
 {
     /// <summary>
-    /// Obtém agent existente ou cria novo baseado no contexto
+    /// Resolve um agent existente ou cria um novo a partir de uma decisão já tomada.
+    /// Não executa orquestração nem escolha de especialista; apenas materializa o agent.
     /// </summary>
-    Task<IAgent> GetOrCreateAgentAsync(AnalysisResult context);
+    Task<IAgent> ResolveAgentAsync(AnalysisResult context);
+
+    /// <summary>
+    /// Resolve um agent a partir de metadados já materializados no catálogo ativo.
+    /// </summary>
+    Task<IAgent> ResolveAgentAsync(AgentInfo agentInfo);
     
     /// <summary>
     /// Cria agent customizado para domínio específico

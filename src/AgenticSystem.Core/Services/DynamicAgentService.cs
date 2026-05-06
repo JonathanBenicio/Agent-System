@@ -1,8 +1,7 @@
 using System.Text.Json;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
-using AgenticSystem.Core.LLM.Models;
 using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Core.Services;
@@ -14,7 +13,7 @@ namespace AgenticSystem.Core.Services;
 public class DynamicAgentService : IDynamicAgentService
 {
     private readonly IAgentFactory _agentFactory;
-    private readonly ILLMManager _llmManager;
+    private readonly IChatClient _chatClient;
     private readonly ILogger<DynamicAgentService> _logger;
 
     private static readonly string[] CreationKeywords =
@@ -26,11 +25,11 @@ public class DynamicAgentService : IDynamicAgentService
 
     public DynamicAgentService(
         IAgentFactory agentFactory,
-        ILLMManager llmManager,
+        IChatClient chatClient,
         ILogger<DynamicAgentService> logger)
     {
         _agentFactory = agentFactory;
-        _llmManager = llmManager;
+        _chatClient = chatClient;
         _logger = logger;
     }
 
@@ -47,15 +46,18 @@ public class DynamicAgentService : IDynamicAgentService
     public async Task<AgentSpecification> GenerateSpecificationAsync(string input, UserContext context)
     {
         var prompt = BuildSpecPrompt(input, context);
-        var request = new LLMRequest
-        {
-            Prompt = prompt,
-            SystemPrompt = "You are an agent specification generator. Return ONLY valid JSON.",
-            Parameters = new LLMParameters { Temperature = 0.2 }
-        };
-        var response = await _llmManager.GenerateAsync(request);
+        var response = await _chatClient.GetResponseAsync(
+            [
+                new ChatMessage(ChatRole.System, "You are an agent specification generator. Return ONLY valid JSON."),
+                new ChatMessage(ChatRole.User, prompt)
+            ],
+            new ChatOptions
+            {
+                Temperature = 0.2f,
+                MaxOutputTokens = 2000
+            });
 
-        if (!response.Success || string.IsNullOrWhiteSpace(response.Content))
+        if (string.IsNullOrWhiteSpace(response.Text))
         {
             _logger.LogWarning("LLM failed to generate agent spec, using fallback");
             return BuildFallbackSpec(input);
@@ -63,7 +65,7 @@ public class DynamicAgentService : IDynamicAgentService
 
         try
         {
-            var spec = ParseSpecFromLLM(response.Content, input);
+            var spec = ParseSpecFromLLM(response.Text, input);
             _logger.LogInformation("📋 Generated spec for agent: {Name} (domain: {Domain})", spec.Name, spec.Domain);
             return spec;
         }

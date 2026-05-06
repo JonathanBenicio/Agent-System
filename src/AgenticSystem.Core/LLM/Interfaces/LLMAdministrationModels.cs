@@ -1,20 +1,4 @@
-using AgenticSystem.Core.LLM.Models;
-
 namespace AgenticSystem.Core.LLM.Interfaces;
-
-public interface ILLMManager
-{
-    Task<LLMResponse> GenerateAsync(LLMRequest request, CancellationToken ct = default);
-    Task<LLMResponse> GenerateWithProfileAsync(string agentName, string taskType, string prompt, CancellationToken ct = default);
-    ILLMProvider GetProvider(string name);
-    ILLMProvider GetDefaultProvider();
-    IEnumerable<ILLMProvider> GetEnabledProviders();
-    IEnumerable<LLMProviderInfo> GetAllProviderInfo();
-    Task<LLMConfigurationInfo> GetConfigurationAsync(CancellationToken ct = default);
-    Task<bool> TestProviderAsync(string name, CancellationToken ct = default);
-    Task<bool> UpdateProviderAsync(string name, UpdateProviderRequest request, CancellationToken ct = default);
-    Task<LLMConfigurationInfo> UpdateDefaultSelectionAsync(UpdateDefaultLlmSelectionRequest request, CancellationToken ct = default);
-}
 
 public class LLMProviderInfo
 {

@@ -60,7 +60,7 @@ public static class ServiceCollectionExtensions
         }
 
         services.AddSingleton<LLMManager>();
-        services.AddSingleton<ILLMManager>(sp => sp.GetRequiredService<LLMManager>());
+        services.AddSingleton<ILLMAdministrationService>(sp => sp.GetRequiredService<LLMManager>());
         services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(sp.GetRequiredService<LLMManager>()));
         services.AddSingleton<IChatClient>(sp => new GovernedChatClient(
             sp.GetRequiredService<ContextAwareChatClient>(),
@@ -97,15 +97,28 @@ public static class ServiceCollectionExtensions
             || services.Any(d => d.ServiceType == typeof(Microsoft.Extensions.AI.IChatClient));
         if (hasChatClient)
         {
+            var orchestratorMetadata = OrchestratorMetadata.Default;
+
+            services.AddSingleton(orchestratorMetadata);
             services.AddSingleton<AgentFrameworkFactory>();
             services.AddSingleton<AgentFrameworkSessionStoreAdapter>();
-            services.AddSingleton<AgentSessionBridge>();
-            services.AddSingleton<OrchestratorAgentBuilder>();
-            services.AddScoped(CreateHostedOrchestratorResolution);
+            services.AddSingleton<OrchestratorAuxiliaryToolService>();
+            services.AddSingleton<OrchestratorInstructionService>();
+            services.AddSingleton<OrchestratorToolBindingService>();
+            services.AddSingleton<OrchestratorContextFactory>();
+            services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
+            services.AddSingleton<IDirectAgentExecutionFactory>(sp =>
+                new AgentFrameworkAgentFactory(
+                    sp.GetRequiredService<AgentFrameworkFactory>(),
+                    sp.GetRequiredService<AgentFrameworkSessionStoreAdapter>(),
+                    sp.GetRequiredService<ISessionManager>(),
+                    sp.GetRequiredService<ILogger<AgentFrameworkAdapter>>(),
+                    sp.GetService<IAgentRuntimeCoordinator>(),
+                    enableStreaming: enableStreaming));
 
             var hostedOrchestratorBuilder = services.AddAIAgent(
-                HostedOrchestratorResolution.AgentName,
-                static (sp, _) => sp.GetRequiredService<HostedOrchestratorResolution>().Context.OrchestratorAgent,
+                orchestratorMetadata.Name,
+                static (sp, _) => sp.GetRequiredService<OrchestratorContext>().OrchestratorAgent,
                 ServiceLifetime.Scoped);
 
             hostedOrchestratorBuilder.WithSessionStore(
@@ -121,32 +134,6 @@ public static class ServiceCollectionExtensions
                     sp.GetRequiredService<IFrameworkOrchestratorService>(),
                     sp.GetRequiredService<ILogger<ProtocolOrchestratorChatClient>>()));
 
-            // Decorator: wraps IAgentFactory (HierarchicalAgentFactory) with Agent Framework pipeline
-            var innerFactoryDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IAgentFactory));
-            if (innerFactoryDescriptor is not null)
-            {
-                services.Remove(innerFactoryDescriptor);
-                services.AddSingleton<IAgentFactory>(sp =>
-                {
-                    // Resolve the original HierarchicalAgentFactory
-                    IAgentFactory innerFactory = innerFactoryDescriptor.ImplementationType is { } implType
-                        ? (IAgentFactory)ActivatorUtilities.CreateInstance(sp, implType)
-                        : innerFactoryDescriptor.ImplementationFactory is { } factory
-                            ? (IAgentFactory)factory(sp)
-                            : throw new InvalidOperationException(
-                                "IAgentFactory registration has no ImplementationType or ImplementationFactory");
-                    var frameworkFactory = sp.GetRequiredService<AgentFrameworkFactory>();
-                    var sessionBridge = sp.GetRequiredService<AgentSessionBridge>();
-                    var adapterLogger = sp.GetRequiredService<ILogger<AgentFrameworkAdapter>>();
-                    return new AgentFrameworkAgentFactory(
-                        innerFactory,
-                        frameworkFactory,
-                        sessionBridge,
-                        adapterLogger,
-                        sp.GetService<IAgentRuntimeCoordinator>(),
-                        enableStreaming: enableStreaming);
-                });
-            }
         }
 
         // Memory / Vector Store — conditional based on VectorStoreType config
@@ -208,26 +195,6 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient();
 
         return services;
-    }
-
-    private static HostedOrchestratorResolution CreateHostedOrchestratorResolution(IServiceProvider serviceProvider)
-    {
-        var runtimeContext = serviceProvider.GetRequiredService<ILLMRuntimeContextAccessor>().Current;
-        var sessionId = runtimeContext?.SessionId;
-
-        if (string.IsNullOrWhiteSpace(sessionId))
-        {
-            throw new InvalidOperationException(
-                "Hosted orchestrator resolution requires an active runtime context with a session id.");
-        }
-
-        var orchestratorBuilder = serviceProvider.GetRequiredService<OrchestratorAgentBuilder>();
-        var orchestratorContext = orchestratorBuilder
-            .GetOrCreateOrchestratorAsync(sessionId, CancellationToken.None)
-            .GetAwaiter()
-            .GetResult();
-
-        return new HostedOrchestratorResolution(orchestratorContext);
     }
 
     /// <summary>

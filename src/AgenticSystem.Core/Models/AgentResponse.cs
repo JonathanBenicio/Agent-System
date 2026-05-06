@@ -56,11 +56,6 @@ public class AgentResponse
     public string? SessionId { get; set; }
     
     /// <summary>
-    /// Sugere handoffs para outros agents
-    /// </summary>
-    public List<HandoffSuggestion> SuggestedHandoffs { get; set; } = new();
-
-    /// <summary>
     /// Score de confiança exposto ao usuário (Maturity Level 7)
     /// </summary>
     public ConfidenceScore? Confidence { get; set; }
@@ -86,15 +81,4 @@ public class AgentResponse
             ErrorMessage = errorMessage
         };
     }
-}
-
-/// <summary>
-/// Sugestão de handoff para outro agent
-/// </summary>
-public class HandoffSuggestion
-{
-    public string TargetAgent { get; set; } = string.Empty;
-    public string Reason { get; set; } = string.Empty;
-    public string Prompt { get; set; } = string.Empty;
-    public Dictionary<string, object> Context { get; set; } = new();
 }

@@ -314,7 +314,7 @@ public partial class RAGServiceTests
         var query = new RAGQuery { Query = "test" };
         var result = await _ragService.RetrieveContextAsync(query);
 
-        result.TotalTime.Should().BeGreaterOrEqualTo(TimeSpan.Zero);
-        result.RetrievalTime.Should().BeGreaterOrEqualTo(TimeSpan.Zero);
+        result.TotalTime.Should().BeGreaterThanOrEqualTo(TimeSpan.Zero);
+        result.RetrievalTime.Should().BeGreaterThanOrEqualTo(TimeSpan.Zero);
     }
 }

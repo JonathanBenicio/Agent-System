@@ -95,26 +95,29 @@ public class InMemoryToolManager : IToolManager
                     _cache[cacheKey] = new CacheEntry(result, DateTime.UtcNow.Add(decision.Policy.CacheTtl));
                 }
 
-                await _runtimeCoordinator?.RecordArtifactAsync(new AgentExecutionArtifact
+                if (_runtimeCoordinator is not null)
                 {
-                    SessionId = _runtimeCoordinator.CurrentSessionId ?? string.Empty,
-                    Type = AgentExecutionArtifactType.ToolExecution,
-                    Name = tool.Name,
-                    AgentName = _runtimeCoordinator.CurrentAgentName,
-                    Status = result.Success ? "Success" : "Failed",
-                    Summary = result.ErrorMessage,
-                    Data = new Dictionary<string, object>
+                    await _runtimeCoordinator.RecordArtifactAsync(new AgentExecutionArtifact
                     {
-                        ["toolId"] = tool.Id,
-                        ["logicalToolId"] = toolId,
-                        ["toolVersion"] = registration?.Version ?? "1.0.0",
-                        ["toolVariant"] = registration?.VariantName ?? "default",
-                        ["action"] = input.Action,
-                        ["attempt"] = attempt + 1,
-                        ["latencyMs"] = sw.Elapsed.TotalMilliseconds,
-                        ["metadata"] = result.Metadata ?? new Dictionary<string, object>()
-                    }
-                }, ct)!;
+                        SessionId = _runtimeCoordinator.CurrentSessionId ?? string.Empty,
+                        Type = AgentExecutionArtifactType.ToolExecution,
+                        Name = tool.Name,
+                        AgentName = _runtimeCoordinator.CurrentAgentName,
+                        Status = result.Success ? "Success" : "Failed",
+                        Summary = result.ErrorMessage,
+                        Data = new Dictionary<string, object>
+                        {
+                            ["toolId"] = tool.Id,
+                            ["logicalToolId"] = toolId,
+                            ["toolVersion"] = registration?.Version ?? "1.0.0",
+                            ["toolVariant"] = registration?.VariantName ?? "default",
+                            ["action"] = input.Action,
+                            ["attempt"] = attempt + 1,
+                            ["latencyMs"] = sw.Elapsed.TotalMilliseconds,
+                            ["metadata"] = result.Metadata ?? new Dictionary<string, object>()
+                        }
+                    }, ct);
+                }
 
                 await PublishToolEventAsync(AgentStreamEventType.ToolCompleted, tool, input.Action, sw.Elapsed.TotalMilliseconds, result.Success, result.Metadata, ct);
                 _logger.LogInformation("🔧 Tool {ToolId} executada com sucesso: {Success}", toolId, result.Success);

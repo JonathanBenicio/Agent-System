@@ -29,7 +29,7 @@ public class ToolDiscoveryServiceTests
         results.Should().HaveCount(1);
         results[0].ToolName.Should().Be(toolId);
         results[0].PackageName.Should().Be(expectedPackage);
-        results[0].RelevanceScore.Should().BeGreaterOrEqualTo(0.85);
+        results[0].RelevanceScore.Should().BeGreaterThanOrEqualTo(0.85);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public class ToolDiscoveryServiceTests
         var results = await _sut.SearchAsync(new[] { "github", "totally-unknown" });
 
         results.Should().HaveCount(2);
-        results[0].RelevanceScore.Should().BeGreaterOrEqualTo(results[1].RelevanceScore);
+        results[0].RelevanceScore.Should().BeGreaterThanOrEqualTo(results[1].RelevanceScore);
     }
 
     [Fact]

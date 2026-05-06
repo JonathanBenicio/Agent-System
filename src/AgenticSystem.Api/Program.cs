@@ -13,8 +13,11 @@ using Microsoft.Extensions.AI;
 using ModelContextProtocol.AspNetCore;
 using Serilog;
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -47,6 +50,10 @@ builder.Services.UseLocalExecutionStorageMode(builder.Configuration);
 var protocolHosting = builder.Configuration.GetSection("ProtocolHosting");
 var a2aEnabled = protocolHosting.GetValue<bool>("A2A:Enabled");
 var agUiEnabled = protocolHosting.GetValue<bool>("AgUI:Enabled");
+var protocolRateLimitingEnabled = protocolHosting.GetValue("RateLimiting:Enabled", true);
+var protocolRateLimitPermitLimit = protocolHosting.GetValue("RateLimiting:PermitLimit", 60);
+var protocolRateLimitWindowSeconds = protocolHosting.GetValue("RateLimiting:WindowSeconds", 60);
+var protocolRateLimitQueueLimit = protocolHosting.GetValue("RateLimiting:QueueLimit", 0);
 
 if (a2aEnabled || agUiEnabled)
 {
@@ -147,6 +154,43 @@ builder.Services.AddAuthentication(options =>
     };
 });
 builder.Services.AddAuthorization();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, ct) =>
+    {
+        context.HttpContext.Response.Headers["Retry-After"] = protocolRateLimitWindowSeconds.ToString();
+        if (!context.HttpContext.Response.HasStarted)
+        {
+            context.HttpContext.Response.ContentType = "application/json";
+            await context.HttpContext.Response.WriteAsJsonAsync(new
+            {
+                error = "Protocol rate limit exceeded. Try again later."
+            }, cancellationToken: ct);
+        }
+    };
+
+    options.AddPolicy(ProtocolRateLimiting.PolicyName, httpContext =>
+    {
+        if (!protocolRateLimitingEnabled)
+        {
+            return RateLimitPartition.GetNoLimiter("protocol-rate-limiting-disabled");
+        }
+
+        var partitionKey = ProtocolRateLimiting.BuildPartitionKey(httpContext);
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey,
+            _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = protocolRateLimitPermitLimit,
+                Window = TimeSpan.FromSeconds(protocolRateLimitWindowSeconds),
+                SegmentsPerWindow = 4,
+                QueueLimit = protocolRateLimitQueueLimit,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true
+            });
+    });
+});
 
 builder.Services.AddCors(options =>
 {
@@ -221,6 +265,7 @@ app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();
 app.UseTenantMiddleware();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 app.MapMcp("/mcp").RequireAuthorization();
@@ -233,11 +278,15 @@ app.MapGet("/version", () => new { Version = "1.0.0", Build = DateTime.UtcNow.To
 // Protocol hosting endpoints — A2A + AG-UI
 if (a2aEnabled)
 {
-    app.MapA2AHttpJson("AgenticSystem", "/a2a").RequireAuthorization();
+    app.MapA2AHttpJson("AgenticSystem", "/a2a")
+        .RequireAuthorization()
+        .RequireRateLimiting(ProtocolRateLimiting.PolicyName);
 }
 if (agUiEnabled)
 {
-    app.MapAGUI("AgenticSystem", "/agui").RequireAuthorization();
+    app.MapAGUI("AgenticSystem", "/agui")
+        .RequireAuthorization()
+        .RequireRateLimiting(ProtocolRateLimiting.PolicyName);
 }
 
 app.MapPost("/api/chat", async (ChatRequest request, IMetaAgent metaAgent, TenantContext tenantContext, HttpContext httpContext) =>
@@ -423,4 +472,48 @@ static class SseWriter
 
     private static string ToSseEventName(AgentStreamEventType type)
         => type.ToString().ToLowerInvariant();
+}
+
+static class ProtocolRateLimiting
+{
+    public const string PolicyName = "ProtocolEndpoints";
+
+    public static string BuildPartitionKey(HttpContext httpContext)
+    {
+        var tenantId = httpContext.User.FindFirst("tenant_id")?.Value;
+        var userId = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? httpContext.User.FindFirst("sub")?.Value
+            ?? httpContext.User.Identity?.Name;
+
+        if (!string.IsNullOrWhiteSpace(tenantId) && !string.IsNullOrWhiteSpace(userId))
+        {
+            return $"tenant:{tenantId}:user:{userId}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            return $"user:{userId}";
+        }
+
+        if (httpContext.Request.Headers.TryGetValue("Authorization", out var authorization)
+            && !string.IsNullOrWhiteSpace(authorization))
+        {
+            return $"auth:{Hash(authorization.ToString())}";
+        }
+
+        if (httpContext.Request.Headers.TryGetValue("X-Api-Key", out var apiKey)
+            && !string.IsNullOrWhiteSpace(apiKey))
+        {
+            return $"api-key:{Hash(apiKey.ToString())}";
+        }
+
+        var remoteIp = httpContext.Connection.RemoteIpAddress?.ToString();
+        return string.IsNullOrWhiteSpace(remoteIp) ? "anonymous" : $"ip:{remoteIp}";
+    }
+
+    private static string Hash(string value)
+    {
+        var bytes = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(value));
+        return Convert.ToHexString(bytes[..8]);
+    }
 }

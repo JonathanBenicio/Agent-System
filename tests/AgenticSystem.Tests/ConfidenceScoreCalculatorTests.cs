@@ -135,7 +135,7 @@ public class ConfidenceScoreCalculatorTests
 
         var score = _sut.Calculate(response, ragContext: null, reflections: null, toolAvailability: toolResult);
 
-        score.Value.Should().BeGreaterOrEqualTo(0.7);
+        score.Value.Should().BeGreaterThanOrEqualTo(0.7);
         score.Level.Should().Be(ConfidenceLevel.High);
     }
 

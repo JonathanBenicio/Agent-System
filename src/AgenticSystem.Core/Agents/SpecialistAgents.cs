@@ -1,6 +1,6 @@
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Core.Agents;
@@ -8,11 +8,11 @@ namespace AgenticSystem.Core.Agents;
 public class CalendarAgent : BaseAgent
 {
     public CalendarAgent(
-        ILLMManager llmManager,
+        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger<CalendarAgent> logger,
         IAgentMemoryService? agentMemoryService = null)
-        : base(llmManager, skillManager, logger, agentMemoryService) { }
+        : base(chatClient, skillManager, logger, agentMemoryService) { }
 
     public override string Name => "CalendarAgent";
     public override string Description => "Gerencia eventos, agendamentos, compromissos e disponibilidade.";
@@ -34,11 +34,11 @@ public class CalendarAgent : BaseAgent
 public class CreativeAgent : BaseAgent
 {
     public CreativeAgent(
-        ILLMManager llmManager,
+        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger<CreativeAgent> logger,
         IAgentMemoryService? agentMemoryService = null)
-        : base(llmManager, skillManager, logger, agentMemoryService) { }
+        : base(chatClient, skillManager, logger, agentMemoryService) { }
 
     public override string Name => "CreativeAgent";
     public override string Description => "Brainstorming, geração de conteúdo, escrita criativa e ideação.";
@@ -60,11 +60,11 @@ public class CreativeAgent : BaseAgent
 public class AnalysisAgent : BaseAgent
 {
     public AnalysisAgent(
-        ILLMManager llmManager,
+        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger<AnalysisAgent> logger,
         IAgentMemoryService? agentMemoryService = null)
-        : base(llmManager, skillManager, logger, agentMemoryService) { }
+        : base(chatClient, skillManager, logger, agentMemoryService) { }
 
     public override string Name => "AnalysisAgent";
     public override string Description => "Análise de dados, pesquisa, comparação e geração de insights.";

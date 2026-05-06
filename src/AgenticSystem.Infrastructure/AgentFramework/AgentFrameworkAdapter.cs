@@ -18,7 +18,8 @@ public class AgentFrameworkAdapter : IAgent
 {
     private readonly IAgent _innerAgent;
     private readonly FrameworkAgent _frameworkAgent;
-    private readonly AgentSessionBridge _sessionBridge;
+    private readonly AgentFrameworkSessionStoreAdapter _sessionStore;
+    private readonly ISessionManager _sessionManager;
     private readonly ILogger<AgentFrameworkAdapter> _logger;
     private readonly IAgentRuntimeCoordinator? _runtimeCoordinator;
     private readonly bool _enableStreaming;
@@ -26,14 +27,16 @@ public class AgentFrameworkAdapter : IAgent
     public AgentFrameworkAdapter(
         IAgent innerAgent,
         FrameworkAgent frameworkAgent,
-        AgentSessionBridge sessionBridge,
+        AgentFrameworkSessionStoreAdapter sessionStore,
+        ISessionManager sessionManager,
         ILogger<AgentFrameworkAdapter> logger,
         IAgentRuntimeCoordinator? runtimeCoordinator = null,
         bool enableStreaming = false)
     {
         _innerAgent = innerAgent ?? throw new ArgumentNullException(nameof(innerAgent));
         _frameworkAgent = frameworkAgent ?? throw new ArgumentNullException(nameof(frameworkAgent));
-        _sessionBridge = sessionBridge ?? throw new ArgumentNullException(nameof(sessionBridge));
+        _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
+        _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _runtimeCoordinator = runtimeCoordinator;
         _enableStreaming = enableStreaming;
@@ -56,7 +59,7 @@ public class AgentFrameworkAdapter : IAgent
 
     /// <summary>
     /// Executa via Agent Framework pipeline (ChatClientAgent → logging → telemetry → IChatClient).
-    /// Reutiliza AgentSession via SessionBridge para manter contexto de conversa.
+    /// Reutiliza AgentSession via AgentSessionStoreAdapter para manter contexto de conversa.
     /// </summary>
     /// <remarks>
     /// [Fase 3] Com o FrameworkOrchestratorService como ponto central de orquestração,
@@ -64,8 +67,6 @@ public class AgentFrameworkAdapter : IAgent
     /// Este método permanece apenas para chamada direta a agentes nomeados (ExecuteDirectAsync).
     /// Prefira usar IFrameworkOrchestratorService.ExecuteAsync para fluxos orquestrados.
     /// </remarks>
-    [Obsolete("Especialistas devem ser chamados via tool bindings do FrameworkOrchestratorService. " +
-              "Este método será removido na Fase 4. Use IFrameworkOrchestratorService.ExecuteAsync.", error: false)]
     public async Task<AgentResponse> ExecuteAsync(string input, UserContext context)
     {
         UpdateLastUsed();
@@ -73,7 +74,7 @@ public class AgentFrameworkAdapter : IAgent
         try
         {
             var sessionId = ResolveSessionId(context);
-            var session = await _sessionBridge.GetOrCreateFrameworkSessionAsync(_frameworkAgent, sessionId);
+            var session = await _sessionStore.GetSessionAsync(_frameworkAgent, sessionId, CancellationToken.None);
 
             string content;
             FrameworkAgentResponse? frameworkResponse = null;
@@ -132,8 +133,8 @@ public class AgentFrameworkAdapter : IAgent
                 }
             };
 
-            await _sessionBridge.SyncResponseAsync(sessionId, Name, input, result);
-            await _sessionBridge.PersistFrameworkSessionAsync(sessionId, _frameworkAgent, session);
+            await SyncResponseAsync(sessionId, input, result);
+            await _sessionStore.SaveSessionAsync(_frameworkAgent, sessionId, session, CancellationToken.None);
 
             return result;
         }
@@ -167,6 +168,27 @@ public class AgentFrameworkAdapter : IAgent
 
     public void UpdateLastUsed()
         => _innerAgent.UpdateLastUsed();
+
+    private async Task SyncResponseAsync(string sessionId, string userInput, AgentResponse response)
+    {
+        var agentEvent = new AgentEvent
+        {
+            SessionId = sessionId,
+            AgentName = Name,
+            UserInput = userInput,
+            AgentResponse = response.Content,
+            ActionsPerformed = response.ActionsPerformed,
+            ToolsUsed = response.ToolsUsed,
+            Context = new Dictionary<string, object>
+            {
+                ["source"] = "AgentFramework",
+                ["success"] = response.Success,
+                ["executionMode"] = "direct"
+            }
+        };
+
+        await _sessionManager.AddEventAsync(sessionId, agentEvent);
+    }
 
     private static string ResolveSessionId(UserContext context)
     {

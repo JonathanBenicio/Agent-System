@@ -330,7 +330,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         foreach (var step in plan.Steps.OrderBy(step => step.Index))
         {
             var stepAnalysis = BuildStepAnalysis(step, analysis);
-            var agent = await _agentFactory.GetOrCreateAgentAsync(stepAnalysis);
+            var agent = await _agentFactory.ResolveAgentAsync(stepAnalysis);
             var stepInput = await BuildStepInputAsync(input, step, agent, ct);
             stepInput = await BuildChannelAwareStepInputAsync(sessionId, step, agent, stepInput, AgentChannelKind.Planner, ct);
 
@@ -434,7 +434,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             }
         }, ct);
 
-        var reviewer = await _agentFactory.GetOrCreateAgentAsync(new AnalysisResult
+        var reviewer = await _agentFactory.ResolveAgentAsync(new AnalysisResult
         {
             PrimaryDomain = "analysis",
             EstimatedAgent = "AnalysisAgent",

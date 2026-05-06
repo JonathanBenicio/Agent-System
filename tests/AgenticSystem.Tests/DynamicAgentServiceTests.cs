@@ -1,10 +1,10 @@
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
-using AgenticSystem.Core.LLM.Models;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
 using System.Threading;
 using FluentAssertions;
+using AIChatResponse = Microsoft.Extensions.AI.ChatResponse;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
@@ -14,15 +14,15 @@ namespace AgenticSystem.Tests;
 public class DynamicAgentServiceTests
 {
     private readonly IAgentFactory _agentFactory;
-    private readonly ILLMManager _llmManager;
+    private readonly IChatClient _chatClient;
     private readonly DynamicAgentService _sut;
 
     public DynamicAgentServiceTests()
     {
         _agentFactory = Substitute.For<IAgentFactory>();
-        _llmManager = Substitute.For<ILLMManager>();
+        _chatClient = Substitute.For<IChatClient>();
         var logger = Substitute.For<ILogger<DynamicAgentService>>();
-        _sut = new DynamicAgentService(_agentFactory, _llmManager, logger);
+        _sut = new DynamicAgentService(_agentFactory, _chatClient, logger);
     }
 
     [Fact]
@@ -74,8 +74,8 @@ public class DynamicAgentServiceTests
             ""instructions"": ""You are a finance expert agent""
         }";
 
-        _llmManager.GenerateAsync(Arg.Any<LLMRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LLMResponse { Success = true, Content = llmJson });
+        _chatClient.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(new AIChatResponse(new ChatMessage(ChatRole.Assistant, llmJson)));
 
         var agent = Substitute.For<IAgent>();
         agent.Name.Returns("FinanceAgent");
@@ -94,8 +94,8 @@ public class DynamicAgentServiceTests
         var input = "crie um agente de finanças";
         var context = new UserContext { UserId = "user1", Role = "dev", Language = "pt-br" };
 
-        _llmManager.GenerateAsync(Arg.Any<LLMRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LLMResponse { Success = false, Content = null });
+        _chatClient.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(new AIChatResponse(new ChatMessage(ChatRole.Assistant, string.Empty)));
 
         var agent = Substitute.For<IAgent>();
         agent.Name.Returns("FinanceAgent");
@@ -142,8 +142,8 @@ public class DynamicAgentServiceTests
     {
         var context = new UserContext { UserId = "user1", Role = "dev", Language = "pt-br" };
 
-        _llmManager.GenerateAsync(Arg.Any<LLMRequest>(), Arg.Any<CancellationToken>())
-            .Returns(new LLMResponse { Success = false });
+        _chatClient.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
+            .Returns(new AIChatResponse(new ChatMessage(ChatRole.Assistant, string.Empty)));
 
         var spec = await _sut.GenerateSpecificationAsync("crie um agente de marketing", context);
 

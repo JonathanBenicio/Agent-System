@@ -101,7 +101,7 @@ Com ML11 (Dynamic Agent Creation), o sistema não precisa prever todo domínio a
 
 ### 7. Delegação é cooperação, não falha
 
-Com ML12 (Dynamic Handoffs), agents delegam contexto entre si mid-conversation. Não é fallback — é arquitetura intencional.
+Com ML12 (Delegação Dinâmica), agents delegam contexto entre si mid-conversation. Não é fallback — é arquitetura intencional.
 
 | Strategy | Quando usar |
 |----------|-------------|
@@ -109,7 +109,7 @@ Com ML12 (Dynamic Handoffs), agents delegam contexto entre si mid-conversation. 
 | `FanOut` | Múltiplas perspectivas em paralelo |
 | `Chain` | Pipeline sequencial — output de um é input do próximo |
 
-**Anti-pattern**: Agent que tenta resolver tudo sozinho para "não perder contexto". O HandoffManager preserva contexto entre delegações por design.
+**Anti-pattern**: Agent que tenta resolver tudo sozinho para "não perder contexto". O orquestrador preserva contexto entre delegações por design, usando sessão estruturada, bindings e canais compartilhados.
 
 ---
 
@@ -153,7 +153,7 @@ O SetupFlowManager (ML15) garante que novos usuários sejam guiados — não aba
 | **Preference Dictatorship** | Forçar personalização sem opt-out | Profiles são sugestivos, nunca mandatórios |
 | **Correction Overfit** | Regras de correção ultra-específicas | Scope broad primeiro, refine depois |
 | **Static Catalog** | Prever todos os agents na compilação | Dynamic Agent Creation (ML11) em runtime |
-| **Context Amnesia** | Perder contexto em delegações | HandoffManager preserva state (ML12) |
+| **Context Amnesia** | Perder contexto em delegações | Sessão estruturada + canais entre agents preservam state (ML12) |
 | **Infinite Memory** | Guardar tudo sem curadoria | Session Consolidation (ML13) comprime |
 
 ---
@@ -186,7 +186,7 @@ OpenAI, Gemini, Claude, Ollama — todos atrás da mesma interface `ILLMProvider
 | Confidence exposta | 100% | Todo `AgentResponse` tem score |
 | Human correction loop ativo | > 0 regras | `CorrectionRule.TimesApplied > 0` |
 | Dynamic agents criados | > 0 em uso real | `DynamicAgentService.GetDynamicAgentsAsync()` |
-| Handoff success rate | > 95% | Delegações que retornam resultado válido |
+| Delegation success rate | > 95% | Delegações que retornam resultado válido |
 | Session consolidation | < 30 min para consolidar | `SessionConsolidator` processa em batch |
 | Setup completion rate | > 80% | Usuários que completam todos os steps |
 | Test coverage | 243 tests, 0 failures | `dotnet test` green |

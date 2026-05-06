@@ -29,14 +29,14 @@
 | | |
 |---|---|
 | **Área** | Microsoft Agent Framework |
-| **Status atual** | Orquestração segue custom via `MetaAgentOrchestrator` + `AgentRuntimeCoordinator`, usa `FrameworkAgentChannelService` para compartilhar contexto persistido entre planner, handoffs e reviewer, o `AgentSessionBridge` restaura `AgentSession` por `frameworkAgentId` e o `AgentCollaborationWorkflow` monta reviewer nativo com specialist agents expostos como tools via `AIAgentExtensions.AsAIFunction(...)`; o runtime do produto referencia `Microsoft.Agents.AI` / `Microsoft.Agents.AI.Abstractions` 1.3.0 e a API expõe MCP, não A2A |
-| **Gap** | Ainda não adota a superfície moderna de orquestração do framework no .NET, em especial `Microsoft.Agents.AI.Workflows` com `WorkflowBuilder`, `GroupChatWorkflowBuilder`, `GroupChatManager` / `RoundRobinGroupChatManager` e `HandoffWorkflowBuilder`; a seleção, terminação e coordenação ponta a ponta seguem em componentes próprios, e não há integração A2A registrada no runtime atual |
-| **Oportunidade** | Evoluir de reviewer agent-as-tool para Workflows nativos com selection strategy, round-robin, termination policies, checkpoints e handoffs preservando os channels já implementados; em trilha complementar, avaliar A2A para interoperabilidade entre runtimes, sem confundir isso com a orquestração interna |
-| **Impacto** | Médio — reduz código custom e alinha com evolução do framework |
-| **Esforço** | Alto — requer refactor de orquestração |
-| **Referência** | [`MetaAgentOrchestrator.cs`](../src/AgenticSystem.Core/Services/MetaAgentOrchestrator.cs), [`AgentRuntimeCoordinator.cs`](../src/AgenticSystem.Core/Services/AgentRuntimeCoordinator.cs), [`FrameworkAgentChannelService.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkAgentChannelService.cs), [`AgentSessionBridge.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/AgentSessionBridge.cs), [`AgentCollaborationWorkflow.cs`](../src/AgenticSystem.Infrastructure/AI/AgentCollaborationWorkflow.cs), [`AgentFrameworkFactory.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/AgentFrameworkFactory.cs), [`AgenticSystem.Infrastructure.csproj`](../src/AgenticSystem.Infrastructure/AgenticSystem.Infrastructure.csproj), [`Program.cs`](../src/AgenticSystem.Api/Program.cs) |
+| **Status atual** | O fluxo principal já é framework-first: `AgentExecutionWorkflow.ExecuteAsync()` delega para `FrameworkOrchestratorService`, que resolve um `AIAgent` hosted + `AgentSessionStore` keyed; `AgentCollaborationWorkflow` já usa `AgentWorkflowBuilder.BuildSequential(...)`; A2A e AG-UI já estão expostos; `IAgentFactory` voltou a entregar agentes crus; o `AgentFrameworkAdapter` ficou explícito só no `ExecuteDirectAsync`; e o orquestrador já delega a montagem final do hosted agent e o catálogo de tools auxiliares para serviços dedicados |
+| **Gap** | O gap deixou de ser “adotar workflows/A2A” e passou a ser **drenar as dívidas locais finais da migração**: enxugar a composição por sessão que ainda vive no `OrchestratorContextFactory`, adicionar testes de integração de protocolo e continuar usando extensões locais para reflection/quality gates enquanto o MAF não oferece isso nativamente |
+| **Oportunidade** | Consolidar o hosting nativo fim-a-fim no fluxo principal, simplificar wrappers transitórios e expandir `BuildConcurrent`, checkpointing e outros recursos de workflow onde houver ROI real |
+| **Impacto** | Médio — reduz código transitório e aproxima o runtime do modelo nativo já suportado pelo framework |
+| **Esforço** | Médio-Alto — requer cortes incrementais em paths ainda acoplados ao modelo anterior |
+| **Referência** | [`FrameworkOrchestratorService.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs), [`OrchestratorContextResolver.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorContextResolver.cs), [`OrchestratorContextFactory.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorContextFactory.cs), [`AgentFrameworkSessionStoreAdapter.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/AgentFrameworkSessionStoreAdapter.cs), [`AgentCollaborationWorkflow.cs`](../src/AgenticSystem.Infrastructure/AI/AgentCollaborationWorkflow.cs), [`ServiceCollectionExtensions.cs`](../src/AgenticSystem.Infrastructure/Extensions/ServiceCollectionExtensions.cs), [`Program.cs`](../src/AgenticSystem.Api/Program.cs) |
 
-**Decisão sugerida:** Tratar o fechamento completo deste item como adoção incremental de `Microsoft.Agents.AI.Workflows` e, em trilha separada, de `Microsoft.Agents.AI.Hosting.A2A`; o framework já oferece essas capacidades, mas o runtime atual do produto ainda está apoiado em `Microsoft.Agents.AI` + `Microsoft.Agents.AI.Abstractions` com orquestração principal custom. No corte atual, o ganho útil já entregue foi levar o reviewer para o caminho nativo com agents como tools e sessões persistidas.
+**Decisão sugerida:** Tratar o fechamento completo deste item como remoção progressiva das dívidas locais finais da migração framework-first. Workflows e protocol hosting já fazem parte do runtime atual; o backlog remanescente é simplificar o orquestrador hosted e cortar código transitório à medida que cada slice for validado.
 
 ---
 
@@ -166,9 +166,9 @@
 |---|---|
 | **Área** | Microsoft Agent Framework |
 | **Item** | Agent-to-Agent Channels nativos via sessão estruturada |
-| **Status atual** | `FrameworkAgentChannelService` persiste mensagens de canal na sessão e `HandoffManager`/`AgentCollaborationWorkflow` passam a construir inputs com contexto compartilhado entre agents |
-| **Resultado** | Planner, handoffs e reviewer deixaram de trocar apenas strings soltas e passaram a reutilizar um canal estruturado e persistido por sessão |
-| **Referência** | [`FrameworkAgentChannelService.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkAgentChannelService.cs), [`HandoffManager.cs`](../src/AgenticSystem.Core/Services/HandoffManager.cs), [`AgentCollaborationWorkflow.cs`](../src/AgenticSystem.Infrastructure/AI/AgentCollaborationWorkflow.cs) |
+| **Status atual** | `FrameworkAgentChannelService` persiste mensagens de canal na sessão e o orquestrador/workflows passam a construir inputs com contexto compartilhado entre agents |
+| **Resultado** | Planner, delegações e reviewer deixaram de trocar apenas strings soltas e passaram a reutilizar um canal estruturado e persistido por sessão |
+| **Referência** | [`FrameworkAgentChannelService.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkAgentChannelService.cs), [`FrameworkOrchestratorService.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs), [`AgentCollaborationWorkflow.cs`](../src/AgenticSystem.Infrastructure/AI/AgentCollaborationWorkflow.cs) |
 
 ---
 
@@ -220,7 +220,7 @@ Nenhum item do diagnóstico permanece totalmente sem implementação. O backlog 
 
 Foco restante do roadmap:
 
-- Médio impacto / alto esforço: migrar a orquestração custom para `Microsoft.Agents.AI.Workflows`, adotando workflow graphs, group chat e handoff nativos, preservando os channels já implementados e avaliando A2A como trilha complementar de interoperabilidade.
+- Médio impacto / alto esforço: consolidar o hosting nativo do orquestrador principal e cortar os wrappers transitórios que ainda sobraram fora do slice colaborativo.
 - Médio impacto / médio esforço: expandir compatibilidade para mais arquiteturas de rerank além do fluxo atual de upload individual/ZIP e persistência por tenant.
 
 ## Roadmap Sugerido

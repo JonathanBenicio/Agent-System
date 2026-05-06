@@ -23,9 +23,9 @@ public class AgentFrameworkFactory
     private readonly IServiceProvider _serviceProvider;
     private readonly UnifiedAIToolProvider? _toolProvider;
     private readonly McpToolsAIFunctionAdapter? _mcpToolsAdapter;
-    private readonly AgentSessionBridge? _sessionBridge;
+    private readonly AgentFrameworkSessionStoreAdapter? _sessionStore;
 
-    // Exposed for OrchestratorAgentBuilder to create the orchestrator ChatClientAgent
+    // Exposed for OrchestratorContextFactory to create the orchestrator ChatClientAgent
     internal IChatClient ChatClient => _chatClient;
     internal ILoggerFactory LoggerFactory => _loggerFactory;
     internal IServiceProvider ServiceProvider => _serviceProvider;
@@ -36,21 +36,21 @@ public class AgentFrameworkFactory
         IServiceProvider serviceProvider,
         UnifiedAIToolProvider? toolProvider = null,
         McpToolsAIFunctionAdapter? mcpToolsAdapter = null,
-        AgentSessionBridge? sessionBridge = null)
+        AgentFrameworkSessionStoreAdapter? sessionStore = null)
     {
         _chatClient = chatClient;
         _loggerFactory = loggerFactory;
         _serviceProvider = serviceProvider;
         _toolProvider = toolProvider;
         _mcpToolsAdapter = mcpToolsAdapter;
-        _sessionBridge = sessionBridge;
+        _sessionStore = sessionStore;
     }
 
     /// <summary>
     /// Cria um ChatClientAgent com pipeline (logging + telemetry) a partir de um IAgent existente.
     /// Nota: Usa construtor posicional para suportar Instructions (system prompt rico).
-    /// ChatHistoryProvider não é setado aqui pois AgentSessionBridge já gerencia
-    /// a reutilização de AgentSession (que mantém chat history in-memory por sessão).
+    /// ChatHistoryProvider não é setado aqui pois a reutilização de AgentSession
+    /// é controlada pelo AgentFrameworkSessionStoreAdapter quando o agent roda.
     /// </summary>
     public async Task<FrameworkAgent> CreateFromAgentAsync(IAgent agent, CancellationToken ct = default)
         => await CreateFromAgentAsync(agent, additionalTools: null, ct);
@@ -113,13 +113,13 @@ public class AgentFrameworkFactory
 
     public async Task<AgentToolBinding?> CreateToolBindingAsync(IAgent agent, string sessionId, CancellationToken ct = default)
     {
-        if (_sessionBridge is null)
+        if (_sessionStore is null)
         {
             return null;
         }
 
         var frameworkAgent = await CreateFromAgentAsync(agent, ct);
-        var session = await _sessionBridge.GetOrCreateFrameworkSessionAsync(frameworkAgent, sessionId, ct);
+        var session = await _sessionStore.GetSessionAsync(frameworkAgent, sessionId, ct);
         var tool = frameworkAgent.AsAIFunction(
             new AIFunctionFactoryOptions
             {
@@ -133,22 +133,22 @@ public class AgentFrameworkFactory
 
     public async Task<FrameworkAgentSession> GetOrCreateSessionAsync(FrameworkAgent agent, string sessionId, CancellationToken ct = default)
     {
-        if (_sessionBridge is null)
+        if (_sessionStore is null)
         {
-            throw new InvalidOperationException("AgentSessionBridge is not available.");
+            throw new InvalidOperationException("AgentFrameworkSessionStoreAdapter is not available.");
         }
 
-        return await _sessionBridge.GetOrCreateFrameworkSessionAsync(agent, sessionId, ct);
+        return await _sessionStore.GetSessionAsync(agent, sessionId, ct);
     }
 
     public async Task PersistSessionAsync(string sessionId, FrameworkAgent agent, FrameworkAgentSession session, CancellationToken ct = default)
     {
-        if (_sessionBridge is null)
+        if (_sessionStore is null)
         {
             return;
         }
 
-        await _sessionBridge.PersistFrameworkSessionAsync(sessionId, agent, session, ct);
+        await _sessionStore.SaveSessionAsync(agent, sessionId, session, ct);
     }
 
     private async Task<IList<AITool>?> GetUnifiedToolsAsync(CancellationToken ct)

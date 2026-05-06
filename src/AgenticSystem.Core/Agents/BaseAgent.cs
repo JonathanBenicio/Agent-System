@@ -1,7 +1,6 @@
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.LLM.Interfaces;
-using AgenticSystem.Core.LLM.Models;
 using AgenticSystem.Core.Models;
 using System.Text;
 
@@ -9,18 +8,18 @@ namespace AgenticSystem.Core.Agents;
 
 public abstract class BaseAgent : IAgent
 {
-    private readonly ILLMManager _llmManager;
+    private readonly IChatClient _chatClient;
     private readonly ISkillManager _skillManager;
     private readonly IAgentMemoryService? _agentMemoryService;
     private readonly ILogger _logger;
 
     protected BaseAgent(
-        ILLMManager llmManager,
+        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger logger,
         IAgentMemoryService? agentMemoryService = null)
     {
-        _llmManager = llmManager;
+        _chatClient = chatClient;
         _skillManager = skillManager;
         _agentMemoryService = agentMemoryService;
         _logger = logger;
@@ -46,15 +45,18 @@ public abstract class BaseAgent : IAgent
         try
         {
             var systemPrompt = await BuildSystemPromptAsync(context, input);
-            var response = await _llmManager.GenerateWithProfileAsync(
-                Name, "default", $"{systemPrompt}\n\nUser: {input}");
+            var response = await _chatClient.GetResponseAsync(
+                [
+                    new ChatMessage(ChatRole.System, systemPrompt),
+                    new ChatMessage(ChatRole.User, input)
+                ],
+                new ChatOptions
+                {
+                    Temperature = 0.7f,
+                    MaxOutputTokens = 2000
+                });
 
-            if (!response.Success)
-            {
-                return AgentResponse.Error(response.ErrorMessage ?? "LLM failed", Name);
-            }
-
-            var result = await ProcessResponseAsync(response.Content, input, context);
+            var result = await ProcessResponseAsync(response.Text ?? string.Empty, input, context);
             result.AgentName = Name;
             result.AgentTier = Tier;
             return result;

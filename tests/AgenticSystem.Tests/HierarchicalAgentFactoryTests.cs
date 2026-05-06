@@ -1,16 +1,16 @@
 using FluentAssertions;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
-using AgenticSystem.Core.LLM.Interfaces;
 
 namespace AgenticSystem.Tests;
 
 public class HierarchicalAgentFactoryTests
 {
-    private readonly ILLMManager _llmManager;
+    private readonly IChatClient _chatClient;
     private readonly ISkillManager _skillManager;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<HierarchicalAgentFactory> _logger;
@@ -18,16 +18,16 @@ public class HierarchicalAgentFactoryTests
 
     public HierarchicalAgentFactoryTests()
     {
-        _llmManager = Substitute.For<ILLMManager>();
+        _chatClient = Substitute.For<IChatClient>();
         _skillManager = Substitute.For<ISkillManager>();
         _loggerFactory = Substitute.For<ILoggerFactory>();
         _loggerFactory.CreateLogger(Arg.Any<string>()).Returns(Substitute.For<ILogger>());
         _logger = Substitute.For<ILogger<HierarchicalAgentFactory>>();
-        _sut = new HierarchicalAgentFactory(_llmManager, _skillManager, _loggerFactory, _logger);
+        _sut = new HierarchicalAgentFactory(_chatClient, _skillManager, _loggerFactory, _logger);
     }
 
     [Fact]
-    public async Task GetOrCreateAgentAsync_WithGeneralDomain_ReturnsAgent()
+    public async Task ResolveAgentAsync_WithGeneralDomain_ReturnsAgent()
     {
         var analysis = new AnalysisResult
         {
@@ -36,14 +36,14 @@ public class HierarchicalAgentFactoryTests
             Complexity = ComplexityLevel.Simple
         };
 
-        var agent = await _sut.GetOrCreateAgentAsync(analysis);
+        var agent = await _sut.ResolveAgentAsync(analysis);
 
         agent.Should().NotBeNull();
         agent.Name.Should().Be("GeneralAgent");
     }
 
     [Fact]
-    public async Task GetOrCreateAgentAsync_WithPersonalDomain_ReturnsPersonalAgent()
+    public async Task ResolveAgentAsync_WithPersonalDomain_ReturnsPersonalAgent()
     {
         var analysis = new AnalysisResult
         {
@@ -51,7 +51,7 @@ public class HierarchicalAgentFactoryTests
             RecommendedTier = AgentTier.Master
         };
 
-        var agent = await _sut.GetOrCreateAgentAsync(analysis);
+        var agent = await _sut.ResolveAgentAsync(analysis);
 
         agent.Should().NotBeNull();
         agent.Name.Should().Be("PersonalAgent");
