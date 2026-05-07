@@ -1,256 +1,186 @@
 using System.Text.Json;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Npgsql;
 
 namespace AgenticSystem.Infrastructure.Persistence;
 
 public sealed class PostgresScheduledTaskStore : IScheduledTaskStore
 {
-    private readonly string _connectionString;
+    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresScheduledTaskStore> _logger;
-    private readonly SemaphoreSlim _schemaLock = new(1, 1);
-    private bool _schemaReady;
 
-    public PostgresScheduledTaskStore(string connectionString, ILogger<PostgresScheduledTaskStore> logger)
+    public PostgresScheduledTaskStore(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresScheduledTaskStore> logger)
     {
-        _connectionString = connectionString;
+        _dbContextFactory = dbContextFactory;
         _logger = logger;
     }
 
     public async Task<ScheduledTask> SaveTaskAsync(ScheduledTask task, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entity = await db.ScheduledTasks.FirstOrDefaultAsync(item => item.Id == task.Id, ct);
+        if (entity is null)
+        {
+            db.ScheduledTasks.Add(new ScheduledTaskEntity
+            {
+                Id = task.Id,
+                Name = task.Name,
+                Status = task.Status.ToString(),
+                NextRunAt = task.NextRunAt,
+                PayloadJson = JsonSerializer.Serialize(task),
+                UpdatedAt = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            entity.Name = task.Name;
+            entity.Status = task.Status.ToString();
+            entity.NextRunAt = task.NextRunAt;
+            entity.PayloadJson = JsonSerializer.Serialize(task);
+            entity.UpdatedAt = DateTime.UtcNow;
+        }
 
-        const string sql = """
-            INSERT INTO scheduled_tasks (id, name, status, next_run_at, payload, updated_at)
-            VALUES (@id, @name, @status, @nextRunAt, @payload::jsonb, @updatedAt)
-            ON CONFLICT (id) DO UPDATE SET
-                name = EXCLUDED.name,
-                status = EXCLUDED.status,
-                next_run_at = EXCLUDED.next_run_at,
-                payload = EXCLUDED.payload,
-                updated_at = EXCLUDED.updated_at
-            """;
-
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", task.Id);
-        cmd.Parameters.AddWithValue("name", task.Name);
-        cmd.Parameters.AddWithValue("status", task.Status.ToString());
-        cmd.Parameters.AddWithValue("nextRunAt", (object?)task.NextRunAt ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("payload", JsonSerializer.Serialize(task));
-        cmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await db.SaveChangesAsync(ct);
         return task;
     }
 
     public async Task<ScheduledTask?> GetTaskAsync(string taskId, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        const string sql = "SELECT payload FROM scheduled_tasks WHERE id = @id";
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var payload = await db.ScheduledTasks
+            .AsNoTracking()
+            .Where(item => item.Id == taskId)
+            .Select(item => item.PayloadJson)
+            .FirstOrDefaultAsync(ct);
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", taskId);
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return result is string json ? JsonSerializer.Deserialize<ScheduledTask>(json) : null;
+        return payload is null ? null : JsonSerializer.Deserialize<ScheduledTask>(payload);
     }
 
     public async Task<IReadOnlyList<ScheduledTask>> GetAllTasksAsync(CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        const string sql = "SELECT payload FROM scheduled_tasks ORDER BY updated_at DESC";
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var payloads = await db.ScheduledTasks
+            .AsNoTracking()
+            .OrderByDescending(item => item.UpdatedAt)
+            .Select(item => item.PayloadJson)
+            .ToListAsync(ct);
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        var items = new List<ScheduledTask>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-        {
-            var task = JsonSerializer.Deserialize<ScheduledTask>(reader.GetString(0));
-            if (task is not null)
-            {
-                items.Add(task);
-            }
-        }
-
-        return items;
+        return payloads
+            .Select(payload => JsonSerializer.Deserialize<ScheduledTask>(payload))
+            .OfType<ScheduledTask>()
+            .ToList();
     }
 
     public async Task DeleteTaskAsync(string taskId, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        const string sql = "DELETE FROM scheduled_tasks WHERE id = @id";
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entity = await db.ScheduledTasks.FirstOrDefaultAsync(item => item.Id == taskId, ct);
+        if (entity is null)
+        {
+            return;
+        }
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", taskId);
-        await cmd.ExecuteNonQueryAsync(ct);
+        db.ScheduledTasks.Remove(entity);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<TriggerRule> SaveRuleAsync(TriggerRule rule, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entity = await db.TriggerRules.FirstOrDefaultAsync(item => item.Id == rule.Id, ct);
+        if (entity is null)
+        {
+            db.TriggerRules.Add(new TriggerRuleEntity
+            {
+                Id = rule.Id,
+                Name = rule.Name,
+                Enabled = rule.Enabled,
+                PayloadJson = JsonSerializer.Serialize(rule),
+                UpdatedAt = DateTime.UtcNow
+            });
+        }
+        else
+        {
+            entity.Name = rule.Name;
+            entity.Enabled = rule.Enabled;
+            entity.PayloadJson = JsonSerializer.Serialize(rule);
+            entity.UpdatedAt = DateTime.UtcNow;
+        }
 
-        const string sql = """
-            INSERT INTO trigger_rules (id, name, enabled, payload, updated_at)
-            VALUES (@id, @name, @enabled, @payload::jsonb, @updatedAt)
-            ON CONFLICT (id) DO UPDATE SET
-                name = EXCLUDED.name,
-                enabled = EXCLUDED.enabled,
-                payload = EXCLUDED.payload,
-                updated_at = EXCLUDED.updated_at
-            """;
-
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", rule.Id);
-        cmd.Parameters.AddWithValue("name", rule.Name);
-        cmd.Parameters.AddWithValue("enabled", rule.Enabled);
-        cmd.Parameters.AddWithValue("payload", JsonSerializer.Serialize(rule));
-        cmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
-        await cmd.ExecuteNonQueryAsync(ct);
+        await db.SaveChangesAsync(ct);
         return rule;
     }
 
     public async Task<TriggerRule?> GetRuleAsync(string ruleId, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        const string sql = "SELECT payload FROM trigger_rules WHERE id = @id";
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var payload = await db.TriggerRules
+            .AsNoTracking()
+            .Where(item => item.Id == ruleId)
+            .Select(item => item.PayloadJson)
+            .FirstOrDefaultAsync(ct);
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", ruleId);
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return result is string json ? JsonSerializer.Deserialize<TriggerRule>(json) : null;
+        return payload is null ? null : JsonSerializer.Deserialize<TriggerRule>(payload);
     }
 
     public async Task<IReadOnlyList<TriggerRule>> GetAllRulesAsync(CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        const string sql = "SELECT payload FROM trigger_rules ORDER BY updated_at DESC";
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var payloads = await db.TriggerRules
+            .AsNoTracking()
+            .OrderByDescending(item => item.UpdatedAt)
+            .Select(item => item.PayloadJson)
+            .ToListAsync(ct);
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        var items = new List<TriggerRule>();
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
-        {
-            var rule = JsonSerializer.Deserialize<TriggerRule>(reader.GetString(0));
-            if (rule is not null)
-            {
-                items.Add(rule);
-            }
-        }
-
-        return items;
+        return payloads
+            .Select(payload => JsonSerializer.Deserialize<TriggerRule>(payload))
+            .OfType<TriggerRule>()
+            .ToList();
     }
 
     public async Task DeleteRuleAsync(string ruleId, CancellationToken ct = default)
     {
-        await EnsureSchemaAsync(ct);
-        const string sql = "DELETE FROM trigger_rules WHERE id = @id";
-
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", ruleId);
-        await cmd.ExecuteNonQueryAsync(ct);
-    }
-
-    public async Task<TaskExecution> SaveExecutionAsync(TaskExecution execution, CancellationToken ct = default)
-    {
-        await EnsureSchemaAsync(ct);
-
-        const string sql = """
-            INSERT INTO scheduled_task_executions (execution_id, task_id, started_at, completed_at, success, payload)
-            VALUES (@executionId, @taskId, @startedAt, @completedAt, @success, @payload::jsonb)
-            ON CONFLICT (execution_id) DO UPDATE SET
-                task_id = EXCLUDED.task_id,
-                started_at = EXCLUDED.started_at,
-                completed_at = EXCLUDED.completed_at,
-                success = EXCLUDED.success,
-                payload = EXCLUDED.payload
-            """;
-
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("executionId", execution.ExecutionId);
-        cmd.Parameters.AddWithValue("taskId", execution.TaskId);
-        cmd.Parameters.AddWithValue("startedAt", execution.StartedAt);
-        cmd.Parameters.AddWithValue("completedAt", (object?)execution.CompletedAt ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("success", execution.Success);
-        cmd.Parameters.AddWithValue("payload", JsonSerializer.Serialize(execution));
-        await cmd.ExecuteNonQueryAsync(ct);
-        return execution;
-    }
-
-    private async Task EnsureSchemaAsync(CancellationToken ct)
-    {
-        if (_schemaReady)
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entity = await db.TriggerRules.FirstOrDefaultAsync(item => item.Id == ruleId, ct);
+        if (entity is null)
         {
             return;
         }
 
-        await _schemaLock.WaitAsync(ct);
-        try
+        db.TriggerRules.Remove(entity);
+        await db.SaveChangesAsync(ct);
+    }
+
+    public async Task<TaskExecution> SaveExecutionAsync(TaskExecution execution, CancellationToken ct = default)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entity = await db.ScheduledTaskExecutions.FirstOrDefaultAsync(item => item.ExecutionId == execution.ExecutionId, ct);
+        if (entity is null)
         {
-            if (_schemaReady)
+            db.ScheduledTaskExecutions.Add(new ScheduledTaskExecutionEntity
             {
-                return;
-            }
-
-            const string sql = """
-                CREATE TABLE IF NOT EXISTS scheduled_tasks (
-                    id text PRIMARY KEY,
-                    name text NOT NULL,
-                    status text NOT NULL,
-                    next_run_at timestamp with time zone NULL,
-                    payload jsonb NOT NULL,
-                    updated_at timestamp with time zone NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS trigger_rules (
-                    id text PRIMARY KEY,
-                    name text NOT NULL,
-                    enabled boolean NOT NULL,
-                    payload jsonb NOT NULL,
-                    updated_at timestamp with time zone NOT NULL
-                );
-
-                CREATE TABLE IF NOT EXISTS scheduled_task_executions (
-                    execution_id text PRIMARY KEY,
-                    task_id text NOT NULL,
-                    started_at timestamp with time zone NOT NULL,
-                    completed_at timestamp with time zone NULL,
-                    success boolean NOT NULL,
-                    payload jsonb NOT NULL
-                );
-
-                CREATE INDEX IF NOT EXISTS ix_scheduled_tasks_status ON scheduled_tasks(status);
-                CREATE INDEX IF NOT EXISTS ix_trigger_rules_enabled ON trigger_rules(enabled);
-                CREATE INDEX IF NOT EXISTS ix_scheduled_task_executions_task_id ON scheduled_task_executions(task_id);
-                """;
-
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync(ct);
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            await cmd.ExecuteNonQueryAsync(ct);
-            _schemaReady = true;
+                ExecutionId = execution.ExecutionId,
+                TaskId = execution.TaskId,
+                StartedAt = execution.StartedAt,
+                CompletedAt = execution.CompletedAt,
+                Success = execution.Success,
+                PayloadJson = JsonSerializer.Serialize(execution)
+            });
         }
-        finally
+        else
         {
-            _schemaLock.Release();
+            entity.TaskId = execution.TaskId;
+            entity.StartedAt = execution.StartedAt;
+            entity.CompletedAt = execution.CompletedAt;
+            entity.Success = execution.Success;
+            entity.PayloadJson = JsonSerializer.Serialize(execution);
         }
+
+        await db.SaveChangesAsync(ct);
+        _logger.LogDebug("Task execution persisted via EF Core: {ExecutionId}", execution.ExecutionId);
+        return execution;
     }
 }

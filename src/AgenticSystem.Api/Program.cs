@@ -5,6 +5,7 @@ using AgenticSystem.Api.MCP;
 using AgenticSystem.Core.Extensions;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.AgentFramework;
 using AgenticSystem.Infrastructure.Extensions;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
@@ -57,14 +58,23 @@ var protocolRateLimitQueueLimit = protocolHosting.GetValue("RateLimiting:QueueLi
 
 if (a2aEnabled || agUiEnabled)
 {
-    // Protocol-facing agent uses the full orchestrator pipeline via keyed IChatClient.
-    // O ProtocolOrchestratorChatClient delega para IFrameworkOrchestratorService.ExecuteAsync,
-    // garantindo acesso a tools, RAG, especialistas e middleware (Finding 11 resolved).
-    builder.Services.AddAIAgent(
+    // Protocol hosting now aliases the native hosted orchestrator instead of a custom IChatClient wrapper.
+    var protocolAgentBuilder = builder.Services.AddAIAgent(
         "AgenticSystem",
-        "You are the Agentic System orchestrator. Route requests to the appropriate specialist agent.",
-        "Multi-agent orchestrator for A2A and AG-UI protocol interoperability",
-        chatClientServiceKey: "protocol-orchestrator");
+        static (sp, _) =>
+        {
+            var metadata = sp.GetRequiredService<OrchestratorMetadata>();
+            return sp.GetRequiredKeyedService<Microsoft.Agents.AI.AIAgent>(metadata.Name);
+        },
+        ServiceLifetime.Scoped);
+
+    protocolAgentBuilder.WithSessionStore(
+        static (sp, _) =>
+        {
+            var metadata = sp.GetRequiredService<OrchestratorMetadata>();
+            return sp.GetRequiredKeyedService<AgentSessionStore>(metadata.Name);
+        },
+        ServiceLifetime.Singleton);
 
     if (a2aEnabled)
     {

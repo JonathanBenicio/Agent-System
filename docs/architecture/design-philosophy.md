@@ -60,7 +60,7 @@ O sistema evolui em camadas de maturidade (ML1–ML10), cada uma adicionando uma
 | 14 | Smart Routing | Decisão informada > decisão rápida |
 | 15 | Setup Flow | Primeiras impressões definem adoção |
 | 16 | Session Persistence | Dados de sessão sobrevivem ao processo |
-| 17 | M.E.AI Adapter | Ecossistema aberto via padrão da indústria |
+| 17 | IChatClient Compatibility | Compatibilidade entre runtime contextual e providers legados |
 | 18 | Voice Interface | Acessibilidade é feature, não addon |
 
 **Regra**: Cada ML funciona standalone. ML18 não depende de ML17. Um deploy pode ativar qualquer subconjunto.
@@ -99,12 +99,12 @@ O `UserPreferenceEngine` (ML10) personaliza respostas sem forçar o usuário a u
 Os maturity levels 11-15 transformam o sistema de um executor passivo em um organismo adaptativo:
 
 - **ML11 — Dynamic Agent Creation**: O sistema cria agents especializados sob demanda via linguagem natural. Em vez de prever todo domínio antecipadamente, o sistema cresce com o uso.
-- **ML12 — Dynamic Handoffs**: Agents delegam contexto entre si mid-conversation. Strategies: SingleDelegate, FanOut (paralelo), Chain (sequencial). Delegação é cooperação, não falha.
+- **ML12 — Dynamic Handoffs**: O runtime hospedado delega contexto entre especialistas por tool bindings, canais estruturados e workflow colaborativo. Strategies como SingleDelegate, FanOut e Chain continuam disponíveis como topologias do canal.
 - **ML13 — Session Consolidation**: Sessões longas são comprimidas em summaries com extração de tópicos, agents utilizados e insights. Esquecer com critério é lembrar melhor.
 - **ML14 — Smart Routing**: O SmartRouter combina intent, confiança, carga e especialidade do agent para tomar decisões de routing. Fallback automático se o agent primário falhar.
 - **ML15 — Setup Flow**: Fluxo guiado de onboarding com validação por step. A primeira experiência define a adoção — o sistema guia, não assume.
-- **ML16 — Session Persistence**: `ISessionStore` abstrai persistência de sessões. Default `InMemorySessionStore` para dev, `SqliteSessionStore` (file-based JSON) para produção leve. Swap via DI sem alterar consumers.
-- **ML17 — M.E.AI Adapter**: `ChatClientProviderAdapter` faz bridge de qualquer `IChatClient` (Microsoft.Extensions.AI) para `ILLMProvider`. Zero config — registre o IChatClient e o adapter aparece automaticamente no ServiceGateway.
+- **ML16 — Session Persistence**: `ISessionStore` abstrai persistência de sessões. `InMemorySessionStore` cobre dev/local, `PostgresSessionStore` sustenta persistência durável e `AgentFrameworkSessionStoreAdapter` conecta esse armazenamento ao runtime hospedado.
+- **ML17 — IChatClient Compatibility**: `LLMManager` + `ContextAwareChatClient` resolvem provider/modelo por contexto; quando um fluxo precisa da direção inversa, `ProviderBackedChatClient` expõe compatibilidade entre contratos sem depender de um adapter automático global.
 - **ML18 — Voice Interface**: `VoiceController` expõe `/api/voice/ask` com timeout de 7s e `StripMarkdown` para output TTS-friendly. Alexa/Google Assistant ready sem middleware adicional.
 
 **Regra**: ML11-18 são composíveis. Um deploy pode usar handoffs sem smart routing, ou session consolidation sem agents dinâmicos.

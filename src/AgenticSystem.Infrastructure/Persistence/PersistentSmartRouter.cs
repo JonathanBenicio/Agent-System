@@ -1,7 +1,8 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Npgsql;
 
 namespace AgenticSystem.Infrastructure.Persistence;
 
@@ -12,18 +13,18 @@ namespace AgenticSystem.Infrastructure.Persistence;
 public class PersistentSmartRouter : ISmartRouter
 {
     private readonly ISmartRouter _inner;
-    private readonly string _connectionString;
+    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PersistentSmartRouter> _logger;
     private readonly SemaphoreSlim _warmupLock = new(1, 1);
     private volatile bool _warmedUp;
 
     public PersistentSmartRouter(
         ISmartRouter inner,
-        string connectionString,
+        IDbContextFactory<AgenticDbContext> dbContextFactory,
         ILogger<PersistentSmartRouter> logger)
     {
         _inner = inner;
-        _connectionString = connectionString;
+        _dbContextFactory = dbContextFactory;
         _logger = logger;
     }
 
@@ -50,77 +51,70 @@ public class PersistentSmartRouter : ISmartRouter
     {
         try
         {
-            const string sql = """
-                INSERT INTO agent_performance_metrics (agent_name, domain, latency_ms, success, user_satisfaction, recorded_at)
-                VALUES (@agentName, @domain, @latencyMs, @success, @userSatisfaction, @recordedAt)
-                """;
+            await using var db = await _dbContextFactory.CreateDbContextAsync();
+            db.AgentPerformanceMetrics.Add(new AgentPerformanceMetricEntity
+            {
+                AgentName = agentName,
+                Domain = metric.Domain,
+                LatencyMs = metric.Latency.TotalMilliseconds,
+                Success = metric.Success,
+                UserSatisfaction = metric.UserSatisfaction,
+                RecordedAt = metric.RecordedAt
+            });
 
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("agentName", agentName);
-            cmd.Parameters.AddWithValue("domain", metric.Domain);
-            cmd.Parameters.AddWithValue("latencyMs", metric.Latency.TotalMilliseconds);
-            cmd.Parameters.AddWithValue("success", metric.Success);
-            cmd.Parameters.AddWithValue("userSatisfaction", (object?)metric.UserSatisfaction ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("recordedAt", metric.RecordedAt);
-
-            await cmd.ExecuteNonQueryAsync();
+            await db.SaveChangesAsync();
         }
-        catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+        catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to persist performance metric for {Agent} — in-memory still recorded", agentName);
+            _logger.LogWarning(ex, "Failed to persist performance metric for {Agent} - in-memory still recorded", agentName);
         }
     }
 
     private async Task EnsureWarmedUpAsync()
     {
-        if (_warmedUp) return;
+        if (_warmedUp)
+        {
+            return;
+        }
 
         await _warmupLock.WaitAsync();
         try
         {
-            if (_warmedUp) return; // Double-check after acquiring lock
-            const string sql = """
-                SELECT agent_name, domain, latency_ms, success, user_satisfaction, recorded_at
-                FROM agent_performance_metrics
-                WHERE recorded_at >= @since
-                ORDER BY recorded_at DESC
-                """;
+            if (_warmedUp)
+            {
+                return;
+            }
 
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
+            await using var db = await _dbContextFactory.CreateDbContextAsync();
+            var entities = await db.AgentPerformanceMetrics
+                .AsNoTracking()
+                .Where(metric => metric.RecordedAt >= DateTime.UtcNow.AddDays(-7))
+                .OrderByDescending(metric => metric.RecordedAt)
+                .ToListAsync();
 
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("since", DateTime.UtcNow.AddDays(-7));
-
-            await using var reader = await cmd.ExecuteReaderAsync();
             var count = 0;
-            while (await reader.ReadAsync())
+            foreach (var entity in entities)
             {
                 var metric = new AgentPerformanceMetric
                 {
-                    Domain = reader.GetString(1),
-                    Latency = TimeSpan.FromMilliseconds(reader.GetDouble(2)),
-                    Success = reader.GetBoolean(3),
-                    UserSatisfaction = reader.IsDBNull(4) ? null : reader.GetDouble(4),
-                    RecordedAt = reader.GetDateTime(5)
+                    Domain = entity.Domain,
+                    Latency = TimeSpan.FromMilliseconds(entity.LatencyMs),
+                    Success = entity.Success,
+                    UserSatisfaction = entity.UserSatisfaction,
+                    RecordedAt = entity.RecordedAt
                 };
-                var agent = reader.GetString(0);
 
-                // Warm up inner (in-memory) without re-persisting
-                await _inner.RecordPerformanceAsync(agent, metric);
+                await _inner.RecordPerformanceAsync(entity.AgentName, metric);
                 count++;
             }
 
             _warmedUp = true;
-            _logger.LogInformation("SmartRouter warmed up with {Count} metrics from PostgreSQL", count);
+            _logger.LogInformation("SmartRouter warmed up with {Count} metrics from PostgreSQL via EF Core", count);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to warm up SmartRouter from PostgreSQL — starting cold");
-            _warmedUp = true; // Don't retry every call
+            _logger.LogWarning(ex, "Failed to warm up SmartRouter from PostgreSQL - starting cold");
+            _warmedUp = true;
         }
         finally
         {

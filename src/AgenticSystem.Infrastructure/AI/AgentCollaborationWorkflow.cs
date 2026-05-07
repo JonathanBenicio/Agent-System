@@ -1,11 +1,14 @@
 using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.Configuration;
 using AgenticSystem.Infrastructure.AgentFramework;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.Agents.AI.Workflows;
 using WorkflowAgent = Microsoft.Agents.AI.AIAgent;
 using WorkflowChatAgent = Microsoft.Agents.AI.ChatClientAgent;
@@ -22,6 +25,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
     private readonly AgentFrameworkFactory? _agentFrameworkFactory;
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
     private readonly ILogger<AgentCollaborationWorkflow> _logger;
+    private readonly CollaborationWorkflowOptions _workflowOptions;
 
     public AgentCollaborationWorkflow(
         ChatClientPlanner planner,
@@ -31,7 +35,8 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         ILogger<AgentCollaborationWorkflow> logger,
         IAgentChannelService? agentChannelService = null,
         IRAGService? ragService = null,
-        AgentFrameworkFactory? agentFrameworkFactory = null)
+        AgentFrameworkFactory? agentFrameworkFactory = null,
+        IOptions<CollaborationWorkflowOptions>? workflowOptions = null)
     {
         _planner = planner;
         _agentFactory = agentFactory;
@@ -41,6 +46,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         _agentChannelService = agentChannelService;
         _ragService = ragService;
         _agentFrameworkFactory = agentFrameworkFactory;
+        _workflowOptions = workflowOptions?.Value ?? new CollaborationWorkflowOptions();
     }
 
     public Task<bool> ShouldRunAsync(string input, AnalysisResult analysis, CancellationToken ct = default)
@@ -67,7 +73,15 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         AnalysisResult analysis,
         CancellationToken ct)
     {
-        var state = new CollaborationWorkflowState(sessionId, input, context, analysis);
+        var state = new CollaborationWorkflowState(sessionId, input, context, analysis)
+        {
+            ExecutionMode = ShouldUseConcurrentContextStage()
+                ? "context-parallel-planner-executor-reviewer-workflow"
+                : "planner-executor-reviewer-workflow",
+            WorkflowEngine = "AgentWorkflowBuilder",
+            AdvancedWorkflowEnabled = _workflowOptions.EnableAdvancedWorkflow,
+            CheckpointingRequested = _workflowOptions.EnableCheckpointing
+        };
         var workflow = BuildCollaborationWorkflow(state);
 
         try
@@ -77,33 +91,14 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
                 new(ChatRole.User, input)
             };
 
-            await using var run = await InProcessExecution.RunAsync(workflow, messages, sessionId, ct);
-
-            if (state.FailedResponse is not null)
+            if (_workflowOptions.EnableCheckpointing)
             {
-                return state.FailedResponse;
+                await using var run = await InProcessExecution.RunAsync(workflow, messages, CheckpointManager.Default, sessionId, ct);
+                return await CompleteWorkflowRunAsync(run, state, ct);
             }
 
-            if (state.FinalResponse is not null)
-            {
-                return state.FinalResponse;
-            }
-
-            var workflowError = run.OutgoingEvents.OfType<WorkflowErrorEvent>().FirstOrDefault();
-            var executorFailure = run.OutgoingEvents.OfType<ExecutorFailedEvent>().FirstOrDefault();
-
-            if (workflowError is not null)
-            {
-                _logger.LogWarning(workflowError.Exception,
-                    "AgentWorkflowBuilder collaboration run failed for session {SessionId}", sessionId);
-            }
-            else if (executorFailure?.Data is Exception executorException)
-            {
-                _logger.LogWarning(executorException,
-                    "AgentWorkflowBuilder collaboration executor failed for session {SessionId}", sessionId);
-            }
-
-            return AgentResponse.Error("Erro ao executar workflow colaborativo.", "CollaborativeWorkflow");
+            await using var nonCheckpointedRun = await InProcessExecution.RunAsync(workflow, messages, sessionId, ct);
+            return await CompleteWorkflowRunAsync(nonCheckpointedRun, state, ct);
         }
         catch (CollaborationWorkflowStageFailedException)
         {
@@ -125,14 +120,14 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         CancellationToken ct)
     {
         var plan = await CreatePlanAsync(sessionId, input, context, analysis, ct);
-        var stepExecution = await ExecutePlanStepsAsync(sessionId, input, context, analysis, plan, ct);
+        var stepExecution = await ExecutePlanStepsAsync(sessionId, input, context, analysis, plan, null, ct);
 
         if (stepExecution.FailedResponse is not null)
         {
             return stepExecution.FailedResponse;
         }
 
-        var review = await ReviewPlanAsync(sessionId, input, context, plan, stepExecution.StepOutputs, ct);
+        var review = await ReviewPlanAsync(sessionId, input, context, plan, stepExecution.StepOutputs, null, ct);
         return BuildCollaborativeResponse(
             plan,
             stepExecution.StepOutputs,
@@ -144,23 +139,217 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
 
     private Workflow BuildCollaborationWorkflow(CollaborationWorkflowState state)
     {
-        var agents = new WorkflowAgent[]
+        var agents = new List<WorkflowAgent>();
+
+        if (ShouldUseConcurrentContextStage())
         {
-            CreateWorkflowStageAgent(
-                "CollaborationPlanner",
-                "Planeja os steps do workflow colaborativo.",
-                (_, cancellationToken) => ExecutePlanningStageAsync(state, cancellationToken)),
-            CreateWorkflowStageAgent(
-                "CollaborationExecutor",
-                "Executa os steps do workflow colaborativo.",
-                (_, cancellationToken) => ExecuteExecutionStageAsync(state, cancellationToken)),
-            CreateWorkflowStageAgent(
-                "CollaborationReviewer",
-                "Revisa os resultados do workflow colaborativo.",
-                (_, cancellationToken) => ExecuteReviewerStageAsync(state, cancellationToken))
+            agents.Add(CreateWorkflowStageAgent(
+                "CollaborationContextCoordinator",
+                "Coleta contexto compartilhado em paralelo antes da execução do plano.",
+                (_, cancellationToken) => ExecuteConcurrentContextStageAsync(state, cancellationToken)));
+        }
+
+        agents.Add(CreateWorkflowStageAgent(
+            "CollaborationPlanner",
+            "Planeja os steps do workflow colaborativo.",
+            (_, cancellationToken) => ExecutePlanningStageAsync(state, cancellationToken)));
+        agents.Add(CreateWorkflowStageAgent(
+            "CollaborationExecutor",
+            "Executa os steps do workflow colaborativo.",
+            (_, cancellationToken) => ExecuteExecutionStageAsync(state, cancellationToken)));
+        agents.Add(CreateWorkflowStageAgent(
+            "CollaborationReviewer",
+            "Revisa os resultados do workflow colaborativo.",
+            (_, cancellationToken) => ExecuteReviewerStageAsync(state, cancellationToken)));
+
+        return AgentWorkflowBuilder.BuildSequential(
+            ShouldUseConcurrentContextStage() ? "collaboration-workflow-advanced" : "collaboration-workflow",
+            agents);
+    }
+
+    private bool ShouldUseConcurrentContextStage()
+        => _workflowOptions.EnableAdvancedWorkflow
+            && _workflowOptions.EnableConcurrentContextStage
+            && (_agentChannelService is not null || _ragService is not null);
+
+    private async Task<AgentResponse> CompleteWorkflowRunAsync(Run run, CollaborationWorkflowState state, CancellationToken ct)
+    {
+        CaptureWorkflowRunMetadata(run, state);
+        await RecordWorkflowStateArtifactAsync(state, ct);
+
+        if (state.FailedResponse is not null)
+        {
+            MergeWorkflowMetadata(state.FailedResponse.Metadata, state.WorkflowMetadata);
+            return state.FailedResponse;
+        }
+
+        if (state.FinalResponse is not null)
+        {
+            MergeWorkflowMetadata(state.FinalResponse.Metadata, state.WorkflowMetadata);
+            return state.FinalResponse;
+        }
+
+        var workflowError = run.OutgoingEvents.OfType<WorkflowErrorEvent>().FirstOrDefault();
+        var executorFailure = run.OutgoingEvents.OfType<ExecutorFailedEvent>().FirstOrDefault();
+
+        if (workflowError is not null)
+        {
+            _logger.LogWarning(workflowError.Exception,
+                "AgentWorkflowBuilder collaboration run failed for session {SessionId}", state.SessionId);
+        }
+        else if (executorFailure?.Data is Exception executorException)
+        {
+            _logger.LogWarning(executorException,
+                "AgentWorkflowBuilder collaboration executor failed for session {SessionId}", state.SessionId);
+        }
+
+        var failedResponse = AgentResponse.Error("Erro ao executar workflow colaborativo.", "CollaborativeWorkflow");
+        MergeWorkflowMetadata(failedResponse.Metadata, state.WorkflowMetadata);
+        return failedResponse;
+    }
+
+    private async Task<string> ExecuteConcurrentContextStageAsync(
+        CollaborationWorkflowState state,
+        CancellationToken ct)
+    {
+        var contextWorkflow = BuildConcurrentContextWorkflow(state);
+        if (contextWorkflow is null)
+        {
+            return "Concurrent context stage skipped.";
+        }
+
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, state.OriginalInput)
         };
 
-        return AgentWorkflowBuilder.BuildSequential("collaboration-workflow", agents);
+        try
+        {
+            if (_workflowOptions.EnableCheckpointing)
+            {
+                await using var checkpointedRun = await InProcessExecution.RunAsync(
+                    contextWorkflow,
+                    messages,
+                    CheckpointManager.Default,
+                    $"{state.SessionId}:context",
+                    ct);
+                CaptureContextRunMetadata(checkpointedRun, state);
+            }
+            else
+            {
+                await using var run = await InProcessExecution.RunAsync(
+                    contextWorkflow,
+                    messages,
+                    $"{state.SessionId}:context",
+                    ct);
+                CaptureContextRunMetadata(run, state);
+            }
+
+            state.SharedContextSupplement = BuildSharedContextSupplement(state.ContextSegments);
+
+            return string.IsNullOrWhiteSpace(state.SharedContextSupplement)
+                ? "Concurrent context stage produced no supplemental context."
+                : $"Concurrent context stage prepared {state.ContextSegments.Count} context source(s).";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Advanced concurrent context stage failed for session {SessionId}. Continuing without shared context.",
+                state.SessionId);
+            state.SharedContextSupplement = null;
+            state.ContextSegments.Clear();
+            return "Concurrent context stage failed; continuing without supplemental context.";
+        }
+    }
+
+    private Workflow? BuildConcurrentContextWorkflow(CollaborationWorkflowState state)
+    {
+        var agents = new List<WorkflowAgent>();
+
+        if (_agentChannelService is not null)
+        {
+            agents.Add(CreateWorkflowStageAgent(
+                "CollaborationChannelContext",
+                "Agrega sinais de canal compartilhado para o workflow colaborativo.",
+                (_, cancellationToken) => ExecuteChannelContextStageAsync(state, cancellationToken)));
+        }
+
+        if (_ragService is not null)
+        {
+            agents.Add(CreateWorkflowStageAgent(
+                "CollaborationRagContext",
+                "Agrega contexto RAG compartilhado para o workflow colaborativo.",
+                (_, cancellationToken) => ExecuteRagContextStageAsync(state, cancellationToken)));
+        }
+
+        return agents.Count == 0
+            ? null
+            : AgentWorkflowBuilder.BuildConcurrent(
+                "collaboration-context-workflow",
+                agents,
+                AggregateConcurrentContextMessages);
+    }
+
+    private async Task<string> ExecuteChannelContextStageAsync(
+        CollaborationWorkflowState state,
+        CancellationToken ct)
+    {
+        if (_agentChannelService is null)
+        {
+            return "Channel context unavailable.";
+        }
+
+        var messages = await _agentChannelService.GetMessagesAsync(state.SessionId, "CollaborativeWorkflow", maxCount: 5, ct);
+        if (messages.Count == 0)
+        {
+            return "No prior native channel context available.";
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("[Shared Channel Context]");
+        foreach (var message in messages)
+        {
+            builder.Append("- From ");
+            builder.Append(message.SourceAgent);
+            builder.Append(" via ");
+            builder.Append(message.Kind);
+            builder.Append(": ");
+            builder.AppendLine(message.Content);
+        }
+
+        var summary = builder.ToString().TrimEnd();
+        state.ContextSegments["channel"] = summary;
+        return summary;
+    }
+
+    private async Task<string> ExecuteRagContextStageAsync(
+        CollaborationWorkflowState state,
+        CancellationToken ct)
+    {
+        if (_ragService is null)
+        {
+            return "RAG context unavailable.";
+        }
+
+        var ragContext = await _ragService.RetrieveContextAsync(new RAGQuery
+        {
+            Query = state.OriginalInput,
+            AgentId = state.Analysis.EstimatedAgent,
+            SessionId = state.SessionId,
+            Scope = SearchScope.All,
+            MaxResults = 8,
+            TopKAfterReRank = 4,
+            MinRelevanceScore = 0.25
+        }, ct);
+
+        if (string.IsNullOrWhiteSpace(ragContext.BuiltContext))
+        {
+            return "No shared RAG context available.";
+        }
+
+        var summary = $"[Shared RAG Context]\n{ragContext.BuiltContext}";
+        state.ContextSegments["rag"] = summary;
+        return summary;
     }
 
     private WorkflowAgent CreateWorkflowStageAgent(
@@ -202,6 +391,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             state.Context,
             state.Analysis,
             state.Plan,
+            state.SharedContextSupplement,
             ct);
 
         state.StepOutputs.Clear();
@@ -234,6 +424,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             state.Context,
             state.Plan,
             state.StepOutputs,
+            state.SharedContextSupplement,
             ct);
 
         state.ReviewResponse = review.ReviewResponse;
@@ -242,8 +433,8 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             state.StepOutputs,
             review.ReviewResponse,
             review.Reviewer.Name,
-            "planner-executor-reviewer-workflow",
-            "AgentWorkflowBuilder");
+            state.ExecutionMode,
+            state.WorkflowEngine);
 
         return state.FinalResponse.Content;
     }
@@ -323,6 +514,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         UserContext context,
         AnalysisResult analysis,
         TaskPlan plan,
+        string? sharedContextSupplement,
         CancellationToken ct)
     {
         var stepOutputs = new List<(TaskStep Step, IAgent Agent, AgentResponse Response)>();
@@ -331,7 +523,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         {
             var stepAnalysis = BuildStepAnalysis(step, analysis);
             var agent = await _agentFactory.ResolveAgentAsync(stepAnalysis);
-            var stepInput = await BuildStepInputAsync(input, step, agent, ct);
+            var stepInput = await BuildStepInputAsync(input, step, agent, sharedContextSupplement, ct);
             stepInput = await BuildChannelAwareStepInputAsync(sessionId, step, agent, stepInput, AgentChannelKind.Planner, ct);
 
             await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
@@ -421,6 +613,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         UserContext context,
         TaskPlan plan,
         IReadOnlyList<(TaskStep Step, IAgent Agent, AgentResponse Response)> stepOutputs,
+        string? sharedContextSupplement,
         CancellationToken ct)
     {
         await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
@@ -443,7 +636,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             RecommendedTier = AgentTier.Specialist
         });
 
-        var reviewPrompt = BuildReviewPrompt(input, plan, stepOutputs);
+        var reviewPrompt = BuildReviewPrompt(input, plan, stepOutputs, sharedContextSupplement);
         reviewPrompt = await BuildChannelAwareReviewInputAsync(sessionId, reviewer.Name, reviewPrompt, ct);
         var reviewSw = Stopwatch.StartNew();
 
@@ -489,7 +682,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         string executionMode,
         string workflowEngine)
     {
-        return new AgentResponse
+        var response = new AgentResponse
         {
             Content = BuildFinalResponse(plan, stepOutputs, reviewResponse),
             AgentName = "CollaborativeWorkflow",
@@ -504,9 +697,13 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
                 ["planId"] = plan.Id,
                 ["reviewer"] = reviewerName,
                 ["stepCount"] = stepOutputs.Count,
-                ["nativeAgentTools"] = reviewResponse.Metadata.GetValueOrDefault("nativeAgentTools", false)
+                ["nativeAgentTools"] = reviewResponse.Metadata.GetValueOrDefault("nativeAgentTools", false),
+                ["nativeHandoffWorkflow"] = reviewResponse.Metadata.GetValueOrDefault("nativeHandoffWorkflow", false)
             }
         };
+
+        MergeWorkflowMetadata(response.Metadata, reviewResponse.Metadata);
+        return response;
     }
 
     private async Task<AgentResponse> ExecuteReviewAsync(
@@ -517,21 +714,52 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         UserContext context,
         CancellationToken ct)
     {
+        var distinctStepAgents = stepOutputs
+            .Select(output => output.Agent)
+            .DistinctBy(agent => agent.Name)
+            .Where(agent => !string.Equals(agent.Name, reviewer.Name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
         if (_agentFrameworkFactory is null)
         {
             return await reviewer.ExecuteAsync(reviewPrompt, context);
         }
 
+        if (ShouldUseNativeGroupChatReview(distinctStepAgents))
+        {
+            var groupChatReview = await TryExecuteNativeGroupChatReviewAsync(
+                sessionId,
+                reviewPrompt,
+                reviewer,
+                distinctStepAgents,
+                ct);
+
+            if (groupChatReview is not null)
+            {
+                return groupChatReview;
+            }
+        }
+
+        if (ShouldUseNativeHandoffReview(distinctStepAgents))
+        {
+            var handoffReview = await TryExecuteNativeHandoffReviewAsync(
+                sessionId,
+                reviewPrompt,
+                reviewer,
+                distinctStepAgents,
+                ct);
+
+            if (handoffReview is not null)
+            {
+                return handoffReview;
+            }
+        }
+
         try
         {
             var bindings = new List<AgentToolBinding>();
-            foreach (var agent in stepOutputs.Select(output => output.Agent).DistinctBy(agent => agent.Name))
+            foreach (var agent in distinctStepAgents)
             {
-                if (string.Equals(agent.Name, reviewer.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
                 var binding = await _agentFrameworkFactory.CreateToolBindingAsync(agent, sessionId, ct);
                 if (binding is not null)
                 {
@@ -547,18 +775,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             var frameworkReviewer = await _agentFrameworkFactory.CreateFromAgentAsync(reviewer, bindings.Select(binding => binding.Tool), ct);
             var reviewSession = await _agentFrameworkFactory.GetOrCreateSessionAsync(frameworkReviewer, sessionId, ct);
             var frameworkResponse = await frameworkReviewer.RunAsync(reviewPrompt, reviewSession, cancellationToken: ct);
-
-            var content = string.Join("\n", frameworkResponse.Messages
-                .Where(message => message.Role == ChatRole.Assistant)
-                .SelectMany(message => message.Contents.OfType<TextContent>())
-                .Select(text => text.Text));
-
-            if (string.IsNullOrWhiteSpace(content))
-            {
-                content = string.Join("\n", frameworkResponse.Messages
-                    .Where(message => message.Role == ChatRole.Assistant)
-                    .Select(message => message.Text));
-            }
+            var content = ExtractFrameworkResponseText(frameworkResponse);
 
             await _agentFrameworkFactory.PersistSessionAsync(sessionId, frameworkReviewer, reviewSession, ct);
             foreach (var binding in bindings)
@@ -586,6 +803,437 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         }
     }
 
+    private bool ShouldUseNativeHandoffReview(IReadOnlyCollection<IAgent> distinctStepAgents)
+        => _workflowOptions.EnableAdvancedWorkflow
+            && _workflowOptions.EnableNativeHandoffReview
+            && _agentFrameworkFactory is not null
+            && distinctStepAgents.Count > 0;
+
+    private bool ShouldUseNativeGroupChatReview(IReadOnlyCollection<IAgent> distinctStepAgents)
+        => _workflowOptions.EnableAdvancedWorkflow
+            && _workflowOptions.EnableNativeGroupChatTermination
+            && _agentFrameworkFactory is not null
+            && distinctStepAgents.Count > 0;
+
+    private async Task<AgentResponse?> TryExecuteNativeGroupChatReviewAsync(
+        string sessionId,
+        string reviewPrompt,
+        IAgent reviewer,
+        IReadOnlyList<IAgent> participantAgents,
+        CancellationToken ct)
+    {
+        if (_agentFrameworkFactory is null || participantAgents.Count == 0)
+        {
+            return null;
+        }
+
+        RoundRobinGroupChatManager? groupChatManager = null;
+        string? terminationReason = null;
+        var participantNames = new List<string> { reviewer.Name };
+        participantNames.AddRange(participantAgents.Select(agent => agent.Name));
+
+        try
+        {
+            var frameworkParticipants = new List<WorkflowAgent>
+            {
+                await _agentFrameworkFactory.CreateFromAgentAsync(reviewer, ct)
+            };
+
+            foreach (var agent in participantAgents)
+            {
+                frameworkParticipants.Add(await _agentFrameworkFactory.CreateFromAgentAsync(agent, ct));
+            }
+
+            #pragma warning disable MAAIW001
+            var groupChatBuilder = AgentWorkflowBuilder.CreateGroupChatBuilderWith(agents =>
+            {
+                groupChatManager = new RoundRobinGroupChatManager(
+                    agents,
+                    (_, history, _) => new ValueTask<bool>(TryResolveGroupChatTerminationReason(history, out terminationReason)));
+                groupChatManager.MaximumIterationCount = Math.Max(1, _workflowOptions.GroupChatMaximumIterations);
+                return groupChatManager;
+            })
+                .AddParticipants(frameworkParticipants)
+                .WithName("collaboration-review-group-chat")
+                .WithDescription("Review colaborativo com política nativa de terminação baseada em group chat.");
+            #pragma warning restore MAAIW001
+
+            var groupChatWorkflow = groupChatBuilder.Build();
+            var inputMessages = new List<ChatMessage>
+            {
+                new(ChatRole.User, reviewPrompt)
+            };
+
+            if (_workflowOptions.EnableCheckpointing)
+            {
+                await using var checkpointedRun = await InProcessExecution.RunAsync(
+                    groupChatWorkflow,
+                    inputMessages,
+                    CheckpointManager.Default,
+                    $"{sessionId}:review-group-chat",
+                    ct);
+
+                return await BuildNativeGroupChatReviewResponseAsync(
+                    checkpointedRun,
+                    reviewer,
+                    participantNames,
+                    groupChatManager,
+                    ResolveGroupChatTerminationReason(terminationReason, groupChatManager),
+                    ct);
+            }
+
+            await using var run = await InProcessExecution.RunAsync(
+                groupChatWorkflow,
+                inputMessages,
+                $"{sessionId}:review-group-chat",
+                ct);
+
+            return await BuildNativeGroupChatReviewResponseAsync(
+                run,
+                reviewer,
+                participantNames,
+                groupChatManager,
+                ResolveGroupChatTerminationReason(terminationReason, groupChatManager),
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Native group-chat review failed, falling back to handoff/native tool review");
+            return null;
+        }
+    }
+
+    private async Task<AgentResponse?> TryExecuteNativeHandoffReviewAsync(
+        string sessionId,
+        string reviewPrompt,
+        IAgent reviewer,
+        IReadOnlyList<IAgent> handoffAgents,
+        CancellationToken ct)
+    {
+        if (_agentFrameworkFactory is null || handoffAgents.Count == 0)
+        {
+            return null;
+        }
+
+        var handoffTargets = handoffAgents.Select(agent => agent.Name).ToList();
+
+        await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
+        {
+            Type = AgentStreamEventType.HandoffStarted,
+            AgentName = reviewer.Name,
+            Message = "Native review handoff workflow started.",
+            Data = new Dictionary<string, object>
+            {
+                ["targetAgents"] = handoffTargets,
+                ["source"] = "collaboration-review"
+            }
+        }, ct);
+
+        try
+        {
+            var frameworkReviewer = await _agentFrameworkFactory.CreateFromAgentAsync(reviewer, ct);
+            var frameworkHandoffAgents = new List<WorkflowAgent>();
+            foreach (var agent in handoffAgents)
+            {
+                var frameworkAgent = await _agentFrameworkFactory.CreateFromAgentAsync(agent, ct);
+                frameworkHandoffAgents.Add(frameworkAgent);
+            }
+
+            #pragma warning disable MAAIW001
+            var handoffWorkflowBuilder = AgentWorkflowBuilder.CreateHandoffBuilderWith(frameworkReviewer)
+                .EmitAgentResponseEvents(true)
+                .WithHandoffs(frameworkReviewer, frameworkHandoffAgents)
+                .WithHandoffs(
+                    frameworkHandoffAgents,
+                    frameworkReviewer,
+                    "Return findings to the review coordinator so the final recommendation can be produced.");
+            #pragma warning restore MAAIW001
+
+            var handoffWorkflow = handoffWorkflowBuilder.Build();
+            var inputMessages = new List<ChatMessage>
+            {
+                new(ChatRole.User, reviewPrompt)
+            };
+
+            if (_workflowOptions.EnableCheckpointing)
+            {
+                await using var checkpointedRun = await InProcessExecution.RunAsync(
+                    handoffWorkflow,
+                    inputMessages,
+                    CheckpointManager.Default,
+                    $"{sessionId}:review-handoff",
+                    ct);
+
+                return await BuildNativeHandoffReviewResponseAsync(
+                    checkpointedRun,
+                    reviewer,
+                    handoffTargets,
+                    sessionId,
+                    ct);
+            }
+
+            await using var run = await InProcessExecution.RunAsync(
+                handoffWorkflow,
+                inputMessages,
+                $"{sessionId}:review-handoff",
+                ct);
+
+            return await BuildNativeHandoffReviewResponseAsync(
+                run,
+                reviewer,
+                handoffTargets,
+                sessionId,
+                ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Native handoff review failed, falling back to native tool review");
+            return null;
+        }
+    }
+
+    private async Task<AgentResponse?> BuildNativeHandoffReviewResponseAsync(
+        Run run,
+        IAgent reviewer,
+        IReadOnlyList<string> handoffTargets,
+        string sessionId,
+        CancellationToken ct)
+    {
+        var agentResponses = run.OutgoingEvents.OfType<AgentResponseEvent>().ToList();
+        var content = string.Join("\n", agentResponses
+            .Select(agentResponseEvent => ExtractFrameworkResponseText(agentResponseEvent.Response))
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Select(text => text.Trim()));
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return null;
+        }
+
+        await _runtimeCoordinator.RecordArtifactAsync(new AgentExecutionArtifact
+        {
+            SessionId = sessionId,
+            Type = AgentExecutionArtifactType.Handoff,
+            Name = "CollaborationReviewHandoff",
+            AgentName = reviewer.Name,
+            Status = "Completed",
+            Summary = content,
+            Data = new Dictionary<string, object>
+            {
+                ["targetAgents"] = handoffTargets,
+                ["checkpointingEnabled"] = run.IsCheckpointingEnabled,
+                ["checkpointCount"] = run.Checkpoints.Count,
+                ["outgoingEventCount"] = run.OutgoingEvents.Count(),
+                ["agentResponseCount"] = agentResponses.Count
+            }
+        }, ct);
+
+        await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
+        {
+            Type = AgentStreamEventType.HandoffCompleted,
+            AgentName = reviewer.Name,
+            Message = "Native review handoff workflow completed.",
+            Data = new Dictionary<string, object>
+            {
+                ["targetAgents"] = handoffTargets,
+                ["checkpointingEnabled"] = run.IsCheckpointingEnabled,
+                ["agentResponseCount"] = agentResponses.Count
+            }
+        }, ct);
+
+        return new AgentResponse
+        {
+            Content = content,
+            AgentName = reviewer.Name,
+            AgentTier = reviewer.Tier,
+            Success = true,
+            Metadata = new Dictionary<string, object>
+            {
+                ["nativeHandoffWorkflow"] = true,
+                ["nativeReviewMode"] = "HandoffWorkflowBuilder",
+                ["handoffTargets"] = handoffTargets,
+                ["handoffCheckpointingEnabled"] = run.IsCheckpointingEnabled,
+                ["handoffCheckpointCount"] = run.Checkpoints.Count,
+                ["handoffOutgoingEventCount"] = run.OutgoingEvents.Count(),
+                ["handoffAgentResponseCount"] = agentResponses.Count
+            }
+        };
+    }
+
+    private async Task<AgentResponse?> BuildNativeGroupChatReviewResponseAsync(
+        Run run,
+        IAgent reviewer,
+        IReadOnlyList<string> participantNames,
+        RoundRobinGroupChatManager? groupChatManager,
+        string terminationReason,
+        CancellationToken ct)
+    {
+        var agentResponses = run.OutgoingEvents.OfType<AgentResponseEvent>().ToList();
+        var content = ExtractWorkflowRunText(run);
+
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return null;
+        }
+
+        await _runtimeCoordinator.RecordArtifactAsync(new AgentExecutionArtifact
+        {
+            SessionId = _runtimeCoordinator.CurrentSessionId ?? string.Empty,
+            Type = AgentExecutionArtifactType.SessionState,
+            Name = "CollaborationReviewGroupChat",
+            AgentName = reviewer.Name,
+            Status = "Completed",
+            Summary = terminationReason,
+            Data = new Dictionary<string, object>
+            {
+                ["participants"] = participantNames,
+                ["terminationReason"] = terminationReason,
+                ["iterationCount"] = groupChatManager?.IterationCount ?? 0,
+                ["maximumIterationCount"] = groupChatManager?.MaximumIterationCount ?? _workflowOptions.GroupChatMaximumIterations,
+                ["checkpointingEnabled"] = run.IsCheckpointingEnabled,
+                ["checkpointCount"] = run.Checkpoints.Count,
+                ["outgoingEventCount"] = run.OutgoingEvents.Count(),
+                ["agentResponseCount"] = agentResponses.Count
+            }
+        }, ct);
+
+        return new AgentResponse
+        {
+            Content = content,
+            AgentName = reviewer.Name,
+            AgentTier = reviewer.Tier,
+            Success = true,
+            Metadata = new Dictionary<string, object>
+            {
+                ["nativeGroupChatTermination"] = true,
+                ["nativeReviewMode"] = "GroupChatWorkflowBuilder",
+                ["groupChatParticipants"] = participantNames,
+                ["groupChatTerminationReason"] = terminationReason,
+                ["groupChatIterationCount"] = groupChatManager?.IterationCount ?? 0,
+                ["groupChatMaximumIterationCount"] = groupChatManager?.MaximumIterationCount ?? _workflowOptions.GroupChatMaximumIterations,
+                ["groupChatCheckpointingEnabled"] = run.IsCheckpointingEnabled,
+                ["groupChatCheckpointCount"] = run.Checkpoints.Count,
+                ["groupChatOutgoingEventCount"] = run.OutgoingEvents.Count(),
+                ["groupChatAgentResponseCount"] = agentResponses.Count
+            }
+        };
+    }
+
+    private static string ExtractWorkflowRunText(Run run)
+    {
+        var texts = new List<string>();
+
+        texts.AddRange(run.OutgoingEvents
+            .OfType<AgentResponseEvent>()
+            .Select(agentResponseEvent => ExtractFrameworkResponseText(agentResponseEvent.Response)));
+
+        texts.AddRange(run.OutgoingEvents
+            .OfType<AgentResponseUpdateEvent>()
+            .Select(agentResponseUpdateEvent => ExtractFrameworkResponseText(agentResponseUpdateEvent.AsResponse())));
+
+        foreach (var outputEvent in run.OutgoingEvents.OfType<WorkflowOutputEvent>())
+        {
+            if (outputEvent.Is<ChatMessage>(out var chatMessage))
+            {
+                texts.Add(ExtractChatMessageText(chatMessage));
+                continue;
+            }
+
+            if (outputEvent.Is<string>(out var textOutput))
+            {
+                texts.Add(textOutput);
+                continue;
+            }
+
+            texts.Add(ExtractFrameworkResponseText(outputEvent.AsType(typeof(object))));
+        }
+
+        return string.Join("\n", texts
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Select(text => text.Trim()));
+    }
+
+    private bool TryResolveGroupChatTerminationReason(IEnumerable<ChatMessage> history, out string? reason)
+    {
+        foreach (var message in history.Where(message => message.Role == ChatRole.Assistant))
+        {
+            var text = ExtractChatMessageText(message);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            foreach (var phrase in _workflowOptions.GroupChatTerminationPhrases)
+            {
+                if (string.IsNullOrWhiteSpace(phrase))
+                {
+                    continue;
+                }
+
+                if (text.Contains(phrase, StringComparison.OrdinalIgnoreCase))
+                {
+                    reason = $"phrase:{phrase}";
+                    return true;
+                }
+            }
+        }
+
+        reason = null;
+        return false;
+    }
+
+    private string ResolveGroupChatTerminationReason(string? explicitReason, RoundRobinGroupChatManager? groupChatManager)
+    {
+        if (!string.IsNullOrWhiteSpace(explicitReason))
+        {
+            return explicitReason;
+        }
+
+        if (groupChatManager is not null && groupChatManager.IterationCount >= groupChatManager.MaximumIterationCount)
+        {
+            return "max-iterations";
+        }
+
+        return "workflow-completed";
+    }
+
+    private static string ExtractChatMessageText(ChatMessage message)
+    {
+        var content = string.Join("\n", message.Contents.OfType<TextContent>().Select(text => text.Text));
+        return string.IsNullOrWhiteSpace(content) ? message.Text ?? string.Empty : content;
+    }
+
+    private static string ExtractFrameworkResponseText(object? frameworkResponse)
+    {
+        if (frameworkResponse is null)
+        {
+            return string.Empty;
+        }
+
+        var messagesProperty = frameworkResponse.GetType().GetProperty("Messages");
+        if (messagesProperty?.GetValue(frameworkResponse) is IEnumerable<ChatMessage> messages)
+        {
+            var content = string.Join("\n", messages
+                .Where(message => message.Role == ChatRole.Assistant)
+                .SelectMany(message => message.Contents.OfType<TextContent>())
+                .Select(text => text.Text));
+
+            if (!string.IsNullOrWhiteSpace(content))
+            {
+                return content;
+            }
+
+            return string.Join("\n", messages
+                .Where(message => message.Role == ChatRole.Assistant)
+                .Select(message => message.Text)
+                .Where(text => !string.IsNullOrWhiteSpace(text))
+                .Select(text => text!));
+        }
+
+        var textProperty = frameworkResponse.GetType().GetProperty("Text");
+        return textProperty?.GetValue(frameworkResponse) as string ?? string.Empty;
+    }
+
     private async Task<TaskPlan> BuildFallbackPlanAsync(string userId, string input, AnalysisResult analysis, CancellationToken ct)
     {
         return await _taskPlanManager.CreatePlanAsync(userId, input,
@@ -600,9 +1248,30 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
 
     private async Task<string> BuildStepInputAsync(string originalInput, TaskStep step, IAgent agent, CancellationToken ct)
     {
+        return await BuildStepInputAsync(originalInput, step, agent, null, ct);
+    }
+
+    private async Task<string> BuildStepInputAsync(
+        string originalInput,
+        TaskStep step,
+        IAgent agent,
+        string? sharedContextSupplement,
+        CancellationToken ct)
+    {
+        var sections = new List<string>
+        {
+            $"[Step]\n{step.Description}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(sharedContextSupplement))
+        {
+            sections.Add(sharedContextSupplement);
+        }
+
         if (_ragService is null)
         {
-            return $"[Step]\n{step.Description}\n\n[Original Objective]\n{originalInput}";
+            sections.Add($"[Original Objective]\n{originalInput}");
+            return string.Join("\n\n", sections);
         }
 
         var ragContext = await _ragService.RetrieveContextAsync(new RAGQuery
@@ -617,10 +1286,13 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
 
         if (string.IsNullOrWhiteSpace(ragContext.BuiltContext))
         {
-            return $"[Step]\n{step.Description}\n\n[Original Objective]\n{originalInput}";
+            sections.Add($"[Original Objective]\n{originalInput}");
+            return string.Join("\n\n", sections);
         }
 
-        return $"[Step]\n{step.Description}\n\n[Relevant Context]\n{ragContext.BuiltContext}\n\n[Original Objective]\n{originalInput}";
+        sections.Add($"[Relevant Context]\n{ragContext.BuiltContext}");
+        sections.Add($"[Original Objective]\n{originalInput}");
+        return string.Join("\n\n", sections);
     }
 
     private static AnalysisResult BuildStepAnalysis(TaskStep step, AnalysisResult original)
@@ -674,13 +1346,24 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             _ => fallback
         };
 
-    private static string BuildReviewPrompt(string originalInput, TaskPlan plan, IReadOnlyList<(TaskStep Step, IAgent Agent, AgentResponse Response)> stepOutputs)
+    private static string BuildReviewPrompt(
+        string originalInput,
+        TaskPlan plan,
+        IReadOnlyList<(TaskStep Step, IAgent Agent, AgentResponse Response)> stepOutputs,
+        string? sharedContextSupplement)
     {
         var sb = new StringBuilder();
         sb.AppendLine("Review the collaborative workflow output.");
         sb.AppendLine();
         sb.AppendLine($"Original objective: {originalInput}");
         sb.AppendLine($"Plan: {plan.Title}");
+
+        if (!string.IsNullOrWhiteSpace(sharedContextSupplement))
+        {
+            sb.AppendLine();
+            sb.AppendLine(sharedContextSupplement);
+        }
+
         sb.AppendLine();
         sb.AppendLine("Steps and outputs:");
         sb.AppendLine("If a step output is incomplete or ambiguous, you may call the step agent as a tool before writing the final review.");
@@ -769,6 +1452,130 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         return sb.ToString().TrimEnd();
     }
 
+    private static List<ChatMessage> AggregateConcurrentContextMessages(IList<List<ChatMessage>> outputs)
+    {
+        var content = string.Join("\n\n", outputs
+            .SelectMany(messages => messages)
+            .Where(message => message.Role == ChatRole.Assistant)
+            .Select(message => message.Text)
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .Select(text => text!));
+
+        return string.IsNullOrWhiteSpace(content)
+            ? []
+            : [new ChatMessage(ChatRole.Assistant, content)];
+    }
+
+    private static string? BuildSharedContextSupplement(ConcurrentDictionary<string, string> contextSegments)
+    {
+        if (contextSegments.IsEmpty)
+        {
+            return null;
+        }
+
+        var orderedSegments = new List<string>();
+        if (contextSegments.TryGetValue("rag", out var ragContext))
+        {
+            orderedSegments.Add(ragContext);
+        }
+
+        if (contextSegments.TryGetValue("channel", out var channelContext))
+        {
+            orderedSegments.Add(channelContext);
+        }
+
+        var additionalSegments = contextSegments
+            .Where(entry => entry.Key is not "rag" and not "channel")
+            .ToList();
+        additionalSegments.Sort((left, right) => string.Compare(left.Key, right.Key, StringComparison.Ordinal));
+
+        foreach (var segment in additionalSegments.Select(entry => entry.Value))
+        {
+            orderedSegments.Add(segment);
+        }
+
+        if (orderedSegments.Count == 0)
+        {
+            return null;
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("[Workflow Shared Context]");
+        builder.AppendLine("Use the supplemental context below when executing and reviewing the plan.");
+        builder.AppendLine();
+        builder.AppendLine(string.Join("\n\n", orderedSegments));
+        return builder.ToString().TrimEnd();
+    }
+
+    private static void MergeWorkflowMetadata(Dictionary<string, object> target, IReadOnlyDictionary<string, object> source)
+    {
+        foreach (var entry in source)
+        {
+            target[entry.Key] = entry.Value;
+        }
+    }
+
+    private void CaptureWorkflowRunMetadata(Run run, CollaborationWorkflowState state)
+    {
+        state.WorkflowMetadata["advancedWorkflow"] = state.AdvancedWorkflowEnabled;
+        state.WorkflowMetadata["concurrentContextStageEnabled"] = ShouldUseConcurrentContextStage();
+        state.WorkflowMetadata["workflowCheckpointingRequested"] = state.CheckpointingRequested;
+        state.WorkflowMetadata["workflowCheckpointingEnabled"] = run.IsCheckpointingEnabled;
+        state.WorkflowMetadata["workflowCheckpointCount"] = run.Checkpoints.Count;
+        state.WorkflowMetadata["workflowOutgoingEventCount"] = run.OutgoingEvents.Count();
+        state.WorkflowMetadata["workflowContextEnriched"] = !string.IsNullOrWhiteSpace(state.SharedContextSupplement);
+        state.WorkflowMetadata["concurrentContextSourcesCount"] = state.ContextSegments.Count;
+
+        if (state.ContextSegments.Count > 0)
+        {
+            var orderedKeys = state.ContextSegments.Keys.ToList();
+            orderedKeys.Sort(StringComparer.Ordinal);
+            state.WorkflowMetadata["concurrentContextSources"] = orderedKeys;
+        }
+
+        if (run.LastCheckpoint is not null)
+        {
+            state.WorkflowMetadata["workflowLastCheckpointId"] = run.LastCheckpoint.CheckpointId;
+            state.WorkflowMetadata["workflowLastCheckpointSessionId"] = run.LastCheckpoint.SessionId;
+        }
+    }
+
+    private void CaptureContextRunMetadata(Run run, CollaborationWorkflowState state)
+    {
+        state.WorkflowMetadata["contextCheckpointingEnabled"] = run.IsCheckpointingEnabled;
+        state.WorkflowMetadata["contextCheckpointCount"] = run.Checkpoints.Count;
+        state.WorkflowMetadata["contextOutgoingEventCount"] = run.OutgoingEvents.Count();
+
+        if (run.LastCheckpoint is not null)
+        {
+            state.WorkflowMetadata["contextLastCheckpointId"] = run.LastCheckpoint.CheckpointId;
+            state.WorkflowMetadata["contextLastCheckpointSessionId"] = run.LastCheckpoint.SessionId;
+        }
+    }
+
+    private async Task RecordWorkflowStateArtifactAsync(CollaborationWorkflowState state, CancellationToken ct)
+    {
+        if (state.WorkflowMetadata.Count == 0)
+        {
+            return;
+        }
+
+        await _runtimeCoordinator.RecordArtifactAsync(new AgentExecutionArtifact
+        {
+            SessionId = state.SessionId,
+            Type = AgentExecutionArtifactType.SessionState,
+            Name = "CollaborationWorkflowState",
+            AgentName = "CollaborativeWorkflow",
+            Status = state.FailedResponse is not null
+                ? "Failed"
+                : state.FinalResponse?.Success == true
+                    ? "Completed"
+                    : "Unknown",
+            Summary = state.ExecutionMode,
+            Data = new Dictionary<string, object>(state.WorkflowMetadata)
+        }, ct);
+    }
+
     private sealed class CollaborationWorkflowState
     {
         public CollaborationWorkflowState(string sessionId, string originalInput, UserContext context, AnalysisResult analysis)
@@ -785,9 +1592,16 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         public AnalysisResult Analysis { get; }
         public TaskPlan? Plan { get; set; }
         public List<(TaskStep Step, IAgent Agent, AgentResponse Response)> StepOutputs { get; } = [];
+        public ConcurrentDictionary<string, string> ContextSegments { get; } = new(StringComparer.OrdinalIgnoreCase);
         public AgentResponse? FailedResponse { get; set; }
         public AgentResponse? FinalResponse { get; set; }
         public AgentResponse? ReviewResponse { get; set; }
+        public string? SharedContextSupplement { get; set; }
+        public string ExecutionMode { get; set; } = "planner-executor-reviewer-workflow";
+        public string WorkflowEngine { get; set; } = "AgentWorkflowBuilder";
+        public bool AdvancedWorkflowEnabled { get; set; }
+        public bool CheckpointingRequested { get; set; }
+        public Dictionary<string, object> WorkflowMetadata { get; } = new();
     }
 
     private sealed class CollaborationWorkflowStageChatClient(

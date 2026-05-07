@@ -1,110 +1,90 @@
 # Diagramas de Arquitetura — Sistema Agentic
 
+> Diagramas alinhados ao runtime atual. Para a narrativa canônica da arquitetura backend, use [backend-architecture-explained.md](backend-architecture-explained.md).
+
 ## 1. Visão Geral (C4 — Container)
 
 ```mermaid
 graph TB
     subgraph User["👤 Usuário"]
-        CLI[CLI / Terminal]
         WEB[Dashboard Web]
         API_CLIENT[API Client]
+        PROTOCOL_CLIENT[Protocol Client]
     end
 
     subgraph System["Sistema Agentic (.NET 10)"]
         subgraph Api["AgenticSystem.Api"]
             REST[REST Controllers]
             VOICE[VoiceController<br/>POST /api/voice/ask]
-            HUB[SignalR Hub<br/>/hubs/gateway]
+            CHAT_HUB[ChatHub<br/>/hubs/chat]
+            GATEWAY_HUB[GatewayHub<br/>/hubs/gateway]
+            PROTOCOLS[A2A / AG-UI / OpenAI-compatible]
             DASH[Dashboard UI]
         end
 
         subgraph Core["AgenticSystem.Core"]
-            META[MetaAgent<br/>Tier 0 — Chief]
-            CTX[ContextAnalyzer]
-            ROUTER[SmartRouter<br/>ML14]
-            QG[QualityGates]
-
-            subgraph Agents["Specialized Agents"]
-                T1["Tier 1 — Master<br/>Personal · Work · Learning"]
-                T2["Tier 2 — Specialist<br/>Calendar · File · Research · Creative · Analysis"]
-                T3["Tier 3 — Support<br/>Notification · API"]
-                DYN["Dynamic Agents<br/>ML11 — Runtime-created"]
-            end
-
-            subgraph Maturity["Maturity Services (ML11-18)"]
-                CHANNELS[Agent Channels<br/>ML12]
-                SESSION[SessionConsolidator<br/>ML13]
-                SETUP[SetupFlowManager<br/>ML15]
-                SESSSTORE[ISessionStore<br/>ML16]
-                MEAI_ADAPT[ChatClientProviderAdapter<br/>ML17]
-                VOICEML[VoiceInterface<br/>ML18]
-            end
+            META[MetaAgentOrchestrator<br/>session + streaming facade]
+            WORKFLOW[AgentExecutionWorkflow<br/>thin execution shell]
         end
 
         subgraph Infra["AgenticSystem.Infrastructure"]
+            ORCH[FrameworkOrchestratorService]
+            HOSTED[Hosted Orchestrator<br/>AIAgent + OrchestratorContext]
+            COLLAB[Collaboration Workflow<br/>planner → executor → reviewer]
             GW[ServiceGateway<br/>Control Plane]
+            PRE[Pre-Processing Pipeline]
+            POST[Post-Processing Pipeline]
 
             subgraph AI["AI Providers"]
                 LLM["LLM<br/>OpenAI · Gemini · Claude · Ollama"]
                 EMB["Embeddings<br/>OpenAI · Google · Ollama · ONNX"]
-                VIS["Vision<br/>OpenAI · Google CV · Azure CV · Ollama"]
             end
 
             subgraph Integrations["Integrations"]
                 CAL["Calendar<br/>Google · Outlook"]
-                PROD["Productivity<br/>Todoist · TickTick · MS Graph"]
-                KNOW["Knowledge<br/>Notion · Obsidian · Drive"]
+                PROD["Productivity<br/>Workflows · HTTP · MCP"]
+                KNOW["Knowledge<br/>Obsidian · Files · RAG"]
             end
 
             subgraph Persistence["Persistence"]
                 PG[(PostgreSQL<br/>+ pgvector<br/>Sessions + Vectors)]
                 OBS[(Obsidian Vault<br/>Markdown)]
                 MCP[MCP Plugins]
+                FRAME_SESS[Agent Framework Session Store]
             end
         end
     end
 
-    CLI --> REST
-    WEB --> HUB
+    WEB --> CHAT_HUB
+    WEB --> GATEWAY_HUB
     API_CLIENT --> REST
     API_CLIENT --> VOICE
+    PROTOCOL_CLIENT --> PROTOCOLS
     REST --> META
     VOICE --> META
-    HUB --> GW
-    DASH --> HUB
+    CHAT_HUB --> META
+    GATEWAY_HUB --> DASH
+    PROTOCOLS --> ORCH
 
-    META --> CTX
-    CTX --> ROUTER
-    ROUTER --> QG
-    QG --> T1
-    QG --> T2
-    QG --> T3
-    QG --> DYN
-
-    T1 --> CHANNELS
-    T2 --> CHANNELS
-    CHANNELS --> T1
-    CHANNELS --> T2
-    CHANNELS --> T3
-
-    T1 --> GW
-    T2 --> GW
-    T3 --> GW
+    META --> WORKFLOW
+    WORKFLOW --> ORCH
+    ORCH --> PRE
+    PRE --> HOSTED
+    HOSTED --> COLLAB
+    HOSTED --> POST
+    HOSTED --> GW
 
     GW --> LLM
     GW --> EMB
-    GW --> VIS
     GW --> CAL
     GW --> PROD
     GW --> KNOW
 
-    T1 --> PG
-    T2 --> PG
-    META --> OBS
-    T2 --> MCP
-    SESSION --> SESSSTORE
-    SESSSTORE --> PG
-    MEAI_ADAPT --> LLM
+    HOSTED --> PG
+    HOSTED --> OBS
+    HOSTED --> MCP
+    HOSTED --> FRAME_SESS
+    FRAME_SESS --> PG
 
     style GW fill:#ff6b35,stroke:#333,stroke-width:3px,color:#fff
     style META fill:#1a73e8,stroke:#333,stroke-width:2px,color:#fff
@@ -117,15 +97,17 @@ graph TB
 ```mermaid
 sequenceDiagram
     actor User
-    participant API as REST API
-    participant Meta as MetaAgent
-    participant Ctx as ContextAnalyzer
-    participant Router as SmartRouter
-    participant QG as QualityGates
-    participant Agent as Specialized Agent
+    participant API as REST/SignalR/API Protocol
+    participant Meta as MetaAgentOrchestrator
+    participant WF as AgentExecutionWorkflow
+    participant Orch as FrameworkOrchestratorService
+    participant Pre as Pre-Processing Pipeline
+    participant Hosted as Hosted AIAgent
+    participant Tools as Specialists + Aux Tools
+    participant Post as Post-Processing Pipeline
     participant GW as ServiceGateway
-    participant LLM as LLM Provider
-    participant Mem as Memory (PG + Obsidian)
+    participant Sess as AgentSessionStore
+    participant Mem as Persistence (PG + Obsidian)
 
     User->>API: POST /api/chat {message}
 
@@ -137,43 +119,37 @@ sequenceDiagram
         end
     end
 
-    API->>Meta: ProcessAsync(request)
+    API->>Meta: ProcessRequestAsync(request)
+    Meta->>WF: ExecuteAsync(sessionId, input, context)
 
     rect rgb(230, 240, 255)
-        Note over Meta,Router: Fase 1 — Análise & Routing
-        Meta->>Ctx: AnalyzeAsync(userInput)
-        Ctx->>GW: ExecuteAsync<ILLMProvider>(analysis prompt)
-        GW->>LLM: Send (temp: 0.1)
-        LLM-->>GW: Intent + Domain + Complexity
-        GW-->>Ctx: Result + Metrics
-        Ctx-->>Meta: RoutingDecision{agent, confidence}
-        Meta->>Router: RouteAsync(decision)
-        Router->>QG: ValidatePreExecution(request)
-        QG-->>Router: ✅ Approved
+        Note over WF,Pre: Fase 1 — Escopo + Pre-Processing
+        WF->>Orch: ExecuteAsync(sessionId, input, context)
+        Orch->>Sess: GetSessionAsync(orchestrator, sessionId)
+        Orch->>Pre: ProcessAsync(request)
+        Pre-->>Orch: effectiveInput + metadata
     end
 
     rect rgb(230, 255, 230)
-        Note over Agent,LLM: Fase 2 — Execução
-        Router->>Agent: ProcessAsync(request, context)
-        Agent->>GW: ExecuteAsync<ILLMProvider>(task prompt)
-        Note over GW: Circuit Breaker → Rate Limit → Budget → Execute
-        GW->>LLM: Send (agent-specific params)
-        LLM-->>GW: Response + tokens
-        GW-->>Agent: Result + metadata{cost, latency}
+        Note over Hosted,Tools: Fase 2 — Orquestração Hosted
+        Orch->>Hosted: RunAsync(effectiveInput, session)
+        Hosted->>Tools: especialistas via AsAIFunction()
+        Tools->>GW: provider/tool/RAG calls
+        GW-->>Tools: results + metrics
+        Tools-->>Hosted: tool outputs + specialist responses
+        Hosted-->>Orch: framework response
     end
 
     rect rgb(255, 245, 230)
-        Note over Agent,Mem: Fase 3 — Persistência
-        Agent->>QG: ValidatePostExecution(response)
-        QG-->>Agent: ✅ Quality OK
-        Agent->>Mem: IndexAsync(session, embeddings)
-        Agent->>Mem: SyncToVault(insights)
+        Note over Orch,Mem: Fase 3 — Pós-Processamento
+        Orch->>Sess: SaveSessionAsync(orchestrator, sessionId, session)
+        Orch->>Post: ProcessAsync(response)
+        Post->>Mem: session + artifacts + agent memory
+        Post-->>WF: AgentResponse
     end
 
-    Agent-->>API: AgentResponse{content, agent, cost}
+    WF-->>API: AgentResponse{content, agent, cost}
     API-->>User: JSON Response
-
-    Note over GW: Emite métricas via SignalR → Dashboard
 ```
 
 ## 3. External Service Gateway (Detalhe)
@@ -242,8 +218,6 @@ graph TD
 
     subgraph Tier2["Tier 2 — Specialist"]
         CALENDAR[CalendarAgent<br/>temp: 0.0]
-        FILE[FileAgent<br/>temp: 0.3]
-        RESEARCH[ResearchAgent<br/>temp: 0.5]
         CREATIVE[CreativeAgent<br/>temp: 0.9]
         ANALYSIS[AnalysisAgent<br/>temp: 0.1]
     end
@@ -258,14 +232,12 @@ graph TD
     META -->|"learning context"| LEARNING
 
     PERSONAL -->|"schedule"| CALENDAR
-    PERSONAL -->|"files"| FILE
-    WORK -->|"research"| RESEARCH
     LEARNING -->|"creative"| CREATIVE
     LEARNING -->|"data"| ANALYSIS
 
     CALENDAR --> NOTIF
     WORK --> NOTIF
-    RESEARCH --> APIAGENT
+    WORK --> APIAGENT
 
     style Tier0 fill:#e8f0fe,stroke:#1a73e8,stroke-width:2px
     style Tier1 fill:#fef7e0,stroke:#f9ab00,stroke-width:2px
@@ -330,8 +302,7 @@ graph TB
         OBSIDIAN_VOL[(Obsidian Vault<br/>Persistent Volume)]
 
         subgraph Monitoring
-            PROM[Prometheus]
-            GRAF[Grafana]
+            LOGS[Structured Logs]
             AI_DASH[Dashboard<br/>Service Gateway]
         end
     end
@@ -343,7 +314,7 @@ graph TB
         OLLAMA[Ollama<br/>Local]
         GRAPH[MS Graph]
         GOOGLE[Google APIs]
-        NOTION_EXT[Notion API]
+        MCP_EXT[MCP Servers]
     end
 
     API_POD --> PG_SVC
@@ -357,10 +328,9 @@ graph TB
     API_POD --> OLLAMA
     API_POD --> GRAPH
     API_POD --> GOOGLE
-    API_POD --> NOTION_EXT
+    API_POD --> MCP_EXT
 
-    API_POD --> PROM
-    PROM --> GRAF
+    API_POD --> LOGS
     API_POD --> AI_DASH
 
     style K8s fill:#326ce5,stroke:#333,color:#fff
@@ -402,7 +372,7 @@ graph TB
     end
 
     subgraph Infra["AgenticSystem.Infrastructure"]
-        SQLITE[SqliteSessionStore<br/>File-based JSON]
+        POSTGRES[PostgresSessionStore<br/>JSON + PostgreSQL]
     end
 
     subgraph Consumers
@@ -413,40 +383,38 @@ graph TB
     SM --> ISTORE
     SC --> ISTORE
     ISTORE -.->|default| INMEM
-    ISTORE -.->|"UseSqliteSessionStore()"| SQLITE
-    SQLITE --> FS[("File System<br/>sessions/#123;id#125;.json")]
+    ISTORE -.->|"UsePostgresSessionStore()"| POSTGRES
+    POSTGRES --> PG[("PostgreSQL<br/>session_data")]
 
     style ISTORE fill:#1a73e8,stroke:#333,color:#fff
     style INMEM fill:#34a853,stroke:#333,color:#fff
-    style SQLITE fill:#336791,stroke:#333,color:#fff
+    style POSTGRES fill:#336791,stroke:#333,color:#fff
 ```
 
-## 9. M.E.AI Adapter (ML17)
+## 9. IChatClient Compatibility (ML17)
 
 ```mermaid
 graph LR
-    subgraph External["Microsoft.Extensions.AI"]
-        ICLIENT[IChatClient<br/>Any registered client]
+    subgraph Runtime["Contextual runtime"]
+        MGR[LLMManager<br/>provider catalog]
+        CTX[ContextAwareChatClient<br/>resolve provider/model]
     end
 
-    subgraph Adapter["ChatClientProviderAdapter"]
-        MAP_IN["LLMRequest → ChatMessage#91;#93;"]
-        EXEC[CompleteAsync]
-        MAP_OUT[ChatResponse → LLMResponse]
+    subgraph Compatibility["Optional compatibility"]
+        BACK[ProviderBackedChatClient<br/>ILLMProvider → IChatClient]
     end
 
     subgraph System["AgenticSystem"]
-        ILLM[ILLMProvider<br/>Name · GenerateAsync]
-        GW[ServiceGateway]
+        CHAT[IChatClient]
+        ILLM[ILLMProvider]
     end
 
-    ICLIENT --> MAP_IN
-    MAP_IN --> EXEC
-    EXEC --> MAP_OUT
-    MAP_OUT --> ILLM
-    ILLM --> GW
+    MGR --> CTX
+    CTX --> CHAT
+    ILLM --> BACK
+    BACK --> CHAT
 
-    style Adapter fill:#ff6b35,stroke:#333,color:#fff
-    style ICLIENT fill:#0078d4,stroke:#333,color:#fff
+    style Runtime fill:#ff6b35,stroke:#333,color:#fff
+    style Compatibility fill:#0078d4,stroke:#333,color:#fff
     style ILLM fill:#1a73e8,stroke:#333,color:#fff
 ```

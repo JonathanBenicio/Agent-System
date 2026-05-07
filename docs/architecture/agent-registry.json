@@ -22,7 +22,7 @@
         }
       },
       "skills": ["context-analysis", "intent-classification", "tier-system"],
-      "tools": ["smart-router", "quality-gate-validator", "session-manager"],
+      "tools": ["calculator", "datetime", "file-search"],
       "handoffs": [
         { "targetAgent": "personal-agent", "condition": "personal-context", "preserveContext": true },
         { "targetAgent": "work-agent", "condition": "work-context", "preserveContext": true },
@@ -57,7 +57,7 @@
         }
       },
       "skills": ["time-management", "task-prioritization"],
-      "tools": ["calendar-provider", "task-provider", "notification-sender"],
+      "tools": ["datetime", "http", "file-search"],
       "handoffs": [
         { "targetAgent": "calendar-agent", "condition": "requires-scheduling", "preserveContext": true, "returnToSource": true },
         { "targetAgent": "notification-agent", "condition": "requires-reminder", "preserveContext": false }
@@ -91,9 +91,9 @@
         }
       },
       "skills": ["email-etiquette", "meeting-management", "document-synthesis"],
-      "tools": ["email-provider", "calendar-provider", "storage-provider", "graph-api"],
+      "tools": ["http", "file-search"],
       "handoffs": [
-        { "targetAgent": "research-agent", "condition": "requires-research", "preserveContext": true, "returnToSource": true },
+        { "targetAgent": "analysis-agent", "condition": "requires-analysis", "preserveContext": true, "returnToSource": true },
         { "targetAgent": "notification-agent", "condition": "requires-notification", "preserveContext": false }
       ],
       "qualityGates": {
@@ -125,7 +125,7 @@
         }
       },
       "skills": ["pedagogy", "research-methodology", "summarization"],
-      "tools": ["research-engine", "notes-provider", "storage-provider"],
+      "tools": ["http", "file-search"],
       "handoffs": [
         { "targetAgent": "creative-agent", "condition": "creative-task-detected", "preserveContext": true },
         { "targetAgent": "analysis-agent", "condition": "data-analysis-needed", "preserveContext": true }
@@ -161,7 +161,7 @@
         }
       },
       "skills": ["creative-writing", "brainstorming-techniques", "storytelling"],
-      "tools": ["notes-provider", "storage-provider"],
+      "tools": ["file-search"],
       "handoffs": [],
       "qualityGates": {
         "preExecution": ["input-not-empty"],
@@ -193,7 +193,7 @@
         }
       },
       "skills": ["data-analysis", "statistical-reasoning", "report-formatting"],
-      "tools": ["vision-provider", "storage-provider", "api-agent"],
+      "tools": ["calculator", "http", "file-search"],
       "handoffs": [],
       "qualityGates": {
         "preExecution": ["input-not-empty", "data-source-valid"],
@@ -221,7 +221,7 @@
         }
       },
       "skills": ["datetime-parsing", "timezone-handling"],
-      "tools": ["calendar-provider"],
+      "tools": ["datetime"],
       "handoffs": [
         { "targetAgent": "notification-agent", "condition": "reminder-needed", "preserveContext": false }
       ],
@@ -250,7 +250,7 @@
         }
       },
       "skills": ["notification-templates"],
-      "tools": ["notification-sender", "email-provider"],
+      "tools": ["datetime", "http"],
       "handoffs": [],
       "qualityGates": {
         "preExecution": ["recipient-valid"],
@@ -278,7 +278,7 @@
         }
       },
       "skills": ["api-documentation", "json-handling"],
-      "tools": ["mcp-plugin-runner", "api-caller"],
+      "tools": ["http", "file-search"],
       "handoffs": [],
       "qualityGates": {
         "preExecution": ["endpoint-valid", "auth-configured"],

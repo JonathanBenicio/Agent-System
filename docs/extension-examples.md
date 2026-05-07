@@ -7,50 +7,33 @@ Exemplos práticos de como estender o Agentic System com novos agents, tools e s
 Agents são especializações de processamento. Cada agent tem um tier que define suas capacidades.
 
 ```csharp
+using AgenticSystem.Core.Agents;
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.Models;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 
 namespace AgenticSystem.Extensions.Agents;
 
-/// <summary>
-/// Agent especializado em análise de segurança.
-/// Tier 2 (Specialist) — domínio único com profundidade.
-/// </summary>
-public class SecurityAuditAgent : IAgent
+public sealed class SecurityAuditAgent : BaseAgent
 {
-    public string Name => "SecurityAuditor";
-    public AgentTier Tier => AgentTier.Specialist;
+    public override string Name => "SecurityAuditor";
+    public override string Description => "Especialista em revisão de segurança e hardening.";
+    public override AgentTier Tier => AgentTier.Specialist;
+    public override string Domain => "security";
+    public override IEnumerable<string> AvailableTools => ["http", "file-search", "calculator"];
 
-    private readonly ILogger<SecurityAuditAgent> _logger;
-
-    public SecurityAuditAgent(ILogger<SecurityAuditAgent> logger)
+    public SecurityAuditAgent(
+        IChatClient chatClient,
+        ISkillManager skillManager,
+        ILogger<SecurityAuditAgent> logger)
+        : base(chatClient, skillManager, logger)
     {
-        _logger = logger;
     }
 
-    public bool CanHandle(AnalysisResult analysis)
-    {
-        // Aceita requests de análise no domínio de segurança
-        return analysis.Intent == IntentType.Analyze
-            && analysis.PrimaryDomain.Contains("security", StringComparison.OrdinalIgnoreCase);
-    }
-
-    public async Task<AgentResponse> ProcessAsync(
-        AgentRequest request,
-        RAGContext? ragContext = null,
-        CancellationToken ct = default)
-    {
-        _logger.LogInformation("🔒 SecurityAuditAgent processing: {Query}", request.Query);
-
-        // 1. Use RAG context se disponível
-        var contextInfo = ragContext?.BuiltContext ?? "No additional context";
-
-        // 2. Processe a requisição (aqui seria chamada ao LLM)
-        var result = $"Security analysis for: {request.Query}\n\nContext used: {contextInfo.Length} chars";
-
-        return AgentResponse.Ok(result, Name, Tier);
-    }
+    protected override string GetBaseSystemPrompt() => """
+        You are a security specialist.
+        Prioritize vulnerability analysis, hardening recommendations and clear remediation steps.
+        """;
 }
 ```
 
@@ -60,7 +43,8 @@ public class SecurityAuditAgent : IAgent
 // Em Program.cs ou em um ServiceCollectionExtensions customizado
 services.AddSingleton<IAgent, SecurityAuditAgent>();
 
-// O HierarchicalAgentFactory automaticamente descobre agents via DI
+// A resolução via DI continua válida para o caminho direto
+// e para a materialização de especialistas do runtime hospedado.
 ```
 
 ## 2. Criar uma Tool
@@ -69,81 +53,82 @@ Tools são operações atômicas que agents podem invocar.
 
 ```csharp
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.Models;
+using Microsoft.Extensions.Logging;
 
 namespace AgenticSystem.Extensions.Tools;
 
-/// <summary>
-/// Tool para validar URLs e verificar status HTTP.
-/// </summary>
-public class UrlHealthCheckTool : ITool
+public sealed class UrlHealthCheckTool : ITool
 {
-    public string Name => "url-health-check";
-    public string Description => "Verifica se uma URL está acessível e retorna o status HTTP.";
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILogger<UrlHealthCheckTool> _logger;
 
-    public ToolParameter[] Parameters => new[]
-    {
-        new ToolParameter
-        {
-            Name = "url",
-            Description = "URL para verificar",
-            Type = "string",
-            Required = true
-        },
-        new ToolParameter
-        {
-            Name = "timeout",
-            Description = "Timeout em segundos (default: 10)",
-            Type = "number",
-            Required = false
-        }
-    };
+    public string Id => "url-health-check";
+    public string Name => "URL Health Check Tool";
+    public string Description => "Valida uma URL e retorna o status HTTP.";
+    public ToolCategory Category => ToolCategory.Api;
+    public bool RequiresAuth => false;
 
-    public async Task<ToolResult> ExecuteAsync(Dictionary<string, object> parameters)
+    public UrlHealthCheckTool(IHttpClientFactory httpClientFactory, ILogger<UrlHealthCheckTool> logger)
     {
-        if (!parameters.TryGetValue("url", out var urlObj) || urlObj is not string url)
+        _httpClientFactory = httpClientFactory;
+        _logger = logger;
+    }
+
+    public async Task<ToolResult> ExecuteAsync(ToolInput input, CancellationToken ct = default)
+    {
+        if (!input.Parameters.TryGetValue("url", out var urlObj) || urlObj is not string url)
         {
-            return ToolResult.Failure("Parameter 'url' is required");
+            return ToolResult.Fail("Parâmetro 'url' é obrigatório.");
         }
 
-        // Validate URL format to prevent SSRF
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
             || (uri.Scheme != "http" && uri.Scheme != "https"))
         {
-            return ToolResult.Failure("Invalid URL format. Only http/https supported.");
+            return ToolResult.Fail("URL inválida. Use http:// ou https://.");
         }
 
-        var timeoutSeconds = parameters.TryGetValue("timeout", out var t)
+        var timeoutSeconds = input.Parameters.TryGetValue("timeout", out var t)
             ? Convert.ToInt32(t) : 10;
 
-        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(timeoutSeconds) };
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(timeoutSeconds);
 
         try
         {
-            var response = await client.GetAsync(uri);
-            return ToolResult.Success(
-                $"Status: {(int)response.StatusCode} {response.StatusCode}");
+            var response = await client.GetAsync(uri, ct);
+            return ToolResult.Ok(new
+            {
+                statusCode = (int)response.StatusCode,
+                reasonPhrase = response.ReasonPhrase,
+                url
+            });
         }
         catch (TaskCanceledException)
         {
-            return ToolResult.Failure($"Timeout after {timeoutSeconds}s");
+            return ToolResult.Fail($"Timeout after {timeoutSeconds}s");
         }
         catch (HttpRequestException ex)
         {
-            return ToolResult.Failure($"Connection error: {ex.Message}");
+            _logger.LogWarning(ex, "Erro ao consultar {Url}", url);
+            return ToolResult.Fail($"Connection error: {ex.Message}");
         }
     }
+
+    public Task<bool> IsAvailableAsync(CancellationToken ct = default) => Task.FromResult(true);
 }
 ```
 
 ### Registrar a Tool
 
 ```csharp
-// Via IToolManager (em runtime)
-var toolManager = serviceProvider.GetRequiredService<IToolManager>();
-toolManager.RegisterTool(new UrlHealthCheckTool());
+services.AddHttpClient();
+services.AddSingleton<ITool, UrlHealthCheckTool>();
 
-// Ou via SeedAgenticDefaults em ServiceCollectionExtensions
+// Opcionalmente, registre explicitamente no IToolManager durante o bootstrap:
+var toolManager = serviceProvider.GetRequiredService<IToolManager>();
+toolManager.RegisterTool(new UrlHealthCheckTool(
+    serviceProvider.GetRequiredService<IHttpClientFactory>(),
+    serviceProvider.GetRequiredService<ILogger<UrlHealthCheckTool>>()));
 ```
 
 ## 3. Criar uma Skill
@@ -152,37 +137,33 @@ Skills são pacotes de conhecimento que enriquecem agents.
 
 ```csharp
 using AgenticSystem.Core.Interfaces;
-using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Extensions.Skills;
 
-/// <summary>
-/// Skill de DevOps — fornece prompts e contexto para operações de CI/CD.
-/// </summary>
-public class DevOpsSkill : ISkill
+public sealed class DevOpsSkill : ISkill
 {
-    public string Name => "devops";
-    public string Description => "CI/CD, Docker, Kubernetes, pipelines e deploy.";
-    public string[] Tags => new[] { "devops", "ci-cd", "docker", "kubernetes", "deploy" };
+    public string Id => "devops";
+    public string Name => "DevOps";
+    public string Domain => "work";
+    public SkillType Type => SkillType.Knowledge;
 
-    public bool IsRelevant(AnalysisResult analysis)
+    public Task<SkillContent> GetContentAsync(SkillContext context)
     {
-        return analysis.PrimaryDomain.Contains("devops", StringComparison.OrdinalIgnoreCase)
-            || analysis.RequiredTools.Any(t =>
-                t.Contains("docker", StringComparison.OrdinalIgnoreCase)
-                || t.Contains("k8s", StringComparison.OrdinalIgnoreCase));
-    }
-
-    public string GetSystemPromptAddition()
-    {
-        return """
-            You are a DevOps specialist. Follow these principles:
-            - Infrastructure as Code (IaC) always
-            - Immutable deployments
-            - 12-factor app methodology
-            - Canary/Blue-Green deployment strategies
-            - Security scanning in CI pipeline (SAST + DAST)
-            """;
+        return Task.FromResult(new SkillContent
+        {
+            SystemPromptFragment = """
+                You are a DevOps specialist. Follow these principles:
+                - Infrastructure as Code (IaC) always
+                - Immutable deployments
+                - 12-factor app methodology
+                - Canary/Blue-Green deployment strategies
+                - Security scanning in CI pipeline (SAST + DAST)
+                """,
+            Metadata = new Dictionary<string, string>
+            {
+                ["topics"] = "devops,ci-cd,docker,kubernetes,deploy"
+            }
+        });
     }
 }
 ```
@@ -242,18 +223,19 @@ services.AddSingleton<IMyFeatureService, MyFeatureService>();
 
 ## 5. Substituir o Session Store (ML16)
 
-O sistema usa `ISessionStore` para persistência de sessões. Por padrão, usa `InMemorySessionStore`. Para trocar para SQLite (ou criar seu próprio):
+O sistema usa `ISessionStore` para persistência de sessões. Por padrão, usa `InMemorySessionStore`. Para persistência durável, o caminho suportado é PostgreSQL:
 
 ```csharp
-// Opção 1 — Usar SQLite (file-based, zero config)
-services.UseSqliteSessionStore("./data/sessions");
+// Opção 1 — Usar PostgreSQL (persistência durável)
+services.UsePostgresSessionStore(configuration.GetConnectionString("AgenticDb")!);
 
 // Opção 2 — Implementar seu próprio ISessionStore
 public class RedisSessionStore : ISessionStore
 {
     public Task SaveAsync(SessionData session, CancellationToken ct = default) { /* ... */ }
     public Task<SessionData?> GetAsync(string sessionId, CancellationToken ct = default) { /* ... */ }
-    public Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, CancellationToken ct = default) { /* ... */ }
+    public Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, CancellationToken ct = default) { /* ... */ }
+    public Task<IReadOnlyList<SessionData>> GetByTenantAsync(string tenantId, string? userId = null, int maxResults = 10, CancellationToken ct = default) { /* ... */ }
     public Task DeleteAsync(string sessionId, CancellationToken ct = default) { /* ... */ }
     public Task<bool> ExistsAsync(string sessionId, CancellationToken ct = default) { /* ... */ }
 }
@@ -264,32 +246,23 @@ services.AddSingleton<ISessionStore, RedisSessionStore>();
 
 ## 6. Integrar LLM via Microsoft.Extensions.AI (ML17)
 
-O sistema usa **OpenAI SDK 2.10** + **Microsoft.Extensions.AI.OpenAI** como bridge. O `ChatClientProviderAdapter` expõe o `IChatClient` automaticamente como `ILLMProvider`:
+O caminho suportado hoje é registrar a infraestrutura completa, deixar o `LLMManager` montar o catálogo administrativo e usar o `ContextAwareChatClient` como `IChatClient` principal do runtime:
 
 ```csharp
-// 1. Registre um IChatClient via OpenAI SDK + M.E.AI pipeline
+// Recomendado: usar a extensão oficial da infraestrutura
+services.AddAgenticSystemInfrastructure(configuration);
+
+// Isso registra, entre outros:
+// - LLMManager (catálogo administrativo de providers)
+// - ContextAwareChatClient (resolve provider/modelo por contexto)
+// - GovernedChatClient como IChatClient principal
+
+// Quando um fluxo legado precisar expor um ILLMProvider como IChatClient:
 services.AddSingleton<IChatClient>(sp =>
-{
-    var client = new OpenAIClient(apiKey);
-    IChatClient chatClient = client.GetChatClient("gpt-4o").AsIChatClient();
-    return new ChatClientBuilder(chatClient)
-        .UseLogging(sp.GetRequiredService<ILoggerFactory>())
-        .Build();
-});
-
-// 2. O ChatClientProviderAdapter é registrado automaticamente
-//    quando detecta um IChatClient no DI (via Infrastructure DI Extensions)
-//    Ele implementa ILLMProvider e funciona como qualquer outro provider
-
-// Pipeline: OpenAIClient → ChatClient → .AsIChatClient() → ChatClientBuilder → DI
-// O adapter mapeia:
-// - LLMRequest → ChatMessage[]
-// - IChatClient.GetResponseAsync() → resultado
-// - ChatResponse → LLMResponse (com tokens de uso)
+    new ProviderBackedChatClient(sp.GetRequiredService<ILLMProvider>()));
 ```
 
-> **Nota**: Semantic Kernel foi removido em favor do OpenAI SDK nativo + M.E.AI.OpenAI bridge.
-> Pacotes: `OpenAI 2.10.0`, `Microsoft.Extensions.AI.OpenAI 10.5.1`, `Microsoft.Extensions.AI 9.6.0`
+> **Nota**: o runtime principal não depende mais de um adapter automático global de `IChatClient` para `ILLMProvider`; a compatibilidade agora é explícita e contextual.
 
 ## 7. Convenções de Extensão
 

@@ -37,6 +37,7 @@ public static class ServiceCollectionExtensions
         services.Configure<GeminiSettings>(configuration.GetSection("AgenticSystem:Gemini"));
         services.Configure<ClaudeSettings>(configuration.GetSection("AgenticSystem:Claude"));
         services.Configure<GatewaySettings>(configuration.GetSection("AgenticSystem:Gateway"));
+        services.Configure<CollaborationWorkflowOptions>(configuration.GetSection("AgenticSystem:CollaborationWorkflow"));
         services.Configure<ChatClientMiddlewareOptions>(configuration.GetSection("AgenticSystem:ChatClientMiddleware"));
         services.Configure<ReRankingOptions>(configuration.GetSection("AgenticSystem:RAG:ReRanking"));
         services.Configure<DynamicSkillsOptions>(configuration.GetSection("AgenticSystem:Skills"));
@@ -101,18 +102,46 @@ public static class ServiceCollectionExtensions
 
             services.AddSingleton(orchestratorMetadata);
             services.AddSingleton<AgentFrameworkFactory>();
-            services.AddSingleton<AgentFrameworkSessionStoreAdapter>();
+            services.AddSingleton<SimpleSessionStoreAdapter>();
             services.AddSingleton<OrchestratorAuxiliaryToolService>();
             services.AddSingleton<OrchestratorInstructionService>();
             services.AddSingleton<OrchestratorToolBindingService>();
+            
+            // [PHASE 1] Novo builder nativo
+            services.AddSingleton<RAGContextProvider>(sp =>
+            {
+                var ragService = sp.GetService<IRAGService>();
+                if (ragService is null)
+                    return null!;
+                var budgetManager = sp.GetService<IContextBudgetManager>();
+                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+                return new RAGContextProvider(ragService, budgetManager, loggerFactory.CreateLogger<RAGContextProvider>());
+            });
+            
+            services.AddSingleton<OrchestratorHostBuilder>(sp =>
+                new OrchestratorHostBuilder(
+                    sp.GetRequiredService<IChatClient>(),
+                    sp.GetRequiredService<ILoggerFactory>(),
+                    sp,
+                    orchestratorMetadata,
+                    sp.GetRequiredService<IAgentFactory>(),
+                    sp.GetRequiredService<OrchestratorInstructionService>(),
+                    sp.GetRequiredService<OrchestratorToolBindingService>(),
+                    sp.GetRequiredService<OrchestratorAuxiliaryToolService>(),
+                    sp.GetRequiredService<ILogger<OrchestratorHostBuilder>>(),
+                    sp.GetService<RAGContextProvider>(),
+                    sp.GetService<IQualityGateService>()));
+            
+            // [DEPRECATED] Thin wrapper for backward compatibility
             services.AddSingleton<OrchestratorContextFactory>();
             services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
-            services.AddSingleton<IDirectAgentExecutionFactory>(sp =>
-                new AgentFrameworkAgentFactory(
+            
+            services.AddSingleton<IDirectAgentExecutionService>(sp =>
+                new AgentFrameworkDirectExecutionService(
                     sp.GetRequiredService<AgentFrameworkFactory>(),
-                    sp.GetRequiredService<AgentFrameworkSessionStoreAdapter>(),
+                    sp.GetRequiredService<SimpleSessionStoreAdapter>(),
                     sp.GetRequiredService<ISessionManager>(),
-                    sp.GetRequiredService<ILogger<AgentFrameworkAdapter>>(),
+                    sp.GetRequiredService<ILogger<AgentFrameworkDirectExecutionService>>(),
                     sp.GetService<IAgentRuntimeCoordinator>(),
                     enableStreaming: enableStreaming));
 
@@ -122,17 +151,10 @@ public static class ServiceCollectionExtensions
                 ServiceLifetime.Scoped);
 
             hostedOrchestratorBuilder.WithSessionStore(
-                static (sp, _) => sp.GetRequiredService<AgentFrameworkSessionStoreAdapter>(),
+                static (sp, _) => sp.GetRequiredService<SimpleSessionStoreAdapter>(),
                 ServiceLifetime.Singleton);
 
             services.AddSingleton<IFrameworkOrchestratorService, FrameworkOrchestratorService>();
-
-            // Protocol-facing IChatClient: delega ao pipeline completo do orquestrador
-            // Usado pelo AddAIAgent para A2A/AG-UI (Finding 11 — protocol agent integration)
-            services.AddKeyedSingleton<IChatClient>("protocol-orchestrator", (sp, _) =>
-                new ProtocolOrchestratorChatClient(
-                    sp.GetRequiredService<IFrameworkOrchestratorService>(),
-                    sp.GetRequiredService<ILogger<ProtocolOrchestratorChatClient>>()));
 
         }
 
@@ -203,15 +225,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection UsePostgresSessionStore(this IServiceCollection services, string connectionString)
     {
-        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(Core.Interfaces.ISessionStore));
-        if (descriptor is not null)
-            services.Remove(descriptor);
-
-        services.AddSingleton<Core.Interfaces.ISessionStore>(sp =>
-        {
-            var logger = sp.GetRequiredService<ILogger<PostgresSessionStore>>();
-            return new PostgresSessionStore(connectionString, logger);
-        });
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<Core.Interfaces.ISessionStore, PostgresSessionStore>(services);
 
         return services;
     }
@@ -222,15 +237,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection UsePostgresVectorStore(this IServiceCollection services, string connectionString)
     {
-        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(IVectorStore));
-        if (descriptor is not null)
-            services.Remove(descriptor);
-
-        services.AddSingleton<IVectorStore>(sp =>
-        {
-            var logger = sp.GetRequiredService<ILogger<PostgresVectorStore>>();
-            return new PostgresVectorStore(connectionString, logger);
-        });
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IVectorStore, PostgresVectorStore>(services);
 
         return services;
     }
@@ -241,15 +249,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection UsePostgresCostTracker(this IServiceCollection services, string connectionString)
     {
-        var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ICostTracker));
-        if (descriptor is not null)
-            services.Remove(descriptor);
-
-        services.AddSingleton<ICostTracker>(sp =>
-        {
-            var logger = sp.GetRequiredService<ILogger<PostgresCostTracker>>();
-            return new PostgresCostTracker(connectionString, logger);
-        });
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<ICostTracker, PostgresCostTracker>(services);
 
         return services;
     }
@@ -260,6 +261,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection UsePostgresSmartRouter(this IServiceCollection services, string connectionString)
     {
+        EnsureDbContextRegistrations(services, connectionString);
+
         var innerDescriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ISmartRouter));
         if (innerDescriptor is not null)
             services.Remove(innerDescriptor);
@@ -274,7 +277,8 @@ public static class ServiceCollectionExtensions
                     : ActivatorUtilities.CreateInstance<Core.Services.SmartRouter>(sp);
 
             var logger = sp.GetRequiredService<ILogger<PersistentSmartRouter>>();
-            return new PersistentSmartRouter(inner, connectionString, logger);
+            var dbContextFactory = sp.GetRequiredService<IDbContextFactory<AgenticDbContext>>();
+            return new PersistentSmartRouter(inner, dbContextFactory, logger);
         });
 
         return services;
@@ -296,8 +300,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection UsePostgresMigrationJobStore(this IServiceCollection services, string connectionString)
     {
-        ReplaceSingleton<IMigrationJobStore>(services, sp =>
-            new PostgresMigrationJobStore(connectionString, sp.GetRequiredService<ILogger<PostgresMigrationJobStore>>()));
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IMigrationJobStore, PostgresMigrationJobStore>(services);
         return services;
     }
 
@@ -306,8 +310,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection UsePostgresEmbeddingModelStore(this IServiceCollection services, string connectionString)
     {
-        ReplaceSingleton<IEmbeddingModelStore>(services, sp =>
-            new PostgresEmbeddingModelStore(connectionString, sp.GetRequiredService<ILogger<PostgresEmbeddingModelStore>>()));
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IEmbeddingModelStore, PostgresEmbeddingModelStore>(services);
         return services;
     }
 
@@ -335,18 +339,13 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException("ConnectionStrings:SessionStore must be configured when AgenticSystem:LocalExecution:StorageMode is PostgreSQL.");
         }
 
-        services.AddDbContext<AgenticDbContext>(options =>
-            options.UseNpgsql(connectionString, npgsql =>
-                npgsql.MigrationsHistoryTable("__ef_migrations_history")));
+        EnsureDbContextRegistrations(services, connectionString);
 
         ReplaceSingleton<IAgentMemoryStore, EfAgentMemoryStore>(services);
         ReplaceSingleton<ITenantStore, EfTenantStore>(services);
-        ReplaceSingleton<IScheduledTaskStore>(services, sp =>
-            new PostgresScheduledTaskStore(connectionString, sp.GetRequiredService<ILogger<PostgresScheduledTaskStore>>()));
-        ReplaceSingleton<IConfigStore>(services, sp =>
-            new PostgresConfigStore(connectionString, sp.GetRequiredService<ILogger<PostgresConfigStore>>()));
-        ReplaceSingleton<IRerankingAssetStore>(services, sp =>
-            new PostgresRerankingAssetStore(connectionString, sp.GetRequiredService<ILogger<PostgresRerankingAssetStore>>()));
+        ReplaceSingleton<IScheduledTaskStore, PostgresScheduledTaskStore>(services);
+        ReplaceSingleton<IConfigStore, PostgresConfigStore>(services);
+        ReplaceSingleton<IRerankingAssetStore, PostgresRerankingAssetStore>(services);
 
         services.UsePostgresSessionStore(connectionString);
         services.UsePostgresVectorStore(connectionString);
@@ -382,6 +381,23 @@ public static class ServiceCollectionExtensions
         }
 
         services.AddSingleton(factory);
+    }
+
+    private static void EnsureDbContextRegistrations(IServiceCollection services, string connectionString)
+    {
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(DbContextOptions<AgenticDbContext>)))
+        {
+            services.AddDbContext<AgenticDbContext>(options =>
+                options.UseNpgsql(connectionString, npgsql =>
+                    npgsql.MigrationsHistoryTable("__ef_migrations_history")));
+        }
+
+        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IDbContextFactory<AgenticDbContext>)))
+        {
+            services.AddDbContextFactory<AgenticDbContext>(options =>
+                options.UseNpgsql(connectionString, npgsql =>
+                    npgsql.MigrationsHistoryTable("__ef_migrations_history")));
+        }
     }
 
     /// <summary>

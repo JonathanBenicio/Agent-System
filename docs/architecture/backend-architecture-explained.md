@@ -1,8 +1,10 @@
 # Backend AgenticSystem — Arquitetura Atual Revalidada
 
-> **Documento de referência** que descreve como o backend funciona no estado atual, revalidado contra o código e contra o [plano de migração framework-first](./framework-first-migration-plan.md).
+> **Documento canônico de arquitetura do backend**. Use este arquivo como fonte de verdade do runtime atual, revalidado contra o código e contra o [plano de migração framework-first](../planejamento/framework-first-migration-plan.md).
 >
 > O sistema já roda framework-first no fluxo principal, com surface hosted do MAF, workflows nativos no slice colaborativo e protocol hosting ativo. Ainda existem dívidas locais abertas: uma cadeia local de composição do orquestrador no runtime hosted (`OrchestratorContextResolver` + `OrchestratorContextFactory`) e middleware de reflection/quality gates via extensões locais.
+>
+> [TECHNICAL_ARCHITECTURE_GUIDE.md](../TECHNICAL_ARCHITECTURE_GUIDE.md) e [DSA-AgenticSystem.md](../DSA-AgenticSystem.md) são documentos complementares e devem permanecer alinhados a este arquivo.
 
 ---
 
@@ -64,7 +66,7 @@ O LLM do orquestrador decide qual especialista chamar com base no input do usuá
 │       ├─ WithAITool(specialist_N)    ← AsAIFunction()            │
 │       ├─ Tools auxiliares (RAG / Router / Analyzer)             │
 │       ├─ UseAIContextProviders(RAGContextProvider)               │
-│       ├─ WithSessionStore(AgentFrameworkSessionStoreAdapter)     │
+│       ├─ WithSessionStore(SimpleSessionStoreAdapter)             │
 │       ├─ UseReflection()          ← extensão local               │
 │       └─ UseQualityGates()        ← extensão local               │
 │                                                                  │
@@ -125,7 +127,7 @@ Contém interfaces, modelos, agentes base e serviços de domínio. **Não refere
 
 Implementa as interfaces do Core com dependências concretas (MAF, PostgreSQL, LLM providers, MCP, RAG).
 
-- **AgentFramework/**: `FrameworkOrchestratorService`, `AgentFrameworkFactory`, `AgentFrameworkSessionStoreAdapter`, `OrchestratorContextResolver`, `OrchestratorContextFactory`, middleware wrappers
+- **AgentFramework/**: `FrameworkOrchestratorService`, `AgentFrameworkFactory`, `SimpleSessionStoreAdapter`, `OrchestratorContextResolver`, `OrchestratorContextFactory`, middleware wrappers
 - **RAG/**: `RAGService`, `LlmReRanker`, `JinaReRankerProvider`, `LocalOnnxCrossEncoderReRankerProvider`, `SemanticCompressorService`, `QueryCompressor`
 - **AI/**: `AgentCollaborationWorkflow` (wrapper para `AgentWorkflowBuilder`), `ChatClientPlanner`, `UnifiedAIToolProvider`
 - **MCP/**: `McpToolsAIFunctionAdapter`, MCP client/server
@@ -147,7 +149,7 @@ WebApplication.CreateBuilder(args)
     │   ├─ EmbeddingGenerator (M.E.AI)
     │   ├─ AddAIAgent("Orchestrator")       ← surface hosted do orquestrador principal
     │   ├─ AddWorkflow("collaboration")     ← workflow nativo no slice colaborativo
-    │   ├─ AgentFrameworkSessionStoreAdapter
+    │   ├─ SimpleSessionStoreAdapter
     │   ├─ RAGContextProvider (MessageAIContextProvider)
     │   ├─ Middleware local: UseQualityGates()
     │   ├─ Pós-processamento compartilhado: AgentExecutionPostProcessingPipeline
@@ -191,7 +193,7 @@ services.AddAIAgent(
     static (sp, _) => sp.GetRequiredService<OrchestratorContext>().OrchestratorAgent,
     ServiceLifetime.Scoped)
     .WithSessionStore(
-        static (sp, _) => sp.GetRequiredService<AgentFrameworkSessionStoreAdapter>(),
+        static (sp, _) => sp.GetRequiredService<SimpleSessionStoreAdapter>(),
         ServiceLifetime.Singleton);
 ```
 
@@ -368,10 +370,10 @@ AgentExecutionWorkflow.ExecuteDirectAsync(sessionId, input, context, "WorkAgent"
     │   ├─ Cria AnalysisResult mock com o agente solicitado
     │   ├─ IAgentExecutionPreProcessingPipeline.ProcessAsync(...)
     │   ├─ IAgentFactory.ResolveAgentAsync(requestedAgent) → IAgent cru
-    │   ├─ IDirectAgentExecutionFactory.CreateDirectExecutionAgentAsync(agent) → AgentFrameworkAdapter
+    │   ├─ IDirectAgentExecutionService.ExecuteDirectAsync(agent, sessionId, input, context)
     │   ├─ Usa EffectiveInput enriquecido com correction rules ativas
     │   ├─ Publica AgentSelected event
-    │   ├─ agent.ExecuteAsync(enrichedInput, context)
+    │   ├─ AgentFrameworkDirectExecutionService
     │   │      └─ ChatClientAgent.RunAsync → IChatClient → LLM
     │   └─ IAgentExecutionPostProcessingPipeline.ProcessAsync(...)
     │          ├─ ReflectionEngine.ReflectAsync
@@ -579,6 +581,8 @@ O workflow de colaboração é ativado quando a tarefa é complexa e requer plan
 - Múltiplos domínios secundários
 - Input contém palavras-chave: "plan", "etapa", "passo"
 
+No estado atual, os enriquecimentos nativos de Fase 5 (`BuildConcurrent`, checkpointing, handoff review e group chat termination) permanecem restritos a este slice colaborativo e protegidos por flags de configuração desligadas por padrão. Eles ainda não fazem parte do caminho estável principal do produto.
+
 ### Arquitetura com AgentWorkflowBuilder
 
 ```csharp
@@ -630,6 +634,12 @@ Resposta retorna ao orquestrador → retorna ao usuário
 | Paralelismo | Sequencial apenas | `BuildConcurrent` para steps independentes |
 | Visualização | Logs | Grafo tipado com edges |
 | Human-in-the-loop | Não | `RequestInfoExecutor` nativo |
+
+### Decisão de rollout atual
+
+- O runtime principal continua framework-first no orquestrador hosted, sem depender do modo avançado do workflow colaborativo.
+- O modo avançado da Fase 5 segue como experimento controlado no `AgentCollaborationWorkflow`.
+- A promoção para caminhos mais centrais depende de stress test, validação manual end-to-end e aprovação explícita de produto.
 
 ### FrameworkAgentChannelService
 
@@ -1043,9 +1053,9 @@ Resultado: `ConfidenceScore { Value, Level (High/Medium/Low/RequiresHumanReview)
 | **Clean Architecture** | Core (domínio) → Infrastructure (implementação) → Api (apresentação) |
 | **Supervisor-with-Tools** | Orquestrador central que delega via tool calling do LLM |
 | **Agent-as-Tool** | Especialistas expostos como `AIFunction` via `AsAIFunction()` |
-| **Factory** | `AgentFrameworkAgentFactory` cria o wrapper explícito do path direto; `AgentFrameworkFactory` cria `ChatClientAgent` |
-| **Adapter** | `AgentFrameworkAdapter` adapta `IAgent` para `ChatClientAgent` apenas no `ExecuteDirectAsync` |
-| **Bridge** | Separação entre sessão do framework (`AgentFrameworkSessionStoreAdapter`) e sessão de negócio (`ISessionManager`) |
+| **Factory** | `AgentFrameworkFactory` cria `ChatClientAgent`; o path direto não precisa mais de factory de wrapper |
+| **Service** | `AgentFrameworkDirectExecutionService` executa `IAgent` cru no framework apenas no `ExecuteDirectAsync` |
+| **Bridge** | Separação entre sessão do framework (`SimpleSessionStoreAdapter`) e sessão de negócio (`ISessionManager`) |
 | **Strategy** | `HandoffStrategy` (SingleDelegate, FanOut, Chain) para delegação entre agentes |
 | **Pipeline/Middleware** | `UseReflection()` e `UseQualityGates()` via extensões locais + `UseLogging()` e `UseOpenTelemetry()` |
 | **Factory** | `HierarchicalAgentFactory` cria agentes por domínio; `AgentFrameworkFactory` cria `ChatClientAgent` |

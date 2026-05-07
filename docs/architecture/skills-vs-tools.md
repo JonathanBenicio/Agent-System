@@ -11,7 +11,7 @@
 | **Analogia** | "Saber fazer" | "Fazer" |
 | **Invocação** | Injetada no contexto do LLM | Chamada programática via interface |
 | **Side effects** | Nenhum | Sim (I/O, APIs, DB) |
-| **Exemplo** | "Como priorizar tarefas" | `ICalendarProvider.CreateEvent()` |
+| **Exemplo** | "Como priorizar tarefas" | `ITool.ExecuteAsync(new ToolInput { ... })` |
 
 ---
 
@@ -61,36 +61,20 @@ public record SkillContext
 ### Registro
 
 ```csharp
-// Em Program.cs ou via auto-discovery
-services.AddSkill<ContextAnalysisSkill>();
-services.AddSkill<CreativeWritingSkill>();
-services.AddSkill<EmailEtiquetteSkill>();
+var skillManager = serviceProvider.GetRequiredService<ISkillManager>();
+skillManager.RegisterSkill(new ContextAnalysisSkill());
+skillManager.RegisterSkill(new CreativeWritingSkill());
+skillManager.RegisterSkill(new EmailEtiquetteSkill());
 ```
 
 ### Uso pelo Agent
 
 ```csharp
-public class CreativeAgent : AgentBase
+public sealed class CreativeAgent : BaseAgent
 {
-    public override async Task<AgentResponse> ProcessAsync(AgentRequest request)
+    protected override async Task<string> BuildSystemPromptAsync(UserContext context, string currentInput)
     {
-        // Skills são injetadas automaticamente no prompt
-        var skills = await _skillManager.ResolveSkillsAsync(
-            agentId: this.Id,
-            taskType: request.TaskType
-        );
-        
-        var systemPrompt = _promptBuilder
-            .WithBaseInstructions(this.SystemMessage)
-            .WithSkills(skills)         // ← Skill content injected here
-            .Build();
-        
-        return await _llm.SendAsync(new LLMRequest
-        {
-            SystemMessage = systemPrompt,
-            UserMessage = request.Input,
-            Parameters = this.LLMProfile.GetParameters(request.TaskType)
-        });
+        return await _skillManager.BuildEnrichedPromptAsync(Name, Domain, Instructions);
     }
 }
 ```
@@ -99,8 +83,8 @@ public class CreativeAgent : AgentBase
 
 | Skill ID | Tipo | Agents que usam | Conteúdo |
 |----------|------|-----------------|----------|
-| `context-analysis` | Instruction | MetaAgent | Regras de classificação de intent |
-| `intent-classification` | Knowledge | MetaAgent | Taxonomia de intents conhecidos |
+| `context-analysis` | Instruction | MetaAgentOrchestrator / especialistas | Regras de classificação de intent |
+| `intent-classification` | Knowledge | MetaAgentOrchestrator / especialistas | Taxonomia de intents conhecidos |
 | `creative-writing` | Template | CreativeAgent | Técnicas e estruturas narrativas |
 | `email-etiquette` | Instruction | WorkAgent | Tom, estrutura, formalidade |
 | `data-analysis` | Knowledge | AnalysisAgent | Métodos estatísticos, visualização |
@@ -111,110 +95,75 @@ public class CreativeAgent : AgentBase
 
 ## 2. Tool — Capability Ativa
 
-Uma **Tool** é uma capability executável que **realiza ações concretas** — chama APIs, lê/escreve dados, dispara processos. Sempre passa pelo ServiceGateway.
+Uma **Tool** é uma capability executável que **realiza ações concretas** — chama APIs, lê/escreve dados, dispara processos. O contrato local é `ITool`; a governança e os eventos passam por `IToolManager` e pelo runtime quando configurados.
 
 ### Interface
 
 ```csharp
 public interface ITool
 {
-    string Id { get; }                    // "calendar-provider", "email-sender"
-    string Name { get; }                  // Nome de exibição
-    string Category { get; }             // Calendar, Email, Storage, LLM...
-    ToolType Type { get; }               // Provider, Utility, MCP
-    
-    /// <summary>
-    /// Descreve os parâmetros que a tool aceita.
-    /// Usado pelo LLM para decidir quando/como invocar.
-    /// </summary>
-    ToolSchema GetSchema();
-    
-    /// <summary>
-    /// Executa a tool com os parâmetros fornecidos.
-    /// Sempre passa pelo ServiceGateway (circuit breaker, rate limit, cost).
-    /// </summary>
-    Task<ToolResult> ExecuteAsync(ToolRequest request);
+    string Id { get; }
+    string Name { get; }
+    string Description { get; }
+    ToolCategory Category { get; }
+    bool RequiresAuth { get; }
+    Task<ToolResult> ExecuteAsync(ToolInput input, CancellationToken ct = default);
+    Task<bool> IsAvailableAsync(CancellationToken ct = default);
 }
 
-public enum ToolType
+public enum ToolCategory
 {
-    Provider,   // Wraps an external service (Calendar, LLM, Vision)
-    Utility,    // Internal utility (file parser, JSON transformer)
-    MCP         // MCP plugin tool
+    Calendar,
+    Email,
+    Storage,
+    Notes,
+    Tasks,
+    Search,
+    Api,
+    Database
 }
 
-public record ToolSchema
+public record ToolInput
 {
-    public string Description { get; init; }
-    public List<ToolParameter> Parameters { get; init; }
-    public string ReturnType { get; init; }
-}
-
-public record ToolParameter
-{
-    public string Name { get; init; }
-    public string Type { get; init; }           // "string", "int", "datetime"
-    public bool Required { get; init; }
-    public string Description { get; init; }
-    public string? DefaultValue { get; init; }
-}
-
-public record ToolRequest
-{
-    public string ToolId { get; init; }
-    public string AgentId { get; init; }        // Who is calling
-    public string SessionId { get; init; }
-    public Dictionary<string, object> Parameters { get; init; }
+    public string Action { get; init; } = string.Empty;
+    public Dictionary<string, object> Parameters { get; init; } = new();
+    public string? UserId { get; init; }
 }
 
 public record ToolResult
 {
     public bool Success { get; init; }
     public object? Data { get; init; }
-    public string? Error { get; init; }
-    public ToolMetadata Metadata { get; init; }  // Cost, latency, provider used
+    public string? ErrorMessage { get; init; }
+    public Dictionary<string, object>? Metadata { get; init; }
 }
 ```
 
 ### Registro
 
 ```csharp
-// Registradas via DI e descobertas pelo ToolManager
-services.AddTool<GoogleCalendarTool>();
-services.AddTool<OutlookCalendarTool>();
-services.AddTool<NotionNotesTool>();
-services.AddTool<MCPPluginTool>();
+services.AddSingleton<ITool, DateTimeTool>();
+services.AddSingleton<ITool, HttpTool>();
+services.AddSingleton<ITool, CalculatorTool>();
+services.AddSingleton<ITool, FileSearchTool>();
 ```
 
 ### Uso pelo Agent
 
 ```csharp
-public class CalendarAgent : AgentBase
+public sealed class CalendarAgent : BaseAgent
 {
-    public override async Task<AgentResponse> ProcessAsync(AgentRequest request)
+    public async Task<ToolResult> GetCurrentTimeAsync(string userId)
     {
-        // 1. LLM interpreta intent e gera parâmetros
-        var parsed = await _llm.SendAsync(new LLMRequest
+        return await _toolManager.ExecuteToolAsync("datetime", new ToolInput
         {
-            SystemMessage = "Parse the scheduling request into structured params...",
-            UserMessage = request.Input,
-            Parameters = new() { Temperature = 0.0, ResponseFormat = "Json" }
+            Action = "now",
+            UserId = userId,
+            Parameters = new()
+            {
+                ["timezone"] = "America/Sao_Paulo"
+            }
         });
-        
-        // 2. Tool executa a ação (via Gateway)
-        var result = await _toolManager.ExecuteAsync(new ToolRequest
-        {
-            ToolId = "calendar-provider",
-            AgentId = this.Id,
-            SessionId = request.SessionId,
-            Parameters = parsed.AsParameters()  // ← Tool invoked here
-        });
-        
-        return new AgentResponse
-        {
-            Content = $"Evento criado: {result.Data}",
-            Metadata = result.Metadata
-        };
     }
 }
 ```
@@ -223,15 +172,10 @@ public class CalendarAgent : AgentBase
 
 | Tool ID | Tipo | Category | Agents que usam | Ação |
 |---------|------|----------|-----------------|------|
-| `calendar-provider` | Provider | Calendar | CalendarAgent, PersonalAgent | CRUD de eventos |
-| `email-provider` | Provider | Email | WorkAgent, NotificationAgent | Enviar/ler emails |
-| `storage-provider` | Provider | Storage | WorkAgent, LearningAgent | Upload/download arquivos |
-| `notes-provider` | Provider | Knowledge | LearningAgent, CreativeAgent | CRUD Notion pages |
-| `task-provider` | Provider | Tasks | PersonalAgent | CRUD Todoist/TickTick |
-| `vision-provider` | Provider | Vision | AnalysisAgent | Análise de imagens |
-| `notification-sender` | Utility | Notifications | NotificationAgent | Push notifications |
-| `smart-router` | Utility | Orchestration | MetaAgent | Routing decision engine |
-| `mcp-plugin-runner` | MCP | Plugin | APIAgent | Executa MCP plugins |
+| `datetime` | Built-in | Calendar | CalendarAgent, PersonalAgent | Data, hora e cálculos temporais |
+| `http` | Built-in | Api | APIAgent, WorkAgent | Requisições HTTP para serviços externos |
+| `calculator` | Built-in | Database | AnalysisAgent | Cálculos numéricos e expressões simples |
+| `file-search` | Built-in | Search | LearningAgent, CreativeAgent | Busca textual em arquivos locais |
 
 ---
 
@@ -255,7 +199,7 @@ public class CalendarAgent : AgentBase
   Testável?        Unit test simples            Integration test + mocks
   Fallback?        N/A                          Via Gateway (próximo provider)
   Custo?           Zero (prompt injection)      Varia (API calls, tokens)
-  Registro?        ISkill + auto-discovery      ITool + DI + Gateway
+    Registro?        ISkill + SkillManager        ITool + DI + ToolManager
 ```
 
 ## 4. Resolução: SkillManager vs ToolManager
@@ -264,21 +208,16 @@ public class CalendarAgent : AgentBase
 // SkillManager — resolve skills relevantes para o contexto
 public interface ISkillManager
 {
-    Task<IReadOnlyList<SkillContent>> ResolveSkillsAsync(
-        string agentId, 
-        string? taskType = null);
-    
-    IReadOnlyList<ISkill> GetSkillsForAgent(string agentId);
+    Task<IEnumerable<SkillContent>> GetSkillsForAgentAsync(string agentName, string domain);
+    Task<string> BuildEnrichedPromptAsync(string agentName, string domain, string basePrompt);
     void RegisterSkill(ISkill skill);
 }
 
-// ToolManager — resolve e executa tools via Gateway
+// ToolManager — resolve e executa tools do runtime
 public interface IToolManager
 {
-    Task<ToolResult> ExecuteAsync(ToolRequest request);
-    
-    IReadOnlyList<ITool> GetToolsForAgent(string agentId);
-    ToolSchema GetSchema(string toolId);
+    Task<ToolResult> ExecuteToolAsync(string toolId, ToolInput input, CancellationToken ct = default);
+    Task<IEnumerable<ITool>> GetAvailableToolsAsync(string? category = null);
     void RegisterTool(ITool tool);
 }
 ```
@@ -323,9 +262,9 @@ sequenceDiagram
 
 ## 6. Regras de Governança
 
-1. **Toda Tool passa pelo Gateway** — sem exceções. Mesmo tools internas registram métricas.
+1. **Toda Tool passa pelo `IToolManager`** — o runtime aplica governança, eventos e políticas quando configurado.
 2. **Skills são stateless** — não mantêm estado entre chamadas. Cada resolução é independente.
 3. **Agent Registry define a binding** — o `agent-registry.json` declara quais skills e tools cada agent pode usar.
 4. **Princípio do menor privilégio** — agents só têm acesso às tools declaradas no registry.
 5. **Skills são composíveis** — um agent pode ter N skills, todas injetadas no prompt.
-6. **Tools são substituíveis** — implementações podem trocar (ex: GoogleCalendar ↔ OutlookCalendar) sem afetar o agent.
+6. **Tools são substituíveis** — implementações podem trocar sem afetar o agent, desde que mantenham o mesmo `toolId` lógico.

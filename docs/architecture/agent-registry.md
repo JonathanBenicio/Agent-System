@@ -27,9 +27,9 @@ Cada agent é registrado com os seguintes campos:
 |----|------|------|---------|--------|:----:|:------:|:-----:|
 | `meta-agent` | MetaAgent | 0 Chief | orchestration | gpt-4o | 0.2 | 3 | 3 |
 | `personal-agent` | PersonalAgent | 1 Master | personal | gpt-4o | 0.4 | 2 | 3 |
-| `work-agent` | WorkAgent | 1 Master | work | gpt-4o | 0.3 | 3 | 4 |
-| `learning-agent` | LearningAgent | 1 Master | learning | gpt-4o | 0.6 | 3 | 3 |
-| `creative-agent` | CreativeAgent | 2 Specialist | creative | gpt-4o | 0.9 | 3 | 2 |
+| `work-agent` | WorkAgent | 1 Master | work | gpt-4o | 0.3 | 3 | 2 |
+| `learning-agent` | LearningAgent | 1 Master | learning | gpt-4o | 0.6 | 3 | 2 |
+| `creative-agent` | CreativeAgent | 2 Specialist | creative | gpt-4o | 0.9 | 3 | 1 |
 | `analysis-agent` | AnalysisAgent | 2 Specialist | analysis | gpt-4o | 0.1 | 3 | 3 |
 | `calendar-agent` | CalendarAgent | 2 Specialist | scheduling | gpt-4o | 0.0 | 2 | 1 |
 | `notification-agent` | NotificationAgent | 3 Support | notifications | gpt-4o-mini | 0.2 | 1 | 2 |
@@ -111,7 +111,7 @@ graph LR
 
     PERS -->|scheduling| CAL[CalendarAgent]
     PERS -->|reminder| NOTIF[NotificationAgent]
-    WORK -->|research| RES[ResearchAgent]
+  WORK -->|api| API[APIAgent]
     WORK -->|notification| NOTIF
     LEARN -->|creative| CREA[CreativeAgent]
     LEARN -->|data| ANAL[AnalysisAgent]
@@ -131,7 +131,7 @@ graph LR
 
 1. Adicionar entrada em `agent-registry.json`
 2. Validar contra `agent-registry.schema.json`
-3. Implementar classe C# herdando de `AgentBase`
+3. Implementar classe C# herdando de `BaseAgent` ou implementando `IAgent`
 4. Configurar LLM profile em `appsettings.json`
-5. Registrar no DI container (`Program.cs`)
+5. Registrar no DI container ou no bootstrap do runtime
 6. Adicionar testes unitários

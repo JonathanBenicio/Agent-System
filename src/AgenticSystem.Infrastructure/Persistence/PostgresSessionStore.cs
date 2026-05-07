@@ -1,7 +1,8 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Npgsql;
 using System.Text.Json;
 
 namespace AgenticSystem.Infrastructure.Persistence;
@@ -12,63 +13,64 @@ namespace AgenticSystem.Infrastructure.Persistence;
 /// </summary>
 public class PostgresSessionStore : ISessionStore
 {
-    private readonly string _connectionString;
+    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresSessionStore> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public PostgresSessionStore(string connectionString, ILogger<PostgresSessionStore> logger)
+    public PostgresSessionStore(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresSessionStore> logger)
     {
-        _connectionString = connectionString;
+        _dbContextFactory = dbContextFactory;
         _logger = logger;
     }
 
     public async Task SaveAsync(SessionData session, CancellationToken ct = default)
     {
-        await ExecuteWithRetryAsync(async () =>
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entity = await db.SessionRecords.FirstOrDefaultAsync(record => record.Id == session.Id, ct);
+        var serialized = JsonSerializer.Serialize(session, JsonOptions);
+
+        if (entity is null)
         {
-            const string sql = """
-                INSERT INTO sessions (id, user_id, tenant_id, data, started_at, ended_at, is_consolidated)
-                VALUES (@id, @userId, @tenantId, @data::jsonb, @startedAt, @endedAt, @isConsolidated)
-                ON CONFLICT (id) DO UPDATE SET
-                    data = EXCLUDED.data,
-                    ended_at = EXCLUDED.ended_at,
-                    is_consolidated = EXCLUDED.is_consolidated
-                """;
+            db.SessionRecords.Add(new SessionRecordEntity
+            {
+                Id = session.Id,
+                UserId = session.UserId,
+                TenantId = session.TenantId,
+                DataJson = serialized,
+                StartedAt = session.StartedAt,
+                EndedAt = session.EndedAt,
+                IsConsolidated = session.IsConsolidated
+            });
+        }
+        else
+        {
+            entity.UserId = session.UserId;
+            entity.TenantId = session.TenantId;
+            entity.DataJson = serialized;
+            entity.StartedAt = session.StartedAt;
+            entity.EndedAt = session.EndedAt;
+            entity.IsConsolidated = session.IsConsolidated;
+        }
 
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync(ct);
-
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("id", session.Id);
-            cmd.Parameters.AddWithValue("userId", session.UserId);
-            cmd.Parameters.AddWithValue("tenantId", session.TenantId);
-            cmd.Parameters.AddWithValue("data", JsonSerializer.Serialize(session, JsonOptions));
-            cmd.Parameters.AddWithValue("startedAt", session.StartedAt);
-            cmd.Parameters.AddWithValue("endedAt", (object?)session.EndedAt ?? DBNull.Value);
-            cmd.Parameters.AddWithValue("isConsolidated", session.IsConsolidated);
-
-            await cmd.ExecuteNonQueryAsync(ct);
-            _logger.LogDebug("Session saved to PostgreSQL: {SessionId}", session.Id);
-        }, ct);
+        await db.SaveChangesAsync(ct);
+        _logger.LogDebug("Session saved to PostgreSQL via EF Core: {SessionId}", session.Id);
     }
 
     public async Task<SessionData?> GetAsync(string sessionId, CancellationToken ct = default)
     {
-        const string sql = "SELECT data FROM sessions WHERE id = @id";
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var json = await db.SessionRecords
+            .AsNoTracking()
+            .Where(record => record.Id == sessionId)
+            .Select(record => record.DataJson)
+            .FirstOrDefaultAsync(ct);
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", sessionId);
-
-        var result = await cmd.ExecuteScalarAsync(ct);
-        if (result is null or DBNull)
+        if (json is null)
             return null;
 
         try
         {
-            return JsonSerializer.Deserialize<SessionData>((string)result, JsonOptions);
+            return JsonSerializer.Deserialize<SessionData>(json, JsonOptions);
         }
         catch (JsonException ex)
         {
@@ -79,83 +81,65 @@ public class PostgresSessionStore : ISessionStore
 
     public async Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, CancellationToken ct = default)
     {
-        const string sql = """
-            SELECT data FROM sessions
-            WHERE user_id = @userId
-            ORDER BY started_at DESC
-            LIMIT @limit
-            """;
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var jsonRows = await db.SessionRecords
+            .AsNoTracking()
+            .Where(record => record.UserId == userId)
+            .OrderByDescending(record => record.StartedAt)
+            .Take(maxResults)
+            .Select(record => record.DataJson)
+            .ToListAsync(ct);
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("userId", userId);
-        cmd.Parameters.AddWithValue("limit", maxResults);
-
-        return await ReadSessionsAsync(cmd, ct);
+        return DeserializeSessions(jsonRows);
     }
 
     public async Task<IReadOnlyList<SessionData>> GetByTenantAsync(string tenantId, string? userId = null, int maxResults = 10, CancellationToken ct = default)
     {
-        var sql = """
-            SELECT data FROM sessions
-            WHERE tenant_id = @tenantId
-            """;
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var query = db.SessionRecords
+            .AsNoTracking()
+            .Where(record => record.TenantId == tenantId);
 
         if (userId is not null)
-            sql += " AND user_id = @userId";
+        {
+            query = query.Where(record => record.UserId == userId);
+        }
 
-        sql += " ORDER BY started_at DESC LIMIT @limit";
+        var jsonRows = await query
+            .OrderByDescending(record => record.StartedAt)
+            .Take(maxResults)
+            .Select(record => record.DataJson)
+            .ToListAsync(ct);
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("tenantId", tenantId);
-        cmd.Parameters.AddWithValue("limit", maxResults);
-        if (userId is not null)
-            cmd.Parameters.AddWithValue("userId", userId);
-
-        return await ReadSessionsAsync(cmd, ct);
+        return DeserializeSessions(jsonRows);
     }
 
     public async Task DeleteAsync(string sessionId, CancellationToken ct = default)
     {
-        const string sql = "DELETE FROM sessions WHERE id = @id";
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entity = await db.SessionRecords.FirstOrDefaultAsync(record => record.Id == sessionId, ct);
+        if (entity is null)
+        {
+            return;
+        }
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", sessionId);
-
-        await cmd.ExecuteNonQueryAsync(ct);
-        _logger.LogDebug("Session deleted from PostgreSQL: {SessionId}", sessionId);
+        db.SessionRecords.Remove(entity);
+        await db.SaveChangesAsync(ct);
+        _logger.LogDebug("Session deleted from PostgreSQL via EF Core: {SessionId}", sessionId);
     }
 
     public async Task<bool> ExistsAsync(string sessionId, CancellationToken ct = default)
     {
-        const string sql = "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = @id)";
-
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync(ct);
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", sessionId);
-
-        var result = await cmd.ExecuteScalarAsync(ct);
-        return result is true;
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        return await db.SessionRecords.AsNoTracking().AnyAsync(record => record.Id == sessionId, ct);
     }
 
-    private static async Task<IReadOnlyList<SessionData>> ReadSessionsAsync(NpgsqlCommand cmd, CancellationToken ct)
+    private IReadOnlyList<SessionData> DeserializeSessions(IEnumerable<string> jsonRows)
     {
         var sessions = new List<SessionData>();
 
-        await using var reader = await cmd.ExecuteReaderAsync(ct);
-        while (await reader.ReadAsync(ct))
+        foreach (var json in jsonRows)
         {
-            var json = reader.GetString(0);
             try
             {
                 var session = JsonSerializer.Deserialize<SessionData>(json, JsonOptions);
@@ -164,33 +148,10 @@ public class PostgresSessionStore : ISessionStore
             }
             catch (JsonException)
             {
-                // Skip corrupted session records rather than failing entire query
+                _logger.LogWarning("Skipping corrupted session payload while reading PostgreSQL records.");
             }
         }
 
         return sessions;
-    }
-
-    private static readonly Random s_jitter = new();
-
-    private async Task ExecuteWithRetryAsync(Func<Task> action, CancellationToken ct, int maxRetries = 3)
-    {
-        for (var attempt = 0; ; attempt++)
-        {
-            try
-            {
-                await action();
-                return;
-            }
-            catch (NpgsqlException ex) when (ex.IsTransient && attempt < maxRetries - 1)
-            {
-                var baseDelay = 100 * Math.Pow(2, attempt);
-                var jitter = s_jitter.Next(0, (int)(baseDelay * 0.5));
-                var delay = TimeSpan.FromMilliseconds(baseDelay + jitter);
-                _logger.LogWarning(ex, "Transient PostgreSQL error (attempt {Attempt}/{MaxRetries}). Retrying in {Delay}ms.",
-                    attempt + 1, maxRetries, delay.TotalMilliseconds);
-                await Task.Delay(delay, ct);
-            }
-        }
     }
 }

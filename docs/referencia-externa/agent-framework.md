@@ -1,3 +1,7 @@
+> **Status documental:** Referência externa do fornecedor.
+> **Escopo:** material importado do Microsoft Agent Framework para consulta; não descreve a implementação específica do AgenticSystem.
+> **Fonte de verdade do projeto:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).
+
 ```
 Tell us about your PDF experience.
 ```

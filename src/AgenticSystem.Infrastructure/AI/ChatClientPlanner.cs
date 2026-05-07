@@ -50,9 +50,9 @@ public class ChatClientPlanner
         IChatClient chatClient,
         ITaskPlanManager taskPlanManager,
         ILoggerFactory loggerFactory,
-        IToolManager toolManager)
+        IToolManager? toolManager)
         : this(chatClient, taskPlanManager, loggerFactory,
-            new UnifiedAIToolProvider(loggerFactory, toolManager))
+            toolManager is null ? null : new UnifiedAIToolProvider(loggerFactory, toolManager))
     {
     }
 

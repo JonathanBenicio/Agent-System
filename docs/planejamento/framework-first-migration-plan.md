@@ -1,9 +1,13 @@
 # Plano de Migração: Framework-First Orchestration
 
+> **Status documental:** Plano de migração e registro de cutover.
+> **Escopo:** consolidar decisões, backlog residual e critérios de encerramento da migração framework-first; não substitui a arquitetura canônica do backend.
+> **Fonte de verdade operacional:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).
+
 > **Criado:** 2026-05-05  
 > **Status:** Fase 1 ✅ completa | Fase 2 ✅ completa | Fase 3 🟡 núcleo concluído, com bloqueio real do framework em reflection/quality gates nativos | Fase 4 ✅ núcleo concluído, com backlog operacional local  
 > **Escopo:** Inverter controle de orquestração do `AgentExecutionWorkflow` para o Microsoft Agent Framework  
-> **Referências:** [TECHNICAL_ARCHITECTURE_GUIDE.md](../TECHNICAL_ARCHITECTURE_GUIDE.md), [AI_Capabilities_Gaps.md](../AI_Capabilities_Gaps.md), [design-philosophy.md](design-philosophy.md)
+> **Referências:** [../TECHNICAL_ARCHITECTURE_GUIDE.md](../TECHNICAL_ARCHITECTURE_GUIDE.md), [AI_Capabilities_Gaps.md](AI_Capabilities_Gaps.md), [../architecture/design-philosophy.md](../architecture/design-philosophy.md)
 
 ---
 

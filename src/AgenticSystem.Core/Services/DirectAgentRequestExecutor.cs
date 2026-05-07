@@ -10,7 +10,7 @@ namespace AgenticSystem.Core.Services;
 public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
 {
     private readonly IAgentFactory _agentFactory;
-    private readonly IDirectAgentExecutionFactory? _directAgentExecutionFactory;
+    private readonly IDirectAgentExecutionService? _directAgentExecutionService;
     private readonly IAgentExecutionPreProcessingPipeline _preProcessingPipeline;
     private readonly ISessionManager _sessionManager;
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
@@ -24,11 +24,11 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
         IAgentRuntimeCoordinator runtimeCoordinator,
         IAgentExecutionPostProcessingPipeline postProcessingPipeline,
         ILogger<DirectAgentRequestExecutor> logger,
-        IDirectAgentExecutionFactory? directAgentExecutionFactory = null)
+        IDirectAgentExecutionService? directAgentExecutionService = null)
     {
         _agentFactory = agentFactory;
         _preProcessingPipeline = preProcessingPipeline;
-        _directAgentExecutionFactory = directAgentExecutionFactory;
+        _directAgentExecutionService = directAgentExecutionService;
         _sessionManager = sessionManager;
         _runtimeCoordinator = runtimeCoordinator;
         _postProcessingPipeline = postProcessingPipeline;
@@ -62,16 +62,13 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
             };
 
             var selectedAgent = await _agentFactory.ResolveAgentAsync(requestedAgent);
-            var executableAgent = _directAgentExecutionFactory is null
-                ? selectedAgent
-                : await _directAgentExecutionFactory.CreateDirectExecutionAgentAsync(selectedAgent, ct);
             var preProcessingResult = await _preProcessingPipeline.ProcessAsync(new AgentExecutionPreProcessingContext
             {
                 SessionId = sessionId,
                 Input = input,
                 UserContext = context,
                 Analysis = analysis,
-                TargetAgent = executableAgent.Name,
+                TargetAgent = selectedAgent.Name,
                 ValidateRequest = true,
                 ApplyCorrectionRules = true,
                 Metadata = new Dictionary<string, object>
@@ -84,8 +81,8 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
             await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
             {
                 Type = AgentStreamEventType.AgentSelected,
-                AgentName = executableAgent.Name,
-                Message = executableAgent.Description,
+                AgentName = selectedAgent.Name,
+                Message = selectedAgent.Description,
                 Data = new Dictionary<string, object>
                 {
                     ["directRequest"] = true,
@@ -94,19 +91,26 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
             }, ct);
 
             var executionSw = System.Diagnostics.Stopwatch.StartNew();
-            using var agentScope = _runtimeCoordinator.BeginAgentScope(executableAgent.Name, executableAgent.AvailableTools);
-            var response = await executableAgent.ExecuteAsync(preProcessingResult.EffectiveInput, context);
+            using var agentScope = _runtimeCoordinator.BeginAgentScope(selectedAgent.Name, selectedAgent.AvailableTools);
+            var response = _directAgentExecutionService is null
+                ? await selectedAgent.ExecuteAsync(preProcessingResult.EffectiveInput, context)
+                : await _directAgentExecutionService.ExecuteDirectAsync(
+                    selectedAgent,
+                    sessionId,
+                    preProcessingResult.EffectiveInput,
+                    context,
+                    ct);
             executionSw.Stop();
 
             response.SessionId = sessionId;
             if (string.IsNullOrWhiteSpace(response.AgentName))
             {
-                response.AgentName = executableAgent.Name;
+                response.AgentName = selectedAgent.Name;
             }
 
             if (response.AgentTier == default)
             {
-                response.AgentTier = executableAgent.Tier;
+                response.AgentTier = selectedAgent.Tier;
             }
 
             response.Metadata["executionMode"] = "direct";

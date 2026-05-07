@@ -1,5 +1,10 @@
 # 🤖 Sistema Agentic Generalista
 
+> **Status documental:** Histórico preservado para rastreabilidade.
+> **Escopo:** snapshot de um README anterior e de um estado arquitetural já superado.
+> **Fonte de verdade operacional:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).
+> **Nota de leitura:** menções abaixo a `.NET 8`, `ResearchAgent`, `Notion`, `Todoist`, `TickTick`, `Grafana` e `Vision Providers` fazem parte do snapshot histórico e não descrevem o runtime vigente.
+
 > Sistema agentic avançado em .NET 8 com Microsoft Agent Framework, múltiplos providers LLM, memória episódica Obsidian e orquestração inteligente. Inspirado nos conceitos do Baianinho-Labs.
 
 ## 🚀 Quick Start

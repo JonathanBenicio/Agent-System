@@ -1,5 +1,9 @@
 # Agentic System — Relatório de Análise de Gaps
 
+> **Status documental:** Análise histórica de gaps.
+> **Escopo:** refletir o diagnóstico de junho/2025 sobre um fluxo principal anterior, que pode divergir do runtime atual.
+> **Fonte de verdade operacional:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).
+
 > **Data**: Junho 2025  
 > **Escopo**: Cross-reference de todos os registros DI vs uso real no fluxo principal  
 > **Branch**: `master` | **Build**: 0 errors, 549 tests passing

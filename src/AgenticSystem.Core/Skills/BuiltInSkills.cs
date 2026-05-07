@@ -21,7 +21,7 @@ When helping with code:
 - Point out potential security issues
 - Prefer composition over inheritance",
             FewShotExamples = @"User: How do I create a REST endpoint in C#?
-Assistant: Here's a minimal API endpoint in .NET 8:
+Assistant: Here's a minimal API endpoint in .NET 10:
 
 ```csharp
 app.MapGet(""/api/items/{id}"", async (int id, IItemService service) =>

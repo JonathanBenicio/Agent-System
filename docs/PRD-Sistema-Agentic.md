@@ -6,9 +6,9 @@
 
 ## O que é
 
-O Sistema Agentic é um **assistente de IA inteligente** que entende o que você precisa e direciona sua solicitação para o especialista certo — automaticamente.
+O Sistema Agentic é um **assistente de IA orientado a especialistas** com entrada unificada por chat, streaming e protocolos. A API abre a sessão, aplica governança e delega a execução principal para um orquestrador hospedado no Microsoft Agent Framework.
 
-Em vez de um chatbot genérico que tenta responder tudo com a mesma abordagem, o Agentic funciona como uma **equipe de especialistas virtuais** coordenados por um gerente (o MetaAgent), cada um otimizado para um tipo de tarefa.
+Em vez de um chatbot genérico que tenta responder tudo com a mesma abordagem, o Agentic funciona como uma **equipe de especialistas virtuais** coordenada por um runtime de orquestração, com memória, RAG, tools auxiliares e workflow colaborativo quando a tarefa exige mais de uma etapa.
 
 ---
 
@@ -29,13 +29,13 @@ Em vez de um chatbot genérico que tenta responder tudo com a mesma abordagem, o
 ```
 Usuário faz uma pergunta
         ↓
-  MetaAgent analisa a intenção
+  API abre sessão + streaming
         ↓
-  Direciona ao especialista certo
+  MetaAgentOrchestrator encaminha ao workflow
         ↓
-  Especialista consulta memória + contexto
+  Orquestrador hospedado escolhe especialistas, contexto e tools
         ↓
-  Resposta com score de confiança
+  Resposta volta com confiança, auditoria e persistência
 ```
 
 **Exemplo prático:**
@@ -57,7 +57,7 @@ O usuário não precisa saber qual especialista existe — o sistema roteia auto
 | **Criatividade** | Brainstorming, escrita, ideação | "5 nomes para nossa nova linha de produtos" |
 | **Análise** | Dados, insights, relatórios | "Qual a tendência de vendas dos últimos 3 meses?" |
 | **Notificações** | Alertas e lembretes proativos | Avisos automáticos baseados em regras |
-| **Integrações** | Conexão com sistemas externos | Conecta com calendário, email, Notion, Todoist |
+| **Protocolos & automação** | Conexão com superfícies externas | Orquestra MCP, A2A, AG-UI e compatibilidade OpenAI |
 
 ---
 
@@ -154,7 +154,7 @@ O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou d
 | Capacidade | Benefício para o usuário |
 |---|---|
 | Criação dinâmica de especialistas | O sistema cria novos especialistas sob demanda via linguagem natural |
-| Delegação entre especialistas | Tarefas que envolvem mais de um domínio são tratadas em conjunto |
+| Delegação entre especialistas | Tarefas multi-etapa podem ser tratadas por workflow colaborativo |
 | Consolidação de sessões | Conversas longas viram memória de longo prazo automaticamente |
 | Roteamento inteligente | Escolha do especialista considera histórico e performance, não só intenção |
 | Onboarding guiado | Novo usuário é guiado passo a passo na configuração |
@@ -164,7 +164,7 @@ O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou d
 | Capacidade | Benefício para o usuário |
 |---|---|
 | Persistência de sessões | Sessões sobrevivem a reinicializações — nada é perdido |
-| Integração aberta com provedores de IA | Qualquer novo provedor de IA do ecossistema Microsoft pode ser plugado sem desenvolvimento |
+| Superfícies abertas de protocolo | Clientes de chat e agents externos podem consumir o runtime por protocolos compatíveis |
 | Interface por voz | Acessível via Alexa, Google Assistant ou qualquer cliente de voz |
 
 ---
@@ -173,18 +173,16 @@ O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou d
 
 | Sistema | O que faz |
 |---|---|
-| **Google Calendar / Outlook** | Cria, consulta e gerencia eventos |
-| **Gmail / Outlook Mail** | Lê, resume e compõe emails |
-| **Google Drive / OneDrive** | Acessa e analisa documentos |
-| **Notion** | Consulta e cria páginas de notas |
-| **Todoist / TickTick** | Gerencia tarefas e projetos |
-| **APIs customizadas (MCP)** | Conecta com qualquer sistema via plugins |
+| **REST + SignalR** | Consumo direto do produto com streaming e sessões |
+| **MCP Plugins** | Conecta ferramentas e sistemas externos sob demanda |
+| **A2A / AG-UI** | Integra agents e clientes protocol-aware |
+| **OpenAI-compatible** | Compatibilidade com clientes que já falam o formato chat completions |
 
 ---
 
 ## Segurança
 
-- Autenticação por chave de API em todas as requisições
+- Autenticação MultiAuth com API Key ou JWT
 - Dados de sessão armazenados localmente (sem cloud terceira)
 - Credenciais de provedores de IA isoladas por configuração
 - Controle de acesso a endpoints administrativos
@@ -196,14 +194,14 @@ O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou d
 
 | Métrica | O que mede |
 |---|---|
-| **Taxa de roteamento correto** | % de vezes que o MetaAgent escolheu o especialista certo |
+| **Taxa de orquestração correta** | % de vezes que o runtime escolheu o fluxo e o especialista adequados |
 | **Score médio de confiança** | Qualidade geral das respostas |
 | **Custo por sessão** | Gasto com provedores de IA por interação |
 | **Tempo de resposta (P50/P95)** | Velocidade de atendimento |
 | **Taxa de fallback** | Frequência de troca automática de provedor |
 | **Correções humanas/dia** | Volume de ajustes manuais (quanto menor, melhor) |
 | **Regras ativas** | Quantidade de aprendizados extraídos de correções |
-| **Cobertura de testes** | 549 testes automatizados cobrindo todos os componentes |
+| **Cobertura de testes** | Saúde da suíte automatizada que protege fluxos centrais do backend |
 
 ---
 
@@ -211,15 +209,15 @@ O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou d
 
 | Item | Status |
 |---|---|
-| 9 especialistas configurados | ✅ Operacional |
-| 18 camadas de maturidade | ✅ Implementadas |
+| Runtime framework-first hospedado | ✅ Operacional |
+| Especialistas e workflow colaborativo | ✅ Implementados |
 | 4 provedores de IA (OpenAI, Google, Anthropic, Ollama) | ✅ Ativos |
 | Memória híbrida (texto + semântica) | ✅ Funcional |
 | Interface por voz | ✅ Disponível |
 | Gateway com proteção e monitoramento | ✅ Ativo |
 | Dashboard web de administração | ✅ Disponível |
 | Deploy via Docker/Kubernetes | ✅ Pronto |
-| 549 testes automatizados | ✅ Passando |
+| Suíte automatizada do backend | ✅ Ativa |
 
 ---
 
@@ -228,7 +226,7 @@ O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou d
 | Termo | Significado |
 |---|---|
 | **Agent** | Especialista virtual otimizado para um domínio |
-| **MetaAgent** | Coordenador que analisa a intenção e distribui tarefas |
+| **MetaAgentOrchestrator** | Fachada de entrada que gerencia sessão, streaming e encaminhamento |
 | **Tier** | Nível hierárquico do especialista (0 = coordenador, 3 = operacional) |
 | **Maturity Level (ML)** | Camada de capacidade do sistema, ativável independentemente |
 | **RAG** | Retrieval-Augmented Generation — buscar contexto relevante antes de responder |

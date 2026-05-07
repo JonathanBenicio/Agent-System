@@ -2,6 +2,8 @@
 
 ## AgenticSystem — Plataforma Multi-Agent com IA Generativa
 
+> Documento de visão macro. Para a arquitetura backend corrente revalidada contra o código, use [architecture/backend-architecture-explained.md](architecture/backend-architecture-explained.md) como referência canônica.
+
 | Campo | Valor |
 |-------|-------|
 | **Projeto** | AgenticSystem |
@@ -22,14 +24,17 @@ Plataforma de orquestração multi-agent com IA generativa que analisa contexto 
 
 ### Incluso
 
-- Orquestração de agentes hierárquicos (Tier 0–3) com roteamento inteligente
+- Orquestração multi-agent framework-first com supervisor hosted, tool bindings e workflows colaborativos
 - Multi-provider LLM (OpenAI, Gemini, Claude, Ollama) com failover automático
 - Pipeline RAG: ingestão de documentos, chunking, embeddings, retrieval + re-ranking
 - Memória dual: Obsidian Vault (human-readable) + PostgreSQL/pgvector (semantic search)
 - Service Gateway: Circuit Breaker, Rate Limiter, Cost Tracker, Health Monitor
 - Frontend SPA: React 19 + SignalR real-time + gestão de agents/tools/skills
 - MCP Plugins: carregamento dinâmico de ferramentas via Model Context Protocol
+- Protocol hosting: A2A, AG-UI e superfície OpenAI-compatible
+- MultiAuth: API Key + JWT Bearer com resolução automática por `PolicyScheme`
 - Chat dedicado: roteamento direto a agents específicos
+- Módulo administrativo ativo de embedding migration
 
 ### Fora de Escopo
 
@@ -71,9 +76,9 @@ Plataforma de orquestração multi-agent com IA generativa que analisa contexto 
 
 **Regra fundamental**: Complexidade flui para baixo. Agents de tier inferior nunca chamam tiers superiores — evita ciclos e simplifica debugging.
 
-### 3.3 Maturity Levels (ML1–ML21)
+### 3.3 Maturity Levels (ML1–ML33)
 
-Sistema evolui em camadas incrementais sem quebrar capabilities anteriores:
+Sistema evolui em camadas incrementais sem quebrar capabilities anteriores. O detalhamento funcional completo vive em [USER-STORIES.md](USER-STORIES.md); abaixo ficam os grupos mais relevantes para a arquitetura:
 
 | ML | Capability | Descrição |
 |----|-----------|-----------|
@@ -86,7 +91,9 @@ Sistema evolui em camadas incrementais sem quebrar capabilities anteriores:
 | ML7 | Multi-Provider LLM | Failover entre OpenAI/Gemini/Claude/Ollama |
 | ML8 | External Service Gateway | Circuit Breaker + Rate Limiter + Cost Tracker |
 | ML9 | Context Compression | Remove redundância antes do retrieval |
-| ML10+ | Vision, MCP, Voice, etc. | Capabilities avançadas |
+| ML10–ML18 | Personalização, agents dinâmicos, handoffs, persistência, voice | Capabilities operacionais avançadas |
+| ML19–ML23 | Multi-tenant, scheduler, embedding migration | Plataforma e operações |
+| ML24–ML33 | Quality gates, streaming, governança, approvals | Runtime agentic moderno |
 
 ### 3.4 Service Gateway
 
@@ -117,15 +124,16 @@ graph LR
 
 | Componente | Tecnologia | Versão |
 |-----------|-----------|--------|
-| Runtime | .NET | 8.0 |
-| Web Framework | ASP.NET Core | 8.x |
-| Real-time | SignalR | 8.x |
+| Runtime | .NET | 10.0 |
+| Web Framework | ASP.NET Core | 10.x |
+| Real-time | SignalR | 10.x |
+| Agent Runtime | Microsoft Agent Framework | 1.4.0 |
 | LLM SDK | OpenAI (oficial) | 2.10 |
-| LLM Abstraction | Microsoft.Extensions.AI (IChatClient) | 9.6 / 10.5 |
+| LLM Abstraction | Microsoft.Extensions.AI (IChatClient) | 10.5 |
 | LLM Bridge | Microsoft.Extensions.AI.OpenAI | 10.5.1 |
 | ORM/Data | Npgsql + pgvector | — |
 | Testes | xUnit + Moq + FluentAssertions | — |
-| Auth | API Key (middleware) | — |
+| Auth | MultiAuth (API Key + JWT) | — |
 
 ### Frontend
 
@@ -159,47 +167,52 @@ graph TD
         UI["SPA"] --> Chat["Chat Page"]
         UI --> AgentChat["Agent Chat Page"]
         UI --> Dashboard["Dashboard"]
-        UI --> Admin["Admin (Agents, Tools, Skills, Gateway, Plugins)"]
+        UI --> Admin["Admin (Agents, Tools, Skills, Gateway, Plugins, Embeddings)"]
     end
 
     subgraph "API Layer (ASP.NET Core)"
         REST["REST Controllers"]
         WS["SignalR Hubs (Chat + Gateway)"]
-        Auth["API Key Middleware"]
+        PROTO["A2A + AG-UI + OpenAI-compatible"]
+        Auth["MultiAuth"]
     end
 
-    subgraph "Core (Domain)"
-        Meta["MetaAgent (Tier 0)"]
-        Agents["Agent Registry"]
-        Skills["Skills"]
-        Tools["Tools"]
-        Sessions["Session Store"]
+    subgraph "Core (Thin Shell)"
+        Meta["MetaAgentOrchestrator"]
+        Workflow["AgentExecutionWorkflow"]
     end
 
-    subgraph "Infrastructure"
+    subgraph "Infrastructure / Hosted Runtime"
+        Orch["FrameworkOrchestratorService"]
+        Hosted["Hosted AIAgent + OrchestratorContext"]
+        Collab["Collaboration Workflow"]
         GW["Service Gateway"]
         LLM["LLM Providers"]
         EMB["Embedding Providers"]
-        VIS["Vision Providers"]
         RAG["RAG Pipeline"]
         MEM["Memory (Obsidian + pgvector)"]
         MCP["MCP Plugin Host"]
+        Sessions["Session Store"]
     end
 
     UI --> REST
     UI --> WS
+    UI --> PROTO
     REST --> Auth --> Meta
     WS --> Auth --> Meta
-    Meta --> Agents
-    Agents --> GW
+    PROTO --> Auth --> Orch
+    Meta --> Workflow
+    Workflow --> Orch
+    Orch --> Hosted
+    Hosted --> Collab
+    Hosted --> GW
     GW --> LLM
     GW --> EMB
-    GW --> VIS
     RAG --> EMB
     RAG --> MEM
-    Meta --> RAG
-    Meta --> Sessions
-    Agents --> MCP
+    Hosted --> RAG
+    Hosted --> Sessions
+    Hosted --> MCP
 ```
 
 ---
@@ -210,12 +223,12 @@ graph TD
 
 ```
 1. User envia mensagem (SignalR ou REST)
-2. ChatHub/ChatController → MetaAgent.ProcessAsync()
-3. MetaAgent executa ContextAnalysis (classifica intenção)
-4. MetaAgent seleciona Agent por capability matching
-5. Agent selecionado processa com LLM via Gateway
-6. Gateway aplica: Rate Limit → Circuit Breaker → Cost Track
-7. Resposta retorna via SignalR (ReceiveMessage) ou HTTP 200
+2. ChatHub/ChatController → MetaAgentOrchestrator.ProcessRequestAsync()
+3. MetaAgentOrchestrator abre sessão e delega ao AgentExecutionWorkflow
+4. AgentExecutionWorkflow abre escopo de runtime e chama FrameworkOrchestratorService
+5. O orquestrador hosted decide entre especialistas, tools auxiliares, RAG e workflow colaborativo
+6. Pós-processamento aplica reflection, confidence, approvals e persistência operacional
+7. Resposta retorna via streaming SignalR/SSE ou HTTP 200
 ```
 
 ### 6.2 Chat Dedicado (sem roteamento)
@@ -223,10 +236,11 @@ graph TD
 ```
 1. User navega para /chat/{agentName}
 2. Frontend envia mensagem com targetAgent = agentName
-3. ChatHub → MetaAgent.ProcessDirectRequestAsync()
-4. MetaAgent faz lookup direto no AgentRegistry (sem ContextAnalysis)
-5. Agent processa diretamente
-6. Resposta retorna ao chat dedicado
+3. ChatHub/Controller → MetaAgentOrchestrator.ProcessDirectRequestAsync()
+4. AgentExecutionWorkflow usa ExecuteDirectAsync()
+5. DirectAgentRequestExecutor resolve o agent alvo e aplica os pipelines compartilhados
+6. Quando necessário, o path direto envolve explicitamente o especialista via Agent Framework
+7. Resposta retorna ao chat dedicado
 ```
 
 ### 6.3 RAG Pipeline
@@ -246,13 +260,13 @@ graph TD
 
 | Aspecto | Implementação |
 |---------|--------------|
-| Autenticação | API Key via middleware (`X-Api-Key` header) |
+| Autenticação | MultiAuth via `PolicyScheme` (`Authorization: Bearer` ou `X-Api-Key`) |
 | Secrets | Variáveis de ambiente ou appsettings.json (nunca em código) |
 | HTTPS | Obrigatório em todos os endpoints |
 | Rate Limiting | Por provider (Service Gateway) + por tenant no endpoint `/api/chat` (sliding window, 429) |
 | Cost Control | Budget diário com alerta e bloqueio |
 | Input Validation | FluentValidation em requests |
-| Prompt Injection Protection | Delimitadores `<user_input>` no ContextAnalyzer isolam input do usuário do system prompt |
+| Prompt Injection Protection | Pré-processamento, quality gates e tool bindings auxiliares do runtime hospedado |
 | Correlation ID | Header `X-Correlation-Id` em error responses para rastreabilidade de incidentes |
 | Retry com Jitter | Exponential backoff + jitter em PostgresVectorStore e PostgresSessionStore (evita thundering herd) |
 | JSON Safety | try/catch `JsonException` em sessões — dados corrompidos não crasham o sistema |
@@ -266,11 +280,11 @@ graph TD
 
 | Pilar | Ferramenta | Implementação |
 |-------|-----------|---------------|
-| Logs | ELK (via FluentD) | Structured logging com Serilog |
-| Métricas | Grafana + Dynatrace | Cost per agent, latency, token usage |
-| Traces | Dynatrace APM | Distributed tracing por request |
-| Dashboards | Grafana | Health, costs, throughput, circuit state |
-| Alertas | Dynatrace | SLA/SLO: latency P95, error rate, budget |
+| Logs | ILogger / structured logging | Eventos operacionais e auditoria |
+| Métricas | Service Gateway + admin APIs | Custos, saúde, latência e circuit state |
+| Traces | Correlation IDs + logs de execução | Rastreabilidade por request |
+| Dashboards | Dashboard web + GatewayHub | Health, custos, throughput e eventos em tempo real |
+| Alertas | Monitoramento operacional do produto | Erros, budget e degradação de serviços |
 | Real-time | SignalR (GatewayHub) | Status changes, cost alerts, circuit events |
 
 ### Health Check Endpoint
@@ -296,9 +310,9 @@ cd frontend && npm run dev                      # Frontend em http://localhost:5
 
 ```dockerfile
 # Multi-stage build
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 # ... build steps ...
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 ```
 
 ### Ambientes
@@ -374,7 +388,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 ### Pendentes
 
 - [ ] Deploy em ambiente de homologação (Kubernetes)
-- [ ] Integração com Dynatrace APM
+- [ ] Consolidar estratégia final de observabilidade externa
 - [ ] Testes de carga com K6 (validar Service Gateway sob stress)
 - [ ] Feature flags via Consul para ML-levels
 - [ ] PostgreSQL managed (RDS/Cloud SQL)

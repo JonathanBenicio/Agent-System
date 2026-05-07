@@ -4,6 +4,7 @@ using AgenticSystem.Infrastructure.Extensions;
 using AgenticSystem.Infrastructure.Gateway;
 using AgenticSystem.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -91,8 +92,14 @@ public class PersistentSmartRouterTests
     {
         _innerRouter = Substitute.For<ISmartRouter>();
         var logger = Substitute.For<ILogger<PersistentSmartRouter>>();
-        // connection string inválida — warm-up falhará gracefully e _warmedUp = true
-        _sut = new PersistentSmartRouter(_innerRouter, "Host=invalid_host_for_test;Database=test;Timeout=1", logger);
+        var options = new DbContextOptionsBuilder<AgenticDbContext>()
+            .UseInMemoryDatabase($"smart-router-tests-{Guid.NewGuid():N}")
+            .Options;
+        var factory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
+        factory.CreateDbContextAsync(Arg.Any<CancellationToken>())
+            .Returns(_ => Task.FromResult(new AgenticDbContext(options)));
+
+        _sut = new PersistentSmartRouter(_innerRouter, factory, logger);
     }
 
     [Fact]

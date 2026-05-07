@@ -1,8 +1,37 @@
 # Technical Architecture Guide — AgenticSystem
 
-> Guia técnico detalhado da arquitetura interna do AgenticSystem.
-> Complementa o [DSA](DSA-AgenticSystem.md) (visão macro) e o [Manifesto](agentic-design-manifesto.md) (princípios de design).
-> Foco: **como** cada subsistema funciona no código, fluxos de execução e integrações.
+> Guia técnico complementar da arquitetura interna do AgenticSystem.
+> Quando houver conflito com a topologia corrente do backend, prevalece [architecture/backend-architecture-explained.md](architecture/backend-architecture-explained.md) como fonte de verdade arquitetural.
+> Este documento aprofunda subsistemas, integrações e superfícies técnicas específicas.
+
+## Governança de Escopo (Core x Laboratório)
+
+### Core de Produto
+
+Para decisões arquiteturais, o core estável do produto é composto por:
+
+- chat principal
+- sessão e seu ciclo de vida
+- streaming fim a fim
+- um único caminho principal de execução
+- observabilidade mínima para operar o runtime
+
+### Trilhas de Laboratório
+
+Capacidades experimentais não alteram o core por padrão. Elas devem entrar isoladas, com:
+
+- feature flag
+- módulo separado
+- rollout opcional
+- fallback para o comportamento atual
+
+Exemplos típicos: protocolos extras, plugins MCP, workflows colaborativos avançados, approvals avançados, self-improvement loops e superfícies administrativas especializadas.
+
+### Critérios de incubação e descarte
+
+Toda capacidade experimental deve declarar, desde o início, hipótese, critério de sucesso e critério de remoção. A promoção para o core exige ganho recorrente comprovado contra baseline, estabilidade operacional e ausência de segundo caminho principal. Sem ganho mensurável ou com aumento de risco estrutural, a capacidade deve permanecer em laboratório, fazer rollback ou ser descartada.
+
+> Referência de planejamento: [planejamento/AI_Advanced_Capabilities_Roadmap.md](planejamento/AI_Advanced_Capabilities_Roadmap.md)
 
 ---
 
@@ -44,38 +73,29 @@ Desde maio/2026, o `MetaAgentOrchestrator` atua como **fachada de sessão + stre
 
 **Arquivo**: `src/AgenticSystem.Core/Services/AgentExecutionWorkflow.cs`
 
+No runtime atual, o `AgentExecutionWorkflow` deixou de concentrar a decisão imperativa de orquestração. O caminho principal virou uma **casca fina** que abre o contexto de runtime e delega para `IFrameworkOrchestratorService`.
+
 ```
 User Input
     │
     ▼
 ┌─────────────────────────────────────┐
-│ 1. Context Analysis                 │ ← IContextAnalyzer.AnalyzeAsync()
+│ 1. MetaAgentOrchestrator            │ ← fachada de sessão + streaming
 ├─────────────────────────────────────┤
-│ 2. Shared Pre-Processing Pipeline   │ ← IAgentExecutionPreProcessingPipeline.ProcessAsync()
-│    request validation + corrections │    IQualityGateService / ICorrectionLoop
+│ 2. AgentExecutionWorkflow           │ ← BeginScope + delegação fina
+│    ILLMRuntimeContextAccessor       │    IFrameworkOrchestratorService
 ├─────────────────────────────────────┤
-│ 3. Tool Availability Guard (ML20)   │ ← IToolAvailabilityGuard.CheckAsync()
+│ 3. FrameworkOrchestratorService     │ ← hosted orchestration path
+│    resolve OrchestratorContext      │    AIAgent + AgentSessionStore keyed
 ├─────────────────────────────────────┤
-│ 4. Dynamic Agent Detection (ML11)   │ ← IDynamicAgentService.IsAgentCreationRequestAsync()
+│ 4. Shared Pre-Processing Pipeline   │ ← validação de request + correction rules
+│    IAgentExecutionPreProcessing     │
 ├─────────────────────────────────────┤
-│ 5. Smart Routing (ML14)             │ ← ISmartRouter.RouteAsync()
+│ 5. Hosted AIAgent.RunAsync()        │ ← supervisor-with-tools
+│    specialists + aux tools + RAG    │    collaboration workflow + protocol surfaces
 ├─────────────────────────────────────┤
-│ 6. Collaborative Flow Decision      │ ← IAgentCollaborationWorkflow.ShouldRunAsync()
-│    planner → specialist → reviewer  │    ExecuteAsync(sessionId, input, ...)
-├─────────────────────────────────────┤
-│ 7. Single-Agent Path (fallback)     │ ← IAgentFactory.ResolveAgentAsync()
-│    RAG + execução direta             │    IRAGService / IDirectAgentRequestExecutor
-├─────────────────────────────────────┤
-│ 8. Shared Post-Processing Pipeline  │ ← IAgentExecutionPostProcessingPipeline
-│    response gate + reflection       │    IQualityGateService / IReflectionEngine
-├─────────────────────────────────────┤
-│ 9. Confidence Score (ML7)           │ ← IConfidenceScoreCalculator.Calculate()
-├─────────────────────────────────────┤
-│ 10. Final Human Approval (ML33)     │ ← IFinalResponseApprovalService.EvaluateAsync()
-│     pending approval when sensitive  │    final-approvals API
-├─────────────────────────────────────┤
-│ 11. Persist Artifacts + Metrics      │ ← IAgentRuntimeCoordinator.RecordArtifactAsync()
-│     session events + consolidation   │    ISessionManager.AddEventAsync()/ConsolidateSessionAsync()
+│ 6. Shared Post-Processing Pipeline  │ ← reflection, confidence, final approval,
+│    IAgentExecutionPostProcessing    │    persistência de artifacts e agent memory
 └─────────────────────────────────────┘
     │
     ▼
@@ -99,20 +119,13 @@ AgentResponse (com Confidence, SessionId, Metadata)
 
 | Dependência | Obrigatória | Papel |
 |-------------|:-----------:|-------|
-| `IContextAnalyzer` | ✅ | Analisa input → domain, intent, tier |
-| `IAgentFactory` | ✅ | Cria/seleciona agents por tier |
+| `IDirectAgentRequestExecutor` | ✅ | Escape hatch do `ExecuteDirectAsync` |
 | `ISessionManager` | ✅ | Gerencia sessões e eventos |
-| `IDynamicAgentService` | ✅ | Criação dinâmica de agents |
-| `IToolAvailabilityGuard` | ✅ | Verifica disponibilidade de tools |
-| `IConfidenceScoreCalculator` | ✅ | Calcula score de confiança |
 | `IAgentRuntimeCoordinator` | ✅ | Streaming, artefatos e métricas |
-| `IFinalResponseApprovalService` | ✅ | Human-in-the-loop antes da resposta final |
-| `IRAGService` | ❌ | Retrieval-Augmented Generation |
-| `IContextBudgetManager` | ❌ | Controla orçamento de tokens |
-| `ISmartRouter` | ❌ | Roteamento por performance |
-| `IQualityGateService` | ❌ | Quality gates usados no pre/post-processing e no chat client governado |
-| `IReflectionEngine` | ❌ | Reflexão pós-ação |
-| `ICorrectionLoop` | ❌ | Regras aplicadas no pre-processing e aprendidas no post-processing |
+| `ILLMRuntimeContextAccessor` | ✅ | Abre o escopo contextual de LLM por sessão/request |
+| `IFrameworkOrchestratorService` | ✅ | Caminho principal framework-first/hosted |
+
+As dependências antes centralizadas no workflow principal migraram para o `FrameworkOrchestratorService`, para os pipelines compartilhados de pre/post-processing e para os specialist tool bindings/context providers do orquestrador hosted.
 
 ---
 
@@ -120,32 +133,39 @@ AgentResponse (com Confidence, SessionId, Metadata)
 
 **Diretório**: `src/AgenticSystem.Infrastructure/AgentFramework/`
 
-O sistema usa o **Microsoft.Agents.AI** como runtime de execução de agents. O `IAgentFactory` permanece cru, enquanto o path direto cria explicitamente um wrapper de framework quando precisa rodar um especialista fora do fluxo orquestrado.
+O sistema usa o **Microsoft.Agents.AI** como runtime **hosted** do fluxo principal. O `IAgentFactory` permanece cru para o domínio e para o path direto; quando o escape hatch `ExecuteDirectAsync` precisa do framework, ele delega para `AgentFrameworkDirectExecutionService`, sem criar um wrapper transitório de `IAgent`.
 
 ### 2.1 Arquitetura do Framework
 
 ```
-┌─────────────────────────────────────────────────────┐
-│ IAgentFactory (raw)                                  │
-│   ↓ ResolveAgentAsync()                              │
-│   IAgent (original)                                  │
-│   ↓ ExecuteDirectAsync()                             │
-│   IDirectAgentExecutionFactory                       │
-│   ↓ CreateDirectExecutionAgentAsync()                │
-│   AgentFrameworkFactory.CreateFromAgent()            │
-│   ↓ creates                                         │
-│   ChatClientAgent (Microsoft.Agents.AI)              │
-│     ├─ IChatClient (pipeline M.E.AI)                 │
-│     ├─ Instructions (system prompt rico)             │
-│     ├─ MCP Tools (via McpToolsAIFunctionAdapter)     │
-│     └─ Logging + OpenTelemetry                       │
-│   ↓ wrapped in                                      │
-│   AgentFrameworkAdapter (implements IAgent)          │
-│     ├─ ExecuteAsync() → frameworkAgent.RunAsync()    │
-│     ├─ Fallback para innerAgent em caso de erro      │
-│     └─ AgentFrameworkSessionStoreAdapter             │
-└─────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│ Program.cs / Hosting DI                                      │
+│   ├─ AddAIAgent("Orchestrator")                             │
+│   ├─ AddAIAgent("AgenticSystem") → alias do hosted agent    │
+│   ├─ AddWorkflow("collaboration")                           │
+│   └─ A2A / AG-UI reutilizam AgentSessionStore do Orchestrator│
+├──────────────────────────────────────────────────────────────┤
+│ OrchestratorContextFactory                                   │
+│   ├─ system prompt do supervisor                             │
+│   ├─ specialist bindings via AsAIFunction()                  │
+│   ├─ tools auxiliares (RAG / Router / Analyzer)              │
+│   ├─ SimpleSessionStoreAdapter keyed                         │
+│   └─ logging + OpenTelemetry                                 │
+├──────────────────────────────────────────────────────────────┤
+│ FrameworkOrchestratorService                                 │
+│   ├─ resolve AIAgent + AgentSessionStore do hosting          │
+│   ├─ pre-processing pipeline                                 │
+│   ├─ orchestrator.RunAsync(...)                              │
+│   └─ post-processing pipeline                                │
+├──────────────────────────────────────────────────────────────┤
+│ Protocol surfaces                                             │
+│   ├─ A2A                                                      │
+│   ├─ AG-UI                                                    │
+│   └─ OpenAI-compatible controller                             │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+O caminho direto continua explícito, mas a execução nativa do framework agora fica concentrada em um serviço dedicado. O adapter transitório saiu do runtime.
 
 ### 2.2 Componentes
 
@@ -156,27 +176,36 @@ Fábrica que transforma `IAgent` em `ChatClientAgent` do Microsoft Agent Framewo
 - Recebe `IChatClient` (pipeline com logging + telemetry + function invocation)
 - Injeta `Instructions` do agent como system prompt
 - Conecta MCP tools via `McpToolsAIFunctionAdapter`
-- Também consegue expor agents especializados como tools nativas via `AIAgentExtensions.AsAIFunction(...)`, reaproveitando `AgentFrameworkSessionStoreAdapter` para restaurar e persistir a sessão correta
+- Também consegue expor agents especializados como tools nativas via `AIAgentExtensions.AsAIFunction(...)`, reaproveitando `SimpleSessionStoreAdapter` para restaurar e persistir a sessão correta
 - Aplica `.AsBuilder().UseLogging().UseOpenTelemetry().Build()`
 
-#### `AgentFrameworkAgentFactory`
+#### `AgentFrameworkDirectExecutionService`
 
-Fábrica explícita do path direto. Só entra quando `ExecuteDirectAsync` precisa envolver um `IAgent` cru com `AgentFrameworkAdapter`:
+Serviço explícito do path direto. Só entra quando `ExecuteDirectAsync` precisa rodar um `IAgent` cru pelo Microsoft Agent Framework:
 
 ```csharp
-public Task<IAgent> CreateDirectExecutionAgentAsync(IAgent agent, CancellationToken ct = default)
-{
-    if (agent is AgentFrameworkAdapter) return Task.FromResult<IAgent>(agent);
-    // cria frameworkAgent + AgentFrameworkAdapter apenas para o path direto
-}
+public Task<AgentResponse> ExecuteDirectAsync(
+    IAgent agent,
+    string sessionId,
+    string input,
+    UserContext context,
+    CancellationToken ct = default)
 ```
+
+Responsabilidades:
+
+1. Criar o `ChatClientAgent` via `AgentFrameworkFactory`
+2. Restaurar a `AgentSession` no `SimpleSessionStoreAdapter`
+3. Executar `RunAsync` ou `RunStreamingAsync`
+4. Persistir a sessão e sincronizar o evento de negócio
+5. Fazer fallback para o agente cru só em erro do framework
 
 #### `DirectAgentRequestExecutor`
 
 Executor dedicado do escape hatch direto. O `AgentExecutionWorkflow` só abre o escopo de runtime/LLM e delega para esse serviço:
 
 1. Resolve o agent solicitado no catálogo ativo
-2. Materializa o wrapper direto via `IDirectAgentExecutionFactory` quando necessário
+2. Chama `IDirectAgentExecutionService` quando a infraestrutura nativa do framework está disponível
 3. Aplica quality gates e correction loop antes da execução
 4. Delega o pós-processamento final para o `IAgentExecutionPostProcessingPipeline`
 
@@ -189,23 +218,16 @@ Pipeline compartilhado do Core para o pós-processamento dos fluxos direto e hos
 3. Calcula confidence e avalia final approval
 4. Persiste sessão, artifacts e memória do agent
 
-#### `AgentFrameworkAdapter`
+O adapter `AgentFrameworkAdapter` foi removido na Fase 4. O comportamento de sessão, execução e fallback foi incorporado ao `AgentFrameworkDirectExecutionService`.
 
-Adapter que implementa `IAgent` e delega execução para o Agent Framework:
+#### `SimpleSessionStoreAdapter`
 
-1. Obtém `AgentSession` via `AgentFrameworkSessionStoreAdapter`
-2. Executa `frameworkAgent.RunAsync(input, session)`
-3. Extrai conteúdo de `TextContent` das mensagens `Assistant`
-4. Sincroniza resultado via `ISessionManager` e persiste a sessão via `AgentFrameworkSessionStoreAdapter`
-5. **Fallback**: se o framework falhar, executa via `innerAgent.ExecuteAsync()` com metadata `frameworkFallback: true`
-
-#### `AgentFrameworkSessionStoreAdapter`
-
-Adapter entre a sessão do framework e a sessão de negócio:
+Adapter final entre a sessão do framework e a sessão de negócio:
 
 - Serializa e persiste o `AgentSession` no store da aplicação por nome estável do agent
 - Restaura a thread nativa do framework sem depender de cache in-memory entre requests
 - Faz fallback para criar nova `AgentSession` quando o estado persistido está ausente ou inválido
+- Substituiu o adapter legado e removeu os warnings de obsolescência do runtime
 
 #### `FrameworkAgentChannelService`
 
@@ -867,7 +889,7 @@ Hub para monitoramento do Service Gateway em tempo real:
 └─────────────┼────────────────────────────────────────┘
               │ Vite proxy
               ▼
-      Backend (.NET 8)
+    Backend (.NET 10)
       /api/*  → REST
       /hubs/* → WebSocket (SignalR)
 ```
@@ -892,7 +914,7 @@ Hub para monitoramento do Service Gateway em tempo real:
 | `/scheduled-tasks` | `ScheduledTasksPage` | Tarefas agendadas & trigger rules |
 | `/config` | `SettingsPage` | Configurações do sistema |
 | `/config/advanced` | `ConfigAdvancedPage` | Config avançada |
-| `/embedding-migration` | `EmbeddingMigrationWizard` | Wizard de migração de embeddings |
+| `/embedding-migration` | `EmbeddingMigrationWizard` | Wizard administrativo ativo de migração de embeddings |
 
 ### 11.4 Comunicação em Tempo Real (SignalR)
 
@@ -1157,7 +1179,7 @@ Esses providers são registrados em `AddAgenticSystemInfrastructure()` e servem 
 | **Api** | `Middleware/` | Tenant resolution |
 | **Core** | `Agents/` | BaseAgent, Master/Specialist/Support |
 | **Core** | `Interfaces/` | Contratos de runtime, memória, tools, channels e integrações |
-| **Core** | `Services/` | MetaAgentOrchestrator (fachada), AgentExecutionWorkflow (pipeline), SessionManager, SmartRouter, AgentMemoryService, etc. |
+| **Core** | `Services/` | MetaAgentOrchestrator (fachada), AgentExecutionWorkflow (casca fina), SessionManager, SmartRouter, AgentMemoryService, etc. |
 | **Core** | `LLM/` | Interfaces e modelos LLM |
 | **Core** | `Models/` | DTOs, entidades, agent memory, tool variants e channel messages |
 | **Core** | `Skills/` | BuiltInSkills |
@@ -1190,7 +1212,7 @@ Esses providers são registrados em `AddAgenticSystemInfrastructure()` e servem 
 | ML26 | Vision (Image Analysis) | `IVisionProvider`, `OpenAIVisionProvider` | Vision |
 | ML27 | MCP Plugin System | `IMCPPluginManager`, `McpClientPlugin`, `McpToolsAIFunctionAdapter` | MCP & Extensibility |
 | ML28 | Storage Abstraction | `IStorageProvider`, `StorageFile` | MCP & Extensibility |
-| ML29 | Agent Execution Workflow | `IAgentExecutionWorkflow`, `AgentExecutionWorkflow` | Agent Runtime Platform |
+| ML29 | Agent Execution Workflow | `IAgentExecutionWorkflow`, `AgentExecutionWorkflow` | Agent Runtime Platform (thin execution shell) |
 | ML30 | End-to-End Streaming Runtime | `IAgentRuntimeCoordinator`, `ChatHub`, `POST /api/chat/stream` | Agent Runtime Platform |
 | ML31 | Governed Capabilities | `IToolGovernanceService`, approvals de tool | Agent Runtime Platform |
 | ML32 | Operational Artifacts & Metrics | `AgentExecutionArtifact`, `AgentRuntimeMetricsSnapshot`, `RuntimeEvaluationResult` | Agent Runtime Platform |

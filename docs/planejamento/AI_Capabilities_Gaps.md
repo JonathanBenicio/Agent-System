@@ -1,14 +1,17 @@
-# Diagnóstico de Capacidades AI/Agentic — Gaps e Oportunidades
+# Diagnóstico de Capacidades AI/Agentic - Gaps e Oportunidades
+> **Status documental:** Planejamento & assessment ativo.
+> **Escopo:** catalogar gaps, dívidas e oportunidades de evolução; este arquivo não substitui a descrição do runtime em produção.
+> **Fonte de verdade operacional:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).
 
 > Gerado em: 2026-05-05  
 > Projeto: AgenticSystem  
-> Escopo: Capacidades **⚠️ subutilizadas** e **❌ não implementadas**
+> Escopo: Capacidades subutilizadas e não implementadas
 
 ---
 
 ## Resumo Executivo
 
-| Categoria | ✅ Usando bem | ⚠️ Parcial | ❌ Não usa | Cobertura |
+| Categoria | Em uso | Parcial | Não usa | Cobertura |
 |---|:---:|:---:|:---:|:---:|
 | M.E.IA | 10 | 0 | 0 | 100% |
 | M.Agent.Framework | 5 | 1 | 0 | 83% |
@@ -22,7 +25,7 @@
 
 ---
 
-## ⚠️ Usando Parcialmente (1 item)
+## Usando Parcialmente (1 item)
 
 ### 1. Multi-Agent Orchestration Nativa
 
@@ -34,13 +37,13 @@
 | **Oportunidade** | Consolidar o hosting nativo fim-a-fim no fluxo principal, simplificar wrappers transitórios e expandir `BuildConcurrent`, checkpointing e outros recursos de workflow onde houver ROI real |
 | **Impacto** | Médio — reduz código transitório e aproxima o runtime do modelo nativo já suportado pelo framework |
 | **Esforço** | Médio-Alto — requer cortes incrementais em paths ainda acoplados ao modelo anterior |
-| **Referência** | [`FrameworkOrchestratorService.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs), [`OrchestratorContextResolver.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorContextResolver.cs), [`OrchestratorContextFactory.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorContextFactory.cs), [`AgentFrameworkSessionStoreAdapter.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/AgentFrameworkSessionStoreAdapter.cs), [`AgentCollaborationWorkflow.cs`](../src/AgenticSystem.Infrastructure/AI/AgentCollaborationWorkflow.cs), [`ServiceCollectionExtensions.cs`](../src/AgenticSystem.Infrastructure/Extensions/ServiceCollectionExtensions.cs), [`Program.cs`](../src/AgenticSystem.Api/Program.cs) |
+| **Referência** | [`FrameworkOrchestratorService.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs), [`OrchestratorContextResolver.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorContextResolver.cs), [`OrchestratorContextFactory.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorContextFactory.cs), [`AgentFrameworkSessionStoreAdapter.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/AgentFrameworkSessionStoreAdapter.cs), [`AgentCollaborationWorkflow.cs`](../../src/AgenticSystem.Infrastructure/AI/AgentCollaborationWorkflow.cs), [`ServiceCollectionExtensions.cs`](../../src/AgenticSystem.Infrastructure/Extensions/ServiceCollectionExtensions.cs), [`Program.cs`](../../src/AgenticSystem.Api/Program.cs) |
 
 **Decisão sugerida:** Tratar o fechamento completo deste item como remoção progressiva das dívidas locais finais da migração framework-first. Workflows e protocol hosting já fazem parte do runtime atual; o backlog remanescente é simplificar o orquestrador hosted e cortar código transitório à medida que cada slice for validado.
 
 ---
 
-## ✅ Fechado Desde o Último Diagnóstico (17 itens)
+## Fechado Desde o Último Diagnóstico (17 itens)
 
 | | |
 |---|---|
@@ -48,7 +51,7 @@
 | **Item** | Re-Ranker Neural com provider especializado real |
 | **Status atual** | `LlmReRanker` resolve `ReRankingOptions` por tenant em runtime via `IRerankingSettingsAccessor`, tenta `IDedicatedReRankerProvider` antes do scorer por embeddings e suporta tanto `JinaReRankerProvider` quanto `LocalOnnxCrossEncoderReRankerProvider`; `/config` agora salva API key, parâmetros e assets por tenant com persistência compatível com os modos locais `InMemory` e `PostgreSQL`, aceitando upload individual de `model.onnx` / `vocab.txt` ou pacote `.zip` |
 | **Resultado** | O gap de provider especializado foi fechado com uma trilha totalmente local forte e multitenant-safe; o rerank neural passa a operar como `Dedicated Provider → Embeddings → LLM`, com configuração dinâmica no front, empacotamento operacional básico via ZIP e sobrevivência a restart quando o storage mode é `PostgreSQL` |
-| **Referência** | [`LlmReRanker.cs`](../src/AgenticSystem.Infrastructure/RAG/LlmReRanker.cs), [`JinaReRankerProvider.cs`](../src/AgenticSystem.Infrastructure/RAG/JinaReRankerProvider.cs), [`LocalOnnxCrossEncoderReRankerProvider.cs`](../src/AgenticSystem.Infrastructure/RAG/LocalOnnxCrossEncoderReRankerProvider.cs), [`RerankingSettingsAccessor.cs`](../src/AgenticSystem.Infrastructure/RAG/RerankingSettingsAccessor.cs), [`SettingsController.cs`](../src/AgenticSystem.Api/Controllers/SettingsController.cs), [`SettingsPage.tsx`](../frontend/src/components/settings/SettingsPage.tsx), [`ReRankingOptions.cs`](../src/AgenticSystem.Infrastructure/Configuration/ReRankingOptions.cs) |
+| **Referência** | [`LlmReRanker.cs`](../../src/AgenticSystem.Infrastructure/RAG/LlmReRanker.cs), [`JinaReRankerProvider.cs`](../../src/AgenticSystem.Infrastructure/RAG/JinaReRankerProvider.cs), [`LocalOnnxCrossEncoderReRankerProvider.cs`](../../src/AgenticSystem.Infrastructure/RAG/LocalOnnxCrossEncoderReRankerProvider.cs), [`RerankingSettingsAccessor.cs`](../../src/AgenticSystem.Infrastructure/RAG/RerankingSettingsAccessor.cs), [`SettingsController.cs`](../../src/AgenticSystem.Api/Controllers/SettingsController.cs), [`SettingsPage.tsx`](../../frontend/src/components/settings/SettingsPage.tsx), [`ReRankingOptions.cs`](../../src/AgenticSystem.Infrastructure/Configuration/ReRankingOptions.cs) |
 
 ---
 
@@ -58,7 +61,7 @@
 | **Item** | Microsoft.Extensions.DataIngestion |
 | **Status atual** | Dependência removida do projeto de infraestrutura |
 | **Resultado** | Pipeline custom de ingestão permanece como implementação oficial, sem dead weight no `.csproj` |
-| **Referência** | [`AgenticSystem.Infrastructure.csproj`](../src/AgenticSystem.Infrastructure/AgenticSystem.Infrastructure.csproj) |
+| **Referência** | [`AgenticSystem.Infrastructure.csproj`](../../src/AgenticSystem.Infrastructure/AgenticSystem.Infrastructure.csproj) |
 
 ---
 
@@ -68,7 +71,7 @@
 | **Item** | Semantic Compression no retrieval |
 | **Status atual** | `RAGService` aplica `ISemanticCompressor.CompressRankedChunksAsync()` quando o contexto excede o budget |
 | **Resultado** | `RAGContext` agora expõe `EffectiveQuery`, `QueryVariants`, `SemanticSummary`, `UsedSemanticCompression` e `OriginalContextTokens` |
-| **Referência** | [`RAGService.cs`](../src/AgenticSystem.Infrastructure/RAG/RAGService.cs), [`SemanticCompressorService.cs`](../src/AgenticSystem.Core/Services/SemanticCompressorService.cs) |
+| **Referência** | [`RAGService.cs`](../../src/AgenticSystem.Infrastructure/RAG/RAGService.cs), [`SemanticCompressorService.cs`](../../src/AgenticSystem.Core/Services/SemanticCompressorService.cs) |
 
 ---
 
@@ -78,7 +81,7 @@
 | **Item** | Retry com backoff e dead-letter |
 | **Status atual** | `ScheduledTaskManager` suporta `maxRetryAttempts`, backoff exponencial, contagem de falhas consecutivas e dead-letter local |
 | **Resultado** | Falhas repetidas deixam de ficar em retry infinito e podem ser retomadas com reset explícito de estado |
-| **Referência** | [`ScheduledTaskManager.cs`](../src/AgenticSystem.Core/Services/ScheduledTaskManager.cs), [`MaturityModels.cs`](../src/AgenticSystem.Core/Models/MaturityModels.cs) |
+| **Referência** | [`ScheduledTaskManager.cs`](../../src/AgenticSystem.Core/Services/ScheduledTaskManager.cs), [`MaturityModels.cs`](../../src/AgenticSystem.Core/Models/MaturityModels.cs) |
 
 ---
 
@@ -88,7 +91,7 @@
 | **Item** | Hardening do webhook delivery |
 | **Status atual** | `WebhookDeliveryChannel` suporta timeout, custom headers, idempotency header e assinatura HMAC SHA-256 via config dictionary |
 | **Resultado** | O canal deixou de ser apenas um POST simples e passou a ter segurança e deduplicação no contrato de entrega |
-| **Referência** | [`WebhookDeliveryChannel.cs`](../src/AgenticSystem.Core/Services/WebhookDeliveryChannel.cs) |
+| **Referência** | [`WebhookDeliveryChannel.cs`](../../src/AgenticSystem.Core/Services/WebhookDeliveryChannel.cs) |
 
 ---
 
@@ -98,7 +101,7 @@
 | **Item** | Microsoft.Extensions.AI.Evaluation |
 | **Status atual** | `RuntimeEvaluatorService` integra `FluencyEvaluator` e `RelevanceTruthAndCompletenessEvaluator` quando há `sessionId` e contexto de sessão |
 | **Resultado** | O score heurístico continua existindo, mas agora é enriquecido por avaliação oficial e persistido no `IOperationalStore` |
-| **Referência** | [`RuntimeEvaluatorService.cs`](../src/AgenticSystem.Core/Services/RuntimeEvaluatorService.cs), [`IOperationalStore.cs`](../src/AgenticSystem.Core/Interfaces/IOperationalStore.cs) |
+| **Referência** | [`RuntimeEvaluatorService.cs`](../../src/AgenticSystem.Core/Services/RuntimeEvaluatorService.cs), [`IOperationalStore.cs`](../../src/AgenticSystem.Core/Interfaces/IOperationalStore.cs) |
 
 ---
 
@@ -108,7 +111,7 @@
 | **Item** | Middlewares custom no `IChatClient` |
 | **Status atual** | `GovernedChatClient` decora o `ContextAwareChatClient` com limite de concorrência, timeout de fila e validação de request/response via `IQualityGateService` |
 | **Resultado** | O pipeline de chat deixou de ser um pass-through simples e ganhou governança reutilizável sem refatorar o `LLMManager` |
-| **Referência** | [`GovernedChatClient.cs`](../src/AgenticSystem.Infrastructure/LLM/GovernedChatClient.cs), [`ChatClientMiddlewareOptions.cs`](../src/AgenticSystem.Infrastructure/Configuration/ChatClientMiddlewareOptions.cs), [`ServiceCollectionExtensions.cs`](../src/AgenticSystem.Infrastructure/Extensions/ServiceCollectionExtensions.cs) |
+| **Referência** | [`GovernedChatClient.cs`](../../src/AgenticSystem.Infrastructure/LLM/GovernedChatClient.cs), [`ChatClientMiddlewareOptions.cs`](../../src/AgenticSystem.Infrastructure/Configuration/ChatClientMiddlewareOptions.cs), [`ServiceCollectionExtensions.cs`](../../src/AgenticSystem.Infrastructure/Extensions/ServiceCollectionExtensions.cs) |
 
 ---
 
@@ -118,7 +121,7 @@
 | **Item** | MCP Server Mode |
 | **Status atual** | `Program.cs` registra `AddMcpServer().WithHttpTransport(...)` e expõe `app.MapMcp("/mcp").RequireAuthorization()` |
 | **Resultado** | O sistema deixou de ser apenas MCP client e agora expõe tools autenticadas (`list_agents`, `search_knowledge`, `list_runtime_tools`, `execute_agent`) para outros agentes e clientes MCP |
-| **Referência** | [`Program.cs`](../src/AgenticSystem.Api/Program.cs), [`AgenticMcpTools.cs`](../src/AgenticSystem.Api/MCP/AgenticMcpTools.cs) |
+| **Referência** | [`Program.cs`](../../src/AgenticSystem.Api/Program.cs), [`AgenticMcpTools.cs`](../../src/AgenticSystem.Api/MCP/AgenticMcpTools.cs) |
 
 ---
 
@@ -128,7 +131,7 @@
 | **Item** | Microsoft.Extensions.VectorData / `AgenticVectorStoreAdapter` |
 | **Status atual** | O adapter agora expõe `GetCollection<string, EmbeddingDocument>()`, `GetDynamicCollection()`, metadata de coleção, collection lifecycle lógico e operações de busca/recuperação/upsert/delete apoiadas no `IVectorStore` custom |
 | **Resultado** | O runtime ganhou interoperabilidade real com `VectorStoreCollection` do ecossistema M.E.AI sem abandonar o store custom existente |
-| **Referência** | [`AgenticVectorStoreAdapter.cs`](../src/AgenticSystem.Infrastructure/AI/AgenticVectorStoreAdapter.cs), [`IVectorStore.cs`](../src/AgenticSystem.Core/Interfaces/IVectorStore.cs), [`InMemoryVectorStore.cs`](../src/AgenticSystem.Infrastructure/Memory/InMemoryVectorStore.cs), [`PostgresVectorStore.cs`](../src/AgenticSystem.Infrastructure/Persistence/PostgresVectorStore.cs) |
+| **Referência** | [`AgenticVectorStoreAdapter.cs`](../../src/AgenticSystem.Infrastructure/AI/AgenticVectorStoreAdapter.cs), [`IVectorStore.cs`](../../src/AgenticSystem.Core/Interfaces/IVectorStore.cs), [`InMemoryVectorStore.cs`](../../src/AgenticSystem.Infrastructure/Memory/InMemoryVectorStore.cs), [`PostgresVectorStore.cs`](../../src/AgenticSystem.Infrastructure/Persistence/PostgresVectorStore.cs) |
 
 ---
 
@@ -138,7 +141,7 @@
 | **Item** | Query Expansion com HyDE condicional |
 | **Status atual** | `RAGService` mantém compressão/variantes heurísticas e agora gera uma variante HyDE via `IChatClient` quando o retrieval inicial vem fraco |
 | **Resultado** | Queries ambíguas ou curtas ganham uma segunda chance de recall sem custo extra em todos os requests; o `RAGContext` passou a expor `UsedHydeExpansion` e `HydeVariant` |
-| **Referência** | [`RAGService.cs`](../src/AgenticSystem.Infrastructure/RAG/RAGService.cs), [`RAGModels.cs`](../src/AgenticSystem.Core/Models/RAGModels.cs) |
+| **Referência** | [`RAGService.cs`](../../src/AgenticSystem.Infrastructure/RAG/RAGService.cs), [`RAGModels.cs`](../../src/AgenticSystem.Core/Models/RAGModels.cs) |
 
 ---
 
@@ -148,7 +151,7 @@
 | **Item** | Skills dinâmicas via YAML/JSON |
 | **Status atual** | `DynamicSkillCatalogHostedService` carrega skills declarativas de diretório configurável e registra no `ISkillManager`, preservando o seed das skills built-in |
 | **Resultado** | O runtime passou a aceitar extensão de skills sem recompilação, com override opcional e resolução de diretório relativa ao content root ou à raiz do repositório |
-| **Referência** | [`DynamicSkillCatalogHostedService.cs`](../src/AgenticSystem.Infrastructure/Skills/DynamicSkillCatalogHostedService.cs), [`DeclarativeSkill.cs`](../src/AgenticSystem.Infrastructure/Skills/DeclarativeSkill.cs), [`DynamicSkillsOptions.cs`](../src/AgenticSystem.Infrastructure/Configuration/DynamicSkillsOptions.cs) |
+| **Referência** | [`DynamicSkillCatalogHostedService.cs`](../../src/AgenticSystem.Infrastructure/Skills/DynamicSkillCatalogHostedService.cs), [`DeclarativeSkill.cs`](../../src/AgenticSystem.Infrastructure/Skills/DeclarativeSkill.cs), [`DynamicSkillsOptions.cs`](../../src/AgenticSystem.Infrastructure/Configuration/DynamicSkillsOptions.cs) |
 
 ---
 
@@ -158,7 +161,7 @@
 | **Item** | Task chaining / DAG-lite |
 | **Status atual** | `ScheduledTaskManager` agora permite ligar tarefas via `LinkTasksAsync`, mantém `DependencyTaskIds`/`ContinuationTaskIds`, bloqueia ciclos e só libera continuações quando todos os predecessores concluíram com sucesso |
 | **Resultado** | O scheduler passou a suportar encadeamento do tipo "terminou A, libera B, depois C" sem reescrever o runtime existente de CRON/intervalo e sem permitir grafos cíclicos |
-| **Referência** | [`ScheduledTaskManager.cs`](../src/AgenticSystem.Core/Services/ScheduledTaskManager.cs), [`IScheduledTaskServices.cs`](../src/AgenticSystem.Core/Interfaces/IScheduledTaskServices.cs), [`MaturityModels.cs`](../src/AgenticSystem.Core/Models/MaturityModels.cs) |
+| **Referência** | [`ScheduledTaskManager.cs`](../../src/AgenticSystem.Core/Services/ScheduledTaskManager.cs), [`IScheduledTaskServices.cs`](../../src/AgenticSystem.Core/Interfaces/IScheduledTaskServices.cs), [`MaturityModels.cs`](../../src/AgenticSystem.Core/Models/MaturityModels.cs) |
 
 ---
 
@@ -168,7 +171,7 @@
 | **Item** | Agent-to-Agent Channels nativos via sessão estruturada |
 | **Status atual** | `FrameworkAgentChannelService` persiste mensagens de canal na sessão e o orquestrador/workflows passam a construir inputs com contexto compartilhado entre agents |
 | **Resultado** | Planner, delegações e reviewer deixaram de trocar apenas strings soltas e passaram a reutilizar um canal estruturado e persistido por sessão |
-| **Referência** | [`FrameworkAgentChannelService.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkAgentChannelService.cs), [`FrameworkOrchestratorService.cs`](../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs), [`AgentCollaborationWorkflow.cs`](../src/AgenticSystem.Infrastructure/AI/AgentCollaborationWorkflow.cs) |
+| **Referência** | [`FrameworkAgentChannelService.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkAgentChannelService.cs), [`FrameworkOrchestratorService.cs`](../../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs), [`AgentCollaborationWorkflow.cs`](../../src/AgenticSystem.Infrastructure/AI/AgentCollaborationWorkflow.cs) |
 
 ---
 
@@ -178,7 +181,7 @@
 | **Item** | Tool Versioning / A/B Testing |
 | **Status atual** | `InMemoryToolManager` agora mantém registry por logical tool id com versões, variantes, rollout percentual e seleção determinística por usuário/sessão |
 | **Resultado** | O runtime ganhou base para rollout gradual de tool variants sem quebrar o contrato existente de `RegisterTool()` |
-| **Referência** | [`InMemoryToolManager.cs`](../src/AgenticSystem.Core/Services/InMemoryToolManager.cs), [`IToolManager.cs`](../src/AgenticSystem.Core/Interfaces/IToolManager.cs), [`ToolVariantModels.cs`](../src/AgenticSystem.Core/Models/ToolVariantModels.cs) |
+| **Referência** | [`InMemoryToolManager.cs`](../../src/AgenticSystem.Core/Services/InMemoryToolManager.cs), [`IToolManager.cs`](../../src/AgenticSystem.Core/Interfaces/IToolManager.cs), [`ToolVariantModels.cs`](../../src/AgenticSystem.Core/Models/ToolVariantModels.cs) |
 
 ---
 
@@ -188,7 +191,7 @@
 | **Item** | Agent Memory Per-Agent |
 | **Status atual** | `BaseAgent` agora consulta `IAgentMemoryService` para enriquecer o system prompt com memórias relevantes por agente/usuário, com store in-memory e persistência EF opcional |
 | **Resultado** | Cada agente passou a reutilizar fatos, regras aprendidas e correções entre sessões, sem depender apenas do histórico da sessão corrente |
-| **Referência** | [`AgentMemoryService.cs`](../src/AgenticSystem.Core/Services/AgentMemoryService.cs), [`BaseAgent.cs`](../src/AgenticSystem.Core/Agents/BaseAgent.cs), [`EfAgentMemoryStore.cs`](../src/AgenticSystem.Infrastructure/Persistence/EfAgentMemoryStore.cs) |
+| **Referência** | [`AgentMemoryService.cs`](../../src/AgenticSystem.Core/Services/AgentMemoryService.cs), [`BaseAgent.cs`](../../src/AgenticSystem.Core/Agents/BaseAgent.cs), [`EfAgentMemoryStore.cs`](../../src/AgenticSystem.Infrastructure/Persistence/EfAgentMemoryStore.cs) |
 
 ---
 
@@ -198,17 +201,17 @@
 | **Item** | Agent Self-Improvement |
 | **Status atual** | `AgentExecutionWorkflow` converte reflexões críticas em regras automáticas via `ICorrectionLoop` e também persiste as sugestões na memória do agente |
 | **Resultado** | O loop de melhoria deixou de depender apenas de regras manuais: falhas/reflexões passam a gerar aprendizados reutilizados em execuções futuras |
-| **Referência** | [`AgentExecutionWorkflow.cs`](../src/AgenticSystem.Core/Services/AgentExecutionWorkflow.cs), [`CorrectionLoopService.cs`](../src/AgenticSystem.Core/Services/CorrectionLoopService.cs), [`AgentMemoryModels.cs`](../src/AgenticSystem.Core/Models/AgentMemoryModels.cs) |
+| **Referência** | [`AgentExecutionWorkflow.cs`](../../src/AgenticSystem.Core/Services/AgentExecutionWorkflow.cs), [`CorrectionLoopService.cs`](../../src/AgenticSystem.Core/Services/CorrectionLoopService.cs), [`AgentMemoryModels.cs`](../../src/AgenticSystem.Core/Models/AgentMemoryModels.cs) |
 
 ---
 
 | | |
 |---|---|
 | **Área** | Integrações Externas |
-| **Item** | Calendar / Email / Notes / Storage Providers |
-| **Status atual** | Providers locais/file-backed foram adicionados e registrados no DI para calendário, email, notas e storage |
-| **Resultado** | As interfaces de integração deixaram de estar órfãs e agora possuem implementações funcionais para uso local/dev, com persistência em filesystem/JSON |
-| **Referência** | [`LocalCalendarProvider.cs`](../src/AgenticSystem.Infrastructure/Integrations/LocalCalendarProvider.cs), [`LocalEmailProvider.cs`](../src/AgenticSystem.Infrastructure/Integrations/LocalEmailProvider.cs), [`ObsidianNotesProvider.cs`](../src/AgenticSystem.Infrastructure/Integrations/ObsidianNotesProvider.cs), [`LocalStorageProvider.cs`](../src/AgenticSystem.Infrastructure/Integrations/LocalStorageProvider.cs) |
+| **Item** | Superfícies externas via MCP e protocolos hospedados |
+| **Status atual** | `Program.cs` expõe MCP autenticado, A2A, AG-UI e a superfície OpenAI-compatible; o backlog de integrações externas saiu do modelo de providers locais dedicados e migrou para superfícies de protocolo e plugins |
+| **Resultado** | O runtime deixou de depender de conectores locais específicos para demonstrar extensibilidade. O foco atual é ampliar testes de integração e expandir bindings/protocolos onde houver necessidade real |
+| **Referência** | [`Program.cs`](../../src/AgenticSystem.Api/Program.cs), [`AgenticMcpTools.cs`](../../src/AgenticSystem.Api/MCP/AgenticMcpTools.cs), [`OpenAIChatCompletionController.cs`](../../src/AgenticSystem.Api/Controllers/OpenAI/OpenAIChatCompletionController.cs), [`ServiceCollectionExtensions.cs`](../../src/AgenticSystem.Infrastructure/Extensions/ServiceCollectionExtensions.cs) |
 
 ---
 

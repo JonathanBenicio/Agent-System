@@ -1,5 +1,10 @@
 # Roadmap de Capacidades Avancadas de IA
 
+> **Status documental:** Roadmap de planejamento futuro.
+> **Escopo:** sequenciar capacidades ainda não tratadas como parte da documentação viva do runtime atual.
+> **Fonte de verdade operacional:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).
+> **Nota de leitura:** nomes de vendors e plataformas citados como exemplo neste roadmap são ilustrativos e não representam compromisso de implementação do runtime atual.
+
 > Gerado em: 2026-05-05  
 > Projeto: AgenticSystem  
 > Escopo: Planejamento de implantacao para GraphRAG, Semantic Caching, Self-Critique Loops e Event-Driven Autonomous Agents
@@ -20,9 +25,9 @@ Consolidar um plano de execucao para a proxima onda de capacidades do AgenticSys
 
 ## Referencias de Arquitetura
 
-- Diagnostico atual: `docs/AI_Capabilities_Gaps.md`
-- Arquitetura tecnica: `docs/TECHNICAL_ARCHITECTURE_GUIDE.md`
-- Fluxos e backlog funcional: `docs/USER-STORIES.md`
+- Diagnostico atual: [AI_Capabilities_Gaps.md](AI_Capabilities_Gaps.md)
+- Arquitetura tecnica: [../TECHNICAL_ARCHITECTURE_GUIDE.md](../TECHNICAL_ARCHITECTURE_GUIDE.md)
+- Fluxos e backlog funcional: [../USER-STORIES.md](../USER-STORIES.md)
 
 ## Principios de Implantacao
 
@@ -34,7 +39,52 @@ Consolidar um plano de execucao para a proxima onda de capacidades do AgenticSys
 
 ---
 
-## Sequenciamento Recomendado
+## Core de Produto
+
+Este roadmap nao redefine o runtime principal do AgenticSystem. O core de produto continua sendo a jornada padrao, obrigatoria e estavel do sistema:
+
+- chat principal
+- ciclo de vida de sessao
+- streaming fim a fim
+- um caminho principal de execucao
+- observabilidade minima para operar o produto
+
+Qualquer proposta deste roadmap que exija uma segunda arquitetura paralela, um segundo caminho padrao de chat ou um desvio permanente do fluxo principal deve permanecer fora do core e ser tratada como laboratorio por padrao.
+
+## Trilhas de Laboratorio
+
+As frentes abaixo entram como trilhas de laboratorio. Elas nao fazem parte do core por default e so podem tocar o fluxo principal por extensao controlada, atras de flag, com modulo separado e rollout opcional.
+
+| Trilha | Papel no portfolio | Hipotese principal | Regra de isolamento |
+|---|---|---|---|
+| Semantic Caching | Eficiencia operacional | reduzir latencia e custo sem degradar qualidade | interceptar antes do provider, com bypass explicito e invalidacao por contexto |
+| Self-Critique Loops | Qualidade em runtime | aumentar groundedness antes da entrega final | acionar por politica de risco, sem virar novo caminho obrigatorio global |
+| GraphRAG | Retrieval relacional | melhorar perguntas trans-documentais e explicabilidade | operar como extensao/decorator do RAG atual com fallback imediato |
+| Event-Driven Agents | Autonomia operacional | permitir execucao assincrona auditavel e idempotente | manter separado do request/response principal e protegido por policies/approvals |
+
+`Fase 0 - Foundations Obrigatorias` e habilitadora dessas trilhas. Ela nao representa, por si so, uma nova capability de produto.
+
+## Criterios de Incubacao e Descarte de Capacidades
+
+| Decisao | Criterios minimos |
+|---|---|
+| Entrar em incubacao | hipotese explicita, criterio de sucesso, criterio de remocao, baseline medido, feature flag definida, fallback para o comportamento atual e dono responsavel pela avaliacao |
+| Permanecer em laboratorio | ganho inicial promissor, mas ainda dependente de rollout parcial, instrumentacao comparativa ou modulo isolado para reduzir blast radius |
+| Promover para o core | ganho recorrente e comprovado contra baseline, SLO estavel, operacao simplificada sem abrir segundo caminho principal, observabilidade suficiente e custo de manutencao menor que manter a capability como experimento |
+| Descartar ou fazer rollback | ausencia de ganho mensuravel, regressao de custo/latencia/qualidade, aumento de risco operacional, necessidade de arquitetura paralela, ou manutencao mais cara do que remover a capability |
+
+Regras de governanca para todas as capacidades experimentais:
+
+1. Nenhuma capability entra em incubacao sem plano de remocao desde o inicio.
+2. Nenhuma capability sai do laboratorio apenas por entusiasmo tecnico; precisa melhorar metricas de produto ou operacao.
+3. Se a capability exigir excecoes permanentes ao chat principal, a sessao, ao streaming ou ao caminho principal de execucao, ela continua fora do core.
+4. Se o rollback nao for barato e previsivel, a capability nao esta pronta para rollout real.
+
+---
+
+## Sequenciamento das Trilhas de Laboratorio
+
+As frentes abaixo permanecem em laboratorio ate cumprirem os criterios de promocao definidos nesta secao.
 
 | Ordem | Frente | Motivo do sequenciamento |
 |---|---|---|
@@ -45,7 +95,7 @@ Consolidar um plano de execucao para a proxima onda de capacidades do AgenticSys
 
 ---
 
-## Fase 0 - Foundations Obrigatorias
+## Fase 0 - Foundations Obrigatorias para as Trilhas de Laboratorio
 
 Antes das quatro frentes, consolidar a base minima de medicao e governanca.
 
@@ -312,7 +362,7 @@ Nao acoplar agentes diretamente ao broker. Introduzir uma camada explicita de co
 
 ### Casos de uso iniciais
 
-- Alerta operacional recebido de Dynatrace ou webhook interno
+- Alerta operacional recebido de uma plataforma de observabilidade ou webhook interno
 - Evento de PR ou issue para abertura de investigacao automatica
 - Mudanca de estado em fila ou tarefa que dispara handoff entre agentes
 - Reprocessamento programado de conhecimento quando uma fonte documental muda

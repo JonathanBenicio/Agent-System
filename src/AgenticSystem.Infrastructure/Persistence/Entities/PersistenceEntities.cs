@@ -154,3 +154,99 @@ public class AgentMemoryEntity
     public int UsageCount { get; set; }
     public bool IsActive { get; set; } = true;
 }
+
+public class SessionRecordEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string TenantId { get; set; } = string.Empty;
+    public string DataJson { get; set; } = "{}";
+    public DateTime StartedAt { get; set; }
+    public DateTime? EndedAt { get; set; }
+    public bool IsConsolidated { get; set; }
+}
+
+public class ConfigEntryEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public string? EncryptedValue { get; set; }
+    public bool IsSecret { get; set; }
+    public string Category { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? Provider { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+    public DateTime? ExpiresAt { get; set; }
+    public string MetadataJson { get; set; } = "{}";
+}
+
+public class ConfigChangeLogEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string ConfigKey { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public string? ChangedBy { get; set; }
+    public DateTime ChangedAt { get; set; }
+    public string? PreviousValueHash { get; set; }
+    public string? NewValueHash { get; set; }
+}
+
+public class ScheduledTaskEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime? NextRunAt { get; set; }
+    public string PayloadJson { get; set; } = "{}";
+    public DateTime UpdatedAt { get; set; }
+}
+
+public class TriggerRuleEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public bool Enabled { get; set; }
+    public string PayloadJson { get; set; } = "{}";
+    public DateTime UpdatedAt { get; set; }
+}
+
+public class ScheduledTaskExecutionEntity
+{
+    public string ExecutionId { get; set; } = string.Empty;
+    public string TaskId { get; set; } = string.Empty;
+    public DateTime StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+    public bool Success { get; set; }
+    public string PayloadJson { get; set; } = "{}";
+}
+
+public class EmbeddingModelEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public bool IsActive { get; set; }
+    public string DataJson { get; set; } = "{}";
+    public DateTime CreatedAt { get; set; }
+}
+
+public class MigrationJobEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string DataJson { get; set; } = "{}";
+    public DateTime CreatedAt { get; set; }
+}
+
+public class RerankingAssetEntity
+{
+    public string TenantId { get; set; } = string.Empty;
+    public string AssetType { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+    public byte[] Content { get; set; } = Array.Empty<byte>();
+    public string ContentHash { get; set; } = string.Empty;
+    public DateTime UpdatedAt { get; set; }
+}

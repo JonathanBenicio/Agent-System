@@ -23,7 +23,7 @@ public class AgentFrameworkFactory
     private readonly IServiceProvider _serviceProvider;
     private readonly UnifiedAIToolProvider? _toolProvider;
     private readonly McpToolsAIFunctionAdapter? _mcpToolsAdapter;
-    private readonly AgentFrameworkSessionStoreAdapter? _sessionStore;
+    private readonly SimpleSessionStoreAdapter? _sessionStore;
 
     // Exposed for OrchestratorContextFactory to create the orchestrator ChatClientAgent
     internal IChatClient ChatClient => _chatClient;
@@ -36,7 +36,7 @@ public class AgentFrameworkFactory
         IServiceProvider serviceProvider,
         UnifiedAIToolProvider? toolProvider = null,
         McpToolsAIFunctionAdapter? mcpToolsAdapter = null,
-        AgentFrameworkSessionStoreAdapter? sessionStore = null)
+        SimpleSessionStoreAdapter? sessionStore = null)
     {
         _chatClient = chatClient;
         _loggerFactory = loggerFactory;
@@ -50,7 +50,7 @@ public class AgentFrameworkFactory
     /// Cria um ChatClientAgent com pipeline (logging + telemetry) a partir de um IAgent existente.
     /// Nota: Usa construtor posicional para suportar Instructions (system prompt rico).
     /// ChatHistoryProvider não é setado aqui pois a reutilização de AgentSession
-    /// é controlada pelo AgentFrameworkSessionStoreAdapter quando o agent roda.
+    /// é controlada pelo SimpleSessionStoreAdapter quando o agent roda.
     /// </summary>
     public async Task<FrameworkAgent> CreateFromAgentAsync(IAgent agent, CancellationToken ct = default)
         => await CreateFromAgentAsync(agent, additionalTools: null, ct);
@@ -135,7 +135,7 @@ public class AgentFrameworkFactory
     {
         if (_sessionStore is null)
         {
-            throw new InvalidOperationException("AgentFrameworkSessionStoreAdapter is not available.");
+            throw new InvalidOperationException("SimpleSessionStoreAdapter is not available.");
         }
 
         return await _sessionStore.GetSessionAsync(agent, sessionId, ct);

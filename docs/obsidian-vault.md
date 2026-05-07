@@ -148,19 +148,19 @@ O vault path é definido em `AgenticSystem:Memory:ObsidianVaultPath`:
 
 ### 2. DI Registration
 
-Em `ServiceCollectionExtensions.cs`, o vault path é lido de **`AgenticSystem:VaultPath`**:
+Em `ServiceCollectionExtensions.cs`, o vault path é lido de **`AgenticSystem:Memory:ObsidianVaultPath`**:
 
 ```csharp
 services.AddSingleton<IObsidianSync>(sp =>
 {
     var vectorStore = sp.GetRequiredService<IVectorStore>();
     var logger = sp.GetRequiredService<ILogger<FileObsidianSync>>();
-    var vaultPath = configuration["AgenticSystem:VaultPath"];
+  var vaultPath = configuration["AgenticSystem:Memory:ObsidianVaultPath"];
     return new FileObsidianSync(vectorStore, logger, vaultPath);
 });
 ```
 
-> ⚠️ **Divergência conhecida**: O DI lê `AgenticSystem:VaultPath`, mas o settings model (`MemorySettings`) usa `AgenticSystem:Memory:ObsidianVaultPath`. Se configurar via appsettings, use ambas as chaves ou corrija o DI para ler de `AgenticSystem:Memory:ObsidianVaultPath`.
+> Situação atual: a divergência antiga foi resolvida. O runtime e o settings model usam a mesma chave `AgenticSystem:Memory:ObsidianVaultPath`.
 
 ### 3. Runtime — API de Settings
 

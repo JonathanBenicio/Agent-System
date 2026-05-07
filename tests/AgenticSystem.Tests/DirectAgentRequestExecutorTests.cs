@@ -11,10 +11,10 @@ namespace AgenticSystem.Tests;
 public class DirectAgentRequestExecutorTests
 {
     [Fact]
-    public async Task ExecuteAsync_UsesExplicitDirectExecutionFactory()
+    public async Task ExecuteAsync_UsesExplicitDirectExecutionService()
     {
         var agentFactory = Substitute.For<IAgentFactory>();
-        var directExecutionFactory = Substitute.For<IDirectAgentExecutionFactory>();
+        var directExecutionService = Substitute.For<IDirectAgentExecutionService>();
         var preProcessingPipeline = Substitute.For<IAgentExecutionPreProcessingPipeline>();
         var postProcessingPipeline = Substitute.For<IAgentExecutionPostProcessingPipeline>();
         var sessionManager = Substitute.For<ISessionManager>();
@@ -35,13 +35,12 @@ public class DirectAgentRequestExecutorTests
         rawAgent.Tier.Returns(AgentTier.Specialist);
         rawAgent.AvailableTools.Returns(Array.Empty<string>());
 
-        var executableAgent = Substitute.For<IAgent>();
-        executableAgent.Name.Returns("FinanceAgent");
-        executableAgent.Description.Returns("Finance agent");
-        executableAgent.Domain.Returns("finance");
-        executableAgent.Tier.Returns(AgentTier.Specialist);
-        executableAgent.AvailableTools.Returns(Array.Empty<string>());
-        executableAgent.ExecuteAsync(Arg.Any<string>(), Arg.Any<UserContext>())
+        directExecutionService.ExecuteDirectAsync(
+                rawAgent,
+                "session-1",
+                "enriched hello",
+                Arg.Any<UserContext>(),
+                Arg.Any<CancellationToken>())
             .Returns(new AgentResponse
             {
                 Content = "Direct response",
@@ -61,8 +60,6 @@ public class DirectAgentRequestExecutorTests
             }
         ]);
         agentFactory.ResolveAgentAsync(Arg.Any<AgentInfo>()).Returns(rawAgent);
-        directExecutionFactory.CreateDirectExecutionAgentAsync(rawAgent, Arg.Any<CancellationToken>())
-            .Returns(executableAgent);
 
         var sut = new DirectAgentRequestExecutor(
             agentFactory,
@@ -71,7 +68,7 @@ public class DirectAgentRequestExecutorTests
             runtimeCoordinator,
             postProcessingPipeline,
             logger,
-            directAgentExecutionFactory: directExecutionFactory);
+            directAgentExecutionService: directExecutionService);
 
         var context = new UserContext { UserId = "user-1" };
 
@@ -80,7 +77,7 @@ public class DirectAgentRequestExecutorTests
         result.Success.Should().BeTrue();
         result.Metadata["executionMode"].Should().Be("direct");
         result.Metadata["appliedCorrectionRules"].Should().Be(2);
-        await directExecutionFactory.Received(1).CreateDirectExecutionAgentAsync(rawAgent, Arg.Any<CancellationToken>());
+        await directExecutionService.Received(1).ExecuteDirectAsync(rawAgent, "session-1", "enriched hello", context, Arg.Any<CancellationToken>());
         await preProcessingPipeline.Received(1).ProcessAsync(
             Arg.Is<AgentExecutionPreProcessingContext>(ctx =>
                 ctx.SessionId == "session-1"
@@ -88,7 +85,6 @@ public class DirectAgentRequestExecutorTests
                 && ctx.ValidateRequest
                 && ctx.ApplyCorrectionRules),
             Arg.Any<CancellationToken>());
-        await executableAgent.Received(1).ExecuteAsync("enriched hello", context);
         await postProcessingPipeline.Received(1).ProcessAsync(
             Arg.Is<AgentExecutionPostProcessingContext>(ctx =>
                 ctx.DirectRequest

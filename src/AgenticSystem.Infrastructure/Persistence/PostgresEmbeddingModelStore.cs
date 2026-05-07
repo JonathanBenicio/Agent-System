@@ -1,187 +1,152 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Npgsql;
 using System.Text.Json;
 
 namespace AgenticSystem.Infrastructure.Persistence;
 
 public class PostgresEmbeddingModelStore : IEmbeddingModelStore
 {
-    private readonly string _connectionString;
+    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresEmbeddingModelStore> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public PostgresEmbeddingModelStore(string connectionString, ILogger<PostgresEmbeddingModelStore> logger)
+    public PostgresEmbeddingModelStore(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresEmbeddingModelStore> logger)
     {
-        _connectionString = connectionString;
+        _dbContextFactory = dbContextFactory;
         _logger = logger;
     }
 
     public async Task<EmbeddingModelConfig?> GetAsync(string modelId)
     {
-        const string sql = "SELECT data FROM embedding_models WHERE id = @id";
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var json = await db.EmbeddingModels
+            .AsNoTracking()
+            .Where(item => item.Id == modelId)
+            .Select(item => item.DataJson)
+            .FirstOrDefaultAsync();
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", modelId);
-
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (await reader.ReadAsync())
-        {
-            var json = reader.GetString(0);
-            return JsonSerializer.Deserialize<EmbeddingModelConfig>(json, JsonOptions);
-        }
-
-        return null;
+        return json is null ? null : JsonSerializer.Deserialize<EmbeddingModelConfig>(json, JsonOptions);
     }
 
     public async Task<IEnumerable<EmbeddingModelConfig>> GetAllAsync()
     {
-        const string sql = "SELECT data FROM embedding_models ORDER BY created_at DESC";
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var payloads = await db.EmbeddingModels
+            .AsNoTracking()
+            .OrderByDescending(item => item.CreatedAt)
+            .Select(item => item.DataJson)
+            .ToListAsync();
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        var models = new List<EmbeddingModelConfig>();
-
-        await using var reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            var json = reader.GetString(0);
-            try
+        return payloads
+            .Select(payload =>
             {
-                var model = JsonSerializer.Deserialize<EmbeddingModelConfig>(json, JsonOptions);
-                if (model is not null)
-                    models.Add(model);
-            }
-            catch (JsonException)
-            {
-                // Skip corrupted records
-            }
-        }
-
-        return models;
+                try
+                {
+                    return JsonSerializer.Deserialize<EmbeddingModelConfig>(payload, JsonOptions);
+                }
+                catch (JsonException)
+                {
+                    return null;
+                }
+            })
+            .OfType<EmbeddingModelConfig>()
+            .ToList();
     }
 
     public async Task<EmbeddingModelConfig> GetActiveAsync()
     {
-        const string sql = "SELECT data FROM embedding_models WHERE is_active = true LIMIT 1";
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var json = await db.EmbeddingModels
+            .AsNoTracking()
+            .Where(item => item.IsActive)
+            .OrderByDescending(item => item.CreatedAt)
+            .Select(item => item.DataJson)
+            .FirstOrDefaultAsync();
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-
-        await using var reader = await cmd.ExecuteReaderAsync();
-        if (await reader.ReadAsync())
+        if (json is null)
         {
-            var json = reader.GetString(0);
-            var model = JsonSerializer.Deserialize<EmbeddingModelConfig>(json, JsonOptions);
-            if (model is not null)
-                return model;
+            throw new InvalidOperationException("No active embedding model configured.");
         }
 
-        throw new InvalidOperationException("No active embedding model configured.");
+        var model = JsonSerializer.Deserialize<EmbeddingModelConfig>(json, JsonOptions);
+        if (model is null)
+        {
+            throw new InvalidOperationException("Active embedding model payload is invalid.");
+        }
+
+        return model;
     }
 
     public async Task SaveAsync(EmbeddingModelConfig model)
     {
-        await ExecuteWithRetryAsync(async () =>
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var entity = await db.EmbeddingModels.FirstOrDefaultAsync(item => item.Id == model.Id);
+        if (entity is null)
         {
-            const string sql = """
-                INSERT INTO embedding_models (id, name, is_active, data, created_at)
-                VALUES (@id, @name, @isActive, @data::jsonb, @createdAt)
-                ON CONFLICT (id) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    is_active = EXCLUDED.is_active,
-                    data = EXCLUDED.data
-                """;
+            db.EmbeddingModels.Add(new EmbeddingModelEntity
+            {
+                Id = model.Id,
+                Name = model.Name,
+                IsActive = model.IsActive,
+                DataJson = JsonSerializer.Serialize(model, JsonOptions),
+                CreatedAt = model.CreatedAt
+            });
+        }
+        else
+        {
+            entity.Name = model.Name;
+            entity.IsActive = model.IsActive;
+            entity.DataJson = JsonSerializer.Serialize(model, JsonOptions);
+        }
 
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
-
-            await using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("id", model.Id);
-            cmd.Parameters.AddWithValue("name", model.Name);
-            cmd.Parameters.AddWithValue("isActive", model.IsActive);
-            cmd.Parameters.AddWithValue("data", JsonSerializer.Serialize(model, JsonOptions));
-            cmd.Parameters.AddWithValue("createdAt", model.CreatedAt);
-
-            await cmd.ExecuteNonQueryAsync();
-            _logger.LogDebug("Embedding model saved to PostgreSQL: {ModelId}", model.Id);
-        });
+        await db.SaveChangesAsync();
+        _logger.LogDebug("Embedding model saved to PostgreSQL via EF Core: {ModelId}", model.Id);
     }
 
     public async Task DeleteAsync(string modelId)
     {
-        const string sql = "DELETE FROM embedding_models WHERE id = @id";
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var entity = await db.EmbeddingModels.FirstOrDefaultAsync(item => item.Id == modelId);
+        if (entity is null)
+        {
+            return;
+        }
 
-        await using var conn = new NpgsqlConnection(_connectionString);
-        await conn.OpenAsync();
-
-        await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("id", modelId);
-
-        await cmd.ExecuteNonQueryAsync();
-        _logger.LogDebug("Embedding model deleted from PostgreSQL: {ModelId}", modelId);
+        db.EmbeddingModels.Remove(entity);
+        await db.SaveChangesAsync();
+        _logger.LogDebug("Embedding model deleted from PostgreSQL via EF Core: {ModelId}", modelId);
     }
 
     public async Task SetActiveAsync(string modelId)
     {
-        await ExecuteWithRetryAsync(async () =>
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var models = await db.EmbeddingModels.ToListAsync();
+        var target = models.FirstOrDefault(item => item.Id == modelId);
+        if (target is null)
         {
-            await using var conn = new NpgsqlConnection(_connectionString);
-            await conn.OpenAsync();
+            throw new InvalidOperationException($"Embedding model '{modelId}' not found.");
+        }
 
-            await using var tx = await conn.BeginTransactionAsync();
-
-            // Deactivate all models
-            await using (var deactivateCmd = new NpgsqlCommand(
-                "UPDATE embedding_models SET is_active = false, data = jsonb_set(data, '{isActive}', 'false') WHERE is_active = true", conn, tx))
-            {
-                await deactivateCmd.ExecuteNonQueryAsync();
-            }
-
-            // Activate the selected model
-            await using (var activateCmd = new NpgsqlCommand(
-                "UPDATE embedding_models SET is_active = true, data = jsonb_set(data, '{isActive}', 'true') WHERE id = @id", conn, tx))
-            {
-                activateCmd.Parameters.AddWithValue("id", modelId);
-                var affected = await activateCmd.ExecuteNonQueryAsync();
-
-                if (affected == 0)
-                    throw new InvalidOperationException($"Embedding model '{modelId}' not found.");
-            }
-
-            await tx.CommitAsync();
-            _logger.LogInformation("Active embedding model set to: {ModelId}", modelId);
-        });
-    }
-
-    private static readonly Random s_jitter = new();
-
-    private async Task ExecuteWithRetryAsync(Func<Task> action, int maxRetries = 3)
-    {
-        for (var attempt = 0; ; attempt++)
+        foreach (var model in models)
         {
-            try
+            var wasActive = model.IsActive;
+            model.IsActive = model.Id == modelId;
+
+            if (wasActive != model.IsActive)
             {
-                await action();
-                return;
-            }
-            catch (NpgsqlException ex) when (ex.IsTransient && attempt < maxRetries - 1)
-            {
-                var baseDelay = 100 * Math.Pow(2, attempt);
-                var jitter = s_jitter.Next(0, (int)(baseDelay * 0.5));
-                var delay = TimeSpan.FromMilliseconds(baseDelay + jitter);
-                _logger.LogWarning(ex, "Transient PostgreSQL error (attempt {Attempt}/{MaxRetries}). Retrying in {Delay}ms.",
-                    attempt + 1, maxRetries, delay.TotalMilliseconds);
-                await Task.Delay(delay);
+                var payload = JsonSerializer.Deserialize<EmbeddingModelConfig>(model.DataJson, JsonOptions);
+                if (payload is not null)
+                {
+                    payload.IsActive = model.IsActive;
+                    model.DataJson = JsonSerializer.Serialize(payload, JsonOptions);
+                }
             }
         }
+
+        await db.SaveChangesAsync();
+        _logger.LogInformation("Active embedding model set to: {ModelId}", modelId);
     }
 }

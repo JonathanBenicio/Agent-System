@@ -224,3 +224,175 @@ public class AgentMemoryConfiguration : IEntityTypeConfiguration<AgentMemoryEnti
         builder.HasIndex(memory => memory.LastUsedAt).HasDatabaseName("ix_agent_memories_last_used_at");
     }
 }
+
+public class SessionRecordConfiguration : IEntityTypeConfiguration<SessionRecordEntity>
+{
+    public void Configure(EntityTypeBuilder<SessionRecordEntity> builder)
+    {
+        builder.ToTable("sessions");
+
+        builder.HasKey(session => session.Id);
+        builder.Property(session => session.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(session => session.UserId).HasColumnName("user_id").HasMaxLength(128).IsRequired();
+        builder.Property(session => session.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(session => session.DataJson).HasColumnName("data").HasColumnType("jsonb").IsRequired();
+        builder.Property(session => session.StartedAt).HasColumnName("started_at");
+        builder.Property(session => session.EndedAt).HasColumnName("ended_at");
+        builder.Property(session => session.IsConsolidated).HasColumnName("is_consolidated");
+
+        builder.HasIndex(session => session.UserId).HasDatabaseName("ix_sessions_user_id");
+        builder.HasIndex(session => session.TenantId).HasDatabaseName("ix_sessions_tenant_id");
+        builder.HasIndex(session => session.StartedAt).HasDatabaseName("idx_sessions_started");
+    }
+}
+
+public class ConfigEntryConfiguration : IEntityTypeConfiguration<ConfigEntryEntity>
+{
+    public void Configure(EntityTypeBuilder<ConfigEntryEntity> builder)
+    {
+        builder.ToTable("config_entries");
+
+        builder.HasKey(entry => entry.Id);
+        builder.Property(entry => entry.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(entry => entry.Key).HasColumnName("key").HasMaxLength(256).IsRequired();
+        builder.Property(entry => entry.Value).HasColumnName("value").IsRequired();
+        builder.Property(entry => entry.EncryptedValue).HasColumnName("encrypted_value");
+        builder.Property(entry => entry.IsSecret).HasColumnName("is_secret");
+        builder.Property(entry => entry.Category).HasColumnName("category").HasMaxLength(64).IsRequired();
+        builder.Property(entry => entry.Status).HasColumnName("status").HasMaxLength(64).IsRequired();
+        builder.Property(entry => entry.Description).HasColumnName("description");
+        builder.Property(entry => entry.Provider).HasColumnName("provider");
+        builder.Property(entry => entry.CreatedAt).HasColumnName("created_at");
+        builder.Property(entry => entry.UpdatedAt).HasColumnName("updated_at");
+        builder.Property(entry => entry.ExpiresAt).HasColumnName("expires_at");
+        builder.Property(entry => entry.MetadataJson).HasColumnName("metadata").HasColumnType("jsonb").IsRequired();
+
+        builder.HasIndex(entry => entry.Key).IsUnique();
+        builder.HasIndex(entry => entry.Category).HasDatabaseName("ix_config_entries_category");
+    }
+}
+
+public class ConfigChangeLogConfiguration : IEntityTypeConfiguration<ConfigChangeLogEntity>
+{
+    public void Configure(EntityTypeBuilder<ConfigChangeLogEntity> builder)
+    {
+        builder.ToTable("config_change_logs");
+
+        builder.HasKey(log => log.Id);
+        builder.Property(log => log.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(log => log.ConfigKey).HasColumnName("config_key").HasMaxLength(256).IsRequired();
+        builder.Property(log => log.Action).HasColumnName("action").HasMaxLength(64).IsRequired();
+        builder.Property(log => log.ChangedBy).HasColumnName("changed_by");
+        builder.Property(log => log.ChangedAt).HasColumnName("changed_at");
+        builder.Property(log => log.PreviousValueHash).HasColumnName("previous_value_hash");
+        builder.Property(log => log.NewValueHash).HasColumnName("new_value_hash");
+
+        builder.HasIndex(log => new { log.ConfigKey, log.ChangedAt })
+            .HasDatabaseName("ix_config_change_logs_key_changed_at");
+    }
+}
+
+public class ScheduledTaskConfiguration : IEntityTypeConfiguration<ScheduledTaskEntity>
+{
+    public void Configure(EntityTypeBuilder<ScheduledTaskEntity> builder)
+    {
+        builder.ToTable("scheduled_tasks");
+
+        builder.HasKey(task => task.Id);
+        builder.Property(task => task.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(task => task.Name).HasColumnName("name").IsRequired();
+        builder.Property(task => task.Status).HasColumnName("status").HasMaxLength(64).IsRequired();
+        builder.Property(task => task.NextRunAt).HasColumnName("next_run_at");
+        builder.Property(task => task.PayloadJson).HasColumnName("payload").HasColumnType("jsonb").IsRequired();
+        builder.Property(task => task.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(task => task.Status).HasDatabaseName("ix_scheduled_tasks_status");
+    }
+}
+
+public class TriggerRuleConfiguration : IEntityTypeConfiguration<TriggerRuleEntity>
+{
+    public void Configure(EntityTypeBuilder<TriggerRuleEntity> builder)
+    {
+        builder.ToTable("trigger_rules");
+
+        builder.HasKey(rule => rule.Id);
+        builder.Property(rule => rule.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(rule => rule.Name).HasColumnName("name").IsRequired();
+        builder.Property(rule => rule.Enabled).HasColumnName("enabled");
+        builder.Property(rule => rule.PayloadJson).HasColumnName("payload").HasColumnType("jsonb").IsRequired();
+        builder.Property(rule => rule.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(rule => rule.Enabled).HasDatabaseName("ix_trigger_rules_enabled");
+    }
+}
+
+public class ScheduledTaskExecutionConfiguration : IEntityTypeConfiguration<ScheduledTaskExecutionEntity>
+{
+    public void Configure(EntityTypeBuilder<ScheduledTaskExecutionEntity> builder)
+    {
+        builder.ToTable("scheduled_task_executions");
+
+        builder.HasKey(execution => execution.ExecutionId);
+        builder.Property(execution => execution.ExecutionId).HasColumnName("execution_id").HasMaxLength(128);
+        builder.Property(execution => execution.TaskId).HasColumnName("task_id").HasMaxLength(128).IsRequired();
+        builder.Property(execution => execution.StartedAt).HasColumnName("started_at");
+        builder.Property(execution => execution.CompletedAt).HasColumnName("completed_at");
+        builder.Property(execution => execution.Success).HasColumnName("success");
+        builder.Property(execution => execution.PayloadJson).HasColumnName("payload").HasColumnType("jsonb").IsRequired();
+
+        builder.HasIndex(execution => execution.TaskId).HasDatabaseName("ix_scheduled_task_executions_task_id");
+    }
+}
+
+public class EmbeddingModelConfiguration : IEntityTypeConfiguration<EmbeddingModelEntity>
+{
+    public void Configure(EntityTypeBuilder<EmbeddingModelEntity> builder)
+    {
+        builder.ToTable("embedding_models");
+
+        builder.HasKey(model => model.Id);
+        builder.Property(model => model.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(model => model.Name).HasColumnName("name").IsRequired();
+        builder.Property(model => model.IsActive).HasColumnName("is_active");
+        builder.Property(model => model.DataJson).HasColumnName("data").HasColumnType("jsonb").IsRequired();
+        builder.Property(model => model.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(model => model.Name).HasDatabaseName("idx_embedding_models_name");
+        builder.HasIndex(model => model.IsActive).HasDatabaseName("idx_embedding_models_active");
+    }
+}
+
+public class MigrationJobConfiguration : IEntityTypeConfiguration<MigrationJobEntity>
+{
+    public void Configure(EntityTypeBuilder<MigrationJobEntity> builder)
+    {
+        builder.ToTable("migration_jobs");
+
+        builder.HasKey(job => job.Id);
+        builder.Property(job => job.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(job => job.Status).HasColumnName("status").HasMaxLength(64).IsRequired();
+        builder.Property(job => job.DataJson).HasColumnName("data").HasColumnType("jsonb").IsRequired();
+        builder.Property(job => job.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(job => job.Status).HasDatabaseName("idx_migration_jobs_status");
+        builder.HasIndex(job => job.CreatedAt).HasDatabaseName("idx_migration_jobs_created");
+    }
+}
+
+public class RerankingAssetConfiguration : IEntityTypeConfiguration<RerankingAssetEntity>
+{
+    public void Configure(EntityTypeBuilder<RerankingAssetEntity> builder)
+    {
+        builder.ToTable("reranking_assets");
+
+        builder.HasKey(asset => new { asset.TenantId, asset.AssetType });
+        builder.Property(asset => asset.TenantId).HasColumnName("tenant_id").HasMaxLength(128);
+        builder.Property(asset => asset.AssetType).HasColumnName("asset_type").HasMaxLength(64);
+        builder.Property(asset => asset.FileName).HasColumnName("file_name").IsRequired();
+        builder.Property(asset => asset.ContentType).HasColumnName("content_type").IsRequired();
+        builder.Property(asset => asset.Content).HasColumnName("content").IsRequired();
+        builder.Property(asset => asset.ContentHash).HasColumnName("content_hash").HasMaxLength(128).IsRequired();
+        builder.Property(asset => asset.UpdatedAt).HasColumnName("updated_at");
+    }
+}

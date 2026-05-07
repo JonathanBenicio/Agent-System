@@ -78,7 +78,9 @@ Todos os arquivos `.feature` usam `# language: pt` (Gherkin em português).
 |---------|-----------|------|:--------:|
 | `backend-apis.feature` | Documents/RAG, Planner, Voice, Obsidian, Setup, Health, Version | T2, ML3, ML18, T8, ML15 | 19 |
 | `scheduled-tasks.feature` | Tasks CRUD, Rules/Trigger Engine, Channels, Health | ML21 | 18 |
-| `embedding-migration.feature` | Models CRUD, Migration Jobs lifecycle, Switchover | ML23 | 14 |
+| `embedding-migration.feature` | Models CRUD, Migration Jobs lifecycle, Switchover — módulo administrativo ativo | ML23 | 14 |
+
+As features `embedding-migration.feature` e `api-key-masking-embedding.feature` permanecem no escopo operacional principal do produto: o backend continua expondo `/api/admin/embedding-migration`, e o frontend mantém a rota `/embedding-migration` com wizard dedicado.
 
 ---
 

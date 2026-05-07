@@ -1,5 +1,10 @@
 # Pipeline Spec→Code — Estado 100% In-Memory sem Fallback
 
+> **Status documental:** Relatório histórico de execução spec→code.
+> **Escopo:** registrar um ciclo anterior de implementação e validação; não descreve o baseline atual do runtime.
+> **Fonte de verdade operacional:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).
+> **Nota de leitura:** itens de backlog citados neste relatório, incluindo exemplos de observabilidade ou pipeline, refletem o contexto daquele ciclo histórico e não a stack vigente.
+
 ## Status: ✅ Completo
 
 ## Fases Executadas

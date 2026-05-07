@@ -1,6 +1,6 @@
 # User Stories — Agentic System
 
-> Catálogo consolidado de User Stories do backend (.NET 8) e frontend (React 19).
+> Catálogo consolidado de User Stories do backend (.NET 10, runtime framework-first hospedado) e frontend (React 19).
 > Gerado via pipeline Spec→Code em maio/2026.
 
 ---
@@ -272,8 +272,8 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 | Item | Detalhe |
 |------|---------|
-| Serviço | `IFrameworkOrchestratorService` + `AgentCollaborationWorkflow` |
-| Responsabilidade | Estratégias de delegação: SingleDelegate, FanOut (paralelo), Chain (sequencial) |
+| Serviço | `IFrameworkOrchestratorService` + `IAgentChannelService` + `AgentCollaborationWorkflow` |
+| Responsabilidade | Delegação por tool bindings, canais estruturados e workflow colaborativo (planner → executor → reviewer), com suporte a topologias `SingleDelegate`, `FanOut` e `Chain` |
 | Testes | Unitários (xUnit) |
 | Status | ✅ Implementado |
 
@@ -369,26 +369,26 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 | Item | Detalhe |
 |------|---------|
 | Serviço | `ISessionStore` (abstração) |
-| Implementações | `InMemorySessionStore` (dev) · `PostgresSessionStore` (produção) |
+| Implementações | `InMemorySessionStore` (dev/local) · `PostgresSessionStore` (persistência principal) |
 | Testes | Unitários + Integração (xUnit) |
 | Status | ✅ Implementado |
 
 **Critérios de Aceite:**
 - [x] Abstração `ISessionStore` com CRUD completo
-- [x] InMemory para dev/test (default)
-- [x] PostgreSQL para produção (swap via DI/config)
+- [x] InMemory para dev/test e execuções locais leves
+- [x] PostgreSQL para persistência durável do runtime
 - [x] Sessões suportam multi-tenant (ML19)
 - [x] TTL configurável para expiração automática
 - [x] `AgenticDbContext : DbContext` — contexto EF Core centralizado para todas as entidades
 - [x] Entidades persistidas: `SessionData`, `Tenant`, `VectorDocumentEntity`, `CostBudgetEntity`, `CostEntryEntity`, `AgentPerformanceMetricEntity`
 - [x] Cada entidade com `IEntityTypeConfiguration<T>` para mapeamento explícito
-- [x] `EfSessionStore : ISessionStore` — implementação alternativa via EF Core
 - [x] `PostgresCostTracker : ICostTracker` — tracking de custo por provider/model em PostgreSQL
 - [x] `PostgresVectorStore : IVectorStore` — armazenamento de vetores com pgvector
+- [x] `AgentFrameworkSessionStoreAdapter` integra a persistência ao runtime hospedado do Agent Framework
 
 ---
 
-#### ML17 — M.E.AI Adapter
+#### ML17 — IChatClient Compatibility Layer
 
 **Como** integrador de LLM providers,
 **quero** bridge automático entre `IChatClient` (M.E.AI) e `ILLMProvider`,
@@ -396,16 +396,16 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 | Item | Detalhe |
 |------|---------|
-| Serviço | `ChatClientProviderAdapter` |
-| Responsabilidade | Bridge `Microsoft.Extensions.AI.IChatClient` → `ILLMProvider` |
+| Serviço | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` |
+| Responsabilidade | Seleção dinâmica de provider/modelo no runtime e compatibilidade entre `IChatClient` e `ILLMProvider` quando necessária |
 | Testes | Unitários (xUnit) |
 | Status | ✅ Implementado |
 
 **Critérios de Aceite:**
-- [x] Registrar `IChatClient` no DI é suficiente
-- [x] Adapter expõe como `ILLMProvider` automaticamente
-- [x] Mapeamento de request/response é transparente
-- [x] Fallback mantém funcionalidade se IChatClient falhar
+- [x] `ContextAwareChatClient` resolve provider/modelo a partir do contexto runtime atual
+- [x] `LLMManager` mantém catálogo administrativo e registro de chat clients por provider
+- [x] `ProviderBackedChatClient` oferece compatibilidade reversa quando um fluxo precisa expor `ILLMProvider` como `IChatClient`
+- [x] Mapeamento de request/response é transparente para chamadas do pipeline principal
 - [x] `EmbeddingProviderAdapter` — bridge `IEmbeddingProvider` → `IEmbeddingGenerator<string, Embedding<float>>`
 - [x] `AgenticVectorStoreAdapter` — bridge `IVectorStore` → `IVectorStore` (M.E.AI)
 - [x] 3 adapters distintos cobrem: Chat, Embedding e Vector Store

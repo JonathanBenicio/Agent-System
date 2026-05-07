@@ -1,7 +1,8 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.Persistence.Entities;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using Npgsql;
 
 namespace AgenticSystem.Infrastructure.Persistence;
 
@@ -10,13 +11,13 @@ namespace AgenticSystem.Infrastructure.Persistence;
 /// </summary>
 public class PostgresCostTracker : ICostTracker
 {
-    private readonly string _connectionString;
+    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresCostTracker> _logger;
     private readonly decimal _defaultDailyBudget;
 
-    public PostgresCostTracker(string connectionString, ILogger<PostgresCostTracker> logger, decimal defaultDailyBudget = 50.00m)
+    public PostgresCostTracker(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresCostTracker> logger, decimal defaultDailyBudget = 50.00m)
     {
-        _connectionString = connectionString;
+        _dbContextFactory = dbContextFactory;
         _logger = logger;
         _defaultDailyBudget = defaultDailyBudget;
     }
@@ -27,24 +28,18 @@ public class PostgresCostTracker : ICostTracker
 
         try
         {
-            const string sql = """
-                INSERT INTO cost_entries (service_name, category, tenant_id, cost, recorded_at)
-                VALUES (@serviceName, @category, @tenantId, @cost, @recordedAt)
-                """;
-
-            using var conn = new NpgsqlConnection(_connectionString);
-            conn.Open();
-
-            using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("serviceName", serviceName);
-            cmd.Parameters.AddWithValue("category", category);
-            cmd.Parameters.AddWithValue("tenantId", tid);
-            cmd.Parameters.AddWithValue("cost", cost);
-            cmd.Parameters.AddWithValue("recordedAt", DateTime.UtcNow);
-
-            cmd.ExecuteNonQuery();
+            using var db = _dbContextFactory.CreateDbContext();
+            db.CostEntries.Add(new CostEntryEntity
+            {
+                ServiceName = serviceName,
+                Category = category,
+                TenantId = tid,
+                Cost = cost,
+                RecordedAt = DateTime.UtcNow
+            });
+            db.SaveChanges();
         }
-        catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to record cost for service {Service}", serviceName);
         }
@@ -57,27 +52,30 @@ public class PostgresCostTracker : ICostTracker
 
         try
         {
-            const string sql = """
-                INSERT INTO cost_budgets (id, service_name, tenant_id, daily_budget, updated_at)
-                VALUES (@id, @serviceName, @tenantId, @dailyBudget, @updatedAt)
-                ON CONFLICT (id) DO UPDATE SET
-                    daily_budget = EXCLUDED.daily_budget,
-                    updated_at = EXCLUDED.updated_at
-                """;
+            using var db = _dbContextFactory.CreateDbContext();
+            var budget = db.CostBudgets.FirstOrDefault(item => item.Id == id);
+            if (budget is null)
+            {
+                db.CostBudgets.Add(new CostBudgetEntity
+                {
+                    Id = id,
+                    ServiceName = serviceName,
+                    TenantId = tid,
+                    DailyBudget = dailyBudget,
+                    UpdatedAt = DateTime.UtcNow
+                });
+            }
+            else
+            {
+                budget.ServiceName = serviceName;
+                budget.TenantId = tid;
+                budget.DailyBudget = dailyBudget;
+                budget.UpdatedAt = DateTime.UtcNow;
+            }
 
-            using var conn = new NpgsqlConnection(_connectionString);
-            conn.Open();
-
-            using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("id", id);
-            cmd.Parameters.AddWithValue("serviceName", serviceName);
-            cmd.Parameters.AddWithValue("tenantId", tid);
-            cmd.Parameters.AddWithValue("dailyBudget", dailyBudget);
-            cmd.Parameters.AddWithValue("updatedAt", DateTime.UtcNow);
-
-            cmd.ExecuteNonQuery();
+            db.SaveChanges();
         }
-        catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to set budget for service {Service}", serviceName);
         }
@@ -95,59 +93,42 @@ public class PostgresCostTracker : ICostTracker
 
         try
         {
-            using var conn = new NpgsqlConnection(_connectionString);
-            conn.Open();
-
-            // Aggregate costs
-            var costSql = """
-                SELECT service_name, category, SUM(cost) as total_cost
-                FROM cost_entries
-                WHERE recorded_at >= @since
-                """;
-
-            if (tenantId is not null)
-                costSql += " AND tenant_id = @tenantId";
-
-            costSql += " GROUP BY service_name, category";
-
-            using (var cmd = new NpgsqlCommand(costSql, conn))
+            using var db = _dbContextFactory.CreateDbContext();
+            var costsQuery = db.CostEntries.AsNoTracking().Where(entry => entry.RecordedAt >= since);
+            if (!string.IsNullOrWhiteSpace(tenantId))
             {
-                cmd.Parameters.AddWithValue("since", since);
-                if (tenantId is not null)
-                    cmd.Parameters.AddWithValue("tenantId", tenantId);
+                costsQuery = costsQuery.Where(entry => entry.TenantId == tenantId);
+            }
 
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
+            var aggregated = costsQuery
+                .GroupBy(entry => new { entry.ServiceName, entry.Category })
+                .Select(group => new
                 {
-                    var svc = reader.GetString(0);
-                    var cat = reader.GetString(1);
-                    var cost = reader.GetDecimal(2);
+                    group.Key.ServiceName,
+                    group.Key.Category,
+                    Total = group.Sum(item => item.Cost)
+                })
+                .ToList();
 
-                    costByService[svc] = costByService.GetValueOrDefault(svc) + cost;
-                    costByCategory[cat] = costByCategory.GetValueOrDefault(cat) + cost;
-                    total += cost;
-                }
-            }
-
-            // Get budgets
-            var budgetSql = "SELECT service_name, daily_budget FROM cost_budgets";
-            if (tenantId is not null)
-                budgetSql += " WHERE tenant_id = @tenantId";
-
-            using (var cmd2 = new NpgsqlCommand(budgetSql, conn))
+            foreach (var item in aggregated)
             {
-                if (tenantId is not null)
-                    cmd2.Parameters.AddWithValue("tenantId", tenantId);
-
-                using var reader2 = cmd2.ExecuteReader();
-                while (reader2.Read())
-                    totalBudget += reader2.GetDecimal(1);
+                costByService[item.ServiceName] = costByService.GetValueOrDefault(item.ServiceName) + item.Total;
+                costByCategory[item.Category] = costByCategory.GetValueOrDefault(item.Category) + item.Total;
+                total += item.Total;
             }
+
+            var budgetsQuery = db.CostBudgets.AsNoTracking();
+            if (!string.IsNullOrWhiteSpace(tenantId))
+            {
+                budgetsQuery = budgetsQuery.Where(budget => budget.TenantId == tenantId);
+            }
+
+            totalBudget = budgetsQuery.Sum(budget => (decimal?)budget.DailyBudget) ?? 0m;
 
             if (totalBudget == 0)
                 totalBudget = _defaultDailyBudget;
         }
-        catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get cost report");
         }
@@ -169,27 +150,19 @@ public class PostgresCostTracker : ICostTracker
     {
         try
         {
-            var sql = """
-                SELECT COALESCE(SUM(cost), 0) FROM cost_entries
-                WHERE service_name = @serviceName AND recorded_at >= @since
-                """;
+            using var db = _dbContextFactory.CreateDbContext();
+            var query = db.CostEntries.AsNoTracking()
+                .Where(entry => entry.ServiceName == serviceName)
+                .Where(entry => entry.RecordedAt >= DateTime.UtcNow.Date);
 
-            if (tenantId is not null)
-                sql += " AND tenant_id = @tenantId";
+            if (!string.IsNullOrWhiteSpace(tenantId))
+            {
+                query = query.Where(entry => entry.TenantId == tenantId);
+            }
 
-            using var conn = new NpgsqlConnection(_connectionString);
-            conn.Open();
-
-            using var cmd = new NpgsqlCommand(sql, conn);
-            cmd.Parameters.AddWithValue("serviceName", serviceName);
-            cmd.Parameters.AddWithValue("since", DateTime.UtcNow.Date);
-            if (tenantId is not null)
-                cmd.Parameters.AddWithValue("tenantId", tenantId);
-
-            var result = cmd.ExecuteScalar();
-            return result is decimal d ? d : 0;
+            return query.Sum(entry => (decimal?)entry.Cost) ?? 0m;
         }
-        catch (Exception ex) when (ex is NpgsqlException or TimeoutException)
+        catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get service cost for {Service}", serviceName);
             return 0;

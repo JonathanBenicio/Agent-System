@@ -1,5 +1,9 @@
 # Over-Engineering Assessment
 
+> **Status documental:** Assessment de simplificação arquitetural.
+> **Escopo:** apontar complexidade acidental, acoplamentos e oportunidades de refactor; não descreve sozinho a topologia válida do runtime.
+> **Fonte de verdade operacional:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).
+
 > Revisao tecnica do runtime Agentic com foco em complexidade acidental, acoplamento e custo de manutencao.
 
 ## Escopo

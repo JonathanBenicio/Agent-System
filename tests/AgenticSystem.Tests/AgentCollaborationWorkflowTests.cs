@@ -1,10 +1,12 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.AI;
+using AgenticSystem.Infrastructure.Configuration;
 using AgenticSystem.Infrastructure.AgentFramework;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Runtime.CompilerServices;
 using AIChatResponse = Microsoft.Extensions.AI.ChatResponse;
 
@@ -115,6 +117,353 @@ public class AgentCollaborationWorkflowTests
         response.Metadata["workflowEngine"].Should().Be("AgentWorkflowBuilder");
         response.Content.Should().Contain("Review completed");
         await taskPlanManager.Received(1).AdvanceStepAsync("plan-1", "Step completed");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_AddsConcurrentContextAndCheckpointMetadata_WhenAdvancedWorkflowIsEnabled()
+    {
+        var taskPlanManager = Substitute.For<ITaskPlanManager>();
+        var runtimeCoordinator = Substitute.For<IAgentRuntimeCoordinator>();
+        runtimeCoordinator.BeginAgentScope(Arg.Any<string>(), Arg.Any<IEnumerable<string>>())
+            .Returns(new DisposableScope());
+
+        var createdPlan = new TaskPlan
+        {
+            Id = "plan-advanced-1",
+            Title = "Plan title",
+            Description = "Plan description",
+            Steps =
+            [
+                new TaskStep
+                {
+                    Index = 0,
+                    Description = "Draft implementation",
+                    AssignedAgent = "WorkAgent",
+                    Status = TaskStepStatus.Pending
+                }
+            ]
+        };
+
+        taskPlanManager.CreatePlanAsync("user-1", "Implement migration", Arg.Any<List<TaskStep>>())
+            .Returns(createdPlan);
+
+        var planner = new ChatClientPlanner(
+            CreateStaticChatClient("[{\"description\":\"Draft implementation\",\"agent\":\"Work\"}]"),
+            taskPlanManager,
+            LoggerFactory.Create(_ => { }));
+
+        var ragService = Substitute.For<IRAGService>();
+        ragService.RetrieveContextAsync(Arg.Any<RAGQuery>(), Arg.Any<CancellationToken>())
+            .Returns(new RAGContext { BuiltContext = "Relevant migration context" });
+
+        var stepAgent = CreateAgent(
+            "WorkAgent",
+            "work",
+            AgentTier.Specialist,
+            new AgentResponse
+            {
+                Content = "Step completed",
+                AgentName = "WorkAgent",
+                Success = true,
+                ToolsUsed = []
+            });
+
+        var reviewerAgent = CreateAgent(
+            "AnalysisAgent",
+            "analysis",
+            AgentTier.Specialist,
+            new AgentResponse
+            {
+                Content = "Review completed",
+                AgentName = "AnalysisAgent",
+                Success = true,
+                Metadata = new Dictionary<string, object>()
+            });
+
+        var agentFactory = Substitute.For<IAgentFactory>();
+        agentFactory.ResolveAgentAsync(Arg.Any<AnalysisResult>())
+            .Returns(callInfo =>
+            {
+                var analysis = callInfo.Arg<AnalysisResult>();
+                return analysis.EstimatedAgent == "AnalysisAgent"
+                    ? reviewerAgent
+                    : stepAgent;
+            });
+
+        var frameworkFactory = new AgentFrameworkFactory(
+            CreateStaticChatClient("unused"),
+            LoggerFactory.Create(_ => { }),
+            new ServiceCollection().BuildServiceProvider());
+
+        var sut = new AgentCollaborationWorkflow(
+            planner,
+            agentFactory,
+            taskPlanManager,
+            runtimeCoordinator,
+            Substitute.For<ILogger<AgentCollaborationWorkflow>>(),
+            ragService: ragService,
+            agentFrameworkFactory: frameworkFactory,
+            workflowOptions: Options.Create(new CollaborationWorkflowOptions
+            {
+                EnableAdvancedWorkflow = true,
+                EnableConcurrentContextStage = true,
+                EnableCheckpointing = true
+            }));
+
+        var context = new UserContext
+        {
+            UserId = "user-1",
+            TenantId = Tenant.DefaultTenantId
+        };
+
+        var analysis = new AnalysisResult
+        {
+            PrimaryDomain = "work",
+            EstimatedAgent = "WorkAgent",
+            Intent = IntentType.Chat,
+            Complexity = ComplexityLevel.RequiresPlanning,
+            RecommendedTier = AgentTier.Specialist,
+            RequiresDelegation = true
+        };
+
+        var response = await sut.ExecuteAsync("session-advanced-1", "Implement migration", context, analysis, CancellationToken.None);
+
+        response.Success.Should().BeTrue();
+        response.Metadata["executionMode"].Should().Be("context-parallel-planner-executor-reviewer-workflow");
+        response.Metadata["advancedWorkflow"].Should().Be(true);
+        response.Metadata["workflowCheckpointingEnabled"].Should().Be(true);
+        response.Metadata["contextCheckpointingEnabled"].Should().Be(true);
+        response.Metadata["workflowContextEnriched"].Should().Be(true);
+        response.Metadata["concurrentContextSourcesCount"].Should().Be(1);
+        response.Content.Should().Contain("Review completed");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UsesNativeHandoffReview_WhenEnabled()
+    {
+        var taskPlanManager = Substitute.For<ITaskPlanManager>();
+        var runtimeCoordinator = Substitute.For<IAgentRuntimeCoordinator>();
+        runtimeCoordinator.BeginAgentScope(Arg.Any<string>(), Arg.Any<IEnumerable<string>>())
+            .Returns(new DisposableScope());
+
+        var createdPlan = new TaskPlan
+        {
+            Id = "plan-handoff-1",
+            Title = "Plan title",
+            Description = "Plan description",
+            Steps =
+            [
+                new TaskStep
+                {
+                    Index = 0,
+                    Description = "Draft implementation",
+                    AssignedAgent = "WorkAgent",
+                    Status = TaskStepStatus.Pending
+                }
+            ]
+        };
+
+        taskPlanManager.CreatePlanAsync("user-1", "Implement migration", Arg.Any<List<TaskStep>>())
+            .Returns(createdPlan);
+
+        var planner = new ChatClientPlanner(
+            CreateStaticChatClient("[{\"description\":\"Draft implementation\",\"agent\":\"Work\"}]"),
+            taskPlanManager,
+            LoggerFactory.Create(_ => { }));
+
+        var stepAgent = CreateAgent(
+            "WorkAgent",
+            "work",
+            AgentTier.Specialist,
+            new AgentResponse
+            {
+                Content = "Step completed",
+                AgentName = "WorkAgent",
+                Success = true,
+                ToolsUsed = []
+            });
+
+        var reviewerAgent = CreateAgent(
+            "AnalysisAgent",
+            "analysis",
+            AgentTier.Specialist,
+            new AgentResponse
+            {
+                Content = "Direct review fallback",
+                AgentName = "AnalysisAgent",
+                Success = true,
+                Metadata = new Dictionary<string, object>()
+            });
+
+        var agentFactory = Substitute.For<IAgentFactory>();
+        agentFactory.ResolveAgentAsync(Arg.Any<AnalysisResult>())
+            .Returns(callInfo =>
+            {
+                var analysis = callInfo.Arg<AnalysisResult>();
+                return analysis.EstimatedAgent == "AnalysisAgent"
+                    ? reviewerAgent
+                    : stepAgent;
+            });
+
+        var frameworkFactory = new AgentFrameworkFactory(
+            CreateStaticChatClient("Review completed via handoff workflow"),
+            LoggerFactory.Create(_ => { }),
+            new ServiceCollection().BuildServiceProvider());
+
+        var sut = new AgentCollaborationWorkflow(
+            planner,
+            agentFactory,
+            taskPlanManager,
+            runtimeCoordinator,
+            Substitute.For<ILogger<AgentCollaborationWorkflow>>(),
+            agentFrameworkFactory: frameworkFactory,
+            workflowOptions: Options.Create(new CollaborationWorkflowOptions
+            {
+                EnableAdvancedWorkflow = true,
+                EnableConcurrentContextStage = false,
+                EnableCheckpointing = true,
+                EnableNativeHandoffReview = true
+            }));
+
+        var context = new UserContext
+        {
+            UserId = "user-1",
+            TenantId = Tenant.DefaultTenantId
+        };
+
+        var analysis = new AnalysisResult
+        {
+            PrimaryDomain = "work",
+            EstimatedAgent = "WorkAgent",
+            Intent = IntentType.Chat,
+            Complexity = ComplexityLevel.RequiresPlanning,
+            RecommendedTier = AgentTier.Specialist,
+            RequiresDelegation = true
+        };
+
+        var response = await sut.ExecuteAsync("session-handoff-1", "Implement migration", context, analysis, CancellationToken.None);
+
+        response.Success.Should().BeTrue();
+        response.Metadata["nativeHandoffWorkflow"].Should().Be(true);
+        response.Metadata["nativeReviewMode"].Should().Be("HandoffWorkflowBuilder");
+        response.Metadata["handoffCheckpointingEnabled"].Should().Be(true);
+        response.Content.Should().Contain("Review completed via handoff workflow");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_UsesNativeGroupChatTermination_WhenEnabled()
+    {
+        var taskPlanManager = Substitute.For<ITaskPlanManager>();
+        var runtimeCoordinator = Substitute.For<IAgentRuntimeCoordinator>();
+        runtimeCoordinator.BeginAgentScope(Arg.Any<string>(), Arg.Any<IEnumerable<string>>())
+            .Returns(new DisposableScope());
+        runtimeCoordinator.CurrentSessionId.Returns("session-group-chat-1");
+
+        var createdPlan = new TaskPlan
+        {
+            Id = "plan-group-chat-1",
+            Title = "Plan title",
+            Description = "Plan description",
+            Steps =
+            [
+                new TaskStep
+                {
+                    Index = 0,
+                    Description = "Draft implementation",
+                    AssignedAgent = "WorkAgent",
+                    Status = TaskStepStatus.Pending
+                }
+            ]
+        };
+
+        taskPlanManager.CreatePlanAsync("user-1", "Implement migration", Arg.Any<List<TaskStep>>())
+            .Returns(createdPlan);
+
+        var planner = new ChatClientPlanner(
+            CreateStaticChatClient("[{\"description\":\"Draft implementation\",\"agent\":\"Work\"}]"),
+            taskPlanManager,
+            LoggerFactory.Create(_ => { }));
+
+        var stepAgent = CreateAgent(
+            "WorkAgent",
+            "work",
+            AgentTier.Specialist,
+            new AgentResponse
+            {
+                Content = "Step completed",
+                AgentName = "WorkAgent",
+                Success = true,
+                ToolsUsed = []
+            });
+
+        var reviewerAgent = CreateAgent(
+            "AnalysisAgent",
+            "analysis",
+            AgentTier.Specialist,
+            new AgentResponse
+            {
+                Content = "Direct review fallback",
+                AgentName = "AnalysisAgent",
+                Success = true,
+                Metadata = new Dictionary<string, object>()
+            });
+
+        var agentFactory = Substitute.For<IAgentFactory>();
+        agentFactory.ResolveAgentAsync(Arg.Any<AnalysisResult>())
+            .Returns(callInfo =>
+            {
+                var analysis = callInfo.Arg<AnalysisResult>();
+                return analysis.EstimatedAgent == "AnalysisAgent"
+                    ? reviewerAgent
+                    : stepAgent;
+            });
+
+        var frameworkFactory = new AgentFrameworkFactory(
+            CreateStaticChatClient("Review completed via group chat"),
+            LoggerFactory.Create(_ => { }),
+            new ServiceCollection().BuildServiceProvider());
+
+        var sut = new AgentCollaborationWorkflow(
+            planner,
+            agentFactory,
+            taskPlanManager,
+            runtimeCoordinator,
+            Substitute.For<ILogger<AgentCollaborationWorkflow>>(),
+            agentFrameworkFactory: frameworkFactory,
+            workflowOptions: Options.Create(new CollaborationWorkflowOptions
+            {
+                EnableAdvancedWorkflow = true,
+                EnableConcurrentContextStage = false,
+                EnableCheckpointing = true,
+                EnableNativeGroupChatTermination = true,
+                GroupChatMaximumIterations = 3,
+                GroupChatTerminationPhrases = ["review completed"]
+            }));
+
+        var context = new UserContext
+        {
+            UserId = "user-1",
+            TenantId = Tenant.DefaultTenantId
+        };
+
+        var analysis = new AnalysisResult
+        {
+            PrimaryDomain = "work",
+            EstimatedAgent = "WorkAgent",
+            Intent = IntentType.Chat,
+            Complexity = ComplexityLevel.RequiresPlanning,
+            RecommendedTier = AgentTier.Specialist,
+            RequiresDelegation = true
+        };
+
+        var response = await sut.ExecuteAsync("session-group-chat-1", "Implement migration", context, analysis, CancellationToken.None);
+
+        response.Success.Should().BeTrue();
+        response.Metadata["nativeGroupChatTermination"].Should().Be(true);
+        response.Metadata["nativeReviewMode"].Should().Be("GroupChatWorkflowBuilder");
+        response.Metadata["groupChatTerminationReason"].Should().Be("phrase:review completed");
+        response.Metadata["groupChatCheckpointingEnabled"].Should().Be(true);
+        response.Content.Should().Contain("Review completed via group chat");
     }
 
     private static IAgent CreateAgent(string name, string domain, AgentTier tier, AgentResponse response)

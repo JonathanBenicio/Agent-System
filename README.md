@@ -1,6 +1,6 @@
 # 🤖 Sistema Agentic Generalista
 
-> .NET 8 + Microsoft.Extensions.AI + OpenAI SDK — multi-provider LLM, memória Obsidian + pgvector, orquestração inteligente. Inspirado no Baianinho-Labs.
+> .NET 10 + Microsoft Agent Framework + Microsoft.Extensions.AI — orquestração framework-first hospedada, memória Obsidian + PostgreSQL/pgvector e superfícies A2A, AG-UI, MCP e OpenAI-compatible.
 
 ## Atualização Maio/2026 — Runtime V2
 
@@ -14,6 +14,32 @@
 Referências:
 - [docs/USER-STORIES.md](docs/USER-STORIES.md)
 - [docs/TECHNICAL_ARCHITECTURE_GUIDE.md](docs/TECHNICAL_ARCHITECTURE_GUIDE.md)
+- [docs/planejamento/AI_Advanced_Capabilities_Roadmap.md](docs/planejamento/AI_Advanced_Capabilities_Roadmap.md)
+
+## 🧭 Governança de Escopo (Core x Laboratório)
+
+### Core de Produto
+
+O caminho padrão e estável do produto permanece:
+
+- chat principal
+- ciclo de vida de sessão
+- streaming fim a fim
+- um caminho principal de execução
+- observabilidade mínima para operação
+
+### Trilhas de Laboratório
+
+Capacidades experimentais (como protocolos extras, plugins MCP, workflows colaborativos avançados, loops de self-improvement e superfícies administrativas especializadas) ficam fora do core por padrão e devem seguir:
+
+- feature flag obrigatória
+- módulo separado
+- rollout opcional
+- fallback explícito para o comportamento atual
+
+### Critérios de incubação e descarte
+
+Toda capacidade experimental precisa nascer com hipótese, critério de sucesso e critério de remoção. A promoção para o core só ocorre com ganho recorrente comprovado contra baseline e sem abrir um segundo caminho principal de execução. Sem ganho mensurável ou com aumento de risco/custo operacional, a diretriz é rollback ou descarte.
 
 ## 🚀 Quick Start
 
@@ -34,7 +60,7 @@ curl -X POST https://localhost:5001/api/chat \
 
 ## 🧠 O que este sistema faz?
 
-Um **Meta-Agent** analisa o contexto da solicitação e roteia para o agent especialista mais adequado, cada um com parâmetros LLM otimizados:
+O sistema expõe uma fachada de chat e protocolo que abre sessão, inicia streaming e delega a execução principal para um orquestrador hospedado no Microsoft Agent Framework. Esse orquestrador escolhe especialistas, tools auxiliares, RAG e workflow colaborativo conforme a necessidade:
 
 - 📅 **Produtividade** — Calendário, tarefas, lembretes
 - 💼 **Trabalho** — Email, documentos, reuniões
@@ -48,34 +74,28 @@ Um **Meta-Agent** analisa o contexto da solicitação e roteia para o agent espe
 
 ```mermaid
 graph TD
-    User(["👤 User"]) --> API["API (ASP.NET + SignalR)"]
-    Voice(["🎙️ Voice Assistant"]) --> VoiceAPI["VoiceController\n/api/voice/ask"]
-    API --> Meta["🧠 MetaAgent — Tier 0\nContext Analyzer + Smart Router"]
-    VoiceAPI --> Meta
+  User(["👤 User / Client"]) --> API["API + SignalR"]
+  Voice(["🎙️ Voice Assistant"]) --> VoiceAPI["VoiceController\n/api/voice/ask"]
+  Protocol["A2A / AG-UI / OpenAI-compatible / MCP"] --> API
+  API --> Meta["MetaAgentOrchestrator\nfachada de sessão + streaming"]
+  VoiceAPI --> Meta
 
-    Meta --> T1["Tier 1 — Masters\nPersonal · Work · Learning"]
-    Meta --> T2["Tier 2 — Specialists\nCreative · Analysis · Calendar"]
-    Meta --> T3["Tier 3 — Support\nNotification · API"]
+  Meta --> Workflow["AgentExecutionWorkflow\ncasca fina"]
+  Workflow --> Hosted["FrameworkOrchestratorService\nAIAgent hospedado"]
 
-    T1 --> GW["🛡️ External Service Gateway\nCircuit Breaker · Rate Limiter · Cost Tracker · Health Monitor"]
-    T2 --> GW
-    T3 --> GW
+  Hosted --> Specialists["Especialistas + Tool Bindings\nPersonal · Work · Learning · Creative · Analysis · Calendar"]
+  Hosted --> Collab["Collaboration Workflow\nplanner → executor → reviewer"]
+  Hosted --> GW["🛡️ Service Gateway\nCircuit Breaker · Rate Limiter · Cost Tracker · Health Monitor"]
+  Hosted --> SessionStore[("📦 Session Store\nInMemory · PostgreSQL")]
 
-    GW --> LLM["LLM\nOpenAI · Gemini · Claude · Ollama"]
-    GW --> MEAI["M.E.AI Adapter\nIChatClient → ILLMProvider"]
-    GW --> Embed["Embeddings"]
-    GW --> Vision["Vision"]
-    GW --> Cal["Calendar"]
-    GW --> Int["Integrations"]
+  GW --> LLM["LLM\nOpenAI · Gemini · Claude · Ollama"]
+  GW --> Embed["Embeddings"]
+  Embed --> Memory[("💾 Memory\nObsidian + PostgreSQL/pgvector")]
 
-    Embed --> Memory[("💾 Memory\nObsidian + PostgreSQL/pgvector")]
-    Meta --> SessionStore[("📦 Session Store\nInMemory · PostgreSQL")]
-
-    style Meta fill:#1a1a2e,stroke:#e94560,color:#fff
+  style Meta fill:#1a1a2e,stroke:#e94560,color:#fff
     style GW fill:#16213e,stroke:#0f3460,color:#fff
     style Memory fill:#0f3460,stroke:#533483,color:#fff
     style VoiceAPI fill:#ff6b35,stroke:#333,color:#fff
-    style MEAI fill:#0078d4,stroke:#333,color:#fff
     style SessionStore fill:#336791,stroke:#333,color:#fff
 ```
 
@@ -83,12 +103,13 @@ graph TD
 
 | Camada | Tecnologias |
 |--------|-------------|
-| **Core** | .NET 8, ASP.NET Core, SignalR, Microsoft.Extensions.AI |
-| **LLM** | OpenAI SDK 2.10 (GPT-4o), Google Gemini, Anthropic Claude, Ollama, M.E.AI.OpenAI (IChatClient bridge) |
+| **Core** | .NET 10, ASP.NET Core 10, SignalR 10, Microsoft.Extensions.AI |
+| **Agent Runtime** | Microsoft Agent Framework 1.4 + hosting/workflows |
+| **LLM** | OpenAI, Google Gemini, Anthropic Claude, Ollama, IChatClient contextual |
 | **Embeddings** | OpenAI (text-embedding-3-small), Google (text-embedding-004), Ollama (nomic-embed-text), ML.NET+ONNX |
-| **Vision** | OpenAI Vision, Google Cloud Vision, Azure CV, Ollama llava |
 | **Memory** | Obsidian vault (human-readable), PostgreSQL + pgvector (semantic search) |
-| **Integrations** | Microsoft Graph, Google APIs, Notion, Todoist/TickTick, MCP Plugins |
+| **Protocols** | A2A, AG-UI, MCP HTTP, OpenAI-compatible |
+| **Integrations** | MCP Plugins e superfícies administrativas do produto |
 | **Document Pipeline** | Parsers (Markdown, PlainText, HTML), Hybrid Chunking, RAG + Re-Ranking |
 | **Gateway** | Circuit Breaker (pure C#), Rate Limiter, Cost Tracker, Health Monitor |
 
@@ -96,43 +117,42 @@ graph TD
 
 | Proteção | Implementação |
 |----------|---------------|
-| **Prompt Injection Protection** | Delimitadores `<user_input>` no ContextAnalyzer isolam input do usuário do system prompt |
+| **Prompt Injection Protection** | Pré-processamento, quality gates e ferramentas auxiliares do orquestrador hospedado |
 | **Rate Limiting per-Tenant** | Sliding window no `/api/chat` — retorna 429 Too Many Requests quando excedido |
 | **Correlation ID** | Header `X-Correlation-Id` em error responses para rastreabilidade de incidentes |
 | **Retry com Jitter Exponencial** | PostgresVectorStore e PostgresSessionStore — evita thundering herd |
 | **JSON Corrupted Data Safety** | try/catch `JsonException` em `GetAsync`/`ReadSessionsAsync` — dados corrompidos não crasham o sistema |
-| **Named Constants (Re-Ranker)** | `VectorScoreWeight`, `TfScoreWeight`, `ExactPhraseBonus`, `SectionMatchBonus`, `TagMatchBonus`, `OverlapPenalty` |
-| **Token Estimation Multilingual** | `CharsPerToken = 3.5` (otimizado para conteúdo multilingual, era 4.0) |
+| **Auth** | MultiAuth com API Key ou JWT via `PolicyScheme` |
+| **Protocol Governance** | Rate limiting dedicado para superfícies A2A, AG-UI e compatibilidade OpenAI |
 
 ## �📂 Estrutura do Projeto
 
 ```
 src/
 ├── AgenticSystem.Api/              # Web API + SignalR
-│   ├── Auth/                       # API Key authentication
+│   ├── Auth/                       # MultiAuth (API Key + JWT)
 │   ├── Controllers/                # REST endpoints (Chat, Agent, LLM, Voice...)
 │   ├── Hubs/                       # SignalR real-time (ChatHub, GatewayHub)
 │   └── Program.cs                  # Startup + DI
 ├── AgenticSystem.Core/             # Business Logic
 │   ├── Interfaces/                 # Contracts (ISkill, ITool, ISessionStore)
 │   ├── Models/                     # Domain models (SessionData, AgentResponse...)
-│   ├── Services/                   # Core services (InMemorySessionStore...)
+│   ├── Services/                   # MetaAgentOrchestrator, AgentExecutionWorkflow, pipelines
 │   └── LLM/                       # LLM abstraction layer
 └── AgenticSystem.Infrastructure/   # External Services
-    ├── LLM/Providers/              # OpenAI, Gemini, Claude, Ollama
-    ├── LLM/Adapters/               # ChatClientProviderAdapter (M.E.AI → ILLMProvider)
+  ├── AgentFramework/             # Hosted orchestrator + tool bindings + session adapter
+  ├── LLM/                        # LLMManager, ContextAwareChatClient, providers e compatibilidade
     ├── Embeddings/Providers/       # OpenAI, Google, Ollama, ONNX
-    ├── Vision/Providers/           # OpenAI, Google, Azure, Ollama
     ├── Persistence/                # PostgresSessionStore (produção)
     ├── Documents/                  # Parsers (Markdown, PlainText, HTML)
     ├── Chunking/                   # Hybrid chunking strategy
     ├── RAG/                        # RAG service + Heuristic Re-Ranker
-    ├── Integrations/               # Google, Microsoft, Notion, Tasks
+    ├── Integrations/               # Conectores e superfícies externas compatíveis
     ├── Gateway/                    # External Service Gateway
     ├── Memory/                     # pgvector
     └── MCP/                        # MCP plugins
 tests/
-└── AgenticSystem.Tests/            # 549 testes (Unit + Integration)
+└── AgenticSystem.Tests/            # suíte automatizada do backend
 docs/architecture/                  # Diagramas, pipeline, RAG flow
 data/obsidian-vault/                # Obsidian notes
 ```
@@ -180,31 +200,17 @@ data/obsidian-vault/                # Obsidian notes
           "MaxTokens": 2000
         }
       },
-      "Gemini": {
-        "ApiKey": "AIza...",
-        "DefaultModel": "gemini-1.5-pro",
-        "IsEnabled": true,
-        "Priority": 2
+      "Protocols": {
+        "EnableMcp": true,
+        "EnableA2A": true,
+        "EnableAgUi": true,
+        "EnableOpenAICompatible": true
       },
-      "Claude": {
-        "ApiKey": "sk-ant-...",
-        "DefaultModel": "claude-3-5-sonnet-20241022",
-        "IsEnabled": false,
-        "Priority": 3
-      }
-    }
-  },
-  
-  "AgentLLMProfiles": {
-    "MetaAgent": {
-      "PreferredModel": "gpt-4o",
-      "DefaultParameters": {
-        "Temperature": 0.2,
-        "MaxTokens": 800,
-        "ResponseFormat": "Json"
-      },
-      "TaskParameters": {
-        "context-analysis": { "Temperature": 0.1 },
+
+      "Memory": {
+        "ObsidianVaultPath": "./data/obsidian-vault",
+        "VectorStoreType": "PostgreSQL",
+        "ConnectionString": "Host=localhost;Port=5432;Database=agentic_memory;Username=postgres;Password=postgres"
         "agent-routing": { "Temperature": 0.0 }
       }
     },
@@ -259,25 +265,11 @@ data/obsidian-vault/                # Obsidian notes
     }
   },
 
-  "Integrations": {
-    "MicrosoftGraph": {
-      "IsEnabled": true,
-      "TenantId": "...",
-      "ClientId": "..."
-    },
-    "Google": {
-      "IsEnabled": true,
-      "CredentialsFile": "./credentials/google-service-account.json",
-      "Scopes": ["calendar", "drive", "gmail.readonly"]
-    },
-    "Notion": {
-      "IsEnabled": false,
-      "ApiKey": "ntn_..."
-    },
-    "Todoist": {
-      "IsEnabled": false,
-      "ApiKey": "..."
-    }
+  "Protocols": {
+    "EnableMcp": true,
+    "EnableA2A": true,
+    "EnableAgUi": true,
+    "EnableOpenAICompatible": true
   },
 
   "ObsidianSync": {
@@ -364,19 +356,15 @@ Todo serviço externo passa pelo Gateway unificado com proteção e telemetria.
 
 | Categoria | Providers | Interface |
 |-----------|-----------|-----------|
-| LLM | OpenAI SDK 2.10, Gemini, Claude, Ollama, M.E.AI (IChatClient) | `ILLMProvider` |
+| LLM | OpenAI, Gemini, Claude, Ollama | `ILLMProvider` + `IChatClient` contextual |
 | Embedding | OpenAI, Google, Ollama, ONNX | `IEmbeddingProvider` |
-| Vision | OpenAI, Google CV, Azure CV, Ollama | `IVisionProvider` |
-| Calendar | Google Calendar, Outlook | `ICalendarProvider` |
-| Email | Gmail, Outlook | `IEmailProvider` |
-| Storage | Google Drive, OneDrive | `IStorageProvider` |
-| Notes | Notion | `INotesProvider` |
-| Tasks | Todoist, TickTick | `ITaskProvider` |
-| Database | PostgreSQL + pgvector | `IVectorStore` |
+| Tools locais | datetime, http, calculator, file-search | `ITool` |
+| Memória | PostgreSQL + pgvector, Obsidian Vault | `IVectorStore`, `IObsidianSync` |
+| Protocolos | MCP, A2A, AG-UI, OpenAI-compatible | Superfícies hospedadas |
 
 ### Admin API
 
-> Todos os endpoints `/api/admin/*` requerem autenticação via header `X-Api-Key`. Configure a chave em `AgenticSystem:AdminApiKey` no `appsettings.json`.
+> Endpoints administrativos seguem a autenticação padrão da API. O runtime suporta API Key e JWT via MultiAuth.
 
 ```bash
 # Gateway
@@ -433,7 +421,7 @@ POST /api/admin/mcp/plugins                    # Registrar plugin
 | ML14 — Smart Routing (performance + user preferences) | ✅ |
 | ML15 — Setup Flow (conversational onboarding wizard) | ✅ |
 | ML16 — Session Persistence (ISessionStore + PostgreSQL) | ✅ |
-| ML17 — M.E.AI Adapter (IChatClient → ILLMProvider) | ✅ |
+| ML17 — IChatClient Compatibility Layer | ✅ |
 | ML18 — Voice Interface (Alexa-ready endpoint) | ✅ |
 | ML19 — Multi-Tenant Foundation (ITenantStore + TenantContext) | ✅ |
 | ML20 — Tool Availability Guard (IToolAvailabilityGuard + ToolDiscoveryService) | ✅ |
@@ -531,25 +519,22 @@ kubectl apply -f k8s/
 
 ## 📈 Monitoramento
 
-- **Application Insights**: Telemetria automática
-- **Prometheus**: Métricas custom (requests, latency, costs)
-- **Grafana**: Dashboards de uso por agent
+- **Structured Logging**: eventos operacionais e auditoria do runtime
+- **Gateway Dashboard**: custos, estado de circuit breaker e saúde dos serviços
+- **SignalR**: eventos em tempo real via `GatewayHub`
 - **Quality Score**: Score contínuo 0-1 com baseline histórico e AI evaluation (`Fluency` + `RTC`) quando há contexto de sessão
 
 ## 🧪 Testes
 
 ```bash
-# Unit tests
-dotnet test tests/AgenticSystem.Tests/Unit/
+# Backend
+dotnet test
 
-# Integration tests  
-dotnet test tests/AgenticSystem.Tests/Integration/
-
-# LLM provider tests
-dotnet test tests/AgenticSystem.Tests/LLM/
+# Frontend E2E
+cd frontend && npx cypress run
 
 # Load testing (K6)
-k6 run tests/load/agent-load-test.js
+k6 run frontend/k6/gateway-load-test.js
 ```
 
 ## 🤝 Contribuindo
@@ -562,9 +547,9 @@ k6 run tests/load/agent-load-test.js
 
 ### Adicionando Novo Agent
 
-1. Criar classe agent em `src/Core/Services/`
+1. Criar classe agent em `src/AgenticSystem.Core/Agents/` ou projeto de extensão equivalente
 2. Configurar perfil LLM em `appsettings.json`
-3. Registrar no DI em `Program.cs`
+3. Registrar no DI em `Program.cs` ou no bootstrap da infraestrutura
 4. Adicionar testes em `tests/`
 
 ### Adicionando Novo Provider LLM
@@ -574,7 +559,7 @@ k6 run tests/load/agent-load-test.js
 3. Mapear request/response formats
 4. Adicionar configuração em `appsettings.json`
 
-**Via Microsoft.Extensions.AI**: Registre qualquer `IChatClient` no DI e o `ChatClientProviderAdapter` o expõe automaticamente como `ILLMProvider` — zero código adicional.
+**Via Microsoft.Extensions.AI**: use `AddAgenticSystemInfrastructure(configuration)` para registrar `LLMManager`, `ContextAwareChatClient` e o `IChatClient` governado. Para compatibilidade reversa, use `ProviderBackedChatClient` explicitamente.
 
 ## 🧬 Maturity Levels
 
@@ -593,12 +578,12 @@ O sistema implementa 10 níveis de maturidade que elevam o agente de um "chatbot
 | ML9 | Query Compression | `IQueryCompressor` | Compressão de queries antes do search — remove redundância, extrai key terms, normaliza intent semântico |
 | ML10 | User Personalization | `IUserPreferenceEngine` | Perfis de preferência por usuário — estilo de comunicação, tolerância a risco, agentes preferidos, EMA de satisfação |
 | ML11 | Dynamic Agent Creation | `IDynamicAgentService` | Criação de agents via linguagem natural — detecção de intent, geração de spec via LLM, fallback por keywords, registro automático |
-| ML12 | Dynamic Handoffs | `IHandoffManager` | Delegação mid-conversation entre agents — SingleDelegate, FanOut (paralelo), Chain (sequencial), histórico de handoffs |
+| ML12 | Dynamic Handoffs | `IFrameworkOrchestratorService` + `IAgentChannelService` | Delegação mid-conversation por tool bindings, canais estruturados e workflow colaborativo |
 | ML13 | Session Consolidation | `ISessionConsolidator` | Sumarização de sessão via LLM — extração de fatos, decisões, preferências, action items. Memória de longo prazo |
 | ML14 | Smart Routing | `ISmartRouter` | Roteamento multi-critério — preferências do usuário, histórico de performance, EMA de latência e qualidade |
 | ML15 | Setup Flow | `ISetupFlowManager` | Onboarding conversacional — wizard step-by-step (Welcome→Identity→Workspace→Jira→Profile→Team→Projects→Complete) |
 | ML16 | Session Persistence | `ISessionStore` | Abstração de persistência de sessões — InMemory (default) e PostgreSQL (produção). Swap transparente via DI |
-| ML17 | M.E.AI Adapter | `ChatClientProviderAdapter` | Bridge Microsoft.Extensions.AI `IChatClient` → `ILLMProvider` — integração zero-config com qualquer IChatClient |
+| ML17 | IChatClient Compatibility | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` | Seleção contextual de provider/modelo e compatibilidade explícita entre `IChatClient` e `ILLMProvider` |
 | ML18 | Voice Interface | `VoiceController` | Endpoint voice-friendly `/api/voice/ask` — timeout 7s, StripMarkdown para TTS, Alexa/Google Assistant ready |
 | ML19 | Multi-Tenant | `ITenantStore` · `ITenantResolver` · `TenantContext` | Isolamento por tenant — resolução via header/token, store in-memory (default), contexto propagado por middleware |
 | ML20 | Tool Availability Guard | `IToolAvailabilityGuard` · `IToolDiscoveryService` | Validação pré-execução de tools requeridas — discovery de MCPs/plugins ausentes, penalização no ConfidenceScore, sugestões sem auto-install |
