@@ -32,6 +32,7 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
         AgentStreamEventType.FinalApprovalRequired,
         AgentStreamEventType.FinalApprovalResolved,
         AgentStreamEventType.ArtifactRecorded,
+        AgentStreamEventType.StateTransition,
         AgentStreamEventType.SessionCompleted,
         AgentStreamEventType.Error
     ];

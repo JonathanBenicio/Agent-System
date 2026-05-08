@@ -23,6 +23,7 @@ public enum AgentStreamEventType
     FinalApprovalRequired,
     FinalApprovalResolved,
     ArtifactRecorded,
+    StateTransition,
     SessionCompleted,
     Error
 }

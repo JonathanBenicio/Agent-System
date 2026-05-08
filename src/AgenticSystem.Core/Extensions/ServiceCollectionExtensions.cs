@@ -30,6 +30,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IToolManager, InMemoryToolManager>();
         services.AddSingleton<IToolGovernanceService, ToolGovernanceService>();
 
+        // Phase 1 — Enterprise Security & Runtime
+        services.AddSingleton<IPolicyEngine, PolicyEngine>();
+        services.AddSingleton<IPermissionService, InMemoryPermissionService>();
+        services.AddSingleton<IAuditLog, InMemoryAuditLog>();
+        services.AddSingleton<IToolGateway, ToolGateway>();
+
         // Multi-Tenant
         services.AddSingleton<ITenantStore, InMemoryTenantStore>();
         services.AddSingleton<ITenantResolver, TenantResolver>();
