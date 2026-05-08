@@ -2,7 +2,7 @@
 
 > **Documento canônico de arquitetura do backend**. Use este arquivo como fonte de verdade do runtime atual, revalidado contra o código e contra o [plano de migração framework-first](../planejamento/framework-first-migration-plan.md).
 >
-> O sistema já roda framework-first no fluxo principal, com surface hosted do MAF, workflows nativos no slice colaborativo e protocol hosting ativo. Ainda existem dívidas locais abertas: uma cadeia local de composição do orquestrador no runtime hosted (`OrchestratorContextResolver` + `OrchestratorContextFactory`) e middleware de reflection/quality gates via extensões locais.
+> O sistema já roda framework-first no fluxo principal, com surface hosted do MAF, workflows nativos no slice colaborativo e protocol hosting ativo. Ainda existem dívidas locais abertas: uma composição local do orquestrador ainda concentrada em `OrchestratorContextFactory` + `OrchestratorHostBuilder` e middleware de reflection/quality gates via extensões locais.
 >
 > [TECHNICAL_ARCHITECTURE_GUIDE.md](../TECHNICAL_ARCHITECTURE_GUIDE.md) e [DSA-AgenticSystem.md](../DSA-AgenticSystem.md) são documentos complementares e devem permanecer alinhados a este arquivo.
 
@@ -16,7 +16,7 @@
 4. [Inicialização e Registro de Dependências](#4-inicialização-e-registro-de-dependências)
 5. [Padrão de Orquestração — Supervisor-with-Tools](#5-padrão-de-orquestração--supervisor-with-tools)
 6. [Fluxos de Request](#6-fluxos-de-request)
-7. [RAG Pipeline — MessageAIContextProvider + AIFunction](#7-rag-pipeline--messageaicontextprovider--aifunction)
+7. [RAG Pipeline — RAGContextProvider + retrieve_context](#7-rag-pipeline--ragcontextprovider--retrieve_context)
 8. [Middleware Pipeline — Reflection e QualityGates](#8-middleware-pipeline--reflection-e-qualitygates)
 9. [Workflow de Colaboração — AgentWorkflowBuilder](#9-workflow-de-colaboração--agentworkflowbuilder)
 10. [Gestão de Sessões — ISessionStore + ISessionManager](#10-gestão-de-sessões--isessionstore--isessionmanager)
@@ -61,7 +61,7 @@ O LLM do orquestrador decide qual especialista chamar com base no input do usuá
 │       ↓                                                          │
 │  AddAIAgent("Orchestrator") → surface hosted scoped             │
 │       ├─ OrchestratorContext (scoped)                           │
-│       ├─ OrchestratorContextResolver → OrchestratorContextFactory│
+│       ├─ OrchestratorContextFactory → OrchestratorHostBuilder    │
 │       ├─ WithAITool(specialist_1)    ← AsAIFunction()            │
 │       ├─ WithAITool(specialist_N)    ← AsAIFunction()            │
 │       ├─ Tools auxiliares (RAG / Router / Analyzer)             │
@@ -127,8 +127,8 @@ Contém interfaces, modelos, agentes base e serviços de domínio. **Não refere
 
 Implementa as interfaces do Core com dependências concretas (MAF, PostgreSQL, LLM providers, MCP, RAG).
 
-- **AgentFramework/**: `FrameworkOrchestratorService`, `AgentFrameworkFactory`, `SimpleSessionStoreAdapter`, `OrchestratorContextResolver`, `OrchestratorContextFactory`, middleware wrappers
-- **RAG/**: `RAGService`, `LlmReRanker`, `JinaReRankerProvider`, `LocalOnnxCrossEncoderReRankerProvider`, `SemanticCompressorService`, `QueryCompressor`
+- **AgentFramework/**: `FrameworkOrchestratorService`, `AgentFrameworkFactory`, `SimpleSessionStoreAdapter`, `OrchestratorContextFactory`, `OrchestratorHostBuilder`, middleware wrappers
+- **RAG/**: `RAGService`, `LlmReRanker`, `JinaReRankerProvider`, `LocalOnnxCrossEncoderReRankerProvider`, `SemanticCompressorService`, `QueryCompressorService`
 - **AI/**: `AgentCollaborationWorkflow` (wrapper para `AgentWorkflowBuilder`), `ChatClientPlanner`, `UnifiedAIToolProvider`
 - **MCP/**: `McpToolsAIFunctionAdapter`, MCP client/server
 - **VectorStore/**: `InMemoryVectorStore`, `PostgreSQLVectorStore`
@@ -150,7 +150,7 @@ WebApplication.CreateBuilder(args)
     │   ├─ AddAIAgent("Orchestrator")       ← surface hosted do orquestrador principal
     │   ├─ AddWorkflow("collaboration")     ← workflow nativo no slice colaborativo
     │   ├─ SimpleSessionStoreAdapter
-    │   ├─ RAGContextProvider (MessageAIContextProvider)
+    │   ├─ RAGContextProvider (provider concreto sobre `MessageAIContextProvider`)
     │   ├─ Middleware local: UseQualityGates()
     │   ├─ Pós-processamento compartilhado: AgentExecutionPostProcessingPipeline
     │   ├─ MCP plugins (discovery + auto-connect)
@@ -419,7 +419,7 @@ Próximo request: orquestrador agora inclui "TrabalhistaAgent" como tool dispon�
 
 ---
 
-## 7. RAG Pipeline — MessageAIContextProvider + AIFunction
+## 7. RAG Pipeline — RAGContextProvider + retrieve_context
 
 ### Conceito Dual
 
@@ -427,8 +427,8 @@ O RAG opera com duas abordagens complementares:
 
 | Abordagem | Mecanismo | Quando | Determinismo |
 |---|---|---|---|
-| **`MessageAIContextProvider`** (primária) | Injeta contexto automaticamente a cada request | Sempre, antes de cada `RunAsync` | Determinístico |
-| **`AIFunction` tool** (complementar) | LLM decide quando chamar `retrieve_context` | Sob demanda, buscas ad-hoc | Não-determinístico |
+| **`RAGContextProvider`** (primária) | Provider concreto que injeta contexto automaticamente a cada request | Sempre, antes de cada `RunAsync` | Determinístico |
+| **`retrieve_context`** (complementar) | `AIFunction` auxiliar decidida pelo LLM para buscas ad-hoc | Sob demanda | Não-determinístico |
 
 ### RAGContextProvider
 
@@ -454,7 +454,7 @@ AgentSession.Messages:
 Query do usuário
     │
     ▼
-QueryCompressor.CompressAsync(query)               ← otimiza query
+IQueryCompressor.CompressAsync(query)              ← otimiza query
     │
     ▼
 Gera variantes de query (original + comprimida)
@@ -469,20 +469,21 @@ VectorStore.SearchAsync(variants, filters)          ← busca vetorial (pgvector
 Filtro por MinRelevanceScore (threshold)
     │
     ▼
-ReRanker.ReRankAsync(query, chunks, topK)           ← re-ranqueamento
+IReRanker.ReRankAsync(query, chunks, topK)          ← re-ranqueamento (`LlmReRanker`)
     │
-    ├─ Dedicated provider (Jina / Local ONNX)       ← tentativa 1
-    ├─ Embeddings-based scorer                       ← fallback
-    └─ LLM-based scorer                             ← último recurso
-    │
-    ▼
-KnowledgeFreshnessService.CalculateFreshnessScoreAsync   ← penaliza chunks stale
+    ├─ `LocalOnnxCrossEncoderReRankerProvider`      ← caminho local forte
+    ├─ `JinaReRankerProvider`                       ← provider externo opcional
+    ├─ Embeddings-based scorer                      ← fallback neural leve
+    └─ LLM-based scorer                             ← último recurso opcional
     │
     ▼
-SemanticCompressor.CompressRankedChunksAsync         ← comprime se contexto > budget
+IKnowledgeFreshnessService.CalculateFreshnessScoreAsync  ← penaliza chunks stale
     │
     ▼
-RAGContext { BuiltContext, Chunks, Tokens, Strategy, ... }
+ISemanticCompressor.CompressRankedChunksAsync        ← comprime se contexto > budget
+    │
+    ▼
+RAGContext { BuiltContext, Chunks, EffectiveQuery, UsedHydeExpansion, SemanticSummary, ... }
 ```
 
 ### Fontes de Conhecimento
@@ -701,7 +702,7 @@ Primeiro request:
   
 Cada request subsequente:
   ISessionStore.GetSessionAsync → restaura AgentSession (chat history)
-    MessageAIContextProvider → injeta RAG no contexto do request
+        RAGContextProvider → injeta RAG no contexto do request
   RunAsync → executa com histórico completo
   ISessionStore.SaveSessionAsync → persiste AgentSession atualizada
   SessionManager.AddEventAsync → registra evento de negócio
@@ -729,7 +730,7 @@ UnifiedAIToolProvider
     │
     ├─ Built-in Tools
     │   └─ Registradas no UnifiedAIToolProvider
-    │       ├─ RAGContextEnricher (retrieve_context)
+    │       ├─ retrieve_context (RAG ad-hoc)
     │       ├─ SmartRouter wrapper (route_to_best_agent)
     │       ├─ ContextAnalyzer wrapper (analyze_request)
     │       └─ CorrectionLoop wrapper (apply_corrections)
@@ -1078,7 +1079,8 @@ Resultado: `ConfidenceScore { Value, Level (High/Medium/Low/RequiresHumanReview)
 | **IHostedAgentBuilder** | Interface retornada por `AddAIAgent()` para configurar o agente (tools, session store, middleware) |
 | **AgentSession** | Sessão do framework que mantém chat history e estado do agente |
 | **ISessionStore** | Interface nativa do MAF para persistência de sessões |
-| **MessageAIContextProvider** | Conceito usado no projeto para injeção automática de contexto antes de cada request |
+| **RAGContextProvider** | Provider concreto do projeto que estende `MessageAIContextProvider` e injeta RAG automaticamente antes de cada request |
+| **MessageAIContextProvider** | Abstração do MAF usada como base do `RAGContextProvider` para injeção automática de contexto |
 | **ChatHistoryProvider** | Conceito relacionado do MAF; o projeto atual preferiu `MessageAIContextProvider` para o RAG do orquestrador |
 | **AgentWorkflowBuilder** | API do MAF para construção de workflows multi-agent (`BuildSequential`, `BuildConcurrent`) |
 | **RunAsync(input, session)** | Método de execução do agente no MAF — aceita 2 argumentos, sem `CancellationToken` |

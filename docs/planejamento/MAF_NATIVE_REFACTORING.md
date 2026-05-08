@@ -1,5 +1,8 @@
 # Plano de Refatoração: Aproximar Runtime do MAF Nativo
 
+> **[TRANSITIONAL]** Este documento registra a trilha de redução de código transitório do runtime MAF.
+> Fases já concluídas devem ser lidas como histórico de execução; apenas backlog residual e critérios de rollout seguem ativos.
+
 **Data:** 7 de maio de 2026  
 **Objetivo:** Reduzir código transitório de integração com MAF mantendo diferencial de produto  
 **Duração estimada:** 3-4 sprints incrementais  
@@ -21,7 +24,7 @@
 
 ### Dívidas Transitórias (Local/Custom)
 ❌ `OrchestratorContextFactory` — composição manual por sessão  
-❌ `OrchestratorContextResolver` — resolução scoped manual  
+❌ `OrchestratorHostBuilder` + `OrchestratorContextFactory` — composição hosted ainda local por sessão  
 
 ### Customização Permanente do Produto (não mover)
 ✅ `IAgentExecutionPreProcessingPipeline` — validação + correction rules (diferencial)  

@@ -392,7 +392,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 - [ ] Testes de carga com K6 (validar Service Gateway sob stress)
 - [ ] Feature flags via Consul para ML-levels
 - [ ] PostgreSQL managed (RDS/Cloud SQL)
-- [ ] Migração de InMemorySessionStore → PostgresSessionStore em produção
+- [ ] Concluir o rollout operacional do `PostgresSessionStore` como padrão em produção
 
 ---
 

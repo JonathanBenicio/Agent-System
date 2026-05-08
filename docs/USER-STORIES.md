@@ -384,7 +384,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] Cada entidade com `IEntityTypeConfiguration<T>` para mapeamento explícito
 - [x] `PostgresCostTracker : ICostTracker` — tracking de custo por provider/model em PostgreSQL
 - [x] `PostgresVectorStore : IVectorStore` — armazenamento de vetores com pgvector
-- [x] `AgentFrameworkSessionStoreAdapter` integra a persistência ao runtime hospedado do Agent Framework
+- [x] `SimpleSessionStoreAdapter` integra a persistência ao runtime hospedado do Agent Framework
 
 ---
 
@@ -500,7 +500,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 | Item | Detalhe |
 |------|---------|
-| Serviços | `DocumentIngestionPipeline` · `MarkdownParser` · `PlainTextParser` · `HtmlParser` · `HybridChunkingStrategy` · `HeuristicReRanker` |
+| Serviços | `DocumentIngestionPipeline` · `MarkdownParser` · `PlainTextParser` · `HtmlParser` · `HybridChunkingStrategy` · `RAGService` · `LlmReRanker` · `QueryCompressorService` · `SemanticCompressorService` |
 | Diretórios | `Infrastructure/Documents/` · `Infrastructure/Chunking/` · `Infrastructure/RAG/` |
 | DI | `IDocumentIngestionPipeline`, `IDocumentParser` (3 impl), `IChunkingStrategy`, `IReRanker`, `IRAGService` |
 | Testes | Unitários (xUnit) |
@@ -523,9 +523,9 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 | Item | Detalhe |
 |------|---------|
-| Serviços | `MetaAgentOrchestrator` · `HierarchicalAgentFactory` · `AgentFrameworkAgentFactory` (path direto explícito) |
+| Serviços | `MetaAgentOrchestrator` · `HierarchicalAgentFactory` · `AgentFrameworkDirectExecutionService` (path direto explícito) |
 | DI | `IMetaAgent`, `IAgentFactory`, `IContextAnalyzer` |
-| Pattern | Factory + Adapter (o path direto cria um wrapper explícito quando precisa usar o framework) |
+| Pattern | Factory + serviço de execução direta (o path direto aciona o runtime do framework sem wrapper transitório de `IAgent`) |
 
 | Tier | Papel | Agents |
 |:----:|-------|--------|
@@ -715,7 +715,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] Microsoft.Extensions.AI pipeline: `ChatClientBuilder` com OpenTelemetry + FunctionInvocation + Logging
 - [x] M.E.AI `IEmbeddingGenerator<string, Embedding<float>>` com OpenTelemetry
 - [x] Overrides por ambiente: InMemory (dev) → PostgreSQL (produção) via métodos `UsePostgres*`
-- [x] Direct execution factory: `AgentFrameworkAgentFactory` cria explicitamente o wrapper do Agent Framework só no `ExecuteDirectAsync`
+- [x] Direct execution service: `AgentFrameworkDirectExecutionService` executa o agent cru pelo runtime do framework só no `ExecuteDirectAsync`
 - [x] Health endpoint: `/health` (anonymous) + `/version` (anonymous)
 - [x] CORS: permissivo em dev (`SetIsOriginAllowed(_ => true)`), restrito em produção (AllowedOrigins obrigatório)
 
@@ -875,7 +875,7 @@ TriggerEngine.EvaluateAsync(rule)
 - Scheduler in-process via `IHostedService` (sem dependência externa tipo Hangfire na v1)
 - Persistência de state via `IScheduledTaskStore` (in-memory default, PostgreSQL opcional)
 - Idempotência: cada execução gera um `executionId` para dedup
-- Circuit breaker no delivery channel (Polly) para evitar flood em caso de falha do destino
+- Circuit breaker no delivery channel (`CircuitBreaker` local, sem dependência externa específica) para evitar flood em caso de falha do destino
 - Timezone-aware: regras CRON respeitam timezone configurado no tenant
 
 ### Configuration & Embedding (ML22–ML23)
@@ -1014,7 +1014,7 @@ TriggerEngine.EvaluateAsync(rule)
 - [x] `VisionResponse` inclui: description, tokens used, model, latency
 - [x] Health check: `IsEnabled` valida API key + settings antes de aceitar requests
 - [x] Priority system para fallback entre providers (expansível para Google Vision, Azure CV)
-- [x] Provider registrado via DI com `HttpClient` factory (resiliência Polly aplicável)
+- [x] Provider registrado via DI com `HttpClient` factory (resiliência configurável sem acoplar biblioteca específica ao contrato)
 
 ---
 
@@ -1030,7 +1030,7 @@ TriggerEngine.EvaluateAsync(rule)
 |------|---------|
 | Serviços | `IMCPPluginManager` · `IMCPPlugin` |
 | Implementações | `MCPPluginManager` · `McpClientPlugin` (IAsyncDisposable) |
-| Adapter | `McpToolsAIFunctionAdapter` — bridge MCP tools → AI Functions (M.E.AI) |
+| Adapter | `McpToolsAIFunctionAdapter` — bridge MCP tools → `AIFunction` (M.E.AI) |
 | API | `MCPPluginController` (load, unload, list, discover, execute) |
 | Frontend | `PluginsPage.tsx` · `PluginDetailModal.tsx` · `PluginLoadModal.tsx` |
 | Testes | Unitários (xUnit) |

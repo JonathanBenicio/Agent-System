@@ -1,5 +1,8 @@
 # Progresso de Refatoração — MAF Native Runtime
 
+> **[TRANSITIONAL STATUS BOARD]** Este arquivo consolida progresso e backlog residual da refatoração MAF nativa.
+> As fases concluídas devem ser lidas como registro histórico; a arquitetura operacional vigente continua em [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).
+
 **Data da última atualização:** 7 maio 2026  
 **Status global:** Fases 1-4 Completas ✅ | Fase 5 Em andamento ⏳
 
@@ -192,7 +195,7 @@
 
 ### Pending (Próximas Fases) ⏳
 
-- ⏳ `OrchestratorContextResolver` — Pendente review
+- ⏳ `OrchestratorContextFactory` + `OrchestratorHostBuilder` — Review pendente da composição hosted remanescente
 
 ### Mantida por Design ✅
 

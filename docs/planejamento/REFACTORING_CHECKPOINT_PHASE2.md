@@ -1,5 +1,8 @@
 # Checkpoint — Fase 2 ✅ Completa
 
+> **[HISTORICAL CHECKPOINT]** Registro de uma fase concluída da migração/refatoração.
+> Não usar este arquivo como plano ativo; consulte [REFACTORING_PROGRESS.md](./REFACTORING_PROGRESS.md) para status consolidado.
+
 **Data:** 7 maio 2026  
 **Status:** ✅ Compilada e sem erros  
 

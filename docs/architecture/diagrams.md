@@ -40,17 +40,16 @@ graph TB
                 EMB["Embeddings<br/>OpenAI · Google · Ollama · ONNX"]
             end
 
-            subgraph Integrations["Integrations"]
-                CAL["Calendar<br/>Google · Outlook"]
-                PROD["Productivity<br/>Workflows · HTTP · MCP"]
-                KNOW["Knowledge<br/>Obsidian · Files · RAG"]
+            subgraph Tooling["Tooling & Knowledge"]
+                BUILTIN["Built-in Tools<br/>DateTime · Calculator · File Search · HTTP"]
+                MCP_EXT["MCP Plugins<br/>External tool surfaces"]
+                KNOW["Knowledge<br/>Obsidian Sync · Files · RAG"]
             end
 
             subgraph Persistence["Persistence"]
                 PG[(PostgreSQL<br/>+ pgvector<br/>Sessions + Vectors)]
                 OBS[(Obsidian Vault<br/>Markdown)]
-                MCP[MCP Plugins]
-                FRAME_SESS[Agent Framework Session Store]
+                FRAME_SESS[AgentSessionStore<br/>keyed / framework]
             end
         end
     end
@@ -76,13 +75,12 @@ graph TB
 
     GW --> LLM
     GW --> EMB
-    GW --> CAL
-    GW --> PROD
+    GW --> BUILTIN
+    GW --> MCP_EXT
     GW --> KNOW
 
     HOSTED --> PG
     HOSTED --> OBS
-    HOSTED --> MCP
     HOSTED --> FRAME_SESS
     FRAME_SESS --> PG
 
@@ -106,7 +104,7 @@ sequenceDiagram
     participant Tools as Specialists + Aux Tools
     participant Post as Post-Processing Pipeline
     participant GW as ServiceGateway
-    participant Sess as AgentSessionStore
+    participant Sess as AgentSessionStore (keyed)
     participant Mem as Persistence (PG + Obsidian)
 
     User->>API: POST /api/chat {message}
@@ -161,7 +159,7 @@ graph TB
         CTRL[Runtime Controls<br/>Enable · Disable · Switch · Failover]
 
         subgraph Guards["Pre-execution Guards"]
-            CB[Circuit Breaker<br/>Polly]
+            CB[Circuit Breaker<br/>pure C#]
             RL[Rate Limiter<br/>Per-provider]
             BG[Budget Guard<br/>Cost alerts]
         end
@@ -312,8 +310,7 @@ graph TB
         GEMINI[Gemini API]
         CLAUDE[Claude API]
         OLLAMA[Ollama<br/>Local]
-        GRAPH[MS Graph]
-        GOOGLE[Google APIs]
+        EXT_HTTP[External HTTP APIs]
         MCP_EXT[MCP Servers]
     end
 
@@ -326,8 +323,7 @@ graph TB
     API_POD --> GEMINI
     API_POD --> CLAUDE
     API_POD --> OLLAMA
-    API_POD --> GRAPH
-    API_POD --> GOOGLE
+    API_POD --> EXT_HTTP
     API_POD --> MCP_EXT
 
     API_POD --> LOGS
@@ -341,7 +337,7 @@ graph TB
 
 ```mermaid
 sequenceDiagram
-    actor Voice as Alexa / Google Assistant
+    actor Voice as Voice Client / Assistant
     participant VC as VoiceController
     participant Meta as MetaAgent
     participant LLM as LLM Provider

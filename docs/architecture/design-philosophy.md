@@ -103,7 +103,7 @@ Os maturity levels 11-15 transformam o sistema de um executor passivo em um orga
 - **ML13 — Session Consolidation**: Sessões longas são comprimidas em summaries com extração de tópicos, agents utilizados e insights. Esquecer com critério é lembrar melhor.
 - **ML14 — Smart Routing**: O SmartRouter combina intent, confiança, carga e especialidade do agent para tomar decisões de routing. Fallback automático se o agent primário falhar.
 - **ML15 — Setup Flow**: Fluxo guiado de onboarding com validação por step. A primeira experiência define a adoção — o sistema guia, não assume.
-- **ML16 — Session Persistence**: `ISessionStore` abstrai persistência de sessões. `InMemorySessionStore` cobre dev/local, `PostgresSessionStore` sustenta persistência durável e `AgentFrameworkSessionStoreAdapter` conecta esse armazenamento ao runtime hospedado.
+- **ML16 — Session Persistence**: `ISessionStore` abstrai persistência de sessões. `InMemorySessionStore` cobre dev/local, `PostgresSessionStore` sustenta persistência durável e `SimpleSessionStoreAdapter` conecta esse armazenamento ao runtime hospedado.
 - **ML17 — IChatClient Compatibility**: `LLMManager` + `ContextAwareChatClient` resolvem provider/modelo por contexto; quando um fluxo precisa da direção inversa, `ProviderBackedChatClient` expõe compatibilidade entre contratos sem depender de um adapter automático global.
 - **ML18 — Voice Interface**: `VoiceController` expõe `/api/voice/ask` com timeout de 7s e `StripMarkdown` para output TTS-friendly. Alexa/Google Assistant ready sem middleware adicional.
 

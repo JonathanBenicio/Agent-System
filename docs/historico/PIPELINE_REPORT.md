@@ -1,5 +1,8 @@
 # Pipeline Spec→Code — Estado 100% In-Memory sem Fallback
 
+> **[ARCHIVED]** Este relatório registra um ciclo histórico de implementação/spec→code e não deve ser usado como backlog vigente.
+> Próximos passos e migrations citados aqui precisam ser tratados como contexto histórico, não como plano ativo.
+
 > **Status documental:** Relatório histórico de execução spec→code.
 > **Escopo:** registrar um ciclo anterior de implementação e validação; não descreve o baseline atual do runtime.
 > **Fonte de verdade operacional:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).

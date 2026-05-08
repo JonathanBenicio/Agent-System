@@ -1,5 +1,8 @@
 # Agentic System — Relatório de Análise de Gaps
 
+> **[ARCHIVED — SUPERSEDED]** Este relatório reflete um diagnóstico de junho/2025 sobre um fluxo principal anterior.
+> Para análise viva de gaps e oportunidades arquiteturais, consulte [../planejamento/AI_Capabilities_Gaps.md](../planejamento/AI_Capabilities_Gaps.md).
+
 > **Status documental:** Análise histórica de gaps.
 > **Escopo:** refletir o diagnóstico de junho/2025 sobre um fluxo principal anterior, que pode divergir do runtime atual.
 > **Fonte de verdade operacional:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).

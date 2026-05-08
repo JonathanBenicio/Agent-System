@@ -67,7 +67,9 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 |-----------|-----------|
 | [planejamento/AI_Capabilities_Gaps.md](planejamento/AI_Capabilities_Gaps.md) | Diagnóstico vivo de gaps e oportunidades arquiteturais |
 | [planejamento/AI_Advanced_Capabilities_Roadmap.md](planejamento/AI_Advanced_Capabilities_Roadmap.md) | Roadmap futuro para capacidades avançadas |
-| [planejamento/framework-first-migration-plan.md](planejamento/framework-first-migration-plan.md) | Plano de migração framework-first e histórico do cutover |
+| [planejamento/framework-first-migration-plan.md](planejamento/framework-first-migration-plan.md) | Documento transitório: backlog residual da migração framework-first + histórico do cutover |
+| [planejamento/MAF_NATIVE_REFACTORING.md](planejamento/MAF_NATIVE_REFACTORING.md) | Documento transitório: trilha de redução de código MAF nativo e rollout residual |
+| [planejamento/REFACTORING_PROGRESS.md](planejamento/REFACTORING_PROGRESS.md) | Painel transitório de progresso; fases concluídas funcionam como trilha histórica |
 | [planejamento/overengineering-assessment.md](planejamento/overengineering-assessment.md) | Assessment de simplificação e hotspots de complexidade |
 
 ---
@@ -81,8 +83,8 @@ Guia da categoria: [historico/README.md](historico/README.md).
 | Documento | Descrição |
 |-----------|-----------|
 | [historico/README-old.md](historico/README-old.md) | README anterior do projeto |
-| [historico/PIPELINE_REPORT.md](historico/PIPELINE_REPORT.md) | Relatórios históricos do pipeline spec→code |
-| [historico/GAP_ANALYSIS_REPORT.md](historico/GAP_ANALYSIS_REPORT.md) | Análise histórica de gaps de DI e fluxo principal |
+| [historico/PIPELINE_REPORT.md](historico/PIPELINE_REPORT.md) | Relatório histórico spec→code; próximos passos internos não são backlog vigente |
+| [historico/GAP_ANALYSIS_REPORT.md](historico/GAP_ANALYSIS_REPORT.md) | Análise histórica de gaps do fluxo principal anterior; supersedida por AI_Capabilities_Gaps |
 
 ---
 

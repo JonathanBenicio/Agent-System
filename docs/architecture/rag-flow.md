@@ -1,104 +1,104 @@
 # RAG Flow — Retrieval-Augmented Generation
 
+> Fluxo alinhado ao runtime atual. Para a narrativa canônica do backend, use [backend-architecture-explained.md](backend-architecture-explained.md).
+
 ## Visão Geral
 
-O RAG Service orquestra busca vetorial, re-ranking e construção de contexto para injeção no prompt de agentes.
+O RAG atual combina compressão de query, retrieval vetorial, HyDE condicional, re-ranking forte via `LlmReRanker`, freshness penalty, compressão semântica e budget trimming antes de devolver um `RAGContext` pronto para o orquestrador hosted.
 
 ```
-RAGQuery → [VectorStore Search] → SearchMatch[] → [Score Filter] → [ReRanker] → RankedChunk[] → [Context Builder] → RAGContext
+User Query
+    → IQueryCompressor.CompressAsync()
+    → VectorStore.SearchAsync/SearchWithFiltersAsync()
+    → HyDE condicional (se recall inicial vier fraco)
+    → IReRanker.ReRankAsync() via LlmReRanker
+    → IKnowledgeFreshnessService
+    → ISemanticCompressor (quando excede budget)
+    → BuildContextString()
+    → IContextBudgetManager.TrimContextToBudgetAsync()
+    → RAGContext
 ```
 
-## Fluxo de Execução
+## Superfícies de Uso
 
-### 1. Retrieval (VectorStore)
+O runtime usa duas superfícies complementares para retrieval:
 
-```
-RAGQuery.Strategy → BuildFilters() → VectorStore.SearchAsync/SearchWithFiltersAsync
-```
+| Superfície | Mecanismo | Quando | Determinismo |
+| --- | --- | --- | --- |
+| `RAGContextProvider` | Provider concreto que estende `MessageAIContextProvider` | Sempre, antes de cada `RunAsync` do orquestrador | Determinístico |
+| `retrieve_context` | `AIFunction` auxiliar exposta ao orquestrador | Sob demanda, quando o LLM decide buscar contexto adicional | Não-determinístico |
 
-Filtros automáticos por estratégia:
+## Fluxo Completo
 
-| Strategy          | Filtro aplicado          |
-| ----------------- | ------------------------ |
-| Default           | Nenhum (busca geral)     |
-| RecentMemory      | Nenhum                   |
-| DomainKnowledge   | `content_type = domain`  |
-| DecisionHistory   | `content_type = decision`|
-| Episodic          | `content_type = session` |
-| Targeted          | Nenhum                   |
-
-Se `AgentId` for fornecido, adiciona filtro `agent_id`.
-
-### 2. Score Filter
-
-Remove candidatos abaixo de `MinRelevanceScore` (default: 0.3) antes do re-ranking.
-
-### 3. Re-Ranking (`HeuristicReRanker`)
-
-Re-ordena candidatos sem modelo ML. Fórmula (valores definidos como named constants em `HeuristicReRanker`):
-
-```
-FinalScore = VectorScore × VectorScoreWeight(0.4) + TF × TfScoreWeight(0.3) 
-           + ExactPhraseBonus(0.2) + SectionMatchBonus(0.1) 
-           + TagMatchBonus(0.05) + OverlapPenalty(-0.05)
+```text
+1. Query Compression + Query Variants      ← IQueryCompressor.CompressAsync()
+2. Vector Search por variante + filtros    ← IVectorStore.SearchAsync()/SearchWithFiltersAsync()
+3. HyDE condicional                        ← IChatClient.GetResponseAsync()
+4. Merge distinto + Min Score              ← query.MinRelevanceScore (0.3)
+5. Re-Ranking                              ← IReRanker.ReRankAsync()
+     - LlmReRanker                           ← orquestra shortlist heurística + rerank forte
+     - LocalOnnxCrossEncoderReRankerProvider ← caminho local preferencial
+     - JinaReRankerProvider                  ← provider externo opcional
+     - Embedding scorer                      ← fallback neural leve
+     - LLM fallback                          ← último recurso opcional
+6. Freshness Penalty                       ← IKnowledgeFreshnessService
+7. Semantic Compression                    ← ISemanticCompressor.CompressRankedChunksAsync()
+8. Context Build                           ← BuildContextString()
+9. Context Budget                          ← IContextBudgetManager.TrimContextToBudgetAsync()
 ```
 
-| Componente      | Constante            | Peso  | Descrição                              |
-| --------------- | -------------------- | ----- | -------------------------------------- |
-| Vector Score    | `VectorScoreWeight`  | 0.4   | Score original da busca vetorial       |
-| TF Score        | `TfScoreWeight`      | 0.3   | Term frequency (query terms no chunk)  |
-| Phrase Bonus    | `ExactPhraseBonus`   | +0.2  | Se query aparece literalmente          |
-| Section Match   | `SectionMatchBonus`  | +0.1  | Se section title contém query terms    |
-| Tags Bonus      | `TagMatchBonus`      | +0.05 | Se tags contêm query terms             |
-| Overlap Penalty | `OverlapPenalty`     | -0.05 | Chunks com overlap (prefere originais) |
+## Estratégias de Retrieval
 
-### 4. Context Builder
+| Strategy | Filtro | Uso |
+| --- | --- | --- |
+| `Default` | Nenhum | Busca geral |
+| `DomainKnowledge` | `content_type=domain` | Conhecimento de domínio |
+| `DecisionHistory` | `content_type=decision` | Decisões passadas |
+| `Episodic` | `content_type=session` | Sessões anteriores |
+| `RecentMemory` | Nenhum | Memória recente |
+| `Targeted` | Nenhum | Busca com filtros adicionais fornecidos pelo caller |
 
-Gera string formatada em Markdown para injeção no prompt:
+Se `AgentId` for informado, o pipeline adiciona filtro `agent_id` ao retrieval.
 
-```markdown
-## Relevant Context
+## Injeção no Runtime Hosted
 
-### [1] — Decisões Técnicas (source: obsidian)
-Conteúdo do chunk mais relevante...
+O `RAGContextProvider` vive em `src/AgenticSystem.Infrastructure/AgentFramework/` porque ele se encaixa na surface hosted do orquestrador.
 
-### [2] — Arquitetura (source: upload)
-Segundo chunk mais relevante...
-```
+Antes de cada `RunAsync(...)`, ele:
 
-## RAGQuery — Parâmetros
+1. Lê a última mensagem de usuário em `RequestMessages`.
+2. Chama `IRAGService.RetrieveContextAsync(query)`.
+3. Aplica `IContextBudgetManager.TrimContextToBudgetAsync(...)` quando necessário.
+4. Injeta uma mensagem `system` com marker próprio para evitar re-injeção em loops de tool calling.
 
-| Campo              | Tipo              | Default | Descrição                        |
-| ------------------ | ----------------- | ------- | -------------------------------- |
-| `Query`            | string            | —       | Texto da busca                   |
-| `AgentId`          | string?           | null    | Filtrar por agente               |
-| `SessionId`        | string?           | null    | Contexto da sessão               |
-| `Scope`            | SearchScope       | All     | Escopo da busca vetorial         |
-| `MaxResults`       | int               | 10      | Máximo de candidatos             |
-| `TopKAfterReRank`  | int               | 5       | Top-K após re-ranking            |
-| `MinRelevanceScore`| double            | 0.3     | Score mínimo                     |
-| `Strategy`         | RetrievalStrategy | Default | Estratégia de retrieval          |
-| `Filters`          | Dictionary?       | null    | Filtros adicionais               |
+O tool `retrieve_context` continua disponível para buscas ad-hoc fora da injeção automática.
 
 ## RAGContext — Resultado
 
-| Campo                  | Tipo             | Descrição                       |
-| ---------------------- | ---------------- | ------------------------------- |
-| `Query`                | string           | Query original                  |
-| `Chunks`               | List<RankedChunk>| Chunks ranqueados               |
-| `BuiltContext`         | string           | Contexto formatado para prompt  |
-| `TotalTokensUsed`      | int              | Estimativa de tokens            |
-| `CandidatesRetrieved`  | int              | Total do VectorStore            |
-| `CandidatesAfterReRank`| int              | Após re-ranking                 |
-| `StrategyUsed`         | RetrievalStrategy| Estratégia utilizada            |
-| `RetrievalTime`        | TimeSpan         | Tempo de busca vetorial         |
-| `ReRankTime`           | TimeSpan         | Tempo de re-ranking             |
-| `TotalTime`            | TimeSpan         | Tempo total end-to-end          |
+| Campo | Tipo | Descrição |
+| --- | --- | --- |
+| `Query` | string | Query original recebida pelo serviço |
+| `EffectiveQuery` | string | Query efetivamente usada após compressão/variantes |
+| `QueryVariants` | IReadOnlyList<string> | Variantes realmente usadas no retrieval |
+| `Chunks` | List<RankedChunk> | Chunks finais ranqueados |
+| `BuiltContext` | string | Contexto formatado para prompt |
+| `TotalTokensUsed` | int | Estimativa de tokens do contexto final |
+| `CandidatesRetrieved` | int | Total bruto vindo do vector store |
+| `CandidatesAfterReRank` | int | Total remanescente após re-ranking |
+| `StrategyUsed` | RetrievalStrategy | Estratégia aplicada |
+| `UsedHydeExpansion` | bool | Sinaliza uso de HyDE por baixo recall |
+| `HydeVariant` | string? | Variante hipotética gerada por HyDE |
+| `SemanticSummary` | string? | Resumo comprimido quando houve compressão semântica |
+| `UsedSemanticCompression` | bool | Indica se o contexto precisou ser comprimido |
+| `OriginalContextTokens` | int | Estimativa de tokens antes do trim final |
+| `RetrievalTime` | TimeSpan | Tempo de busca vetorial |
+| `ReRankTime` | TimeSpan | Tempo de re-ranking |
+| `TotalTime` | TimeSpan | Tempo total end-to-end |
 
-## Otimizações de Custo/Performance
+## Linguagem Operacional Consolidada
 
-1. **Score filter antes do re-rank** — evita processar candidatos irrelevantes
-2. **Heuristic re-ranker** — zero custo de API (sem cross-encoder externo)
-3. **Token estimation** — `~text.Length / CharsPerToken` (3.5) — otimizado para conteúdo multilingual
-4. **Batch embeddings** — geração em lote na ingestão
-5. **Sequential batch ingestion** — evita sobrecarga de memória em lotes grandes
+- Use `RAGContextProvider` para falar da injeção automática no orquestrador hosted.
+- Use `MessageAIContextProvider` apenas para se referir à abstração do MAF que o provider estende.
+- Use `retrieve_context` para a tool auxiliar de retrieval sob demanda.
+- Use `LlmReRanker` para o pipeline real de rerank; `HeuristicReRanker` continua como shortlist local dentro dele, não como estágio final isolado.
+- Use `IContextBudgetManager` e `ISemanticCompressor` para descrever trimming e compressão do contexto.

@@ -146,6 +146,7 @@ O sistema usa o **Microsoft.Agents.AI** como runtime **hosted** do fluxo princip
 │   └─ A2A / AG-UI reutilizam AgentSessionStore do Orchestrator│
 ├──────────────────────────────────────────────────────────────┤
 │ OrchestratorContextFactory                                   │
+│   ├─ delega montagem ao OrchestratorHostBuilder              │
 │   ├─ system prompt do supervisor                             │
 │   ├─ specialist bindings via AsAIFunction()                  │
 │   ├─ tools auxiliares (RAG / Router / Analyzer)              │
@@ -166,6 +167,8 @@ O sistema usa o **Microsoft.Agents.AI** como runtime **hosted** do fluxo princip
 ```
 
 O caminho direto continua explícito, mas a execução nativa do framework agora fica concentrada em um serviço dedicado. O adapter transitório saiu do runtime.
+
+No fluxo hosted, a composição local remanescente está concentrada em `OrchestratorContextFactory` + `OrchestratorHostBuilder`. Não existe mais um resolvedor scoped paralelo nem wrapper específico de protocolo fora desse caminho.
 
 ### 2.2 Componentes
 
@@ -1145,9 +1148,9 @@ O runtime agora diferencia dois níveis de aprendizado:
 
 ---
 
-## 15. Tool Registry & Local Providers
+## 15. Tool Registry & Local Baseline
 
-**Arquivos**: `src/AgenticSystem.Core/Services/InMemoryToolManager.cs`, `src/AgenticSystem.Core/Models/ToolVariantModels.cs`, `src/AgenticSystem.Infrastructure/Integrations/*`
+**Arquivos**: `src/AgenticSystem.Core/Services/InMemoryToolManager.cs`, `src/AgenticSystem.Core/Models/ToolVariantModels.cs`, `src/AgenticSystem.Core/Tools/BuiltInTools.cs`, `src/AgenticSystem.Infrastructure/AI/ToolAIFunctionFactory.cs`, `src/AgenticSystem.Infrastructure/MCP/McpToolsAIFunctionAdapter.cs`, `src/AgenticSystem.Infrastructure/Sync/FileObsidianSync.cs`
 
 ### 15.1 Tool Versioning / A-B
 
@@ -1156,16 +1159,17 @@ O runtime agora diferencia dois níveis de aprendizado:
 - `RegisterToolVariant()` permite múltiplas versões, nome de variante e rollout percentual.
 - `ExecuteToolAsync()` resolve explicitamente por `toolVersion` / `toolVariant` ou faz seleção determinística por usuário/sessão para A/B.
 
-### 15.2 Providers Locais
+### 15.2 Baseline Local de Tools e Integrações
 
-O runtime passou a registrar implementações concretas para as interfaces de integração:
+O runtime atual não mantém mais uma pasta `Integrations/` com providers locais dedicados. O baseline funcional para dev/local está distribuído entre o catálogo interno de tools, a superfície MCP e o sync do vault:
 
-- `LocalCalendarProvider`: calendário file-backed em JSON.
-- `LocalEmailProvider`: outbox local persistido em JSON.
-- `ObsidianNotesProvider`: criação, leitura e busca de notas em diretório Markdown.
-- `LocalStorageProvider`: upload/download/list em filesystem local.
+- `DateTimeTool`, `CalculatorTool` e `FileSearchTool` no Core como ferramentas internas always-on.
+- `HttpTool` registrado via DI para chamadas HTTP controladas a serviços externos.
+- `UnifiedAIToolProvider` + `ToolAIFunctionFactory` para expor tools internas e MCP como `AIFunction` no runtime hosted.
+- `FileObsidianSync` para sincronização do vault legível em disco com a camada semântica.
+- `MCPPluginManager` / `McpToolsAIFunctionAdapter` para plugins MCP conectados ao runtime.
 
-Esses providers são registrados em `AddAgenticSystemInfrastructure()` e servem como baseline funcional para dev/local antes de integrações com Graph/Google/SMTP/S3.
+Esse conjunto substitui a antiga camada de providers locais nomeados e funciona como baseline operacional antes de integrações externas específicas.
 
 ---
 
@@ -1188,9 +1192,8 @@ Esses providers são registrados em `AddAgenticSystemInfrastructure()` e servem 
 | **Infra** | `AgentFramework/` | Microsoft Agent Framework integration + FrameworkAgentChannelService |
 | **Infra** | `AI/` | ChatClientPlanner, ToolAIFunctionFactory |
 | **Infra** | `LLM/` | LLMManager, Providers (OpenAI/Ollama/Gemini/Claude) |
-| **Infra** | `MCP/` | MCPPluginManager, McpClientPlugin, McpToolsAdapter |
-| **Infra** | `Integrations/` | LocalCalendarProvider, LocalEmailProvider, ObsidianNotesProvider, LocalStorageProvider |
-| **Infra** | `RAG/` | RAGService, HeuristicReRanker, LlmReRanker, LocalOnnxCrossEncoderReRankerProvider, JinaReRankerProvider, dedicated rerank provider abstraction |
+| **Infra** | `MCP/` | MCPPluginManager, McpClientPlugin, McpToolsAIFunctionAdapter |
+| **Infra** | `RAG/` | RAGService, HeuristicReRanker, LlmReRanker, QueryCompressorService, SemanticCompressorService, LocalOnnxCrossEncoderReRankerProvider, JinaReRankerProvider, dedicated rerank provider abstraction |
 | **Infra** | `Gateway/` | ServiceGateway, CircuitBreaker, RateLimiter, CostTracker |
 | **Infra** | `Sync/` | FileObsidianSync (Obsidian Vault) |
 | **Infra** | `Persistence/` | PostgreSQL stores (EF Core + Npgsql), EfAgentMemoryStore |
