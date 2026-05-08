@@ -61,7 +61,11 @@ public class EmbeddingMigrationManagerTests
         var target = await RegisterModelAsync(new EmbeddingModelConfig { Provider = EmbeddingProvider.OpenAI, ModelName = "t", Dimensions = 1536, ApiKey = "k" });
 
         _vectorStore.SearchAsync("*", Arg.Any<SearchScope>(), Arg.Any<int>())
-            .Returns(new SearchResult { Matches = new List<SearchMatch>(), TotalFound = 0, Query = "*" });
+            .Returns(async callInfo => 
+            {
+                await Task.Delay(1000); // Simulate long running search
+                return new SearchResult { Matches = new List<SearchMatch>(), TotalFound = 0, Query = "*" };
+            });
 
         var job = await _sut.StartMigrationAsync(new StartMigrationRequest { SourceModelId = source.Id, TargetModelId = target.Id });
 

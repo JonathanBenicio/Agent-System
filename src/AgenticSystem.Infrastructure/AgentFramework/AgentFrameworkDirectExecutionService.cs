@@ -120,13 +120,13 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
-            _logger.LogWarning(ex, "Agent Framework direct execution failed for {Agent}, falling back to raw agent", agent.Name);
+            _logger.LogWarning(ex, "Agent Framework direct execution failed for {Agent}, returning error response", agent.Name);
 
             if (_runtimeCoordinator is not null)
             {
                 var data = new Dictionary<string, object>
                 {
-                    ["fallback"] = true
+                    ["fallback"] = false
                 };
 
                 if (!string.IsNullOrWhiteSpace(frameworkAgent?.Id))
@@ -143,11 +143,7 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
                 }, ct);
             }
 
-            var fallbackResponse = await agent.ExecuteAsync(input, context);
-            fallbackResponse.Metadata ??= new Dictionary<string, object>();
-            fallbackResponse.Metadata["frameworkFallback"] = true;
-            fallbackResponse.Metadata["frameworkError"] = ex.Message;
-            return fallbackResponse;
+            return AgentResponse.Error($"Framework error: {ex.Message}", agent.Name);
         }
     }
 

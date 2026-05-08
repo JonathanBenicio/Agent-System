@@ -1,5 +1,5 @@
 using FluentAssertions;
-using Microsoft.Extensions.AI;
+
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using AgenticSystem.Core.Interfaces;
@@ -10,7 +10,6 @@ namespace AgenticSystem.Tests;
 
 public class HierarchicalAgentFactoryTests
 {
-    private readonly IChatClient _chatClient;
     private readonly ISkillManager _skillManager;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<HierarchicalAgentFactory> _logger;
@@ -18,12 +17,11 @@ public class HierarchicalAgentFactoryTests
 
     public HierarchicalAgentFactoryTests()
     {
-        _chatClient = Substitute.For<IChatClient>();
         _skillManager = Substitute.For<ISkillManager>();
         _loggerFactory = Substitute.For<ILoggerFactory>();
         _loggerFactory.CreateLogger(Arg.Any<string>()).Returns(Substitute.For<ILogger>());
         _logger = Substitute.For<ILogger<HierarchicalAgentFactory>>();
-        _sut = new HierarchicalAgentFactory(_chatClient, _skillManager, _loggerFactory, _logger);
+        _sut = new HierarchicalAgentFactory(_skillManager, _loggerFactory, _logger);
     }
 
     [Fact]

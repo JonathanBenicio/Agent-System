@@ -1,4 +1,4 @@
-using Microsoft.Extensions.AI;
+
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -8,11 +8,10 @@ namespace AgenticSystem.Core.Agents;
 public class PersonalAgent : BaseAgent
 {
     public PersonalAgent(
-        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger<PersonalAgent> logger,
         IAgentMemoryService? agentMemoryService = null)
-        : base(chatClient, skillManager, logger, agentMemoryService) { }
+        : base(skillManager, logger, agentMemoryService) { }
 
     public override string Name => "PersonalAgent";
     public override string Description => "Gerencia tarefas pessoais, rotina, produtividade e organização.";
@@ -34,11 +33,10 @@ public class PersonalAgent : BaseAgent
 public class WorkAgent : BaseAgent
 {
     public WorkAgent(
-        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger<WorkAgent> logger,
         IAgentMemoryService? agentMemoryService = null)
-        : base(chatClient, skillManager, logger, agentMemoryService) { }
+        : base(skillManager, logger, agentMemoryService) { }
 
     public override string Name => "WorkAgent";
     public override string Description => "Gerencia projetos, sprints, code review, documentação técnica e decisões de trabalho.";
@@ -60,11 +58,10 @@ public class WorkAgent : BaseAgent
 public class LearningAgent : BaseAgent
 {
     public LearningAgent(
-        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger<LearningAgent> logger,
         IAgentMemoryService? agentMemoryService = null)
-        : base(chatClient, skillManager, logger, agentMemoryService) { }
+        : base(skillManager, logger, agentMemoryService) { }
 
     public override string Name => "LearningAgent";
     public override string Description => "Gerencia aprendizado, cursos, resumos de conteúdo e planos de estudo.";

@@ -91,7 +91,6 @@ public class DirectAgentRequestExecutorTests
                 && ctx.TargetAgent == "FinanceAgent"
                 && ctx.Response.Metadata["executionMode"].ToString() == "direct"),
             Arg.Any<CancellationToken>());
-        await rawAgent.DidNotReceive().ExecuteAsync(Arg.Any<string>(), Arg.Any<UserContext>());
     }
 
     [Fact]

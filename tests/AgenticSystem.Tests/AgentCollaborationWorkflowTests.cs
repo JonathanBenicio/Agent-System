@@ -47,29 +47,9 @@ public class AgentCollaborationWorkflowTests
             taskPlanManager,
             LoggerFactory.Create(_ => { }));
 
-        var stepAgent = CreateAgent(
-            "WorkAgent",
-            "work",
-            AgentTier.Specialist,
-            new AgentResponse
-            {
-                Content = "Step completed",
-                AgentName = "WorkAgent",
-                Success = true,
-                ToolsUsed = []
-            });
+        var stepAgent = CreateAgent("WorkAgent", "work", AgentTier.Specialist);
 
-        var reviewerAgent = CreateAgent(
-            "AnalysisAgent",
-            "analysis",
-            AgentTier.Specialist,
-            new AgentResponse
-            {
-                Content = "Review completed",
-                AgentName = "AnalysisAgent",
-                Success = true,
-                Metadata = new Dictionary<string, object>()
-            });
+        var reviewerAgent = CreateAgent("AnalysisAgent", "analysis", AgentTier.Specialist);
 
         var agentFactory = Substitute.For<IAgentFactory>();
         agentFactory.ResolveAgentAsync(Arg.Any<AnalysisResult>())
@@ -86,11 +66,16 @@ public class AgentCollaborationWorkflowTests
             LoggerFactory.Create(_ => { }),
             new ServiceCollection().BuildServiceProvider());
 
+        var directExecService = CreateDirectExecutionService(
+            ("WorkAgent", new AgentResponse { Content = "Step completed", AgentName = "WorkAgent", Success = true, ToolsUsed = [] }),
+            ("AnalysisAgent", new AgentResponse { Content = "Review completed", AgentName = "AnalysisAgent", Success = true, Metadata = new Dictionary<string, object>() }));
+
         var sut = new AgentCollaborationWorkflow(
             planner,
             agentFactory,
             taskPlanManager,
             runtimeCoordinator,
+            directExecService,
             Substitute.For<ILogger<AgentCollaborationWorkflow>>(),
             agentFrameworkFactory: frameworkFactory);
 
@@ -156,29 +141,9 @@ public class AgentCollaborationWorkflowTests
         ragService.RetrieveContextAsync(Arg.Any<RAGQuery>(), Arg.Any<CancellationToken>())
             .Returns(new RAGContext { BuiltContext = "Relevant migration context" });
 
-        var stepAgent = CreateAgent(
-            "WorkAgent",
-            "work",
-            AgentTier.Specialist,
-            new AgentResponse
-            {
-                Content = "Step completed",
-                AgentName = "WorkAgent",
-                Success = true,
-                ToolsUsed = []
-            });
+        var stepAgent = CreateAgent("WorkAgent", "work", AgentTier.Specialist);
 
-        var reviewerAgent = CreateAgent(
-            "AnalysisAgent",
-            "analysis",
-            AgentTier.Specialist,
-            new AgentResponse
-            {
-                Content = "Review completed",
-                AgentName = "AnalysisAgent",
-                Success = true,
-                Metadata = new Dictionary<string, object>()
-            });
+        var reviewerAgent = CreateAgent("AnalysisAgent", "analysis", AgentTier.Specialist);
 
         var agentFactory = Substitute.For<IAgentFactory>();
         agentFactory.ResolveAgentAsync(Arg.Any<AnalysisResult>())
@@ -195,11 +160,16 @@ public class AgentCollaborationWorkflowTests
             LoggerFactory.Create(_ => { }),
             new ServiceCollection().BuildServiceProvider());
 
+        var directExecService = CreateDirectExecutionService(
+            ("WorkAgent", new AgentResponse { Content = "Step completed", AgentName = "WorkAgent", Success = true, ToolsUsed = [] }),
+            ("AnalysisAgent", new AgentResponse { Content = "Review completed", AgentName = "AnalysisAgent", Success = true, Metadata = new Dictionary<string, object>() }));
+
         var sut = new AgentCollaborationWorkflow(
             planner,
             agentFactory,
             taskPlanManager,
             runtimeCoordinator,
+            directExecService,
             Substitute.For<ILogger<AgentCollaborationWorkflow>>(),
             ragService: ragService,
             agentFrameworkFactory: frameworkFactory,
@@ -271,29 +241,9 @@ public class AgentCollaborationWorkflowTests
             taskPlanManager,
             LoggerFactory.Create(_ => { }));
 
-        var stepAgent = CreateAgent(
-            "WorkAgent",
-            "work",
-            AgentTier.Specialist,
-            new AgentResponse
-            {
-                Content = "Step completed",
-                AgentName = "WorkAgent",
-                Success = true,
-                ToolsUsed = []
-            });
+        var stepAgent = CreateAgent("WorkAgent", "work", AgentTier.Specialist);
 
-        var reviewerAgent = CreateAgent(
-            "AnalysisAgent",
-            "analysis",
-            AgentTier.Specialist,
-            new AgentResponse
-            {
-                Content = "Direct review fallback",
-                AgentName = "AnalysisAgent",
-                Success = true,
-                Metadata = new Dictionary<string, object>()
-            });
+        var reviewerAgent = CreateAgent("AnalysisAgent", "analysis", AgentTier.Specialist);
 
         var agentFactory = Substitute.For<IAgentFactory>();
         agentFactory.ResolveAgentAsync(Arg.Any<AnalysisResult>())
@@ -310,11 +260,16 @@ public class AgentCollaborationWorkflowTests
             LoggerFactory.Create(_ => { }),
             new ServiceCollection().BuildServiceProvider());
 
+        var directExecService = CreateDirectExecutionService(
+            ("WorkAgent", new AgentResponse { Content = "Step completed", AgentName = "WorkAgent", Success = true, ToolsUsed = [] }),
+            ("AnalysisAgent", new AgentResponse { Content = "Direct review fallback", AgentName = "AnalysisAgent", Success = true, Metadata = new Dictionary<string, object>() }));
+
         var sut = new AgentCollaborationWorkflow(
             planner,
             agentFactory,
             taskPlanManager,
             runtimeCoordinator,
+            directExecService,
             Substitute.For<ILogger<AgentCollaborationWorkflow>>(),
             agentFrameworkFactory: frameworkFactory,
             workflowOptions: Options.Create(new CollaborationWorkflowOptions
@@ -384,29 +339,9 @@ public class AgentCollaborationWorkflowTests
             taskPlanManager,
             LoggerFactory.Create(_ => { }));
 
-        var stepAgent = CreateAgent(
-            "WorkAgent",
-            "work",
-            AgentTier.Specialist,
-            new AgentResponse
-            {
-                Content = "Step completed",
-                AgentName = "WorkAgent",
-                Success = true,
-                ToolsUsed = []
-            });
+        var stepAgent = CreateAgent("WorkAgent", "work", AgentTier.Specialist);
 
-        var reviewerAgent = CreateAgent(
-            "AnalysisAgent",
-            "analysis",
-            AgentTier.Specialist,
-            new AgentResponse
-            {
-                Content = "Direct review fallback",
-                AgentName = "AnalysisAgent",
-                Success = true,
-                Metadata = new Dictionary<string, object>()
-            });
+        var reviewerAgent = CreateAgent("AnalysisAgent", "analysis", AgentTier.Specialist);
 
         var agentFactory = Substitute.For<IAgentFactory>();
         agentFactory.ResolveAgentAsync(Arg.Any<AnalysisResult>())
@@ -423,11 +358,16 @@ public class AgentCollaborationWorkflowTests
             LoggerFactory.Create(_ => { }),
             new ServiceCollection().BuildServiceProvider());
 
+        var directExecService = CreateDirectExecutionService(
+            ("WorkAgent", new AgentResponse { Content = "Step completed", AgentName = "WorkAgent", Success = true, ToolsUsed = [] }),
+            ("AnalysisAgent", new AgentResponse { Content = "Direct review fallback", AgentName = "AnalysisAgent", Success = true, Metadata = new Dictionary<string, object>() }));
+
         var sut = new AgentCollaborationWorkflow(
             planner,
             agentFactory,
             taskPlanManager,
             runtimeCoordinator,
+            directExecService,
             Substitute.For<ILogger<AgentCollaborationWorkflow>>(),
             agentFrameworkFactory: frameworkFactory,
             workflowOptions: Options.Create(new CollaborationWorkflowOptions
@@ -466,7 +406,7 @@ public class AgentCollaborationWorkflowTests
         response.Content.Should().Contain("Review completed via group chat");
     }
 
-    private static IAgent CreateAgent(string name, string domain, AgentTier tier, AgentResponse response)
+    private static IAgent CreateAgent(string name, string domain, AgentTier tier)
     {
         var agent = Substitute.For<IAgent>();
         agent.Name.Returns(name);
@@ -478,9 +418,33 @@ public class AgentCollaborationWorkflowTests
         agent.IsActive.Returns(true);
         agent.AvailableTools.Returns(Array.Empty<string>());
         agent.Instructions.Returns($"You are {name}.");
-        agent.ExecuteAsync(Arg.Any<string>(), Arg.Any<UserContext>()).Returns(response);
         agent.CanHandleAsync(Arg.Any<AnalysisResult>()).Returns(Task.FromResult(true));
         return agent;
+    }
+
+    private static IDirectAgentExecutionService CreateDirectExecutionService(
+        params (string AgentName, AgentResponse Response)[] mappings)
+    {
+        var service = Substitute.For<IDirectAgentExecutionService>();
+        service.ExecuteDirectAsync(
+                Arg.Any<IAgent>(),
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<UserContext>(),
+                Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                var agent = callInfo.Arg<IAgent>();
+                var mapping = mappings.FirstOrDefault(m => m.AgentName == agent.Name);
+                return mapping.Response ?? new AgentResponse
+                {
+                    Content = $"Default response from {agent.Name}",
+                    AgentName = agent.Name,
+                    Success = true,
+                    Metadata = new Dictionary<string, object>()
+                };
+            });
+        return service;
     }
 
     private sealed class DisposableScope : IDisposable

@@ -92,9 +92,13 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
 
             var executionSw = System.Diagnostics.Stopwatch.StartNew();
             using var agentScope = _runtimeCoordinator.BeginAgentScope(selectedAgent.Name, selectedAgent.AvailableTools);
-            var response = _directAgentExecutionService is null
-                ? await selectedAgent.ExecuteAsync(preProcessingResult.EffectiveInput, context)
-                : await _directAgentExecutionService.ExecuteDirectAsync(
+            
+            if (_directAgentExecutionService is null)
+            {
+                throw new InvalidOperationException("IDirectAgentExecutionService is not configured for direct execution.");
+            }
+
+            var response = await _directAgentExecutionService.ExecuteDirectAsync(
                     selectedAgent,
                     sessionId,
                     preProcessingResult.EffectiveInput,

@@ -16,10 +16,6 @@ public interface IAgent
     DateTime LastUsedAt { get; }
     bool IsActive { get; }
     
-    /// <summary>
-    /// Executa uma requisição dentro do escopo do agent
-    /// </summary>
-    Task<AgentResponse> ExecuteAsync(string input, UserContext context);
     
     /// <summary>
     /// Verifica se o agent pode processar a requisição

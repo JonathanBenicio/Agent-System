@@ -213,11 +213,13 @@ public class InMemoryVectorStoreSemanticTests
 
 #endregion
 
-#region Finding 2+3 — MetaAgentOrchestrator delegates to ExecutionWorkflow
+#region Finding 2+3 — MetaAgentOrchestrator delegates to Framework Orchestrator
 
 public class MetaAgentOrchestratorRAGTests
 {
-    private readonly IAgentExecutionWorkflow _executionWorkflow;
+    private readonly IFrameworkOrchestratorService _frameworkOrchestrator;
+    private readonly IDirectAgentRequestExecutor _directAgentRequestExecutor;
+    private readonly ILLMRuntimeContextAccessor _llmRuntimeContextAccessor;
     private readonly IAgentFactory _agentFactory;
     private readonly ISessionManager _sessionManager;
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
@@ -225,7 +227,9 @@ public class MetaAgentOrchestratorRAGTests
 
     public MetaAgentOrchestratorRAGTests()
     {
-        _executionWorkflow = Substitute.For<IAgentExecutionWorkflow>();
+        _frameworkOrchestrator = Substitute.For<IFrameworkOrchestratorService>();
+        _directAgentRequestExecutor = Substitute.For<IDirectAgentRequestExecutor>();
+        _llmRuntimeContextAccessor = Substitute.For<ILLMRuntimeContextAccessor>();
         _agentFactory = Substitute.For<IAgentFactory>();
         _sessionManager = Substitute.For<ISessionManager>();
         _runtimeCoordinator = Substitute.For<IAgentRuntimeCoordinator>();
@@ -234,35 +238,37 @@ public class MetaAgentOrchestratorRAGTests
         _sessionManager.StartSessionAsync(Arg.Any<UserContext>()).Returns("session-1");
         _runtimeCoordinator.BeginExecutionScope(Arg.Any<string>(), Arg.Any<UserContext>())
             .Returns(Substitute.For<IDisposable>());
+        _llmRuntimeContextAccessor.BeginScope(Arg.Any<UserContext>(), Arg.Any<string>())
+            .Returns(Substitute.For<IDisposable>());
     }
 
     [Fact]
-    public async Task ProcessRequestAsync_DelegatesToExecutionWorkflow()
+    public async Task ProcessRequestAsync_DelegatesToFrameworkOrchestrator()
     {
         // Arrange
-        _executionWorkflow.ExecuteAsync("session-1", "What time is it?", Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
+        _frameworkOrchestrator.ExecuteAsync("session-1", "What time is it?", Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("10 AM", "TestAgent", AgentTier.Support));
 
         var sut = new MetaAgentOrchestrator(
-            _executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
+            _frameworkOrchestrator, _directAgentRequestExecutor, _llmRuntimeContextAccessor, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
 
         // Act
         var result = await sut.ProcessRequestAsync("What time is it?", new UserContext { UserId = "u1", Name = "Test" });
 
         // Assert
         result.Success.Should().BeTrue();
-        await _executionWorkflow.Received(1).ExecuteAsync("session-1", "What time is it?", Arg.Any<UserContext>(), Arg.Any<CancellationToken>());
+        await _frameworkOrchestrator.Received(1).ExecuteAsync("session-1", "What time is it?", Arg.Any<UserContext>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ProcessRequestAsync_WorksWithSuccessfulExecution()
     {
         // Arrange
-        _executionWorkflow.ExecuteAsync(Arg.Any<string>(), "Hello", Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
+        _frameworkOrchestrator.ExecuteAsync(Arg.Any<string>(), "Hello", Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("Response", "TestAgent", AgentTier.Support));
 
         var sut = new MetaAgentOrchestrator(
-            _executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
+            _frameworkOrchestrator, _directAgentRequestExecutor, _llmRuntimeContextAccessor, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
 
         // Act
         var result = await sut.ProcessRequestAsync("Hello", new UserContext { UserId = "u1", Name = "Test" });
@@ -276,11 +282,11 @@ public class MetaAgentOrchestratorRAGTests
     public async Task ProcessRequestAsync_StartsSessionBeforeExecution()
     {
         // Arrange
-        _executionWorkflow.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
+        _frameworkOrchestrator.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("OK", "TestAgent", AgentTier.Support));
 
         var sut = new MetaAgentOrchestrator(
-            _executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
+            _frameworkOrchestrator, _directAgentRequestExecutor, _llmRuntimeContextAccessor, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
 
         // Act
         await sut.ProcessRequestAsync("question", new UserContext { UserId = "u1", Name = "Test" });
@@ -294,11 +300,11 @@ public class MetaAgentOrchestratorRAGTests
     public async Task ProcessRequestAsync_PropagatesWorkflowFailure()
     {
         // Arrange — workflow returns error
-        _executionWorkflow.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
+        _frameworkOrchestrator.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Error("Execution failed", "TestAgent"));
 
         var sut = new MetaAgentOrchestrator(
-            _executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
+            _frameworkOrchestrator, _directAgentRequestExecutor, _llmRuntimeContextAccessor, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
 
         // Act
         var result = await sut.ProcessRequestAsync("query", new UserContext { UserId = "u1", Name = "Test" });
@@ -311,11 +317,11 @@ public class MetaAgentOrchestratorRAGTests
     public async Task ProcessRequestAsync_SetsSessionIdInContext()
     {
         // Arrange
-        _executionWorkflow.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
+        _frameworkOrchestrator.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("response", "TestAgent", AgentTier.Support));
 
         var sut = new MetaAgentOrchestrator(
-            _executionWorkflow, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
+            _frameworkOrchestrator, _directAgentRequestExecutor, _llmRuntimeContextAccessor, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
 
         var userContext = new UserContext { UserId = "u1", Name = "Test" };
 

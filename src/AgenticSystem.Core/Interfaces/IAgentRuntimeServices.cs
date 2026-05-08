@@ -51,11 +51,7 @@ public interface IFinalResponseApprovalService
         CancellationToken ct = default);
 }
 
-public interface IAgentExecutionWorkflow
-{
-    Task<AgentResponse> ExecuteAsync(string sessionId, string input, UserContext context, CancellationToken ct = default);
-    Task<AgentResponse> ExecuteDirectAsync(string sessionId, string input, UserContext context, string targetAgent, CancellationToken ct = default);
-}
+
 
 public interface IAgentCollaborationWorkflow
 {

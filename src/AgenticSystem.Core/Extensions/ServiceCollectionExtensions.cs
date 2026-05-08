@@ -26,7 +26,6 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAgentExecutionPreProcessingPipeline, AgentExecutionPreProcessingPipeline>();
         services.AddSingleton<IAgentExecutionPostProcessingPipeline, AgentExecutionPostProcessingPipeline>();
         services.AddSingleton<IDirectAgentRequestExecutor, DirectAgentRequestExecutor>();
-        services.AddSingleton<IAgentExecutionWorkflow, AgentExecutionWorkflow>();
         services.AddSingleton<ISkillManager, InMemorySkillManager>();
         services.AddSingleton<IToolManager, InMemoryToolManager>();
         services.AddSingleton<IToolGovernanceService, ToolGovernanceService>();

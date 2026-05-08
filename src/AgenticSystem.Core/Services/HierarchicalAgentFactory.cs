@@ -10,20 +10,17 @@ namespace AgenticSystem.Core.Services;
 public class HierarchicalAgentFactory : IAgentFactory
 {
     private readonly ConcurrentDictionary<string, IAgent> _agentPool = new();
-    private readonly IChatClient _chatClient;
     private readonly ISkillManager _skillManager;
     private readonly IAgentMemoryService? _agentMemoryService;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<HierarchicalAgentFactory> _logger;
 
     public HierarchicalAgentFactory(
-        IChatClient chatClient,
         ISkillManager skillManager,
         ILoggerFactory loggerFactory,
         ILogger<HierarchicalAgentFactory> logger,
         IAgentMemoryService? agentMemoryService = null)
     {
-        _chatClient = chatClient;
         _skillManager = skillManager;
         _agentMemoryService = agentMemoryService;
         _loggerFactory = loggerFactory;
@@ -62,7 +59,6 @@ public class HierarchicalAgentFactory : IAgentFactory
     public async Task<IAgent> CreateCustomAgentAsync(AgentSpecification specification)
     {
         var agent = new CustomAgent(
-            _chatClient,
             _skillManager,
             _loggerFactory.CreateLogger<CustomAgent>(),
             specification,
@@ -173,15 +169,15 @@ public class HierarchicalAgentFactory : IAgentFactory
     {
         return name switch
         {
-            "PersonalAgent" or "personal" => new PersonalAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<PersonalAgent>(), _agentMemoryService),
-            "WorkAgent" or "work" => new WorkAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<WorkAgent>(), _agentMemoryService),
-            "LearningAgent" or "learning" => new LearningAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<LearningAgent>(), _agentMemoryService),
-            "CreativeAgent" or "creative" => new CreativeAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<CreativeAgent>(), _agentMemoryService),
-            "CalendarAgent" or "calendar" => new CalendarAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<CalendarAgent>(), _agentMemoryService),
-            "AnalysisAgent" or "analysis" => new AnalysisAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<AnalysisAgent>(), _agentMemoryService),
-            "NotificationAgent" or "notification" => new NotificationAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<NotificationAgent>(), _agentMemoryService),
-            "APIAgent" or "api" => new APIAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<APIAgent>(), _agentMemoryService),
-            _ => new GeneralAgent(_chatClient, _skillManager, _loggerFactory.CreateLogger<GeneralAgent>(), _agentMemoryService)
+            "PersonalAgent" or "personal" => new PersonalAgent(_skillManager, _loggerFactory.CreateLogger<PersonalAgent>(), _agentMemoryService),
+            "WorkAgent" or "work" => new WorkAgent(_skillManager, _loggerFactory.CreateLogger<WorkAgent>(), _agentMemoryService),
+            "LearningAgent" or "learning" => new LearningAgent(_skillManager, _loggerFactory.CreateLogger<LearningAgent>(), _agentMemoryService),
+            "CreativeAgent" or "creative" => new CreativeAgent(_skillManager, _loggerFactory.CreateLogger<CreativeAgent>(), _agentMemoryService),
+            "CalendarAgent" or "calendar" => new CalendarAgent(_skillManager, _loggerFactory.CreateLogger<CalendarAgent>(), _agentMemoryService),
+            "AnalysisAgent" or "analysis" => new AnalysisAgent(_skillManager, _loggerFactory.CreateLogger<AnalysisAgent>(), _agentMemoryService),
+            "NotificationAgent" or "notification" => new NotificationAgent(_skillManager, _loggerFactory.CreateLogger<NotificationAgent>(), _agentMemoryService),
+            "APIAgent" or "api" => new APIAgent(_skillManager, _loggerFactory.CreateLogger<APIAgent>(), _agentMemoryService),
+            _ => new GeneralAgent(_skillManager, _loggerFactory.CreateLogger<GeneralAgent>(), _agentMemoryService)
         };
     }
 
@@ -200,12 +196,11 @@ internal class CustomAgent : BaseAgent
     private readonly AgentSpecification _spec;
 
     public CustomAgent(
-        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger logger,
         AgentSpecification specification,
         IAgentMemoryService? agentMemoryService = null)
-        : base(chatClient, skillManager, logger, agentMemoryService)
+        : base(skillManager, logger, agentMemoryService)
     {
         _spec = specification;
     }

@@ -11,20 +11,26 @@ namespace AgenticSystem.Core.Services;
 /// </summary>
 public class MetaAgentOrchestrator : IMetaAgent
 {
-    private readonly IAgentExecutionWorkflow _executionWorkflow;
+    private readonly IFrameworkOrchestratorService _frameworkOrchestrator;
+    private readonly IDirectAgentRequestExecutor _directAgentRequestExecutor;
+    private readonly ILLMRuntimeContextAccessor _llmRuntimeContextAccessor;
     private readonly IAgentFactory _agentFactory;
     private readonly ISessionManager _sessionManager;
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
     private readonly ILogger<MetaAgentOrchestrator> _logger;
 
     public MetaAgentOrchestrator(
-        IAgentExecutionWorkflow executionWorkflow,
+        IFrameworkOrchestratorService frameworkOrchestrator,
+        IDirectAgentRequestExecutor directAgentRequestExecutor,
+        ILLMRuntimeContextAccessor llmRuntimeContextAccessor,
         IAgentFactory agentFactory,
         ISessionManager sessionManager,
         IAgentRuntimeCoordinator runtimeCoordinator,
         ILogger<MetaAgentOrchestrator> logger)
     {
-        _executionWorkflow = executionWorkflow;
+        _frameworkOrchestrator = frameworkOrchestrator;
+        _directAgentRequestExecutor = directAgentRequestExecutor;
+        _llmRuntimeContextAccessor = llmRuntimeContextAccessor;
         _agentFactory = agentFactory;
         _sessionManager = sessionManager;
         _runtimeCoordinator = runtimeCoordinator;
@@ -78,7 +84,33 @@ public class MetaAgentOrchestrator : IMetaAgent
 
     private async Task<AgentResponse> ProcessRequestCoreAsync(string sessionId, string input, UserContext context, CancellationToken ct)
     {
-        return await _executionWorkflow.ExecuteAsync(sessionId, input, context, ct);
+        using var llmScope = _llmRuntimeContextAccessor.BeginScope(context, sessionId);
+
+        try
+        {
+            _logger.LogInformation("🎯 Workflow executando request: {Input}", input[..Math.Min(50, input.Length)]);
+            _logger.LogDebug("Delegating to Framework Orchestrator");
+            return await _frameworkOrchestrator.ExecuteAsync(sessionId, input, context, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Workflow execution failed: {Message}", ex.Message);
+            await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
+            {
+                Type = AgentStreamEventType.Error,
+                Message = ex.Message,
+                Data = new Dictionary<string, object>
+                {
+                    ["fallback"] = false,
+                    ["workflow"] = "primary"
+                }
+            }, ct);
+
+            try { await _sessionManager.EndSessionAsync(sessionId); }
+            catch (Exception endEx) { _logger.LogWarning(endEx, "Falha ao finalizar sessão {SessionId}", sessionId); }
+
+            return AgentResponse.Error("Erro interno ao processar a requisição.", "MetaAgentOrchestrator");
+        }
     }
     
     public async Task<IEnumerable<AgentInfo>> GetActiveAgentsAsync()
@@ -120,6 +152,7 @@ public class MetaAgentOrchestrator : IMetaAgent
 
     private async Task<AgentResponse> ProcessDirectRequestCoreAsync(string sessionId, string input, UserContext context, string targetAgent, CancellationToken ct)
     {
-        return await _executionWorkflow.ExecuteDirectAsync(sessionId, input, context, targetAgent, ct);
+        using var llmScope = _llmRuntimeContextAccessor.BeginScope(context, sessionId);
+        return await _directAgentRequestExecutor.ExecuteAsync(sessionId, input, context, targetAgent, ct);
     }
 }

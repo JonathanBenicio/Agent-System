@@ -1,25 +1,20 @@
-using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
-using System.Text;
 
 namespace AgenticSystem.Core.Agents;
 
 public abstract class BaseAgent : IAgent
 {
-    private readonly IChatClient _chatClient;
     private readonly ISkillManager _skillManager;
     private readonly IAgentMemoryService? _agentMemoryService;
     private readonly ILogger _logger;
 
     protected BaseAgent(
-        IChatClient chatClient,
         ISkillManager skillManager,
         ILogger logger,
         IAgentMemoryService? agentMemoryService = null)
     {
-        _chatClient = chatClient;
         _skillManager = skillManager;
         _agentMemoryService = agentMemoryService;
         _logger = logger;
@@ -35,38 +30,8 @@ public abstract class BaseAgent : IAgent
     public DateTime LastUsedAt { get; private set; }
     public bool IsActive { get; set; } = true;
     public virtual IEnumerable<string> AvailableTools => Enumerable.Empty<string>();
+    
     public virtual string Instructions => GetBaseSystemPrompt();
-
-    public async Task<AgentResponse> ExecuteAsync(string input, UserContext context)
-    {
-        UpdateLastUsed();
-        _logger.LogInformation("🤖 [{Agent}] Executando: {Input}", Name, Truncate(input, 80));
-
-        try
-        {
-            var systemPrompt = await BuildSystemPromptAsync(context, input);
-            var response = await _chatClient.GetResponseAsync(
-                [
-                    new ChatMessage(ChatRole.System, systemPrompt),
-                    new ChatMessage(ChatRole.User, input)
-                ],
-                new ChatOptions
-                {
-                    Temperature = 0.7f,
-                    MaxOutputTokens = 2000
-                });
-
-            var result = await ProcessResponseAsync(response.Text ?? string.Empty, input, context);
-            result.AgentName = Name;
-            result.AgentTier = Tier;
-            return result;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "❌ [{Agent}] Erro: {Message}", Name, ex.Message);
-            return AgentResponse.Error("Erro interno ao processar a requisição.", Name);
-        }
-    }
 
     public virtual async Task<bool> CanHandleAsync(AnalysisResult analysis)
     {
@@ -78,45 +43,5 @@ public abstract class BaseAgent : IAgent
 
     public void UpdateLastUsed() => LastUsedAt = DateTime.UtcNow;
 
-    protected virtual async Task<string> BuildSystemPromptAsync(UserContext context, string currentInput)
-    {
-        var enrichedPrompt = await _skillManager.BuildEnrichedPromptAsync(Name, Domain, GetBaseSystemPrompt());
-
-        if (_agentMemoryService is null || string.IsNullOrWhiteSpace(context.UserId))
-        {
-            return enrichedPrompt;
-        }
-
-        var memories = await _agentMemoryService.GetRelevantMemoriesAsync(Name, context.UserId, currentInput);
-        if (memories.Count == 0)
-        {
-            return enrichedPrompt;
-        }
-
-        var builder = new StringBuilder(enrichedPrompt);
-        builder.AppendLine();
-        builder.AppendLine();
-        builder.AppendLine("## Agent Memory");
-        builder.AppendLine("Leve em conta estes aprendizados persistidos antes de responder:");
-        foreach (var memory in memories)
-        {
-            builder.Append("- ");
-            builder.Append('(');
-            builder.Append(memory.MemoryType);
-            builder.Append(") ");
-            builder.AppendLine(memory.Content);
-        }
-
-        return builder.ToString();
-    }
-
-    protected virtual Task<AgentResponse> ProcessResponseAsync(string llmContent, string userInput, UserContext context)
-    {
-        return Task.FromResult(AgentResponse.Ok(llmContent, Name, Tier));
-    }
-
     protected abstract string GetBaseSystemPrompt();
-
-    private static string Truncate(string text, int maxLength)
-        => text.Length <= maxLength ? text : text[..maxLength] + "...";
 }

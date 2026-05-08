@@ -109,7 +109,7 @@ public class AgentFrameworkDirectExecutionServiceTests
     }
 
     [Fact]
-    public async Task ExecuteDirectAsync_FallsBackToRawAgent_WhenFrameworkThrows()
+    public async Task ExecuteDirectAsync_ReturnsError_WhenFrameworkThrows()
     {
         var chatClient = Substitute.For<IChatClient>();
         chatClient.GetResponseAsync(Arg.Any<IEnumerable<ChatMessage>>(), Arg.Any<ChatOptions?>(), Arg.Any<CancellationToken>())
@@ -127,16 +127,12 @@ public class AgentFrameworkDirectExecutionServiceTests
             runtimeCoordinator);
 
         var agent = CreateAgent("TestAgent");
-        var fallbackResponse = AgentResponse.Ok("fallback", "TestAgent", AgentTier.Specialist);
-        agent.ExecuteAsync("hello", Arg.Any<UserContext>()).Returns(fallbackResponse);
 
         var result = await sut.ExecuteDirectAsync(agent, "session-1", "hello", new UserContext { UserId = "u1" });
 
-        result.Content.Should().Be("fallback");
-        result.Metadata.Should().ContainKey("frameworkFallback");
-        result.Metadata["frameworkFallback"].Should().Be(true);
-        result.Metadata.Should().ContainKey("frameworkError");
-        await agent.Received(1).ExecuteAsync("hello", Arg.Any<UserContext>());
+        result.Success.Should().BeFalse();
+        result.Content.Should().Contain("Framework error: boom");
+        result.AgentName.Should().Be("TestAgent");
     }
 
     private static IAgent CreateAgent(string name)

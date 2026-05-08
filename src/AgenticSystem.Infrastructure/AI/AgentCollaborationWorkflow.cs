@@ -26,12 +26,14 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
     private readonly ILogger<AgentCollaborationWorkflow> _logger;
     private readonly CollaborationWorkflowOptions _workflowOptions;
+    private readonly IDirectAgentExecutionService _directAgentExecutionService;
 
     public AgentCollaborationWorkflow(
         ChatClientPlanner planner,
         IAgentFactory agentFactory,
         ITaskPlanManager taskPlanManager,
         IAgentRuntimeCoordinator runtimeCoordinator,
+        IDirectAgentExecutionService directAgentExecutionService,
         ILogger<AgentCollaborationWorkflow> logger,
         IAgentChannelService? agentChannelService = null,
         IRAGService? ragService = null,
@@ -42,6 +44,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         _agentFactory = agentFactory;
         _taskPlanManager = taskPlanManager;
         _runtimeCoordinator = runtimeCoordinator;
+        _directAgentExecutionService = directAgentExecutionService;
         _logger = logger;
         _agentChannelService = agentChannelService;
         _ragService = ragService;
@@ -543,7 +546,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             var executionSw = Stopwatch.StartNew();
 
             using var agentScope = _runtimeCoordinator.BeginAgentScope(agent.Name, agent.AvailableTools);
-            var response = await agent.ExecuteAsync(stepInput, context);
+            var response = await _directAgentExecutionService.ExecuteDirectAsync(agent, sessionId, stepInput, context, ct);
             executionSw.Stop();
 
             if (!response.Success)
@@ -722,7 +725,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
 
         if (_agentFrameworkFactory is null)
         {
-            return await reviewer.ExecuteAsync(reviewPrompt, context);
+            return await _directAgentExecutionService.ExecuteDirectAsync(reviewer, sessionId, reviewPrompt, context, ct);
         }
 
         if (ShouldUseNativeGroupChatReview(distinctStepAgents))
@@ -769,7 +772,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
 
             if (bindings.Count == 0)
             {
-                return await reviewer.ExecuteAsync(reviewPrompt, context);
+                return await _directAgentExecutionService.ExecuteDirectAsync(reviewer, sessionId, reviewPrompt, context, ct);
             }
 
             var frameworkReviewer = await _agentFrameworkFactory.CreateFromAgentAsync(reviewer, bindings.Select(binding => binding.Tool), ct);
@@ -799,7 +802,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         catch (Exception ex)
         {
             _logger.LogDebug(ex, "Native agent-tool review failed, falling back to direct reviewer execution");
-            return await reviewer.ExecuteAsync(reviewPrompt, context);
+            return await _directAgentExecutionService.ExecuteDirectAsync(reviewer, sessionId, reviewPrompt, context, ct);
         }
     }
 
