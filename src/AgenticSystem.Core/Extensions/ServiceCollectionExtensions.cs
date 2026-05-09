@@ -135,6 +135,11 @@ public static class ServiceCollectionExtensions
         // Fallback Executor
         services.AddSingleton<FallbackExecutor>();
 
+        // Knowledge Graph (Graph RAG)
+        services.AddSingleton<InMemoryKnowledgeGraphService>();
+        services.AddSingleton<IKnowledgeGraphService>(sp => sp.GetRequiredService<InMemoryKnowledgeGraphService>());
+        services.AddSingleton<IKnowledgeGraphStore>(sp => sp.GetRequiredService<InMemoryKnowledgeGraphService>());
+
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ServiceCollectionExtensions).Assembly));
 
         return services;
