@@ -16,16 +16,8 @@ public class PostgresPermissionService : IPermissionService
 
     public async Task<bool> HasPermissionAsync(string userId, string resource, Permission permission, CancellationToken ct = default)
     {
-        // Simplification for Phase 2: if user has Admin role, they have all permissions.
-        var isAdmin = await _dbContext.RoleAssignments
-            .AsNoTracking()
-            .AnyAsync(r => r.UserId == userId && r.RoleId == "Admin", ct);
-            
-        if (isAdmin) return true;
-
-        // In a real system, we'd map roles to specific permissions on resources.
-        // For now, we return false if not admin.
-        return false;
+        var effectivePerms = await GetEffectivePermissionsAsync(userId, resource, ct);
+        return (effectivePerms & permission) == permission;
     }
 
     public async Task<IReadOnlyList<RoleAssignment>> GetRolesAsync(string userId, CancellationToken ct = default)
@@ -70,11 +62,24 @@ public class PostgresPermissionService : IPermissionService
 
     public async Task<Permission> GetEffectivePermissionsAsync(string userId, string resource, CancellationToken ct = default)
     {
-        var isAdmin = await _dbContext.RoleAssignments
+        var roleNames = await _dbContext.RoleAssignments
             .AsNoTracking()
-            .AnyAsync(r => r.UserId == userId && r.RoleId == "Admin", ct);
+            .Where(r => r.UserId == userId)
+            .Select(r => r.RoleId)
+            .ToListAsync(ct);
 
-        if (isAdmin) return Permission.Admin;
-        return Permission.None;
+        Permission effective = Permission.None;
+
+        foreach (var roleName in roleNames)
+        {
+            var builtIn = BuiltInRoles.All.FirstOrDefault(r => r.Name.Equals(roleName, StringComparison.OrdinalIgnoreCase));
+            if (builtIn != null)
+            {
+                effective |= builtIn.Permissions;
+            }
+            // In the future: Add lookup for custom roles in a RoleDefinitions table.
+        }
+
+        return effective;
     }
 }

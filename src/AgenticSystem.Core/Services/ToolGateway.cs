@@ -16,6 +16,8 @@ public class ToolGateway : IToolGateway
     private readonly IToolGovernanceService _governanceService;
     private readonly IAuditLog _auditLog;
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
+    private readonly IPermissionService _permissionService;
+    private readonly ILLMRuntimeContextAccessor _contextAccessor;
     private readonly ILogger<ToolGateway> _logger;
 
     public ToolGateway(
@@ -23,12 +25,16 @@ public class ToolGateway : IToolGateway
         IToolGovernanceService governanceService,
         IAuditLog auditLog,
         IAgentRuntimeCoordinator runtimeCoordinator,
+        IPermissionService permissionService,
+        ILLMRuntimeContextAccessor contextAccessor,
         ILogger<ToolGateway> logger)
     {
         _policyEngine = policyEngine;
         _governanceService = governanceService;
         _auditLog = auditLog;
         _runtimeCoordinator = runtimeCoordinator;
+        _permissionService = permissionService;
+        _contextAccessor = contextAccessor;
         _logger = logger;
     }
 
@@ -37,10 +43,35 @@ public class ToolGateway : IToolGateway
         options ??= new ToolGatewayOptions();
         var sw = Stopwatch.StartNew();
 
+        var runtimeContext = _contextAccessor.Current;
+        var userId = runtimeContext?.UserId;
+        var tenantId = runtimeContext?.TenantId;
+
+        // Step 0: RBAC Permission check
+        if (!string.IsNullOrEmpty(userId))
+        {
+            var hasPermission = await _permissionService.HasPermissionAsync(userId, $"tools/{tool.Name}", Permission.Execute, ct);
+            if (!hasPermission)
+            {
+                sw.Stop();
+                var msg = $"User {userId} does not have permission to execute tool {tool.Name}.";
+                await RecordAuditAsync(tool, input, false, msg, sw.Elapsed, ct);
+                return new ToolGatewayResult
+                {
+                    Success = false,
+                    ErrorMessage = msg,
+                    Latency = sw.Elapsed,
+                    ValidationErrors = [msg]
+                };
+            }
+        }
+
         // Step 1: Policy check
         var policyContext = new PolicyContext
         {
             AgentName = _runtimeCoordinator.CurrentAgentName,
+            TenantId = tenantId,
+            UserId = userId,
             ToolName = tool.Name,
             ToolCategory = tool.Category.ToString(),
             Action = input.Action,
