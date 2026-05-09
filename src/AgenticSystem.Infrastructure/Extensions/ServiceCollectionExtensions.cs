@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
@@ -142,6 +143,7 @@ public static class ServiceCollectionExtensions
                     sp.GetRequiredService<SimpleSessionStoreAdapter>(),
                     sp.GetRequiredService<ISessionManager>(),
                     sp.GetRequiredService<ILogger<AgentFrameworkDirectExecutionService>>(),
+                    sp,
                     sp.GetService<IAgentRuntimeCoordinator>(),
                     enableStreaming: enableStreaming));
 
@@ -202,6 +204,12 @@ public static class ServiceCollectionExtensions
             sp.GetService<Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>>(),
             sp.GetRequiredService<IRerankingSettingsAccessor>(),
             sp.GetRequiredService<ILogger<LlmReRanker>>()));
+            
+        services.AddSingleton<IEmbeddingProvider>(sp => new AgenticSystem.Infrastructure.Embeddings.EmbeddingProviderAdapter(
+            sp.GetRequiredService<Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>>(),
+            sp.GetRequiredService<ILogger<AgenticSystem.Infrastructure.Embeddings.EmbeddingProviderAdapter>>()));
+            
+        services.AddSingleton<IAdvancedRetrievalService, PostgresAdvancedRetrievalService>();
         services.AddSingleton<IRAGService, RAGService>();
 
         // Obsidian Sync
@@ -418,14 +426,20 @@ public static class ServiceCollectionExtensions
         {
             services.AddDbContext<AgenticDbContext>(options =>
                 options.UseNpgsql(connectionString, npgsql =>
-                    npgsql.MigrationsHistoryTable("__ef_migrations_history")));
+                {
+                    npgsql.MigrationsHistoryTable("__ef_migrations_history");
+                    npgsql.UseVector();
+                }));
         }
 
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IDbContextFactory<AgenticDbContext>)))
         {
             services.AddDbContextFactory<AgenticDbContext>(options =>
                 options.UseNpgsql(connectionString, npgsql =>
-                    npgsql.MigrationsHistoryTable("__ef_migrations_history")));
+                {
+                    npgsql.MigrationsHistoryTable("__ef_migrations_history");
+                    npgsql.UseVector();
+                }));
         }
     }
 

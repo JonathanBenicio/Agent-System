@@ -19,6 +19,7 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<AgentFrameworkDirectExecutionService> _logger;
     private readonly IAgentRuntimeCoordinator? _runtimeCoordinator;
+    private readonly IServiceProvider _serviceProvider;
     private readonly bool _enableStreaming;
 
     public AgentFrameworkDirectExecutionService(
@@ -26,6 +27,7 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
         SimpleSessionStoreAdapter sessionStore,
         ISessionManager sessionManager,
         ILogger<AgentFrameworkDirectExecutionService> logger,
+        IServiceProvider serviceProvider,
         IAgentRuntimeCoordinator? runtimeCoordinator = null,
         bool enableStreaming = false)
     {
@@ -33,6 +35,7 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _sessionManager = sessionManager ?? throw new ArgumentNullException(nameof(sessionManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _runtimeCoordinator = runtimeCoordinator;
         _enableStreaming = enableStreaming;
     }
@@ -57,7 +60,7 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
             frameworkAgent = await _frameworkFactory.CreateFromAgentAsync(agent, ct);
             var session = await _sessionStore.GetSessionAsync(frameworkAgent, sessionId, ct);
 
-            string content;
+            string content = string.Empty;
             FrameworkAgentResponse? frameworkResponse = null;
 
             if (_enableStreaming)
@@ -84,18 +87,48 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
             }
             else
             {
-                frameworkResponse = await frameworkAgent.RunAsync(input, session);
-
-                content = string.Join("\n", frameworkResponse.Messages
-                    .Where(m => m.Role == ChatRole.Assistant)
-                    .SelectMany(m => m.Contents.OfType<TextContent>())
-                    .Select(t => t.Text));
-
-                if (string.IsNullOrWhiteSpace(content))
+                var schemaAttribute = agent.GetType().GetCustomAttributes(typeof(AgenticSystem.Core.Attributes.AgenticJsonSchemaAttribute), true).FirstOrDefault() as AgenticSystem.Core.Attributes.AgenticJsonSchemaAttribute;
+                var validator = _serviceProvider.GetService(typeof(IStructuredOutputValidator)) as IStructuredOutputValidator;
+                
+                int maxRetries = schemaAttribute?.AutoRetryOnFailure == true ? schemaAttribute.MaxRetries : 1;
+                string currentInput = input;
+                
+                for (int attempt = 1; attempt <= maxRetries; attempt++)
                 {
+                    frameworkResponse = await frameworkAgent.RunAsync(currentInput, session);
+
                     content = string.Join("\n", frameworkResponse.Messages
                         .Where(m => m.Role == ChatRole.Assistant)
-                        .Select(m => m.Text));
+                        .SelectMany(m => m.Contents.OfType<TextContent>())
+                        .Select(t => t.Text));
+
+                    if (string.IsNullOrWhiteSpace(content))
+                    {
+                        content = string.Join("\n", frameworkResponse.Messages
+                            .Where(m => m.Role == ChatRole.Assistant)
+                            .Select(m => m.Text));
+                    }
+                    
+                    if (schemaAttribute != null && validator != null)
+                    {
+                        var schema = new StructuredOutputSchema
+                        {
+                            Name = agent.Name,
+                            SchemaJson = schemaAttribute.CustomSchemaJson ?? "{}" // Basic fallback if NJsonSchema wasn't specified
+                        };
+                        
+                        var validationResult = await validator.ValidateAsync(content, schema, ct);
+                        if (!validationResult.IsValid)
+                        {
+                            _logger.LogWarning("Agent {AgentName} failed schema validation on attempt {Attempt}. Errors: {Errors}", agent.Name, attempt, string.Join(", ", validationResult.ValidationErrors));
+                            if (attempt < maxRetries)
+                            {
+                                currentInput = $"The JSON is invalid against the schema. Fix the errors: {string.Join("; ", validationResult.ValidationErrors)}";
+                                continue;
+                            }
+                        }
+                    }
+                    break;
                 }
             }
 

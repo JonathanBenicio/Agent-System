@@ -147,4 +147,34 @@ public class SmartRouter : ISmartRouter
             .Select(r => r.AgentName)
             .ToList();
     }
+
+    public Task<ProviderRoutingDecision> RouteProviderAsync(string? requestedProvider, string? requestedModel)
+    {
+        var decision = new ProviderRoutingDecision
+        {
+            PrimaryProvider = string.IsNullOrWhiteSpace(requestedProvider) ? "OpenAI" : requestedProvider,
+            PrimaryModel = string.IsNullOrWhiteSpace(requestedModel) ? "gpt-4o-mini" : requestedModel,
+            FallbackChain = []
+        };
+
+        // Fallback chain definition
+        if (decision.PrimaryProvider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+        {
+            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "Gemini", Model = "gemini-1.5-flash" });
+            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "Claude", Model = "claude-3-haiku-20240307" });
+        }
+        else if (decision.PrimaryProvider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+        {
+            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "OpenAI", Model = "gpt-4o-mini" });
+            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "Claude", Model = "claude-3-haiku-20240307" });
+        }
+        else
+        {
+            // Default fallback for any other
+            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "OpenAI", Model = "gpt-4o-mini" });
+            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "Gemini", Model = "gemini-1.5-flash" });
+        }
+
+        return Task.FromResult(decision);
+    }
 }

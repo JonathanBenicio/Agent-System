@@ -37,7 +37,7 @@ public class PostgresVectorStore : IVectorStore
             entity.Content = document.Content;
             entity.Type = document.Type;
             entity.Collection = document.Collection;
-            entity.Embedding = document.Embedding;
+            entity.Embedding = document.Embedding != null ? new Pgvector.Vector(document.Embedding) : null;
             entity.MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions);
             entity.IndexedAt = DateTime.UtcNow;
         }
@@ -199,7 +199,7 @@ public class PostgresVectorStore : IVectorStore
             Content = entity.Content,
             Type = entity.Type,
             Collection = entity.Collection,
-            Embedding = entity.Embedding,
+            Embedding = entity.Embedding?.ToArray() ?? Array.Empty<float>(),
             Metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(entity.MetadataJson, JsonOptions) ?? new(),
             IndexedAt = entity.IndexedAt
         };
@@ -213,7 +213,7 @@ public class PostgresVectorStore : IVectorStore
             Content = document.Content,
             Type = document.Type,
             Collection = document.Collection,
-            Embedding = document.Embedding,
+            Embedding = document.Embedding != null ? new Pgvector.Vector(document.Embedding) : null,
             MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions),
             IndexedAt = DateTime.UtcNow
         };

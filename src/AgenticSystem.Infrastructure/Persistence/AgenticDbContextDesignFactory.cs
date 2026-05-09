@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using Pgvector.EntityFrameworkCore;
 
 namespace AgenticSystem.Infrastructure.Persistence;
 
@@ -13,7 +14,10 @@ public sealed class AgenticDbContextDesignFactory : IDesignTimeDbContextFactory<
 
         var optionsBuilder = new DbContextOptionsBuilder<AgenticDbContext>();
         optionsBuilder.UseNpgsql(connectionString, npgsql =>
-            npgsql.MigrationsHistoryTable("__ef_migrations_history"));
+        {
+            npgsql.MigrationsHistoryTable("__ef_migrations_history");
+            npgsql.UseVector();
+        });
 
         return new AgenticDbContext(optionsBuilder.Options);
     }

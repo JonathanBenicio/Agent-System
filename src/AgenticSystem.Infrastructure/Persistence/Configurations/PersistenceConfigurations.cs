@@ -18,8 +18,8 @@ public class VectorDocumentConfiguration : IEntityTypeConfiguration<VectorDocume
         builder.Property(v => v.MetadataJson).HasColumnName("metadata").HasColumnType("jsonb");
         builder.Property(v => v.IndexedAt).HasColumnName("indexed_at");
 
-        // Embedding stored as float[] — pgvector column type set via raw SQL in migration
-        builder.Property(v => v.Embedding).HasColumnName("embedding");
+        // Utilizando a extensão nativa pgvector com dimensão dinâmica (ideal para modelos locais Ollama)
+        builder.Property(v => v.Embedding).HasColumnName("embedding").HasColumnType("vector");
 
         builder.HasIndex(v => v.Collection).HasDatabaseName("ix_vector_documents_collection");
         builder.HasIndex(v => v.Type).HasDatabaseName("ix_vector_documents_type");

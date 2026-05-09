@@ -4,11 +4,12 @@ using System.Text.RegularExpressions;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using Microsoft.Extensions.Logging;
+using NJsonSchema;
 
 namespace AgenticSystem.Core.Services;
 
 /// <summary>
-/// Validates agent outputs against structured schemas.
+/// Validates agent outputs against structured schemas using NJsonSchema (JSON Schema Draft 7+).
 /// Extracts JSON from free-form text, validates required fields, and provides detailed errors.
 /// </summary>
 public partial class StructuredOutputValidator : IStructuredOutputValidator
@@ -20,7 +21,7 @@ public partial class StructuredOutputValidator : IStructuredOutputValidator
         _logger = logger;
     }
 
-    public Task<StructuredOutputValidationResult> ValidateAsync(
+    public async Task<StructuredOutputValidationResult> ValidateAsync(
         string rawOutput,
         StructuredOutputSchema schema,
         CancellationToken ct = default)
@@ -36,81 +37,61 @@ public partial class StructuredOutputValidator : IStructuredOutputValidator
         catch (JsonException ex)
         {
             errors.Add($"Invalid JSON: {ex.Message}");
-            return Task.FromResult(StructuredOutputValidationResult.Failure(rawOutput, errors));
+            return StructuredOutputValidationResult.Failure(rawOutput, errors);
         }
 
-        // Step 2: Validate required fields
-        var root = doc.RootElement;
-        if (root.ValueKind != JsonValueKind.Object)
-        {
-            errors.Add($"Expected JSON object, got {root.ValueKind}.");
-            return Task.FromResult(StructuredOutputValidationResult.Failure(rawOutput, errors));
-        }
-
-        foreach (var field in schema.RequiredFields)
-        {
-            if (!root.TryGetProperty(field, out var prop))
-            {
-                errors.Add($"Missing required field: '{field}'.");
-            }
-            else if (prop.ValueKind == JsonValueKind.Null)
-            {
-                errors.Add($"Required field '{field}' is null.");
-            }
-            else if (prop.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(prop.GetString()))
-            {
-                errors.Add($"Required field '{field}' is empty.");
-            }
-        }
-
-        // Step 3: Validate against JSON Schema (basic type checking)
+        // Step 2: Validate against JSON Schema via NJsonSchema
         if (!string.IsNullOrEmpty(schema.SchemaJson) && schema.SchemaJson != "{}")
         {
             try
             {
-                var schemaDoc = JsonDocument.Parse(schema.SchemaJson);
-                var schemaRoot = schemaDoc.RootElement;
-
-                if (schemaRoot.TryGetProperty("properties", out var properties))
+                var nJsonSchema = await JsonSchema.FromJsonAsync(schema.SchemaJson, ct);
+                var validationErrors = nJsonSchema.Validate(doc.RootElement.GetRawText());
+                
+                foreach (var validationError in validationErrors)
                 {
-                    foreach (var prop in properties.EnumerateObject())
-                    {
-                        if (root.TryGetProperty(prop.Name, out var valueProp) &&
-                            prop.Value.TryGetProperty("type", out var expectedType))
-                        {
-                            var expected = expectedType.GetString();
-                            var actual = valueProp.ValueKind;
-
-                            var typeMismatch = expected switch
-                            {
-                                "string" => actual != JsonValueKind.String,
-                                "number" or "integer" => actual != JsonValueKind.Number,
-                                "boolean" => actual is not JsonValueKind.True and not JsonValueKind.False,
-                                "array" => actual != JsonValueKind.Array,
-                                "object" => actual != JsonValueKind.Object,
-                                _ => false
-                            };
-
-                            if (typeMismatch)
-                            {
-                                errors.Add($"Field '{prop.Name}' expected type '{expected}', got '{actual}'.");
-                            }
-                        }
-                    }
+                    errors.Add($"Schema Validation Error at '{validationError.Path}': {validationError.Kind} - {validationError.ToString()}");
                 }
             }
-            catch (JsonException ex)
+            catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to parse schema JSON for validation");
+                _logger.LogWarning(ex, "Failed to parse or validate schema JSON via NJsonSchema");
+                errors.Add($"Internal Schema Validation Error: {ex.Message}");
+            }
+        }
+        else
+        {
+            // Fallback Step 2: Validate required fields manually if no full schema is provided
+            var root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                errors.Add($"Expected JSON object, got {root.ValueKind}.");
+                return StructuredOutputValidationResult.Failure(rawOutput, errors);
+            }
+
+            foreach (var field in schema.RequiredFields)
+            {
+                if (!root.TryGetProperty(field, out var prop))
+                {
+                    errors.Add($"Missing required field: '{field}'.");
+                }
+                else if (prop.ValueKind == JsonValueKind.Null)
+                {
+                    errors.Add($"Required field '{field}' is null.");
+                }
+                else if (prop.ValueKind == JsonValueKind.String && string.IsNullOrWhiteSpace(prop.GetString()))
+                {
+                    errors.Add($"Required field '{field}' is empty.");
+                }
             }
         }
 
         if (errors.Count > 0)
         {
-            return Task.FromResult(StructuredOutputValidationResult.Failure(rawOutput, errors));
+            return StructuredOutputValidationResult.Failure(rawOutput, errors);
         }
 
-        return Task.FromResult(StructuredOutputValidationResult.Success(rawOutput, doc));
+        return StructuredOutputValidationResult.Success(rawOutput, doc);
     }
 
     public async Task<StructuredOutputValidationResult> ExtractAndValidateAsync(

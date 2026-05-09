@@ -9,6 +9,8 @@ public class LLMRequest
     public LLMParameters Parameters { get; set; } = new();
     public List<ChatMessage> Messages { get; set; } = new();
     public ResponseFormat? ResponseFormat { get; set; }
+    public AgenticSystem.Core.Models.StructuredOutputSchema? RequiredSchema { get; set; }
+    public int MaxRetries { get; set; } = 3;
 }
 
 public class ChatMessage

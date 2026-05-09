@@ -47,6 +47,11 @@ public class PersistentSmartRouter : ISmartRouter
         return await _inner.GetRankingsByDomainAsync(domain);
     }
 
+    public Task<ProviderRoutingDecision> RouteProviderAsync(string? requestedProvider, string? requestedModel)
+    {
+        return _inner.RouteProviderAsync(requestedProvider, requestedModel);
+    }
+
     private async Task PersistMetricAsync(string agentName, AgentPerformanceMetric metric)
     {
         try

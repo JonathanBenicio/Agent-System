@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Globalization;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.LLM.Interfaces;
@@ -9,6 +9,8 @@ using AgenticSystem.Infrastructure.Configuration;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
+using Polly;
 using MChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 namespace AgenticSystem.Infrastructure.LLM;
@@ -33,10 +35,13 @@ public class LLMManager : ILLMAdministrationService
     private readonly ISessionStore _sessionStore;
     private readonly IConfigManager? _configManager;
     private readonly IConfigReloadNotifier? _configReloadNotifier;
-
+    private readonly IServiceProvider _serviceProvider;
     private readonly Dictionary<string, ILLMProvider> _providers = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IChatClient> _chatClientRegistry = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _configSync = new(1, 1);
+    
+    // Polly Circuit Breakers per provider
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Polly.CircuitBreaker.AsyncCircuitBreakerPolicy> _circuitBreakers = new();
 
     private volatile bool _runtimeConfigDirty = true;
     private string? _defaultProviderOverride;
@@ -44,7 +49,8 @@ public class LLMManager : ILLMAdministrationService
 
     public LLMManager(
         IEnumerable<ILLMProvider> providers,
-        ILogger<LLMManager> logger)
+        ILogger<LLMManager> logger,
+        IServiceProvider serviceProvider)
     {
         _settings = new AgenticSystemSettings();
         _logger = logger;
@@ -52,6 +58,7 @@ public class LLMManager : ILLMAdministrationService
         _llmRuntimeContextAccessor = new LLMRuntimeContextAccessor();
         _tenantStore = new InMemoryTenantStore();
         _sessionStore = new InMemorySessionStore();
+        _serviceProvider = serviceProvider;
         _configManager = null;
         _configReloadNotifier = null;
 
@@ -74,6 +81,7 @@ public class LLMManager : ILLMAdministrationService
         ILLMRuntimeContextAccessor llmRuntimeContextAccessor,
         ITenantStore tenantStore,
         ISessionStore sessionStore,
+        IServiceProvider serviceProvider,
         IConfigManager? configManager = null,
         IConfigReloadNotifier? configReloadNotifier = null)
     {
@@ -83,6 +91,7 @@ public class LLMManager : ILLMAdministrationService
         _llmRuntimeContextAccessor = llmRuntimeContextAccessor;
         _tenantStore = tenantStore;
         _sessionStore = sessionStore;
+        _serviceProvider = serviceProvider;
         _configManager = configManager;
         _configReloadNotifier = configReloadNotifier;
 
@@ -105,56 +114,155 @@ public class LLMManager : ILLMAdministrationService
             string.Join(", ", _providers.Keys));
     }
 
+    private Polly.CircuitBreaker.AsyncCircuitBreakerPolicy GetCircuitBreaker(string providerName)
+    {
+        return _circuitBreakers.GetOrAdd(providerName, _ =>
+            Polly.Policy
+                .Handle<Exception>(ex => 
+                    ex.Message.Contains("429") || 
+                    ex.Message.Contains("timeout") || 
+                    ex is HttpRequestException || 
+                    ex is TimeoutException)
+                .CircuitBreakerAsync(
+                    exceptionsAllowedBeforeBreaking: 3,
+                    durationOfBreak: TimeSpan.FromSeconds(30),
+                    onBreak: (ex, breakDelay) =>
+                    {
+                        _logger.LogWarning(ex, "🚨 Circuit Breaker for {Provider} triped! Breaking for {Delay}s", providerName, breakDelay.TotalSeconds);
+                    },
+                    onReset: () =>
+                    {
+                        _logger.LogInformation("✅ Circuit Breaker for {Provider} reset.", providerName);
+                    },
+                    onHalfOpen: () =>
+                    {
+                        _logger.LogInformation("⏳ Circuit Breaker for {Provider} is half-open (testing next request).", providerName);
+                    }));
+    }
+
     public async Task<LLMResponse> GenerateAsync(LLMRequest request, CancellationToken ct = default)
     {
         var selection = await ResolveSelectionAsync(request, ct);
-        var chatClient = await ResolveChatClientAsync(selection.Provider, selection.Model, selection.ApiKey, ct);
-
+        
         var messages = MapMessages(request);
         if (messages.Count == 0)
         {
             return LLMResponse.Fail("The request does not contain any prompt or chat messages.", selection.Provider);
         }
 
-        var options = new ChatOptions
+        var smartRouter = _serviceProvider.GetService<ISmartRouter>();
+        ProviderRoutingDecision routingDecision = null!;
+        if (smartRouter is not null)
         {
-            Temperature = (float?)request.Parameters.Temperature,
-            MaxOutputTokens = request.Parameters.MaxTokens,
-            TopP = (float?)request.Parameters.TopP,
-            FrequencyPenalty = (float?)request.Parameters.FrequencyPenalty,
-            PresencePenalty = (float?)request.Parameters.PresencePenalty,
-            StopSequences = request.Parameters.Stop,
-            ModelId = selection.Model
+            routingDecision = await smartRouter.RouteProviderAsync(selection.Provider, selection.Model);
+        }
+        
+        var candidates = new List<ProviderFallbackOption>
+        {
+            new ProviderFallbackOption { Provider = selection.Provider, Model = selection.Model }
         };
 
+        if (routingDecision is not null && routingDecision.FallbackChain.Count > 0)
+        {
+            candidates.AddRange(routingDecision.FallbackChain);
+        }
+
+        var validator = _serviceProvider.GetService<IStructuredOutputValidator>();
+        var maxAttempts = request.RequiredSchema != null ? request.MaxRetries : 1;
         var sw = Stopwatch.StartNew();
+        var exceptions = new List<Exception>();
 
-        try
+        foreach (var candidate in candidates)
         {
-            var response = await chatClient.GetResponseAsync(messages, options, ct);
-            sw.Stop();
+            var chatClient = await ResolveChatClientAsync(candidate.Provider, candidate.Model, selection.ApiKey, ct);
+            var cb = GetCircuitBreaker(candidate.Provider);
 
-            var llmResponse = LLMResponse.Ok(
-                response.Text ?? string.Empty,
-                selection.Model,
-                selection.Provider,
-                MapUsage(response.Usage));
+            if (cb.CircuitState == Polly.CircuitBreaker.CircuitState.Open || 
+                cb.CircuitState == Polly.CircuitBreaker.CircuitState.Isolated)
+            {
+                _logger.LogWarning("⏭️ Skipping {Provider} (Circuit Open)", candidate.Provider);
+                continue;
+            }
 
-            llmResponse.Latency = sw.Elapsed;
-            return llmResponse;
+            var options = new ChatOptions
+            {
+                Temperature = (float?)request.Parameters.Temperature,
+                MaxOutputTokens = request.Parameters.MaxTokens,
+                TopP = (float?)request.Parameters.TopP,
+                FrequencyPenalty = (float?)request.Parameters.FrequencyPenalty,
+                PresencePenalty = (float?)request.Parameters.PresencePenalty,
+                StopSequences = request.Parameters.Stop,
+                ModelId = candidate.Model
+            };
+            
+            // Ativa modo JSON (dependendo do modelo) se exigido
+            if (request.ResponseFormat == ResponseFormat.Json || request.RequiredSchema != null)
+            {
+                options.ResponseFormat = ChatResponseFormat.Json;
+            }
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                try
+                {
+                    var response = await cb.ExecuteAsync(async () => 
+                        await chatClient.GetResponseAsync(messages, options, ct));
+
+                    var responseText = response.Text ?? string.Empty;
+
+                    if (request.RequiredSchema != null && validator != null)
+                    {
+                        var validationResult = await validator.ValidateAsync(responseText, request.RequiredSchema, ct);
+                        if (!validationResult.IsValid)
+                        {
+                            _logger.LogWarning("⚠️ Schema validation failed on attempt {Attempt}/{MaxRetries} via {Provider}. Error: {Error}", attempt, maxAttempts, candidate.Provider, string.Join(", ", validationResult.ValidationErrors));
+                            if (attempt < maxAttempts)
+                            {
+                                // Adiciona a falha como mensagem para a LLM corrigir
+                                messages.Add(new MChatMessage(ChatRole.Assistant, responseText));
+                                messages.Add(new MChatMessage(ChatRole.User, $"The JSON is invalid against the schema. Fix the errors: {string.Join("; ", validationResult.ValidationErrors)}"));
+                                continue;
+                            }
+                            else
+                            {
+                                throw new Exception($"Schema validation failed after {maxAttempts} attempts.");
+                            }
+                        }
+                    }
+
+                    sw.Stop();
+
+                    var llmResponse = LLMResponse.Ok(
+                        responseText,
+                        candidate.Model,
+                        candidate.Provider,
+                        MapUsage(response.Usage));
+
+                    llmResponse.Latency = sw.Elapsed;
+
+                    if (candidate.Provider != selection.Provider)
+                    {
+                        _logger.LogInformation("🔄 Fallback successful: switched from {Primary} to {Fallback}", selection.Provider, candidate.Provider);
+                    }
+
+                    return llmResponse;
+                }
+                catch (Exception ex)
+                {
+                    exceptions.Add(ex);
+                    _logger.LogError(ex, "❌ Request via {Provider} failed on attempt {Attempt}.", candidate.Provider, attempt);
+                    // Se a chamada falhar (por exemplo rede/timeout), não re-tenta localmente, avança para o próximo provedor.
+                    break;
+                }
+            }
         }
-        catch (Exception ex)
-        {
-            sw.Stop();
-            _logger.LogError(ex,
-                "❌ Chat request via {Provider} failed after {Latency}ms",
-                selection.Provider,
-                sw.ElapsedMilliseconds);
 
-            var failedResponse = LLMResponse.Fail(ex.Message, selection.Provider);
-            failedResponse.Latency = sw.Elapsed;
-            return failedResponse;
-        }
+        sw.Stop();
+        
+        var aggregateEx = new AggregateException("All fallback providers failed.", exceptions);
+        var failedResponse = LLMResponse.Fail(aggregateEx.Message, selection.Provider);
+        failedResponse.Latency = sw.Elapsed;
+        return failedResponse;
     }
 
     public async Task<IReadOnlyList<LLMProviderInfo>> GetEnabledProvidersAsync(CancellationToken ct = default)
