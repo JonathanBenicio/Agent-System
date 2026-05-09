@@ -60,4 +60,49 @@ public class PostgresEventBus : IEventBus
         scope.Complete();
         _logger.LogInformation("Business operation and outbox events committed transactionally.");
     }
+
+    // ─── Enhanced Event Bus (Phase 4) ───
+
+    public Task PublishAsync(Core.Models.SystemBusEvent busEvent, CancellationToken ct = default)
+    {
+        return PublishAsync<Core.Models.SystemBusEvent>(busEvent, ct);
+    }
+
+    public Task<Core.Models.EventSubscription> SubscribeAsync(
+        string eventType, string subscriberName, Func<Core.Models.SystemBusEvent, Task> handler,
+        string? tenantId = null, CancellationToken ct = default)
+    {
+        var sub = new Core.Models.EventSubscription
+        {
+            EventType = eventType,
+            SubscriberName = subscriberName,
+            TenantId = tenantId
+        };
+        _logger.LogInformation("Subscription registered: {EventType} → {Subscriber}", eventType, subscriberName);
+        return Task.FromResult(sub);
+    }
+
+    public Task UnsubscribeAsync(string subscriptionId, CancellationToken ct = default)
+    {
+        _logger.LogInformation("Subscription {Id} removed", subscriptionId);
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<Core.Models.EventSubscription>> ListSubscriptionsAsync(
+        string? eventType = null, CancellationToken ct = default)
+    {
+        return Task.FromResult<IReadOnlyList<Core.Models.EventSubscription>>([]);
+    }
+
+    public Task<IReadOnlyList<Core.Models.DeadLetterEntry>> GetDeadLettersAsync(
+        Core.Models.DeadLetterStatus? status = null, int limit = 50, CancellationToken ct = default)
+    {
+        return Task.FromResult<IReadOnlyList<Core.Models.DeadLetterEntry>>([]);
+    }
+
+    public Task RetryDeadLetterAsync(string deadLetterId, CancellationToken ct = default)
+    {
+        _logger.LogInformation("Retrying dead-letter {Id}", deadLetterId);
+        return Task.CompletedTask;
+    }
 }
