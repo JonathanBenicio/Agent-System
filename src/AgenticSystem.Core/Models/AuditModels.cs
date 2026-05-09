@@ -23,6 +23,8 @@ public class AuditEntry
     public string? Description { get; init; }
     public bool Success { get; init; } = true;
     public string? ErrorMessage { get; init; }
+    public string? IpAddress { get; init; }
+    public string? UserAgent { get; init; }
     public DateTime Timestamp { get; init; } = DateTime.UtcNow;
     public Dictionary<string, object> Metadata { get; init; } = new();
 }
@@ -38,7 +40,8 @@ public enum AuditCategory
     Authentication,
     PermissionChange,
     KnowledgeIngestion,
-    SystemEvent
+    SystemEvent,
+    Security
 }
 
 /// <summary>

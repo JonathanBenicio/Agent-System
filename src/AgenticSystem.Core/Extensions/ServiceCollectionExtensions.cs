@@ -90,6 +90,7 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<IConfigReloadNotifier, ConfigReloadNotifier>();
         services.AddSingleton<IConfigManager, ConfigManager>();
+        services.AddHostedService<SecretRotationBackgroundService>();
 
         // ML23 — Embedding Migration (Re-indexação)
         services.AddSingleton<IEmbeddingModelStore, InMemoryEmbeddingModelStore>();

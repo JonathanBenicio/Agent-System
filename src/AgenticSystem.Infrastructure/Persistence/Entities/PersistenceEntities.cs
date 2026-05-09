@@ -272,6 +272,8 @@ public class AuditEntryEntity
     public string? Description { get; set; }
     public bool Success { get; set; } = true;
     public string? ErrorMessage { get; set; }
+    public string? IpAddress { get; set; }
+    public string? UserAgent { get; set; }
     public string DetailsJson { get; set; } = "{}";
 }
 

@@ -34,6 +34,8 @@ public class PostgresAuditLog : IAuditLog
             Description = entry.Description,
             Success = entry.Success,
             ErrorMessage = entry.ErrorMessage,
+            IpAddress = entry.IpAddress,
+            UserAgent = entry.UserAgent,
             DetailsJson = entry.Metadata != null ? JsonSerializer.Serialize(entry.Metadata) : "{}"
         };
 
@@ -84,6 +86,8 @@ public class PostgresAuditLog : IAuditLog
             Description = e.Description,
             Success = e.Success,
             ErrorMessage = e.ErrorMessage,
+            IpAddress = e.IpAddress,
+            UserAgent = e.UserAgent,
             Timestamp = e.Timestamp,
             Metadata = string.IsNullOrWhiteSpace(e.DetailsJson) || e.DetailsJson == "{}" 
                 ? new Dictionary<string, object>()
