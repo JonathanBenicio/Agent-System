@@ -26,8 +26,12 @@ public class AgentSpecification
     public AgentTier Tier { get; set; }
     public string Domain { get; set; } = string.Empty;
     public List<string> AllowedTools { get; set; } = new();
+    public List<string> Capabilities { get; set; } = new();
+    public AutonomyLevel AutonomyLevel { get; set; } = AutonomyLevel.Supervised;
+    public List<string> PolicyIds { get; set; } = new();
     public string Instructions { get; set; } = string.Empty;
     public Dictionary<string, object> Configuration { get; set; } = new();
+    public string? WorkflowTemplate { get; set; }
     public TimeSpan? AutoCleanupAfter { get; set; }
 }
 

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
@@ -100,6 +101,25 @@ public static class ServiceCollectionExtensions
 
         // Runtime Evaluator — InMemory fallback (overridden by UsePostgresOperationalStore when Postgres is configured)
         services.AddSingleton<IRuntimeEvaluator, InMemoryRuntimeEvaluator>();
+
+        // Agent Versioning
+        services.AddSingleton<IAgentVersionStore, InMemoryAgentVersionStore>();
+        services.AddSingleton<IAgentVersioningService>(sp =>
+        {
+            var store = sp.GetRequiredService<IAgentVersionStore>();
+            var auditLog = sp.GetRequiredService<IAuditLog>();
+            var logger = sp.GetRequiredService<ILogger<AgentVersioningService>>();
+            var agents = sp.GetServices<IAgent>().ToList();
+            IAgent? resolver(string name) => agents.FirstOrDefault(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            return new AgentVersioningService(store, auditLog, resolver, logger);
+        });
+
+        // Agent Evaluation
+        services.AddSingleton<IEvalResultStore, InMemoryEvalResultStore>();
+        services.AddSingleton<IAgentEvaluationService, AgentEvaluationService>();
+
+        // Structured Output Validation
+        services.AddSingleton<IStructuredOutputValidator, StructuredOutputValidator>();
 
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ServiceCollectionExtensions).Assembly));
 
