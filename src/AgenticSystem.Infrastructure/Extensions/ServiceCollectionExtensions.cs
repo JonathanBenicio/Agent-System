@@ -330,6 +330,18 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    /// <summary>
+    /// Substitui os stores de qualidade e confiabilidade em-memória pelos baseados no PostgreSQL.
+    /// </summary>
+    public static IServiceCollection UsePostgresQualityStores(this IServiceCollection services, string connectionString)
+    {
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IAgentVersionStore, PostgresAgentVersionStore>(services);
+        ReplaceSingleton<IPromptTemplateStore, PostgresPromptTemplateStore>(services);
+        ReplaceSingleton<IEvalResultStore, PostgresEvalResultStore>(services);
+        return services;
+    }
+
     public static IServiceCollection UseLocalExecutionStorageMode(this IServiceCollection services, IConfiguration configuration)
     {
         var configuredMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
@@ -370,6 +382,7 @@ public static class ServiceCollectionExtensions
         services.UsePostgresSecurityAndAudit(connectionString);
         services.UsePostgresMigrationJobStore(connectionString);
         services.UsePostgresEmbeddingModelStore(connectionString);
+        services.UsePostgresQualityStores(connectionString);
 
         return services;
     }

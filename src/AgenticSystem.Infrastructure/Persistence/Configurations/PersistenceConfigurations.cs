@@ -464,3 +464,90 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
         builder.HasIndex(o => o.CreatedAt).HasDatabaseName("ix_outbox_messages_created_at");
     }
 }
+
+public class AgentVersionConfiguration : IEntityTypeConfiguration<AgentVersionEntity>
+{
+    public void Configure(EntityTypeBuilder<AgentVersionEntity> builder)
+    {
+        builder.ToTable("agent_versions");
+
+        builder.HasKey(v => v.Id);
+        builder.Property(v => v.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(v => v.AgentName).HasColumnName("agent_name").HasMaxLength(256).IsRequired();
+        builder.Property(v => v.VersionNumber).HasColumnName("version_number").IsRequired();
+        builder.Property(v => v.Label).HasColumnName("label").HasMaxLength(128);
+        builder.Property(v => v.Status).HasColumnName("status").IsRequired();
+        builder.Property(v => v.Environment).HasColumnName("environment").IsRequired();
+        builder.Property(v => v.SystemPrompt).HasColumnName("system_prompt").IsRequired();
+        builder.Property(v => v.ModelProvider).HasColumnName("model_provider").HasMaxLength(128);
+        builder.Property(v => v.ModelId).HasColumnName("model_id").HasMaxLength(128);
+        builder.Property(v => v.Tools).HasColumnName("tools").HasColumnType("text[]").IsRequired();
+        builder.Property(v => v.PolicySnapshotJson).HasColumnName("policy_snapshot").HasColumnType("jsonb");
+        builder.Property(v => v.ParametersJson).HasColumnName("parameters").HasColumnType("jsonb").IsRequired();
+        builder.Property(v => v.Description).HasColumnName("description");
+        builder.Property(v => v.ChangeLog).HasColumnName("change_log");
+        builder.Property(v => v.CreatedBy).HasColumnName("created_by").HasMaxLength(128);
+        builder.Property(v => v.CreatedAt).HasColumnName("created_at");
+        builder.Property(v => v.PromotedAt).HasColumnName("promoted_at");
+        builder.Property(v => v.PromotedBy).HasColumnName("promoted_by").HasMaxLength(128);
+        builder.Property(v => v.ConfigHash).HasColumnName("config_hash").HasMaxLength(128);
+        builder.Property(v => v.ParentVersionId).HasColumnName("parent_version_id").HasMaxLength(64);
+
+        builder.HasIndex(v => v.AgentName).HasDatabaseName("ix_agent_versions_agent_name");
+        builder.HasIndex(v => new { v.AgentName, v.VersionNumber }).IsUnique().HasDatabaseName("ix_agent_versions_agent_version_unique");
+    }
+}
+
+public class PromptTemplateConfiguration : IEntityTypeConfiguration<PromptTemplateEntity>
+{
+    public void Configure(EntityTypeBuilder<PromptTemplateEntity> builder)
+    {
+        builder.ToTable("prompt_templates");
+
+        builder.HasKey(p => p.Id);
+        builder.Property(p => p.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(p => p.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(p => p.AgentName).HasColumnName("agent_name").HasMaxLength(256).IsRequired();
+        builder.Property(p => p.TemplateBody).HasColumnName("template_body").IsRequired();
+        builder.Property(p => p.Version).HasColumnName("version").IsRequired();
+        builder.Property(p => p.Locale).HasColumnName("locale").HasMaxLength(16).IsRequired();
+        builder.Property(p => p.Variables).HasColumnName("variables").HasColumnType("text[]").IsRequired();
+        builder.Property(p => p.Description).HasColumnName("description");
+        builder.Property(p => p.IsActive).HasColumnName("is_active");
+        builder.Property(p => p.CreatedAt).HasColumnName("created_at");
+        builder.Property(p => p.UpdatedAt).HasColumnName("updated_at");
+        builder.Property(p => p.CreatedBy).HasColumnName("created_by").HasMaxLength(128);
+
+        builder.HasIndex(p => p.AgentName).HasDatabaseName("ix_prompt_templates_agent_name");
+        builder.HasIndex(p => new { p.AgentName, p.Locale, p.IsActive }).HasDatabaseName("ix_prompt_templates_agent_locale_active");
+    }
+}
+
+public class EvalSuiteResultConfiguration : IEntityTypeConfiguration<EvalSuiteResultEntity>
+{
+    public void Configure(EntityTypeBuilder<EvalSuiteResultEntity> builder)
+    {
+        builder.ToTable("eval_suite_results");
+
+        builder.HasKey(e => e.SuiteId);
+        builder.Property(e => e.SuiteId).HasColumnName("suite_id").HasMaxLength(64);
+        builder.Property(e => e.AgentName).HasColumnName("agent_name").HasMaxLength(256).IsRequired();
+        builder.Property(e => e.AgentVersionId).HasColumnName("agent_version_id").HasMaxLength(64);
+        builder.Property(e => e.TotalTests).HasColumnName("total_tests").IsRequired();
+        builder.Property(e => e.Passed).HasColumnName("passed").IsRequired();
+        builder.Property(e => e.Failed).HasColumnName("failed").IsRequired();
+        builder.Property(e => e.OverallScore).HasColumnName("overall_score").IsRequired();
+        builder.Property(e => e.AccuracyScore).HasColumnName("accuracy_score").IsRequired();
+        builder.Property(e => e.SafetyScore).HasColumnName("safety_score").IsRequired();
+        builder.Property(e => e.LatencyP50Ms).HasColumnName("latency_p50_ms").IsRequired();
+        builder.Property(e => e.LatencyP95Ms).HasColumnName("latency_p95_ms").IsRequired();
+        builder.Property(e => e.TotalTokensUsed).HasColumnName("total_tokens_used").IsRequired();
+        builder.Property(e => e.ResultsJson).HasColumnName("results").HasColumnType("jsonb").IsRequired();
+        builder.Property(e => e.RegressionsJson).HasColumnName("regressions").HasColumnType("jsonb").IsRequired();
+        builder.Property(e => e.StartedAt).HasColumnName("started_at");
+        builder.Property(e => e.CompletedAt).HasColumnName("completed_at");
+
+        builder.HasIndex(e => e.AgentName).HasDatabaseName("ix_eval_suite_results_agent_name");
+        builder.HasIndex(e => e.StartedAt).HasDatabaseName("ix_eval_suite_results_started_at");
+    }
+}

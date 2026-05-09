@@ -133,7 +133,7 @@ public class AgentExecutionStateMachineTests
 
 public class PolicyEngineTests
 {
-    private PolicyEngine CreateEngine() => new(NullLogger<PolicyEngine>.Instance);
+    private PolicyEngine CreateEngine() => new(new InMemoryPolicyStore(), NullLogger<PolicyEngine>.Instance);
 
     [Fact]
     public async Task NoPolicies_DefaultAllows()
@@ -486,7 +486,7 @@ public class PolicyEngineGovernanceIntegrationTests
         coordinator.CurrentAllowedTools.Returns(Array.Empty<string>());
         coordinator.CurrentAgentName.Returns("TestAgent");
 
-        var policyEngine = new PolicyEngine(NullLogger<PolicyEngine>.Instance);
+        var policyEngine = new PolicyEngine(new InMemoryPolicyStore(), NullLogger<PolicyEngine>.Instance);
         await policyEngine.SavePolicyAsync(new AgentPolicy
         {
             Name = "block-email-tools",
@@ -494,7 +494,7 @@ public class PolicyEngineGovernanceIntegrationTests
             Priority = 10
         });
 
-        var governance = new ToolGovernanceService(coordinator, policyEngine, NullLogger<ToolGovernanceService>.Instance);
+        var governance = new ToolGovernanceService(coordinator, policyEngine, Substitute.For<IAuditLog>(), NullLogger<ToolGovernanceService>.Instance);
 
         var tool = Substitute.For<ITool>();
         tool.Id.Returns("email-sender");
@@ -513,9 +513,9 @@ public class PolicyEngineGovernanceIntegrationTests
         var coordinator = Substitute.For<IAgentRuntimeCoordinator>();
         coordinator.CurrentAllowedTools.Returns(Array.Empty<string>());
 
-        var policyEngine = new PolicyEngine(NullLogger<PolicyEngine>.Instance);
+        var policyEngine = new PolicyEngine(new InMemoryPolicyStore(), NullLogger<PolicyEngine>.Instance);
 
-        var governance = new ToolGovernanceService(coordinator, policyEngine, NullLogger<ToolGovernanceService>.Instance);
+        var governance = new ToolGovernanceService(coordinator, policyEngine, Substitute.For<IAuditLog>(), NullLogger<ToolGovernanceService>.Instance);
 
         var tool = Substitute.For<ITool>();
         tool.Id.Returns("search-tool");
@@ -645,5 +645,46 @@ public class SecretsVaultTests
 
         var withoutWindow = (await mgr.GetExpiredSecretsAsync(TimeSpan.FromDays(1))).ToList();
         Assert.Empty(withoutWindow);
+    }
+}
+
+public class InMemoryPolicyStore : IPolicyStore
+{
+    private readonly List<AgentPolicy> _policies = new();
+
+    public Task<IReadOnlyList<AgentPolicy>> GetPoliciesAsync(string? agentName = null, CancellationToken ct = default)
+    {
+        IReadOnlyList<AgentPolicy> result = _policies
+            .Where(p => p.IsActive)
+            .Where(p => string.IsNullOrWhiteSpace(agentName)
+                     || string.IsNullOrWhiteSpace(p.AgentNamePattern)
+                     || MatchesPattern(agentName, p.AgentNamePattern))
+            .ToList();
+        return Task.FromResult(result);
+    }
+
+    public Task SavePolicyAsync(AgentPolicy policy, CancellationToken ct = default)
+    {
+        var existing = _policies.FirstOrDefault(p => p.Id == policy.Id);
+        if (existing != null)
+            _policies.Remove(existing);
+        _policies.Add(policy);
+        return Task.CompletedTask;
+    }
+
+    public Task DeletePolicyAsync(string policyId, CancellationToken ct = default)
+    {
+        var existing = _policies.FirstOrDefault(p => p.Id == policyId);
+        if (existing != null)
+            _policies.Remove(existing);
+        return Task.CompletedTask;
+    }
+
+    private static bool MatchesPattern(string value, string pattern)
+    {
+        if (pattern == "*") return true;
+        if (pattern.EndsWith('*'))
+            return value.StartsWith(pattern[..^1], StringComparison.OrdinalIgnoreCase);
+        return value.Equals(pattern, StringComparison.OrdinalIgnoreCase);
     }
 }

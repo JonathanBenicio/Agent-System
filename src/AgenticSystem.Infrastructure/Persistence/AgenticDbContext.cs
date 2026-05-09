@@ -31,6 +31,9 @@ public class AgenticDbContext : DbContext
     public DbSet<RoleAssignmentEntity> RoleAssignments => Set<RoleAssignmentEntity>();
     public DbSet<OutboxMessageEntity> OutboxMessages => Set<OutboxMessageEntity>();
     public DbSet<AgentPolicyEntity> AgentPolicies => Set<AgentPolicyEntity>();
+    public DbSet<AgentVersionEntity> AgentVersions => Set<AgentVersionEntity>();
+    public DbSet<PromptTemplateEntity> PromptTemplates => Set<PromptTemplateEntity>();
+    public DbSet<EvalSuiteResultEntity> EvalSuiteResults => Set<EvalSuiteResultEntity>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AgenticDbContext).Assembly);
