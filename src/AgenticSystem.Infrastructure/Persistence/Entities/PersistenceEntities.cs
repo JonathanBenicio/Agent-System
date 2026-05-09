@@ -250,3 +250,47 @@ public class RerankingAssetEntity
     public string ContentHash { get; set; } = string.Empty;
     public DateTime UpdatedAt { get; set; }
 }
+
+// ═══════════════════════════════════════════════════════════
+// Phase 2 Enterprise Entities (Audit, RBAC, Outbox)
+// ═══════════════════════════════════════════════════════════
+
+public class AuditEntryEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    public string Category { get; set; } = string.Empty; // Core.Models.AuditCategory
+    public string Action { get; set; } = string.Empty;
+    public string? UserId { get; set; }
+    public string? TenantId { get; set; }
+    public string? SessionId { get; set; }
+    public string? AgentName { get; set; }
+    public string? ToolName { get; set; }
+    public string? ModelUsed { get; set; }
+    public decimal? Cost { get; set; }
+    public string? TraceId { get; set; }
+    public string? Description { get; set; }
+    public bool Success { get; set; } = true;
+    public string? ErrorMessage { get; set; }
+    public string DetailsJson { get; set; } = "{}";
+}
+
+public class RoleAssignmentEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string RoleId { get; set; } = string.Empty;
+    public string? TenantId { get; set; }
+    public string? GrantedBy { get; set; }
+    public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class OutboxMessageEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string EventType { get; set; } = string.Empty;
+    public string PayloadJson { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? ProcessedAt { get; set; }
+    public string? Error { get; set; }
+}

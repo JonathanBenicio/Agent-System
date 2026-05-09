@@ -396,3 +396,71 @@ public class RerankingAssetConfiguration : IEntityTypeConfiguration<RerankingAss
         builder.Property(asset => asset.UpdatedAt).HasColumnName("updated_at");
     }
 }
+
+public class AuditEntryConfiguration : IEntityTypeConfiguration<AuditEntryEntity>
+{
+    public void Configure(EntityTypeBuilder<AuditEntryEntity> builder)
+    {
+        builder.ToTable("audit_entries");
+
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(a => a.Timestamp).HasColumnName("timestamp");
+        builder.Property(a => a.Category).HasColumnName("category").HasMaxLength(64).IsRequired();
+        builder.Property(a => a.Action).HasColumnName("action").HasMaxLength(256).IsRequired();
+        builder.Property(a => a.UserId).HasColumnName("user_id").HasMaxLength(128);
+        builder.Property(a => a.TenantId).HasColumnName("tenant_id").HasMaxLength(128);
+        builder.Property(a => a.SessionId).HasColumnName("session_id").HasMaxLength(128);
+        builder.Property(a => a.AgentName).HasColumnName("agent_name").HasMaxLength(128);
+        builder.Property(a => a.ToolName).HasColumnName("tool_name").HasMaxLength(128);
+        builder.Property(a => a.ModelUsed).HasColumnName("model_used").HasMaxLength(128);
+        builder.Property(a => a.Cost).HasColumnName("cost");
+        builder.Property(a => a.TraceId).HasColumnName("trace_id").HasMaxLength(128);
+        builder.Property(a => a.Description).HasColumnName("description");
+        builder.Property(a => a.Success).HasColumnName("success").IsRequired();
+        builder.Property(a => a.ErrorMessage).HasColumnName("error_message");
+        builder.Property(a => a.DetailsJson).HasColumnName("details").HasColumnType("jsonb").IsRequired();
+
+        builder.HasIndex(a => a.TenantId).HasDatabaseName("ix_audit_entries_tenant_id");
+        builder.HasIndex(a => a.UserId).HasDatabaseName("ix_audit_entries_user_id");
+        builder.HasIndex(a => a.Timestamp).HasDatabaseName("ix_audit_entries_timestamp");
+    }
+}
+
+public class RoleAssignmentConfiguration : IEntityTypeConfiguration<RoleAssignmentEntity>
+{
+    public void Configure(EntityTypeBuilder<RoleAssignmentEntity> builder)
+    {
+        builder.ToTable("role_assignments");
+
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(r => r.UserId).HasColumnName("user_id").HasMaxLength(128).IsRequired();
+        builder.Property(r => r.RoleId).HasColumnName("role_id").HasMaxLength(64).IsRequired();
+        builder.Property(r => r.TenantId).HasColumnName("tenant_id").HasMaxLength(128);
+        builder.Property(r => r.GrantedBy).HasColumnName("granted_by").HasMaxLength(128);
+        builder.Property(r => r.GrantedAt).HasColumnName("granted_at");
+
+        builder.HasIndex(r => new { r.UserId, r.RoleId, r.TenantId }).IsUnique().HasDatabaseName("ix_role_assignments_unique");
+        builder.HasIndex(r => r.TenantId).HasDatabaseName("ix_role_assignments_tenant_id");
+    }
+}
+
+public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessageEntity>
+{
+    public void Configure(EntityTypeBuilder<OutboxMessageEntity> builder)
+    {
+        builder.ToTable("outbox_messages");
+
+        builder.HasKey(o => o.Id);
+        builder.Property(o => o.Id).HasColumnName("id");
+        builder.Property(o => o.EventType).HasColumnName("event_type").HasMaxLength(256).IsRequired();
+        builder.Property(o => o.PayloadJson).HasColumnName("payload").HasColumnType("jsonb").IsRequired();
+        builder.Property(o => o.CreatedAt).HasColumnName("created_at");
+        builder.Property(o => o.ProcessedAt).HasColumnName("processed_at");
+        builder.Property(o => o.Error).HasColumnName("error");
+
+        builder.HasIndex(o => o.ProcessedAt).HasDatabaseName("ix_outbox_messages_processed_at");
+        builder.HasIndex(o => o.CreatedAt).HasDatabaseName("ix_outbox_messages_created_at");
+    }
+}

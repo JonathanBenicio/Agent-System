@@ -7,6 +7,7 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.AgentFramework;
 using AgenticSystem.Infrastructure.Extensions;
+using AgenticSystem.Api.Extensions;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Hosting.AGUI.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
@@ -226,18 +227,10 @@ builder.Services.AddCors(options =>
 });
 
 // ============================================================================
-// 📊 LOGGING
+// 📊 OBSERVABILITY (Telemetry & Logging)
 // ============================================================================
 
-builder.Host.UseSerilog((context, loggerConfig) =>
-{
-    loggerConfig
-        .ReadFrom.Configuration(context.Configuration)
-        .Enrich.WithProperty("ApplicationName", "AgenticSystem")
-        .Enrich.FromLogContext()
-        .WriteTo.Console()
-        .WriteTo.File("logs/agentic-system-.log", rollingInterval: RollingInterval.Day);
-});
+builder.AddEnterpriseObservability("AgenticSystem.Api");
 
 // ============================================================================
 // 🏗️ BUILD & CONFIGURE PIPELINE
@@ -271,6 +264,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Agentic System API v1"));
 }
 
+app.UseSerilogRequestLogging();
 app.UseHttpsRedirection();
 app.UseCors();
 app.UseAuthentication();

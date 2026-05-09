@@ -8,6 +8,9 @@ public interface IAgentRuntimeCoordinator
     UserContext? CurrentUserContext { get; }
     string? CurrentAgentName { get; }
     IReadOnlyCollection<string> CurrentAllowedTools { get; }
+    AgentExecutionStateMachine? CurrentStateMachine { get; }
+
+    Task<AgentStateTransition> TransitionStateAsync(AgentExecutionState newState, string trigger, string? detail = null, CancellationToken ct = default);
 
     IDisposable BeginExecutionScope(string sessionId, UserContext context);
     IDisposable BeginAgentScope(string agentName, IEnumerable<string>? allowedTools = null);
@@ -32,6 +35,7 @@ public interface IToolGovernanceService
         string resolvedBy,
         string? comment = null,
         CancellationToken ct = default);
+    Task<ToolApprovalRequest> WaitForApprovalAsync(string approvalId, TimeSpan timeout, CancellationToken ct = default);
 }
 
 public interface IFinalResponseApprovalService

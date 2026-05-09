@@ -8,12 +8,15 @@ namespace AgenticSystem.Core.Services;
 public class ToolGovernanceService : IToolGovernanceService
 {
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
+    private readonly IPolicyEngine _policyEngine;
     private readonly ILogger<ToolGovernanceService> _logger;
     private readonly ConcurrentDictionary<string, ToolApprovalRequest> _approvals = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<ToolApprovalRequest>> _approvalWaiters = new(StringComparer.OrdinalIgnoreCase);
 
-    public ToolGovernanceService(IAgentRuntimeCoordinator runtimeCoordinator, ILogger<ToolGovernanceService> logger)
+    public ToolGovernanceService(IAgentRuntimeCoordinator runtimeCoordinator, IPolicyEngine policyEngine, ILogger<ToolGovernanceService> logger)
     {
         _runtimeCoordinator = runtimeCoordinator;
+        _policyEngine = policyEngine;
         _logger = logger;
     }
 
@@ -21,6 +24,34 @@ public class ToolGovernanceService : IToolGovernanceService
     {
         var policy = BuildPolicy(tool, input);
         var allowedTools = _runtimeCoordinator.CurrentAllowedTools;
+
+        // Phase 1 — Declarative policy engine evaluation (deny-first)
+        var policyContext = new PolicyContext
+        {
+            AgentName = _runtimeCoordinator.CurrentAgentName,
+            ToolName = tool.Name,
+            ToolCategory = tool.Category.ToString(),
+            Action = input.Action,
+            RiskLevel = policy.RiskLevel
+        };
+
+        var policyResult = await _policyEngine.EvaluateAsync(policyContext, ct);
+
+        if (!policyResult.Allowed && !policyResult.RequiresApproval)
+        {
+            _logger.LogWarning("Policy engine denied tool '{ToolName}': {Reason}", tool.Name, policyResult.Reason);
+            return new ToolExecutionDecision
+            {
+                Allowed = false,
+                Reason = policyResult.Reason,
+                Policy = policy
+            };
+        }
+
+        if (policyResult.RequiresApproval)
+        {
+            policy.RequiresApproval = true;
+        }
 
         if (allowedTools.Count > 0 && !IsAllowedForCurrentAgent(tool, allowedTools))
         {
@@ -111,6 +142,11 @@ public class ToolGovernanceService : IToolGovernanceService
 
         _logger.LogWarning("Tool approval required for {ToolId} in session {SessionId}", tool.Id, approval.SessionId);
 
+        if (_runtimeCoordinator.CurrentStateMachine != null && _runtimeCoordinator.CurrentStateMachine.CanTransition(AgentExecutionState.WaitingHumanApproval))
+        {
+            await _runtimeCoordinator.TransitionStateAsync(AgentExecutionState.WaitingHumanApproval, $"Tool {tool.Name} requires approval.");
+        }
+
         return new ToolExecutionDecision
         {
             Allowed = false,
@@ -119,6 +155,44 @@ public class ToolGovernanceService : IToolGovernanceService
             Policy = policy,
             ApprovalRequest = approval
         };
+    }
+
+    public async Task<ToolApprovalRequest> WaitForApprovalAsync(string approvalId, TimeSpan timeout, CancellationToken ct = default)
+    {
+        if (!_approvals.TryGetValue(approvalId, out var approval))
+        {
+            throw new ArgumentException($"Approval request {approvalId} not found.");
+        }
+
+        if (approval.Status != ToolApprovalStatus.Pending)
+        {
+            return approval;
+        }
+
+        var tcs = _approvalWaiters.GetOrAdd(approvalId, _ => new TaskCompletionSource<ToolApprovalRequest>(TaskCreationOptions.RunContinuationsAsynchronously));
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(timeout);
+
+        try
+        {
+            await using (cts.Token.Register(() => tcs.TrySetCanceled(cts.Token)))
+            {
+                return await tcs.Task;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            if (!_approvals.TryGetValue(approvalId, out var timedOutApproval)) return approval;
+
+            // Automatically reject if timed out
+            if (timedOutApproval.Status == ToolApprovalStatus.Pending)
+            {
+                await ResolveApprovalAsync(approvalId, ToolApprovalStatus.Rejected, "System", "Approval timed out.");
+            }
+
+            return timedOutApproval;
+        }
     }
 
     public Task<IReadOnlyList<ToolApprovalRequest>> GetPendingApprovalsAsync(string? sessionId = null, CancellationToken ct = default)
@@ -177,6 +251,18 @@ public class ToolGovernanceService : IToolGovernanceService
                 ["resolvedBy"] = resolvedBy
             }
         }, ct);
+
+        // Resume state machine
+        if (_runtimeCoordinator.CurrentStateMachine != null && _runtimeCoordinator.CurrentStateMachine.CanTransition(AgentExecutionState.ExecutingTool))
+        {
+            var nextState = status == ToolApprovalStatus.Approved ? AgentExecutionState.ExecutingTool : AgentExecutionState.Cancelled;
+            await _runtimeCoordinator.TransitionStateAsync(nextState, $"Approval {status} by {resolvedBy}");
+        }
+
+        if (_approvalWaiters.TryRemove(approvalId, out var tcs))
+        {
+            tcs.TrySetResult(approval);
+        }
 
         return approval;
     }

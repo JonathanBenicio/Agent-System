@@ -211,4 +211,78 @@ public class ConfigManager : IConfigManager
             ? _encryption.Decrypt(entry.EncryptedValue)
             : entry.Value;
     }
+
+    public async Task<ConfigEntry> RotateSecretAsync(string key, string newValue)
+    {
+        var existing = await _store.GetByKeyAsync(key)
+            ?? throw new KeyNotFoundException($"Configuration key '{key}' not found.");
+
+        if (!existing.IsSecret)
+        {
+            throw new InvalidOperationException($"Configuration '{key}' is not a secret and cannot be rotated.");
+        }
+
+        var previousHash = existing.EncryptedValue != null
+            ? _encryption.Hash(_encryption.Decrypt(existing.EncryptedValue))
+            : null;
+
+        existing.EncryptedValue = _encryption.Encrypt(newValue);
+        existing.Value = "********";
+        existing.UpdatedAt = DateTime.UtcNow;
+
+        await _store.SaveAsync(existing);
+
+        await _store.SaveChangeLogAsync(new ConfigChangeLog
+        {
+            ConfigKey = key,
+            Action = "Rotated",
+            PreviousValueHash = previousHash,
+            NewValueHash = _encryption.Hash(newValue)
+        });
+
+        _reloadNotifier.NotifyChange(key);
+        _logger.LogInformation("Secret '{Key}' rotated successfully", key);
+
+        return new ConfigEntry
+        {
+            Id = existing.Id,
+            Key = existing.Key,
+            Value = "********",
+            IsSecret = true,
+            Category = existing.Category,
+            Status = existing.Status,
+            Description = existing.Description,
+            Provider = existing.Provider,
+            CreatedAt = existing.CreatedAt,
+            UpdatedAt = existing.UpdatedAt,
+            ExpiresAt = existing.ExpiresAt,
+            Metadata = existing.Metadata
+        };
+    }
+
+    public async Task<IEnumerable<ConfigEntry>> GetExpiredSecretsAsync(TimeSpan? lookaheadWindow = null)
+    {
+        var window = lookaheadWindow ?? TimeSpan.FromDays(7);
+        var threshold = DateTime.UtcNow.Add(window);
+
+        var allEntries = await _store.GetAllAsync();
+        return allEntries
+            .Where(e => e.IsSecret && e.ExpiresAt.HasValue && e.ExpiresAt.Value <= threshold)
+            .OrderBy(e => e.ExpiresAt)
+            .Select(e => new ConfigEntry
+            {
+                Id = e.Id,
+                Key = e.Key,
+                Value = "********",
+                IsSecret = true,
+                Category = e.Category,
+                Status = e.Status,
+                Description = e.Description,
+                Provider = e.Provider,
+                CreatedAt = e.CreatedAt,
+                UpdatedAt = e.UpdatedAt,
+                ExpiresAt = e.ExpiresAt,
+                Metadata = e.Metadata
+            });
+    }
 }

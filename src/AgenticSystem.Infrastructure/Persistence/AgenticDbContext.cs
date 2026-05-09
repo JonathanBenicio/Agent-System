@@ -27,7 +27,9 @@ public class AgenticDbContext : DbContext
     public DbSet<EmbeddingModelEntity> EmbeddingModels => Set<EmbeddingModelEntity>();
     public DbSet<MigrationJobEntity> MigrationJobs => Set<MigrationJobEntity>();
     public DbSet<RerankingAssetEntity> RerankingAssets => Set<RerankingAssetEntity>();
-
+    public DbSet<AuditEntryEntity> AuditEntries => Set<AuditEntryEntity>();
+    public DbSet<RoleAssignmentEntity> RoleAssignments => Set<RoleAssignmentEntity>();
+    public DbSet<OutboxMessageEntity> OutboxMessages => Set<OutboxMessageEntity>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AgenticDbContext).Assembly);

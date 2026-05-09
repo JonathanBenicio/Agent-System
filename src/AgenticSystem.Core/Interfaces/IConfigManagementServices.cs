@@ -15,6 +15,16 @@ public interface IConfigManager
     Task<ConfigValidationResult> ValidateAsync(string key);
     Task<IEnumerable<ConfigChangeLog>> GetAuditLogAsync(string? key = null, int limit = 50);
     Task<string?> ResolveValueAsync(string key);
+
+    /// <summary>
+    /// Rotates a secret by generating a new encrypted value and logging the rotation.
+    /// </summary>
+    Task<ConfigEntry> RotateSecretAsync(string key, string newValue);
+
+    /// <summary>
+    /// Returns all secrets that have expired or will expire within the given window.
+    /// </summary>
+    Task<IEnumerable<ConfigEntry>> GetExpiredSecretsAsync(TimeSpan? lookaheadWindow = null);
 }
 
 /// <summary>

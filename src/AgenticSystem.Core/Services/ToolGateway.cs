@@ -78,22 +78,43 @@ public class ToolGateway : IToolGateway
         // Step 4: Check if approval is required
         if (!governance.Allowed)
         {
-            sw.Stop();
-            await RecordAuditAsync(tool, input, false,
-                governance.RequiresApproval ? "Waiting for approval" : governance.Reason,
-                sw.Elapsed, ct);
-
-            return new ToolGatewayResult
+            if (governance.RequiresApproval && governance.ApprovalRequest != null)
             {
-                Success = false,
-                ErrorMessage = governance.Reason,
-                AppliedPolicy = policy,
-                PolicyResult = policyResult,
-                Latency = sw.Elapsed,
-                Metadata = governance.ApprovalRequest != null
-                    ? new Dictionary<string, object> { ["approvalId"] = governance.ApprovalRequest.Id }
-                    : new()
-            };
+                _logger.LogInformation("Tool execution for {ToolName} paused waiting for human approval...", tool.Name);
+                
+                var approvalTimeout = TimeSpan.FromMinutes(10); // Or read from options
+                var resolvedApproval = await _governanceService.WaitForApprovalAsync(governance.ApprovalRequest.Id, approvalTimeout, ct);
+                
+                if (resolvedApproval.Status == ToolApprovalStatus.Approved)
+                {
+                    _logger.LogInformation("Tool execution for {ToolName} approved by {User}", tool.Name, resolvedApproval.ResolvedBy);
+                    governance.Allowed = true;
+                    // Resume timing
+                    sw.Start();
+                }
+                else
+                {
+                    governance.Reason = $"Approval {resolvedApproval.Status.ToString().ToLowerInvariant()}";
+                }
+            }
+
+            if (!governance.Allowed)
+            {
+                sw.Stop();
+                await RecordAuditAsync(tool, input, false, governance.Reason, sw.Elapsed, ct);
+
+                return new ToolGatewayResult
+                {
+                    Success = false,
+                    ErrorMessage = governance.Reason,
+                    AppliedPolicy = policy,
+                    PolicyResult = policyResult,
+                    Latency = sw.Elapsed,
+                    Metadata = governance.ApprovalRequest != null
+                        ? new Dictionary<string, object> { ["approvalId"] = governance.ApprovalRequest.Id }
+                        : new()
+                };
+            }
         }
 
         // Step 5: Execute with timeout and retry
