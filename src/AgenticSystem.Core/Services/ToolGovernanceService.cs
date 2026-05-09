@@ -9,14 +9,20 @@ public class ToolGovernanceService : IToolGovernanceService
 {
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
     private readonly IPolicyEngine _policyEngine;
+    private readonly IAuditLog _auditLog;
     private readonly ILogger<ToolGovernanceService> _logger;
     private readonly ConcurrentDictionary<string, ToolApprovalRequest> _approvals = new(StringComparer.OrdinalIgnoreCase);
     private readonly ConcurrentDictionary<string, TaskCompletionSource<ToolApprovalRequest>> _approvalWaiters = new(StringComparer.OrdinalIgnoreCase);
 
-    public ToolGovernanceService(IAgentRuntimeCoordinator runtimeCoordinator, IPolicyEngine policyEngine, ILogger<ToolGovernanceService> logger)
+    public ToolGovernanceService(
+        IAgentRuntimeCoordinator runtimeCoordinator,
+        IPolicyEngine policyEngine,
+        IAuditLog auditLog,
+        ILogger<ToolGovernanceService> logger)
     {
         _runtimeCoordinator = runtimeCoordinator;
         _policyEngine = policyEngine;
+        _auditLog = auditLog;
         _logger = logger;
     }
 
@@ -258,6 +264,25 @@ public class ToolGovernanceService : IToolGovernanceService
             var nextState = status == ToolApprovalStatus.Approved ? AgentExecutionState.ExecutingTool : AgentExecutionState.Cancelled;
             await _runtimeCoordinator.TransitionStateAsync(nextState, $"Approval {status} by {resolvedBy}");
         }
+
+        // Audit log for compliance
+        await _auditLog.RecordAsync(new AuditEntry
+        {
+            Category = AuditCategory.ApprovalDecision,
+            Action = $"ToolApproval.{status}",
+            SessionId = approval.SessionId,
+            AgentName = approval.AgentName,
+            ToolName = approval.ToolName,
+            Description = $"Tool '{approval.ToolName}' approval {status} by {resolvedBy}. {comment}",
+            Success = status == ToolApprovalStatus.Approved,
+            Metadata = new Dictionary<string, object>
+            {
+                ["approvalId"] = approval.Id,
+                ["resolvedBy"] = resolvedBy,
+                ["riskLevel"] = approval.RiskLevel.ToString(),
+                ["decisionTimeMs"] = (approval.ResolvedAt!.Value - approval.CreatedAt).TotalMilliseconds
+            }
+        }, ct);
 
         if (_approvalWaiters.TryRemove(approvalId, out var tcs))
         {
