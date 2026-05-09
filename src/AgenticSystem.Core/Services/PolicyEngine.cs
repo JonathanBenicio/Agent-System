@@ -11,25 +11,60 @@ namespace AgenticSystem.Core.Services;
 /// </summary>
 public class PolicyEngine : IPolicyEngine
 {
-    private readonly ConcurrentDictionary<string, AgentPolicy> _policies = new(StringComparer.OrdinalIgnoreCase);
+    private readonly IPolicyStore _policyStore;
     private readonly ILogger<PolicyEngine> _logger;
 
-    public PolicyEngine(ILogger<PolicyEngine> logger)
+    public PolicyEngine(IPolicyStore policyStore, ILogger<PolicyEngine> logger)
     {
+        _policyStore = policyStore;
         _logger = logger;
     }
 
-    public Task<PolicyEvaluation> EvaluateAsync(PolicyContext context, CancellationToken ct = default)
+    public async Task<PolicyEvaluation> EvaluateAsync(PolicyContext context, CancellationToken ct = default)
     {
-        var applicable = GetApplicablePolicies(context);
+        var applicable = await GetApplicablePoliciesAsync(context, ct);
 
         if (applicable.Count == 0)
         {
-            return Task.FromResult(PolicyEvaluation.Allow("No policies defined; default allow."));
+            return PolicyEvaluation.Allow("No policies defined; default allow.");
         }
 
         foreach (var policy in applicable)
         {
+            // 1. Check Content Filters (Prompt Injection, PII, etc.)
+            if (policy.ContentFilters.Count > 0)
+            {
+                var input = context.Metadata.GetValueOrDefault("UserInput")?.ToString() ?? string.Empty;
+                foreach (var filter in policy.ContentFilters)
+                {
+                    if (filter.Equals("no-pii", StringComparison.OrdinalIgnoreCase) && ContainsPii(input))
+                    {
+                        var violation = new PolicyViolation
+                        {
+                            PolicyId = policy.Id,
+                            PolicyName = policy.Name,
+                            Type = PolicyViolationType.ContentFilterViolation,
+                            Description = "PII detected in user input, blocked by policy.",
+                            ActualValue = "PII Data",
+                            AllowedValue = "no-pii"
+                        };
+                        return PolicyEvaluation.Deny(violation.Description, [violation], policy);
+                    }
+                    if (filter.Equals("no-prompt-injection", StringComparison.OrdinalIgnoreCase) && DetectsPromptInjection(input))
+                    {
+                        var violation = new PolicyViolation
+                        {
+                            PolicyId = policy.Id,
+                            PolicyName = policy.Name,
+                            Type = PolicyViolationType.ContentFilterViolation,
+                            Description = "Potential prompt injection detected.",
+                            ActualValue = "Injection Pattern",
+                            AllowedValue = "no-prompt-injection"
+                        };
+                        return PolicyEvaluation.Deny(violation.Description, [violation], policy);
+                    }
+                }
+            }
             // Check denied tools (blocklist)
             if (!string.IsNullOrWhiteSpace(context.ToolName) && policy.DeniedTools.Count > 0)
             {
@@ -46,7 +81,7 @@ public class PolicyEngine : IPolicyEngine
                         AllowedValue = "Not in deny list"
                     };
                     _logger.LogWarning("Policy violation: {Description}", violation.Description);
-                    return Task.FromResult(PolicyEvaluation.Deny(violation.Description, [violation], policy));
+                    return PolicyEvaluation.Deny(violation.Description, [violation], policy);
                 }
             }
 
@@ -65,7 +100,7 @@ public class PolicyEngine : IPolicyEngine
                         ActualValue = context.ToolCategory,
                         AllowedValue = string.Join(", ", policy.AllowedToolCategories)
                     };
-                    return Task.FromResult(PolicyEvaluation.Deny(violation.Description, [violation], policy));
+                    return PolicyEvaluation.Deny(violation.Description, [violation], policy);
                 }
             }
 
@@ -84,7 +119,7 @@ public class PolicyEngine : IPolicyEngine
                         ActualValue = context.Provider,
                         AllowedValue = string.Join(", ", policy.AllowedProviders)
                     };
-                    return Task.FromResult(PolicyEvaluation.Deny(violation.Description, [violation], policy));
+                    return PolicyEvaluation.Deny(violation.Description, [violation], policy);
                 }
             }
 
@@ -102,7 +137,7 @@ public class PolicyEngine : IPolicyEngine
                         ActualValue = context.EstimatedCost.Value.ToString("F4"),
                         AllowedValue = policy.MaxCostPerRequest.Value.ToString("F4")
                     };
-                    return Task.FromResult(PolicyEvaluation.Deny(violation.Description, [violation], policy));
+                    return PolicyEvaluation.Deny(violation.Description, [violation], policy);
                 }
             }
 
@@ -120,7 +155,7 @@ public class PolicyEngine : IPolicyEngine
                         ActualValue = context.EstimatedTokens.Value.ToString(),
                         AllowedValue = policy.MaxTokensPerRequest.Value.ToString()
                     };
-                    return Task.FromResult(PolicyEvaluation.Deny(violation.Description, [violation], policy));
+                    return PolicyEvaluation.Deny(violation.Description, [violation], policy);
                 }
             }
 
@@ -138,73 +173,74 @@ public class PolicyEngine : IPolicyEngine
                 };
 
                 // Autonomy exceeded means approval required (not hard deny)
-                return Task.FromResult(PolicyEvaluation.RequireApproval(violation.Description, policy));
+                return PolicyEvaluation.RequireApproval(violation.Description, policy);
             }
 
             // Check if approval is required by policy threshold
             if (context.RiskLevel >= policy.ApprovalThreshold)
             {
-                return Task.FromResult(PolicyEvaluation.RequireApproval(
+                return PolicyEvaluation.RequireApproval(
                     $"Risk level '{context.RiskLevel}' meets approval threshold '{policy.ApprovalThreshold}' in policy '{policy.Name}'.",
-                    policy));
+                    policy);
             }
 
             // Check if final approval is required
             if (policy.RequireFinalApproval)
             {
-                return Task.FromResult(PolicyEvaluation.RequireApproval(
+                return PolicyEvaluation.RequireApproval(
                     $"Policy '{policy.Name}' requires final human approval for all responses.",
-                    policy));
+                    policy);
             }
         }
 
         var matchedPolicy = applicable[0];
-        return Task.FromResult(PolicyEvaluation.Allow(
+        return PolicyEvaluation.Allow(
             $"All policies passed. Effective autonomy: {matchedPolicy.MaxAutonomyLevel}.",
-            matchedPolicy));
+            matchedPolicy);
     }
 
     public Task<IReadOnlyList<AgentPolicy>> GetPoliciesAsync(string? agentName = null, CancellationToken ct = default)
     {
-        var policies = _policies.Values
-            .Where(p => p.IsActive)
-            .Where(p => string.IsNullOrWhiteSpace(agentName)
-                || string.IsNullOrWhiteSpace(p.AgentNamePattern)
-                || MatchesPattern(agentName, p.AgentNamePattern))
-            .OrderByDescending(p => p.Priority)
-            .ToList();
-
-        return Task.FromResult<IReadOnlyList<AgentPolicy>>(policies);
+        return _policyStore.GetPoliciesAsync(agentName, ct);
     }
 
     public Task SavePolicyAsync(AgentPolicy policy, CancellationToken ct = default)
     {
-        policy.UpdatedAt = DateTime.UtcNow;
-        _policies[policy.Id] = policy;
-        _logger.LogInformation("Policy saved: {PolicyId} ({PolicyName})", policy.Id, policy.Name);
-        return Task.CompletedTask;
+        return _policyStore.SavePolicyAsync(policy, ct);
     }
 
     public Task DeletePolicyAsync(string policyId, CancellationToken ct = default)
     {
-        if (_policies.TryRemove(policyId, out var removed))
-        {
-            _logger.LogInformation("Policy deleted: {PolicyId} ({PolicyName})", policyId, removed.Name);
-        }
-
-        return Task.CompletedTask;
+        return _policyStore.DeletePolicyAsync(policyId, ct);
     }
 
-    private List<AgentPolicy> GetApplicablePolicies(PolicyContext context)
+    private async Task<List<AgentPolicy>> GetApplicablePoliciesAsync(PolicyContext context, CancellationToken ct)
     {
-        return _policies.Values
-            .Where(p => p.IsActive)
-            .Where(p => string.IsNullOrWhiteSpace(p.AgentNamePattern)
-                || (!string.IsNullOrWhiteSpace(context.AgentName) && MatchesPattern(context.AgentName, p.AgentNamePattern)))
+        var policies = await _policyStore.GetPoliciesAsync(context.AgentName, ct);
+
+        return policies
             .Where(p => string.IsNullOrWhiteSpace(p.TenantId)
                 || (!string.IsNullOrWhiteSpace(context.TenantId) && p.TenantId.Equals(context.TenantId, StringComparison.OrdinalIgnoreCase)))
             .OrderByDescending(p => p.Priority)
             .ToList();
+    }
+
+    private static bool ContainsPii(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        // Basic heuristic for PII (Credit cards, SSN patterns)
+        return System.Text.RegularExpressions.Regex.IsMatch(text, @"\b\d{3}-\d{2}-\d{4}\b") || 
+               System.Text.RegularExpressions.Regex.IsMatch(text, @"\b(?:\d[ -]*?){13,16}\b");
+    }
+
+    private static bool DetectsPromptInjection(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return false;
+        var lower = text.ToLowerInvariant();
+        return lower.Contains("ignore all previous") || 
+               lower.Contains("ignore previous instructions") ||
+               lower.Contains("you are now") ||
+               lower.Contains("forget everything");
     }
 
     private static bool MatchesPattern(string value, string pattern)

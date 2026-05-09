@@ -306,6 +306,7 @@ public static class ServiceCollectionExtensions
         ReplaceSingleton<IPermissionService, PostgresPermissionService>(services);
         services.AddHostedService<Persistence.OutboxProcessorBackgroundService>(); // Register outbox
         services.AddSingleton<IEventBus, PostgresEventBus>();
+        services.AddSingleton<IPolicyStore, PostgresPolicyStore>();
         return services;
     }
 

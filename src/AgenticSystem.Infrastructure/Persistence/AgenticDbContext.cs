@@ -30,6 +30,7 @@ public class AgenticDbContext : DbContext
     public DbSet<AuditEntryEntity> AuditEntries => Set<AuditEntryEntity>();
     public DbSet<RoleAssignmentEntity> RoleAssignments => Set<RoleAssignmentEntity>();
     public DbSet<OutboxMessageEntity> OutboxMessages => Set<OutboxMessageEntity>();
+    public DbSet<AgentPolicyEntity> AgentPolicies => Set<AgentPolicyEntity>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AgenticDbContext).Assembly);

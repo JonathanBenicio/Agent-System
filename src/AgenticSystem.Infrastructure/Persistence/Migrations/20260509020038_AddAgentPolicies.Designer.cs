@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using AgenticSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace AgenticSystem.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AgenticDbContext))]
-    partial class AgenticDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260509020038_AddAgentPolicies")]
+    partial class AddAgentPolicies
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
