@@ -121,6 +121,20 @@ public static class ServiceCollectionExtensions
         // Structured Output Validation
         services.AddSingleton<IStructuredOutputValidator, StructuredOutputValidator>();
 
+        // Prompt Management
+        services.AddSingleton<IPromptTemplateStore, InMemoryPromptTemplateStore>();
+        services.AddSingleton<IPromptManager>(sp =>
+        {
+            var store = sp.GetRequiredService<IPromptTemplateStore>();
+            var logger = sp.GetRequiredService<ILogger<PromptManager>>();
+            var agents = sp.GetServices<IAgent>().ToList();
+            IAgent? resolver(string name) => agents.FirstOrDefault(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            return new PromptManager(store, resolver, logger);
+        });
+
+        // Fallback Executor
+        services.AddSingleton<FallbackExecutor>();
+
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ServiceCollectionExtensions).Assembly));
 
         return services;
