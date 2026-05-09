@@ -296,6 +296,20 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
+    /// Registra os serviços de segurança e auditoria suportados pelo PostgreSQL.
+    /// Chamar após UseEntityFramework().
+    /// </summary>
+    public static IServiceCollection UsePostgresSecurityAndAudit(this IServiceCollection services, string connectionString)
+    {
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IAuditLog, PostgresAuditLog>(services);
+        ReplaceSingleton<IPermissionService, PostgresPermissionService>(services);
+        services.AddHostedService<Persistence.OutboxProcessorBackgroundService>(); // Register outbox
+        services.AddSingleton<IEventBus, PostgresEventBus>();
+        return services;
+    }
+
+    /// <summary>
     /// Substitui InMemoryMigrationJobStore pelo PostgresMigrationJobStore.
     /// </summary>
     public static IServiceCollection UsePostgresMigrationJobStore(this IServiceCollection services, string connectionString)
@@ -352,6 +366,7 @@ public static class ServiceCollectionExtensions
         services.UsePostgresCostTracker(connectionString);
         services.UsePostgresSmartRouter(connectionString);
         services.UsePostgresOperationalStore();
+        services.UsePostgresSecurityAndAudit(connectionString);
         services.UsePostgresMigrationJobStore(connectionString);
         services.UsePostgresEmbeddingModelStore(connectionString);
 

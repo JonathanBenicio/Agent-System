@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
+using System.Diagnostics.Metrics;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -38,6 +39,7 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
     ];
 
     private readonly ISessionManager _sessionManager;
+    private readonly IEventBus? _eventBus;
     private readonly IOperationalStore? _operationalStore;
     private readonly ILogger<AgentRuntimeCoordinator> _logger;
     private readonly ConcurrentDictionary<string, List<AgentExecutionArtifact>> _artifacts = new();
@@ -45,22 +47,59 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
     private readonly AgentRuntimeMetricsSnapshot _globalMetrics = new();
     private readonly AsyncLocal<RuntimeScope?> _currentScope = new();
 
-    public AgentRuntimeCoordinator(ISessionManager sessionManager, ILogger<AgentRuntimeCoordinator> logger, IOperationalStore? operationalStore = null)
+    // OpenTelemetry Custom Metrics
+    private static readonly Meter _meter = new("AgenticSystem.Runtime", "1.0.0");
+    private static readonly Counter<long> _streamStartedCounter = _meter.CreateCounter<long>("agenticsystem.stream.started", description: "Number of streams started");
+    private static readonly Counter<long> _agentExecutionsCounter = _meter.CreateCounter<long>("agenticsystem.agent.executions", description: "Number of agent executions");
+    private static readonly Counter<long> _toolExecutionsCounter = _meter.CreateCounter<long>("agenticsystem.tool.executions", description: "Number of tool executions");
+    private static readonly Counter<long> _errorCounter = _meter.CreateCounter<long>("agenticsystem.errors", description: "Number of runtime errors");
+
+    public AgentRuntimeCoordinator(
+        ISessionManager sessionManager, 
+        ILogger<AgentRuntimeCoordinator> logger, 
+        IOperationalStore? operationalStore = null,
+        IEventBus? eventBus = null)
     {
         _sessionManager = sessionManager;
         _logger = logger;
         _operationalStore = operationalStore;
+        _eventBus = eventBus;
     }
 
     public string? CurrentSessionId => _currentScope.Value?.SessionId;
     public UserContext? CurrentUserContext => _currentScope.Value?.UserContext;
     public string? CurrentAgentName => _currentScope.Value?.CurrentAgentName;
     public IReadOnlyCollection<string> CurrentAllowedTools => _currentScope.Value?.AllowedTools ?? Array.Empty<string>();
+    public AgentExecutionStateMachine? CurrentStateMachine => _currentScope.Value?.StateMachine;
+
+    public async Task<AgentStateTransition> TransitionStateAsync(AgentExecutionState newState, string trigger, string? detail = null, CancellationToken ct = default)
+    {
+        var sm = CurrentStateMachine ?? throw new InvalidOperationException("No execution scope is active.");
+        var transition = sm.Transition(newState, trigger, CurrentAgentName, detail);
+        
+        await PublishEventAsync(new AgentStreamEvent
+        {
+            Type = AgentStreamEventType.StateTransition,
+            AgentName = CurrentAgentName,
+            Message = $"Transitioned from {transition.From} to {transition.To} via {trigger}",
+            Data = new Dictionary<string, object>
+            {
+                ["from"] = transition.From.ToString(),
+                ["to"] = transition.To.ToString(),
+                ["trigger"] = trigger,
+                ["detail"] = detail ?? string.Empty
+            }
+        }, ct);
+        
+        return transition;
+    }
 
     public IDisposable BeginExecutionScope(string sessionId, UserContext context)
     {
         var previous = _currentScope.Value;
         _currentScope.Value = new RuntimeScope(sessionId, context, previous?.Writer);
+        // Initialize state machine and transition to Idle
+        _currentScope.Value.StateMachine.Transition(AgentExecutionState.Idle, "scope-started");
         return new ScopeHandle(_currentScope, previous);
     }
 
@@ -171,7 +210,17 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
 
         if (PersistedEventTypes.Contains(streamEvent.Type) && !string.IsNullOrWhiteSpace(streamEvent.SessionId))
         {
-            await PersistRuntimeEventAsync(streamEvent, ct);
+            if (_eventBus != null)
+            {
+                await _eventBus.ExecuteInTransactionAsync(
+                    async () => await PersistRuntimeEventAsync(streamEvent, ct),
+                    new[] { streamEvent },
+                    ct);
+            }
+            else
+            {
+                await PersistRuntimeEventAsync(streamEvent, ct);
+            }
         }
 
         TrackMetrics(streamEvent);
@@ -191,35 +240,50 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
             list.Add(artifact);
         }
 
-        // Persist to operational store (durable)
-        if (_operationalStore is not null)
+        var operation = async () =>
         {
-            try
+            // Persist to operational store (durable)
+            if (_operationalStore is not null)
             {
-                await _operationalStore.SaveArtifactAsync(artifact, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to persist artifact {ArtifactId} to operational store", artifact.Id);
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(artifact.SessionId))
-        {
-            var payload = JsonSerializer.Serialize(artifact.Data);
-            await _sessionManager.AddEventAsync(artifact.SessionId, new AgentEvent
-            {
-                AgentName = $"Artifact.{artifact.Type}",
-                AgentResponse = artifact.Summary ?? string.Empty,
-                Context = new Dictionary<string, object>
+                try
                 {
-                    ["artifactId"] = artifact.Id,
-                    ["artifactType"] = artifact.Type.ToString(),
-                    ["artifactName"] = artifact.Name,
-                    ["artifactStatus"] = artifact.Status,
-                    ["artifactPayload"] = payload
+                    await _operationalStore.SaveArtifactAsync(artifact, ct);
                 }
-            });
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to persist artifact {ArtifactId} to operational store", artifact.Id);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(artifact.SessionId))
+            {
+                var payload = JsonSerializer.Serialize(artifact.Data);
+                await _sessionManager.AddEventAsync(artifact.SessionId, new AgentEvent
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    SessionId = artifact.SessionId,
+                    AgentName = artifact.AgentName ?? "System",
+                    AgentTier = AgentTier.Chief,
+                    UserInput = "Artifact Recorded",
+                    AgentResponse = $"Artifact '{artifact.Name}' of type {artifact.Type} saved.",
+                    ActionsPerformed = { "RecordArtifact" },
+                    Context = new Dictionary<string, object>
+                    {
+                        ["artifactId"] = artifact.Id,
+                        ["artifactType"] = artifact.Type.ToString(),
+                        ["summary"] = artifact.Summary ?? string.Empty
+                    }
+                });
+            }
+        };
+
+        if (_eventBus != null)
+        {
+            await _eventBus.ExecuteInTransactionAsync(operation, new[] { artifact }, ct);
+        }
+        else
+        {
+            await operation();
         }
 
         await PublishEventAsync(new AgentStreamEvent
@@ -346,13 +410,16 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
         {
             case AgentStreamEventType.SessionStarted:
                 metrics.StreamCount++;
+                _streamStartedCounter.Add(1, new KeyValuePair<string, object?>("sessionId", streamEvent.SessionId));
                 break;
             case AgentStreamEventType.AgentSelected:
             case AgentStreamEventType.StepStarted:
                 metrics.AgentExecutions++;
+                _agentExecutionsCounter.Add(1, new KeyValuePair<string, object?>("agentName", streamEvent.AgentName));
                 break;
             case AgentStreamEventType.ToolStarted:
                 metrics.ToolExecutions++;
+                _toolExecutionsCounter.Add(1, new KeyValuePair<string, object?>("agentName", streamEvent.AgentName));
                 break;
             case AgentStreamEventType.ToolApprovalRequired:
                 metrics.ToolApprovalsRequested++;
@@ -375,7 +442,10 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
             case AgentStreamEventType.ReviewCompleted:
                 metrics.Reviews++;
                 break;
+            case AgentStreamEventType.StateTransition:
+                break;
             case AgentStreamEventType.Error:
+                _errorCounter.Add(1, new KeyValuePair<string, object?>("agentName", streamEvent.AgentName));
                 if (streamEvent.Data.TryGetValue("fallback", out var fallback) && fallback is true)
                 {
                     metrics.AgentFallbacks++;
@@ -440,6 +510,7 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
             SessionId = sessionId;
             UserContext = userContext;
             Writer = writer;
+            StateMachine = new AgentExecutionStateMachine { SessionId = sessionId };
         }
 
         public string SessionId { get; }
@@ -447,6 +518,7 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
         public ChannelWriter<AgentStreamEvent>? Writer { get; set; }
         public string? CurrentAgentName { get; set; }
         public IReadOnlyCollection<string> AllowedTools { get; set; } = Array.Empty<string>();
+        public AgentExecutionStateMachine StateMachine { get; }
         public long Sequence;
     }
 
