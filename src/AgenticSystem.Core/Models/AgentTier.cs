@@ -1,7 +1,7 @@
 namespace AgenticSystem.Core.Models;
 
 /// <summary>
-/// Hierarchy de agents baseada no Tier System do Baianinho-Labs
+/// Hierarchy de agents baseada no Tier System do Labs
 /// </summary>
 public enum AgentTier
 {

@@ -635,7 +635,7 @@ MIT License - veja [LICENSE](LICENSE) para detalhes.
 
 ## 🙏 Inspiração
 
-Baseado nos conceitos e arquitetura do **Baianinho-Labs** (Casas Bahia Tech):
+Baseado nos conceitos e arquitetura do **Labs** (Casas Bahia Tech):
 - Tier System para hierarquia de agents
 - Quality Gates para confiabilidade  
 - Context Instructions para especialização
@@ -643,7 +643,7 @@ Baseado nos conceitos e arquitetura do **Baianinho-Labs** (Casas Bahia Tech):
 
 ---
 
-**"Automatizar o repetitivo para focar no criativo."** — Filosofia Baianinho-Labs
+**"Automatizar o repetitivo para focar no criativo."** — Filosofia Labs
 
                          IMPLEMENTADO (ML1-ML10)          IMPLEMENTADO (ML11-ML15)
                     ┌──────────────────┐     ┌──────────────────────────┐
@@ -1591,7 +1591,7 @@ Orchestrator (LLM):
 Gerado dinamicamente com base nos agentes ativos:
 
 ```
-Você é o orquestrador central do sistema Baianinho-Labs.
+Você é o orquestrador central do sistema Labs.
 Sua responsabilidade é analisar a solicitação do usuário e delegar para o especialista mais adequado.
 
 ## Regras de Delegação
@@ -50825,7 +50825,7 @@ v3.0 — [Futuro]
 Este manifesto é um documento vivo. Cada novo Maturity Level, cada decisão arquitetural, cada anti-pattern identificado deve ser registrado aqui. O manifesto evolui com o sistema — nunca atrás dele.
 
 > *"Automatizar o repetitivo para focar no criativo."*
-> — BaIAninho, Casas Bahia Tech
+> — Labs, Casas Bahia Tech
 
 
 
@@ -54141,7 +54141,7 @@ ToolAvailabilityGuard.CheckAsync(requiredTools)
 **Registros de Discovery (fontes):**
 - npm registry (MCPs publicados como `@modelcontextprotocol/*`)
 - GitHub Topics (`mcp-server`, `mcp-plugin`)
-- Catálogo interno (Baianinho-Labs `Ferramentas/`)
+- Catálogo interno (Labs `Ferramentas/`)
 - VS Code Marketplace (extensões com tools)
 
 ---

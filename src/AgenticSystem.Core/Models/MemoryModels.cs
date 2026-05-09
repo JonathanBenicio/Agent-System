@@ -27,6 +27,7 @@ public class EmbeddingDocument
     public string Collection { get; set; } = string.Empty;
     public float[] Embedding { get; set; } = Array.Empty<float>();
     public Dictionary<string, string> Metadata { get; set; } = new();
+    public string? ContextualSummary { get; set; }
     public DateTime IndexedAt { get; set; } = DateTime.UtcNow;
     
     public static EmbeddingDocument FromObsidianNote(ObsidianNote note)
@@ -73,5 +74,6 @@ public class SearchMatch
     public Dictionary<string, string> Metadata { get; set; } = new();
     public string? Snippet { get; set; }
     public float[]? Embedding { get; set; }
+    public string? ContextualSummary { get; set; }
     public DateTime IndexedAt { get; set; }
 }

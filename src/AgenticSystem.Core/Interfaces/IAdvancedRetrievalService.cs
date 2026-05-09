@@ -43,6 +43,14 @@ public interface IAdvancedRetrievalService
     Task<IReadOnlyList<RankedChunk>> ResolveParentChunksAsync(
         IReadOnlyList<RankedChunk> childChunks,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Performs a graph-based search using Knowledge Graph relations.
+    /// </summary>
+    Task<RAGContext> GraphSearchAsync(
+        RAGQuery query,
+        int maxDepth = 2,
+        CancellationToken ct = default);
 }
 
 /// <summary>

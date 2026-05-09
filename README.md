@@ -627,7 +627,7 @@ MIT License - veja [LICENSE](LICENSE) para detalhes.
 
 ## 🙏 Inspiração
 
-Baseado nos conceitos e arquitetura do **Baianinho-Labs** (Casas Bahia Tech):
+Baseado nos conceitos e arquitetura do **Labs** (Casas Bahia Tech):
 - Tier System para hierarquia de agents
 - Quality Gates para confiabilidade  
 - Context Instructions para especialização
@@ -635,7 +635,7 @@ Baseado nos conceitos e arquitetura do **Baianinho-Labs** (Casas Bahia Tech):
 
 ---
 
-**"Automatizar o repetitivo para focar no criativo."** — Filosofia Baianinho-Labs
+**"Automatizar o repetitivo para focar no criativo."** — Filosofia Labs
 
                          IMPLEMENTADO (ML1-ML10)          IMPLEMENTADO (ML11-ML15)
                     ┌──────────────────┐     ┌──────────────────────────┐

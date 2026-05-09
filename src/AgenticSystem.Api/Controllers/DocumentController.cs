@@ -155,6 +155,7 @@ public class DocumentController : ControllerBase
             ".html" or ".htm" => DocumentType.Html,
             ".pptx" => DocumentType.Pptx,
             ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" => DocumentType.Image,
+            ".mp3" or ".wav" or ".ogg" or ".webm" or ".mpeg" => DocumentType.Audio,
             _ => null
         };
     }

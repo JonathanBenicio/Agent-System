@@ -7,7 +7,7 @@ namespace AgenticSystem.Core.Services;
 
 /// <summary>
 /// Meta-Agent principal: analisa contexto, roteia para agents e gerencia sessões.
-/// Inspirado no Tech Lead do Baianinho-Labs com capacidade de orquestração.
+/// Inspirado no Tech Lead do Labs com capacidade de orquestração.
 /// </summary>
 public class MetaAgentOrchestrator : IMetaAgent
 {
@@ -17,6 +17,7 @@ public class MetaAgentOrchestrator : IMetaAgent
     private readonly IAgentFactory _agentFactory;
     private readonly ISessionManager _sessionManager;
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
+    private readonly ITenantIsolationEnforcer? _isolationEnforcer;
     private readonly ILogger<MetaAgentOrchestrator> _logger;
 
     public MetaAgentOrchestrator(
@@ -26,7 +27,8 @@ public class MetaAgentOrchestrator : IMetaAgent
         IAgentFactory agentFactory,
         ISessionManager sessionManager,
         IAgentRuntimeCoordinator runtimeCoordinator,
-        ILogger<MetaAgentOrchestrator> logger)
+        ILogger<MetaAgentOrchestrator> logger,
+        ITenantIsolationEnforcer? isolationEnforcer = null)
     {
         _frameworkOrchestrator = frameworkOrchestrator;
         _directAgentRequestExecutor = directAgentRequestExecutor;
@@ -35,10 +37,19 @@ public class MetaAgentOrchestrator : IMetaAgent
         _sessionManager = sessionManager;
         _runtimeCoordinator = runtimeCoordinator;
         _logger = logger;
+        _isolationEnforcer = isolationEnforcer;
     }
 
     public async Task<AgentResponse> ProcessRequestAsync(string input, UserContext context)
     {
+        if (_isolationEnforcer != null && !string.IsNullOrEmpty(context.TenantId))
+        {
+            if (!await _isolationEnforcer.CanStartSessionAsync(context.TenantId))
+            {
+                return AgentResponse.Error("🚫 Limite de sessões simultâneas atingido para o seu tenant.");
+            }
+        }
+
         var sessionId = await _sessionManager.StartSessionAsync(context);
         context.Preferences["sessionId"] = sessionId;
         using var scope = _runtimeCoordinator.BeginExecutionScope(sessionId, context);

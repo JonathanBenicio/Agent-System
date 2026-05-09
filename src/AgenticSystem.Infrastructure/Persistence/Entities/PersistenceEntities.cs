@@ -12,6 +12,18 @@ public class VectorDocumentEntity
     public Pgvector.Vector? Embedding { get; set; }
     public string MetadataJson { get; set; } = "{}";
     public DateTime IndexedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Full-Text Search vector — populated automatically via Postgres generated column.
+    /// Used for BM25-style keyword ranking with ts_rank_cd.
+    /// </summary>
+    public NpgsqlTypes.NpgsqlTsVector? SearchVector { get; set; }
+
+    /// <summary>
+    /// LLM-generated contextual summary of this chunk within its parent document.
+    /// Used for contextual retrieval enrichment to improve embedding quality.
+    /// </summary>
+    public string? ContextualSummary { get; set; }
 }
 
 /// <summary>
@@ -295,4 +307,130 @@ public class OutboxMessageEntity
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? ProcessedAt { get; set; }
     public string? Error { get; set; }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Phase 3.2: Graph RAG Entities
+// ═══════════════════════════════════════════════════════════
+
+public class KnowledgeGraphNodeEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Label { get; set; } = string.Empty;
+    public string EntityType { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string PropertiesJson { get; set; } = "{}";
+    public string? SourceDocumentId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class KnowledgeGraphEdgeEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string SourceNodeId { get; set; } = string.Empty;
+    public string TargetNodeId { get; set; } = string.Empty;
+    public string RelationType { get; set; } = string.Empty;
+    public double Weight { get; set; } = 1.0;
+    public string PropertiesJson { get; set; } = "{}";
+    public string? SourceDocumentId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// ═══════════════════════════════════════════════════════════
+// Phase 3.5: Workflow Engine Entities
+// ═══════════════════════════════════════════════════════════
+
+public class WorkflowDefinitionEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public int Version { get; set; }
+    public string DefinitionJson { get; set; } = "{}";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class WorkflowExecutionEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string WorkflowId { get; set; } = string.Empty;
+    public string WorkflowName { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty; // Core.Models.WorkflowExecutionStatus
+    public string VariablesJson { get; set; } = "{}";
+    public string? InitiatedBy { get; set; }
+    public string? ErrorMessage { get; set; }
+    public DateTime StartedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedAt { get; set; }
+}
+
+public class WorkflowStepExecutionEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string ExecutionId { get; set; } = string.Empty;
+    public string StepId { get; set; } = string.Empty;
+    public string StepName { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string OutputJson { get; set; } = "{}";
+    public string? ErrorMessage { get; set; }
+    public int RetryCount { get; set; }
+    public bool CompensationExecuted { get; set; }
+    public DateTime? StartedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
+}
+
+public class ModelPerformanceEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string ModelId { get; set; } = string.Empty;
+    public double LatencyMs { get; set; }
+    public bool Success { get; set; }
+    public int InputTokens { get; set; }
+    public int OutputTokens { get; set; }
+    public double ActualCostUsd { get; set; }
+    public DateTime RecordedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class DataConnectorEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string ConnectorType { get; set; } = string.Empty; // Core.Models.DataConnectorType
+    public string ConnectionString { get; set; } = string.Empty;
+    public string SettingsJson { get; set; } = "{}";
+    public string? TenantId { get; set; }
+    public string SyncScheduleJson { get; set; } = "{}";
+    public bool IsActive { get; set; } = true;
+    public DateTime? LastSyncAt { get; set; }
+    public string Status { get; set; } = string.Empty; // Core.Models.ConnectorStatus
+}
+
+public class AgentMarketplaceEntryEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Domain { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Author { get; set; } = string.Empty;
+    public string TagsJson { get; set; } = "[]";
+    public double AverageRating { get; set; }
+    public int InstallCount { get; set; }
+    public string SpecificationJson { get; set; } = "{}";
+    public DateTime PublishedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class EnhancedMemoryEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string AgentName { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string MemoryType { get; set; } = string.Empty; // Core.Models.MemoryType
+    public string Sensitivity { get; set; } = string.Empty; // Core.Models.MemorySensitivity
+    public double Confidence { get; set; }
+    public double Freshness { get; set; }
+    public double DecayRate { get; set; }
+    public int AccessCount { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime LastAccessedAt { get; set; }
+    public DateTime? ExpiresAt { get; set; }
+    public string TagsJson { get; set; } = "{}";
 }

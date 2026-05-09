@@ -11,6 +11,7 @@ public class DocumentChunk
     public int Index { get; set; }
     public int TokenCount { get; set; }
     public ChunkMetadata Metadata { get; set; } = new();
+    public string? ContextualSummary { get; set; }
     public float[] Embedding { get; set; } = Array.Empty<float>();
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -26,6 +27,7 @@ public class DocumentChunk
             Type = Metadata.ContentType,
             Collection = Metadata.Collection,
             Embedding = Embedding,
+            ContextualSummary = ContextualSummary,
             Metadata = Metadata.ToDictionary(),
             IndexedAt = CreatedAt
         };
@@ -100,6 +102,9 @@ public class ChunkingConfig
 
     /// <summary>Tipo de conteúdo para metadados</summary>
     public string ContentType { get; set; } = "document";
+
+    public string? TenantId { get; set; }
+    public string? AgentId { get; set; }
 }
 
 /// <summary>

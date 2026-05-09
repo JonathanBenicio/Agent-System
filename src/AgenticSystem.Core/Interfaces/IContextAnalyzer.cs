@@ -4,7 +4,7 @@ namespace AgenticSystem.Core.Interfaces;
 
 /// <summary>
 /// Analisa intenção, domínio e complexidade de requisições.
-/// Baseado nas Instructions contextuais do Baianinho-Labs.
+/// Baseado nas Instructions contextuais do Labs.
 /// </summary>
 public interface IContextAnalyzer
 {

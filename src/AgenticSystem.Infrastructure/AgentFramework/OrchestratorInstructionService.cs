@@ -48,7 +48,7 @@ public class OrchestratorInstructionService(ILogger<OrchestratorInstructionServi
         IReadOnlyList<AITool> auxiliaryTools)
     {
         var sb = new StringBuilder();
-        sb.AppendLine("Você é o orquestrador central do sistema Baianinho-Labs.");
+        sb.AppendLine("Você é o orquestrador central do sistema Labs.");
         sb.AppendLine("Sua responsabilidade é analisar a solicitação do usuário e delegar para o especialista mais adequado.");
         sb.AppendLine();
         sb.AppendLine("## Regras de Delegação");

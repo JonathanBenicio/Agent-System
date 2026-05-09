@@ -11,7 +11,8 @@ public enum DocumentType
     Docx,
     Html,
     Pptx,
-    Image
+    Image,
+    Audio
 }
 
 /// <summary>

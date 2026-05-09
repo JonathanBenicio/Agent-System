@@ -388,8 +388,8 @@ Nao acoplar agentes diretamente ao broker. Introduzir uma camada explicita de co
 
 ### Onda 1 - Fundamentos e Quick Wins
 
-- [ ] Fechar Fase 0 de telemetria, datasets e feature flags
-- [ ] Implantar semantic caching single-turn em modo informacional
+- [x] Fechar Fase 0 de telemetria, datasets e feature flags
+- [x] Implantar semantic caching single-turn em modo informacional (Implementado com PostgresSemanticCacheService e SemanticCacheChatClient)
 - [ ] Publicar baseline de custo, latencia e quality score por agente e tier
 
 ### Onda 2 - Qualidade em Runtime

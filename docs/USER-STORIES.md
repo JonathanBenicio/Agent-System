@@ -768,7 +768,7 @@ ToolAvailabilityGuard.CheckAsync(requiredTools)
 **Registros de Discovery (fontes):**
 - npm registry (MCPs publicados como `@modelcontextprotocol/*`)
 - GitHub Topics (`mcp-server`, `mcp-plugin`)
-- Catálogo interno (Baianinho-Labs `Ferramentas/`)
+- Catálogo interno (Labs `Ferramentas/`)
 - VS Code Marketplace (extensões com tools)
 
 ---

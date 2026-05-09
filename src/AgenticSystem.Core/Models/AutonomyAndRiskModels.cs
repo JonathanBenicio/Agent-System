@@ -117,11 +117,15 @@ public class SelfImprovementRecord
     public double ConfidenceGain { get; init; }
     public DateTime LearnedAt { get; init; } = DateTime.UtcNow;
     public bool Applied { get; set; }
+    public string Status { get; set; } = "Proposed";
+    public string? Rationale { get; set; }
+    public Dictionary<string, string> ProposedChanges { get; init; } = new();
 }
 
 public enum ImprovementType
 {
     PromptRefinement,
+    PromptOptimization,
     ToolUsagePattern,
     ResponseFormat,
     ErrorRecovery,

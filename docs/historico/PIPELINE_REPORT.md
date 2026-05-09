@@ -129,7 +129,7 @@ Sem connection string configurada → sistema opera 100% in-memory (comportament
 
 ---
 
-*Pipeline executado pelo Baianinho Spec→Code*
+*Pipeline executado pelo Labs Spec→Code*
 
 ---
 
@@ -197,4 +197,4 @@ Findings que foram analisados e considerados design decisions corretas ou já tr
 
 ---
 
-*Pipeline executado pelo Baianinho Spec→Code — Architectural Review*
+*Pipeline executado pelo Labs Spec→Code — Architectural Review*

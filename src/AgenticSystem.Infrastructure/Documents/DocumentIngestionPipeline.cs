@@ -17,6 +17,9 @@ public class DocumentIngestionPipeline : IDocumentIngestionPipeline
     private readonly IChunkingStrategy _chunkingStrategy;
     private readonly TextEmbeddingGenerator? _embeddingGenerator;
     private readonly IVectorStore _vectorStore;
+    private readonly IMultimodalProcessor? _multimodalProcessor;
+    private readonly ITenantIsolationEnforcer? _isolationEnforcer;
+    private readonly IChatClient? _chatClient;
     private readonly ILogger<DocumentIngestionPipeline> _logger;
 
     public DocumentIngestionPipeline(
@@ -24,39 +27,91 @@ public class DocumentIngestionPipeline : IDocumentIngestionPipeline
         IChunkingStrategy chunkingStrategy,
         TextEmbeddingGenerator? embeddingGenerator,
         IVectorStore vectorStore,
-        ILogger<DocumentIngestionPipeline> logger)
+        ILogger<DocumentIngestionPipeline> logger,
+        IMultimodalProcessor? multimodalProcessor = null,
+        ITenantIsolationEnforcer? isolationEnforcer = null,
+        IChatClient? chatClient = null)
     {
         _parsers = parsers.ToDictionary(p => p.SupportedType);
         _chunkingStrategy = chunkingStrategy;
         _embeddingGenerator = embeddingGenerator;
         _vectorStore = vectorStore;
         _logger = logger;
+        _multimodalProcessor = multimodalProcessor;
+        _isolationEnforcer = isolationEnforcer;
+        _chatClient = chatClient;
     }
 
     public async Task<IngestionResult> IngestAsync(
         RawDocument document, ChunkingConfig? config = null, CancellationToken ct = default)
     {
-        var sw = Stopwatch.StartNew();
         config ??= new ChunkingConfig();
+
+        // Enforce tenant ingestion limits
+        if (_isolationEnforcer != null && !string.IsNullOrEmpty(config.TenantId))
+        {
+            if (!await _isolationEnforcer.CanIngestDocumentAsync(config.TenantId, ct: ct))
+            {
+                return IngestionResult.Fail(document.Id, document.FileName, "🚫 Limite de documentos atingido para o seu tenant.");
+            }
+        }
+
+        var sw = Stopwatch.StartNew();
+        var chunks = new List<DocumentChunk>();
+        var contentHash = string.Empty;
 
         try
         {
-            // 1. Parse
-            if (!_parsers.TryGetValue(document.Type, out var parser))
+            // 1. Multimodal processing for images/audio
+            if ((document.Type == DocumentType.Image || document.Type == DocumentType.Audio) && _multimodalProcessor != null)
             {
-                return IngestionResult.Fail(document.Id, document.FileName,
-                    $"No parser registered for type {document.Type}");
+                var mimeType = GetMimeType(document.FileName);
+                using var ms = new MemoryStream(document.Content);
+                var multimodalDoc = await _multimodalProcessor.ProcessAsync(ms, document.FileName, mimeType, ct);
+                
+                contentHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(document.Content)).ToLowerInvariant();
+
+                for (int i = 0; i < multimodalDoc.ExtractedContents.Count; i++)
+                {
+                    var content = multimodalDoc.ExtractedContents[i];
+                    chunks.Add(new DocumentChunk
+                    {
+                        Id = $"{document.Id}_{i}",
+                        DocumentId = document.Id,
+                        Content = content.Content,
+                        Index = i,
+                        TokenCount = EstimateTokens(content.Content),
+                        Metadata = new ChunkMetadata
+                        {
+                            Source = document.Source,
+                            FileName = document.FileName,
+                            ContentType = content.ExtractionType.ToString(),
+                            Collection = config.Collection,
+                            DocumentHash = contentHash,
+                            ChunkIndex = i,
+                            TotalChunks = multimodalDoc.ExtractedContents.Count
+                        }
+                    });
+                }
             }
+            // 2. Standard Parsing for Text/PDF/DOCX
+            else
+            {
+                if (!_parsers.TryGetValue(document.Type, out var parser))
+                {
+                    return IngestionResult.Fail(document.Id, document.FileName,
+                        $"No parser registered for type {document.Type}");
+                }
 
-            var parsed = await parser.ParseAsync(document, ct);
-
-            // 2. Chunk
-            var chunks = await _chunkingStrategy.ChunkAsync(parsed, config, ct);
+                var parsed = await parser.ParseAsync(document, ct);
+                contentHash = parsed.ContentHash;
+                chunks = (await _chunkingStrategy.ChunkAsync(parsed, config, ct)).ToList();
+            }
 
             if (chunks.Count == 0)
             {
                 return IngestionResult.Fail(document.Id, document.FileName,
-                    "Document produced 0 chunks after parsing");
+                    "Document produced 0 chunks after parsing or processing");
             }
 
             if (_embeddingGenerator is null)
@@ -65,8 +120,44 @@ public class DocumentIngestionPipeline : IDocumentIngestionPipeline
                     "No embedding generator is configured for document ingestion");
             }
 
+            // 2.5 Contextual Retrieval (Enrichment)
+            if (_chatClient != null && chunks.Count > 0 && document.Type != DocumentType.Image)
+            {
+                var docContent = string.Join("\n\n", chunks.Select(c => c.Content));
+                if (docContent.Length > 25000) docContent = docContent[..25000]; // Protect against huge context limits
+
+                var summaryTasks = chunks.Select(async chunk =>
+                {
+                    var prompt = $@"
+You are an expert at information retrieval. Here is a document:
+<document>
+{docContent}
+</document>
+
+Here is a chunk extracted from it:
+<chunk>
+{chunk.Content}
+</chunk>
+
+Please give a short, concise context of this chunk within the overall document (1 to 2 sentences). Do not repeat the chunk. Just provide the context.";
+
+                    try
+                    {
+                        var response = await _chatClient.GetResponseAsync(new List<ChatMessage> { new(ChatRole.User, prompt) }, cancellationToken: ct);
+                        chunk.ContextualSummary = response.Text?.Trim();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to generate contextual summary for chunk {Index} of {File}", chunk.Index, document.FileName);
+                    }
+                });
+
+                await Task.WhenAll(summaryTasks);
+            }
+
             // 3. Embed (batch)
-            var texts = chunks.Select(c => c.Content).ToList();
+            // If ContextualSummary exists, we prepend it to the content being embedded to enrich the vector representation
+            var texts = chunks.Select(c => string.IsNullOrEmpty(c.ContextualSummary) ? c.Content : $"{c.ContextualSummary}\n\n{c.Content}").ToList();
             var embeddings = await _embeddingGenerator.GenerateAsync(texts, cancellationToken: ct);
             var embeddingVectors = embeddings.Select(item => item.Vector.ToArray()).ToList();
 
@@ -86,10 +177,10 @@ public class DocumentIngestionPipeline : IDocumentIngestionPipeline
 
             _logger.LogInformation(
                 "✅ Ingested {File}: {Chunks} chunks, {Tokens} tokens, hash={Hash} in {Ms}ms",
-                document.FileName, chunks.Count, totalTokens, parsed.ContentHash[..8], sw.ElapsedMilliseconds);
+                document.FileName, chunks.Count, totalTokens, contentHash.Length > 8 ? contentHash[..8] : contentHash, sw.ElapsedMilliseconds);
 
             return IngestionResult.Ok(document.Id, document.FileName,
-                chunks.Count, totalTokens, parsed.ContentHash, sw.Elapsed);
+                chunks.Count, totalTokens, contentHash, sw.Elapsed);
         }
         catch (Exception ex)
         {
@@ -116,5 +207,26 @@ public class DocumentIngestionPipeline : IDocumentIngestionPipeline
             succeeded, failed, results.Count);
 
         return results;
+    }
+
+    private string GetMimeType(string fileName)
+    {
+        var ext = Path.GetExtension(fileName).ToLowerInvariant();
+        return ext switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".gif" => "image/gif",
+            ".webp" => "image/webp",
+            ".mp3" => "audio/mpeg",
+            ".wav" => "audio/wav",
+            _ => "application/octet-stream"
+        };
+    }
+
+    private int EstimateTokens(string text)
+    {
+        // Simple estimation: 1 token ~= 4 chars
+        return string.IsNullOrEmpty(text) ? 0 : text.Length / 4;
     }
 }

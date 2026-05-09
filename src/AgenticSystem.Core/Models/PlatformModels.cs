@@ -148,11 +148,13 @@ public class DecisionExplanation
     public double ConfidenceScore { get; init; }
     public List<string> Uncertainties { get; init; } = [];
     public string? AlternativeApproach { get; init; }
+    public DateTime Timestamp { get; init; } = DateTime.UtcNow;
 }
 
 public class ReasoningStep
 {
     public int Order { get; init; }
+    public string Title { get; init; } = string.Empty;
     public string StepType { get; init; } = string.Empty; // "retrieval", "analysis", "inference", "tool_call"
     public string Description { get; init; } = string.Empty;
     public double Confidence { get; init; }

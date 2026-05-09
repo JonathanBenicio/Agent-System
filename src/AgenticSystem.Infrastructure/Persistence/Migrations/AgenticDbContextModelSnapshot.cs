@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 using Pgvector;
 
 #nullable disable
@@ -893,6 +894,118 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("runtime_evaluations", (string)null);
                 });
 
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.KnowledgeGraphEdgeEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("PropertiesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("properties");
+
+                    b.Property<string>("RelationType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("relation_type");
+
+                    b.Property<string>("SourceDocumentId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("source_document_id");
+
+                    b.Property<string>("SourceNodeId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_node_id");
+
+                    b.Property<string>("TargetNodeId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("target_node_id");
+
+                    b.Property<double>("Weight")
+                        .HasColumnType("double precision")
+                        .HasColumnName("weight");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RelationType")
+                        .HasDatabaseName("ix_knowledge_graph_edges_relation_type");
+
+                    b.HasIndex("SourceNodeId")
+                        .HasDatabaseName("ix_knowledge_graph_edges_source_node");
+
+                    b.HasIndex("TargetNodeId")
+                        .HasDatabaseName("ix_knowledge_graph_edges_target_node");
+
+                    b.HasIndex("SourceNodeId", "TargetNodeId", "RelationType")
+                        .IsUnique()
+                        .HasDatabaseName("ix_knowledge_graph_edges_unique_relation");
+
+                    b.ToTable("knowledge_graph_edges", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.KnowledgeGraphNodeEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("entity_type");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("label");
+
+                    b.Property<string>("PropertiesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("properties");
+
+                    b.Property<string>("SourceDocumentId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("source_document_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType")
+                        .HasDatabaseName("ix_knowledge_graph_nodes_entity_type");
+
+                    b.HasIndex("Label")
+                        .HasDatabaseName("ix_knowledge_graph_nodes_label");
+
+                    b.HasIndex("SourceDocumentId")
+                        .HasDatabaseName("ix_knowledge_graph_nodes_source_document");
+
+                    b.ToTable("knowledge_graph_nodes", (string)null);
+                });
+
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.MigrationJobEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -1536,6 +1649,9 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("content");
 
+                    b.Property<string>("ContextualSummary")
+                        .HasColumnType("text");
+
                     b.Property<Vector>("Embedding")
                         .HasColumnType("vector")
                         .HasColumnName("embedding");
@@ -1548,6 +1664,12 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("metadata");
+
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasAnnotation("Npgsql:TsVectorConfig", "english")
+                        .HasAnnotation("Npgsql:TsVectorProperties", new[] { "Content" });
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -1562,6 +1684,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("IndexedAt")
                         .HasDatabaseName("ix_vector_documents_indexed_at");
+
+                    b.HasIndex("SearchVector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
 
                     b.HasIndex("Type")
                         .HasDatabaseName("ix_vector_documents_type");

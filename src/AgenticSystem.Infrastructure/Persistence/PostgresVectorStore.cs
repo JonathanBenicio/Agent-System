@@ -39,6 +39,7 @@ public class PostgresVectorStore : IVectorStore
             entity.Collection = document.Collection;
             entity.Embedding = document.Embedding != null ? new Pgvector.Vector(document.Embedding) : null;
             entity.MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions);
+            entity.ContextualSummary = document.ContextualSummary;
             entity.IndexedAt = DateTime.UtcNow;
         }
 
@@ -201,6 +202,7 @@ public class PostgresVectorStore : IVectorStore
             Collection = entity.Collection,
             Embedding = entity.Embedding?.ToArray() ?? Array.Empty<float>(),
             Metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(entity.MetadataJson, JsonOptions) ?? new(),
+            ContextualSummary = entity.ContextualSummary,
             IndexedAt = entity.IndexedAt
         };
     }
@@ -215,6 +217,7 @@ public class PostgresVectorStore : IVectorStore
             Collection = document.Collection,
             Embedding = document.Embedding != null ? new Pgvector.Vector(document.Embedding) : null,
             MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions),
+            ContextualSummary = document.ContextualSummary,
             IndexedAt = DateTime.UtcNow
         };
     }
@@ -232,6 +235,7 @@ public class PostgresVectorStore : IVectorStore
             Metadata = model.Metadata,
             Snippet = model.Content.Length > 300 ? model.Content[..300] + "..." : model.Content,
             Embedding = model.Embedding,
+            ContextualSummary = model.ContextualSummary,
             IndexedAt = model.IndexedAt
         };
     }

@@ -33,7 +33,8 @@ public class AgentFrameworkDirectExecutionServiceTests
             null!,
             CreateSessionStoreAdapter(),
             Substitute.For<ISessionManager>(),
-            Substitute.For<ILogger<AgentFrameworkDirectExecutionService>>());
+            Substitute.For<ILogger<AgentFrameworkDirectExecutionService>>(),
+            Substitute.For<IServiceProvider>());
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("frameworkFactory");
     }
@@ -45,7 +46,8 @@ public class AgentFrameworkDirectExecutionServiceTests
             CreateFrameworkFactory(),
             null!,
             Substitute.For<ISessionManager>(),
-            Substitute.For<ILogger<AgentFrameworkDirectExecutionService>>());
+            Substitute.For<ILogger<AgentFrameworkDirectExecutionService>>(),
+            Substitute.For<IServiceProvider>());
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("sessionStore");
     }
@@ -57,7 +59,8 @@ public class AgentFrameworkDirectExecutionServiceTests
             CreateFrameworkFactory(),
             CreateSessionStoreAdapter(),
             null!,
-            Substitute.For<ILogger<AgentFrameworkDirectExecutionService>>());
+            Substitute.For<ILogger<AgentFrameworkDirectExecutionService>>(),
+            Substitute.For<IServiceProvider>());
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("sessionManager");
     }
@@ -69,7 +72,8 @@ public class AgentFrameworkDirectExecutionServiceTests
             CreateFrameworkFactory(),
             CreateSessionStoreAdapter(),
             Substitute.For<ISessionManager>(),
-            null!);
+            null!,
+            Substitute.For<IServiceProvider>());
 
         act.Should().Throw<ArgumentNullException>().WithParameterName("logger");
     }
@@ -90,7 +94,8 @@ public class AgentFrameworkDirectExecutionServiceTests
             CreateFrameworkFactory(chatClient),
             CreateSessionStoreAdapter(sessionStore),
             sessionManager,
-            Substitute.For<ILogger<AgentFrameworkDirectExecutionService>>());
+            Substitute.For<ILogger<AgentFrameworkDirectExecutionService>>(),
+            Substitute.For<IServiceProvider>());
 
         var agent = CreateAgent("TestAgent");
 
@@ -124,6 +129,7 @@ public class AgentFrameworkDirectExecutionServiceTests
             CreateSessionStoreAdapter(sessionStore),
             sessionManager,
             Substitute.For<ILogger<AgentFrameworkDirectExecutionService>>(),
+            Substitute.For<IServiceProvider>(),
             runtimeCoordinator);
 
         var agent = CreateAgent("TestAgent");

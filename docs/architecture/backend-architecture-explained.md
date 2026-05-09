@@ -223,7 +223,7 @@ Orchestrator (LLM):
 Gerado dinamicamente com base nos agentes ativos:
 
 ```
-Você é o orquestrador central do sistema Baianinho-Labs.
+Você é o orquestrador central do sistema Labs.
 Sua responsabilidade é analisar a solicitação do usuário e delegar para o especialista mais adequado.
 
 ## Regras de Delegação

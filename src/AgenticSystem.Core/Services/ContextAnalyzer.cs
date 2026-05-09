@@ -8,7 +8,7 @@ namespace AgenticSystem.Core.Services;
 
 /// <summary>
 /// Analisa contexto e intenção de requisições usando LLM.
-/// Baseado nas Instructions contextuais do Baianinho-Labs.
+/// Baseado nas Instructions contextuais do Labs.
 /// </summary>
 public class ContextAnalyzer : IContextAnalyzer
 {

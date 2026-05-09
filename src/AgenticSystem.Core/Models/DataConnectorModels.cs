@@ -52,7 +52,7 @@ public class DataSyncSchedule
 {
     public bool AutoSync { get; init; } = false;
     public string? CronExpression { get; init; }
-    public TimeSpan? SyncInterval { get; init; }
+    public TimeSpan SyncInterval { get; init; } = TimeSpan.FromHours(24);
     public bool IncrementalSync { get; init; } = true;
 }
 
@@ -61,13 +61,13 @@ public class DataSyncSchedule
 /// </summary>
 public class DataSyncResult
 {
-    public string ConnectorId { get; init; } = string.Empty;
-    public bool Success { get; init; }
-    public int DocumentsSynced { get; init; }
-    public int DocumentsUpdated { get; init; }
-    public int DocumentsDeleted { get; init; }
-    public int Errors { get; init; }
-    public TimeSpan Duration { get; init; }
-    public string? ErrorMessage { get; init; }
-    public DateTime SyncedAt { get; init; } = DateTime.UtcNow;
+    public string ConnectorId { get; set; } = string.Empty;
+    public bool Success { get; set; }
+    public int DocumentsSynced { get; set; }
+    public int DocumentsUpdated { get; set; }
+    public int DocumentsDeleted { get; set; }
+    public int Errors { get; set; }
+    public TimeSpan Duration { get; set; }
+    public string? ErrorMessage { get; set; }
+    public DateTime SyncedAt { get; set; } = DateTime.UtcNow;
 }

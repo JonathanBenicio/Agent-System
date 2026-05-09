@@ -4,7 +4,7 @@ namespace AgenticSystem.Core.Interfaces;
 
 /// <summary>
 /// Factory para criação dinâmica de agents baseado em contexto.
-/// Implementa Tier System do Baianinho-Labs (0=Chief, 1=Master, 2=Specialist, 3=Support)
+/// Implementa Tier System do Labs (0=Chief, 1=Master, 2=Specialist, 3=Support)
 /// </summary>
 public interface IAgentFactory
 {

@@ -5,7 +5,7 @@
 > **Fonte de verdade operacional:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md).
 > **Nota de leitura:** menções abaixo a `.NET 8`, `ResearchAgent`, `Notion`, `Todoist`, `TickTick`, `Grafana` e `Vision Providers` fazem parte do snapshot histórico e não descrevem o runtime vigente.
 
-> Sistema agentic avançado em .NET 8 com Microsoft Agent Framework, múltiplos providers LLM, memória episódica Obsidian e orquestração inteligente. Inspirado nos conceitos do Baianinho-Labs.
+> Sistema agentic avançado em .NET 8 com Microsoft Agent Framework, múltiplos providers LLM, memória episódica Obsidian e orquestração inteligente. Inspirado nos conceitos do Labs.
 
 ## 🚀 Quick Start
 
@@ -50,7 +50,7 @@ dotnet test
                       │
 ┌─────────────────────▼──────────────────────────────────────┐
 │                  META-AGENT                                │
-│  • Context Analysis (Baianinho-Labs inspired)             │
+│  • Context Analysis (Labs inspired)             │
 │  • Tier-based routing (0=Chief → 3=Support)               │
 │  • Quality Gates & Validation                             │
 └─────────────────────┬──────────────────────────────────────┘
@@ -650,7 +650,7 @@ Acesse `https://localhost:5001/dashboard` para:
 - 🏥 **Health** — latência, erros, failovers
 - 💰 **Budget** — alertas de custo por categoria
 
-## 🧠 Conceitos do Baianinho-Labs — Análise de Implementação
+## 🧠 Conceitos do Labs — Análise de Implementação
 
 ### ✅ **Já Implementados** (Score: 9.2/10)
 
@@ -693,7 +693,7 @@ Acesse `https://localhost:5001/dashboard` para:
 
 ```mermaid
 gantt
-    title Roadmap de Conceitos Baianinho-Labs
+    title Roadmap de Conceitos Labs
     dateFormat  YYYY-MM-DD
     section Prioridade Alta
     Context Analyzer    :2026-05-01, 7d
@@ -958,7 +958,7 @@ MIT License - veja [LICENSE](LICENSE) para detalhes.
 
 ## 🙏 Inspiração
 
-Baseado nos conceitos e arquitetura do **Baianinho-Labs** (Casas Bahia Tech):
+Baseado nos conceitos e arquitetura do **Labs** (Casas Bahia Tech):
 - Tier System para hierarquia de agents
 - Quality Gates para confiabilidade  
 - Context Instructions para especialização
@@ -966,7 +966,7 @@ Baseado nos conceitos e arquitetura do **Baianinho-Labs** (Casas Bahia Tech):
 
 ---
 
-**"Automatizar o repetitivo para focar no criativo."** — Filosofia Baianinho-Labs
+**"Automatizar o repetitivo para focar no criativo."** — Filosofia Labs
 
 ## 📂 Estrutura do Projeto
 
@@ -981,7 +981,7 @@ docs/                           # Documentação técnica
 data/                           # Obsidian vault local
 ```
 
-## 🎯 Concepts from Baianinho-Labs
+## 🎯 Concepts from Labs
 
 - **Tier System**: Hierarquia de agents (0-3)
 - **Quality Gates**: Auditoria automática
@@ -1089,4 +1089,4 @@ kubectl apply -f k8s/
 
 ---
 
-**Inspirado pelo Baianinho-Labs** — Conceitos enterprise aplicados a sistema agentic generalista.
+**Inspirado pelo Labs** — Conceitos enterprise aplicados a sistema agentic generalista.

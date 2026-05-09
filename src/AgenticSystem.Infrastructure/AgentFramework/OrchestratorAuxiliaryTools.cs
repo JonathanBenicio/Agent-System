@@ -16,6 +16,31 @@ public static class OrchestratorAuxiliaryTools
     public const string RetrieveContextToolName = "retrieve_context";
     public const string RouteToAgentToolName = "route_to_best_agent";
     public const string AnalyzeRequestToolName = "analyze_request";
+    public const string CreateAgentToolName = "create_dynamic_agent";
+
+    /// <summary>
+    /// Cria AITool para criação dinâmica de agentes.
+    /// O LLM chama esta tool quando identifica que precisa de um especialista que não existe no catálogo.
+    /// </summary>
+    public static AITool CreateDynamicAgentTool(IDynamicAgentService dynamicAgentService)
+    {
+        return AIFunctionFactory.Create(
+            async (
+                [Description("Descrição do domínio ou objetivo do agente a ser criado (ex: 'especialista em impostos imobiliários')")]
+                string goal,
+                CancellationToken ct) =>
+            {
+                var result = await dynamicAgentService.HandleAgentCreationAsync(goal, new UserContext());
+                return result.Success 
+                    ? $"Agent criado com sucesso: {result.AgentName}. Agora você pode delegar tarefas para ele." 
+                    : $"Falha ao criar agent: {result.ErrorMessage}";
+            },
+            new AIFunctionFactoryOptions
+            {
+                Name = CreateAgentToolName,
+                Description = "Cria dinamicamente um novo agente especialista para um domínio específico usando linguagem natural."
+            });
+    }
 
     /// <summary>
     /// Cria AITool para busca on-demand de contexto via RAG.
@@ -128,6 +153,7 @@ public static class OrchestratorAuxiliaryTools
     [
         RetrieveContextToolName,
         RouteToAgentToolName,
-        AnalyzeRequestToolName
+        AnalyzeRequestToolName,
+        CreateAgentToolName
     ];
 }

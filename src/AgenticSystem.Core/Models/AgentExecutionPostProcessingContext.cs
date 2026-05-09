@@ -13,6 +13,7 @@ public class AgentExecutionPostProcessingContext
     public bool ValidateResponse { get; set; } = true;
     public bool RunReflection { get; set; } = true;
     public bool LearnFromReflection { get; set; } = true;
+    public RAGContext? RagContext { get; set; }
     public Dictionary<string, object> EventContext { get; set; } = new();
     public Dictionary<string, object> ArtifactData { get; set; } = new();
 }

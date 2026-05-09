@@ -23,6 +23,14 @@ public class SemanticCacheEntry
     public DateTime LastHitAt { get; set; }
 }
 
+public class SemanticCacheResult
+{
+    public bool IsHit { get; set; }
+    public string? CachedResponse { get; set; }
+    public double SimilarityScore { get; set; }
+    public Dictionary<string, string> Metadata { get; set; } = new();
+}
+
 /// <summary>
 /// Cache statistics.
 /// </summary>
@@ -139,6 +147,7 @@ public enum CitationType
 public class CitedResponse
 {
     public string ResponseText { get; init; } = string.Empty;
+    public string CitedText { get; init; } = string.Empty;
     public List<Citation> Citations { get; init; } = [];
     public double OverallConfidence { get; init; }
     public int UncitedStatements { get; init; }

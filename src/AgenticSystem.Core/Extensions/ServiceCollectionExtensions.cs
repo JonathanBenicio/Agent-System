@@ -140,6 +140,27 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IKnowledgeGraphService>(sp => sp.GetRequiredService<InMemoryKnowledgeGraphService>());
         services.AddSingleton<IKnowledgeGraphStore>(sp => sp.GetRequiredService<InMemoryKnowledgeGraphService>());
 
+        // Workflow Engine
+        services.AddSingleton<IWorkflowStore, InMemoryWorkflowStore>();
+        services.AddSingleton<IWorkflowEngine, DefaultWorkflowEngine>();
+
+        // Phase 3 — Advanced Intelligence & Quality
+        services.AddSingleton<IModelPerformanceStore, InMemoryModelPerformanceStore>();
+        services.AddSingleton<IModelRouter, AdaptiveModelRouter>();
+        services.AddSingleton<ICitationEngine, DefaultCitationEngine>();
+        services.AddSingleton<IExplainabilityService, DefaultExplainabilityService>();
+        services.AddSingleton<IAgentSimulationEngine, AgentSimulationService>();
+        services.AddSingleton<ISelfImprovementEngine, SelfImprovementService>();
+
+        // Phase 4 — Platform & Data Connectors
+        services.AddSingleton<IDataConnectorStore, InMemoryDataConnectorStore>();
+        services.AddSingleton<IDataConnectorManager, DataConnectorManager>();
+        services.AddSingleton<ITenantIsolationEnforcer, TenantIsolationService>();
+        services.AddSingleton<IAgentMarketplace, InMemoryAgentMarketplace>();
+        services.AddSingleton<IAdminConsole, AdminConsoleService>();
+        services.AddSingleton<IComplianceService, ComplianceService>();
+        services.AddSingleton<IMemoryLifecycleStore, InMemoryMemoryLifecycleStore>();
+
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ServiceCollectionExtensions).Assembly));
 
         return services;

@@ -14,6 +14,7 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
     private readonly IReflectionEngine? _reflectionEngine;
     private readonly ICorrectionLoop? _correctionLoop;
     private readonly IAgentMemoryService? _agentMemoryService;
+    private readonly ICitationEngine? _citationEngine;
     private readonly ILogger<AgentExecutionPostProcessingPipeline> _logger;
 
     public AgentExecutionPostProcessingPipeline(
@@ -25,7 +26,8 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
         IQualityGateService? qualityGateService = null,
         IReflectionEngine? reflectionEngine = null,
         ICorrectionLoop? correctionLoop = null,
-        IAgentMemoryService? agentMemoryService = null)
+        IAgentMemoryService? agentMemoryService = null,
+        ICitationEngine? citationEngine = null)
     {
         _sessionManager = sessionManager;
         _runtimeCoordinator = runtimeCoordinator;
@@ -36,6 +38,7 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
         _reflectionEngine = reflectionEngine;
         _correctionLoop = correctionLoop;
         _agentMemoryService = agentMemoryService;
+        _citationEngine = citationEngine;
     }
 
     public async Task<AgentResponse> ProcessAsync(
@@ -56,12 +59,27 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
             response.AgentName = context.Analysis.EstimatedAgent;
         }
 
+        // Apply citations if RAG context is present
+        if (_citationEngine is not null && context.RagContext is { Chunks.Count: > 0 } && !string.IsNullOrWhiteSpace(response.Content))
+        {
+            try
+            {
+                var cited = await _citationEngine.GenerateWithCitationsAsync(response.Content, context.RagContext.Chunks, ct);
+                response.Content = cited.CitedText;
+                response.Metadata["citations"] = cited.Citations;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "⚠️ Failure generating citations for session {SessionId}", context.SessionId);
+            }
+        }
+
         await ValidatePostExecutionAsync(context, ct);
 
         var reflectionOutcome = await ReflectAsync(context);
         response.Confidence = _confidenceCalculator.Calculate(
             response,
-            ragContext: null,
+            ragContext: context.RagContext,
             reflections: reflectionOutcome.Reflections,
             toolAvailability: null);
 

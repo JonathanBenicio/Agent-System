@@ -214,4 +214,4 @@ v3.0 — [Futuro]
 Este manifesto é um documento vivo. Cada novo Maturity Level, cada decisão arquitetural, cada anti-pattern identificado deve ser registrado aqui. O manifesto evolui com o sistema — nunca atrás dele.
 
 > *"Automatizar o repetitivo para focar no criativo."*
-> — BaIAninho, Casas Bahia Tech
+> — Labs, Casas Bahia Tech

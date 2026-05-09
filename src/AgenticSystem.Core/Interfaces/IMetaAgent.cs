@@ -4,7 +4,7 @@ namespace AgenticSystem.Core.Interfaces;
 
 /// <summary>
 /// Meta-Agent: Componente central que analisa contexto, roteia para agents especializados
-/// e gerencia sessões. Inspirado no Tech Lead do Baianinho-Labs.
+/// e gerencia sessões. Inspirado no Tech Lead do Labs.
 /// </summary>
 public interface IMetaAgent
 {

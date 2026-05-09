@@ -20,6 +20,7 @@ public class RAGService : IRAGService
     private readonly IKnowledgeFreshnessService? _freshnessService;
     private readonly IQueryCompressor? _queryCompressor;
     private readonly ISemanticCompressor? _semanticCompressor;
+    private readonly IAdvancedRetrievalService? _advancedRetrievalService;
     private readonly IChatClient? _chatClient;
 
     public RAGService(
@@ -30,6 +31,7 @@ public class RAGService : IRAGService
         IKnowledgeFreshnessService? freshnessService = null,
         IQueryCompressor? queryCompressor = null,
         ISemanticCompressor? semanticCompressor = null,
+        IAdvancedRetrievalService? advancedRetrievalService = null,
         IChatClient? chatClient = null)
     {
         _vectorStore = vectorStore;
@@ -39,6 +41,7 @@ public class RAGService : IRAGService
         _freshnessService = freshnessService;
         _queryCompressor = queryCompressor;
         _semanticCompressor = semanticCompressor;
+        _advancedRetrievalService = advancedRetrievalService;
         _chatClient = chatClient;
     }
 
@@ -62,76 +65,113 @@ public class RAGService : IRAGService
 
         // 1. Retrieve — busca vetorial com filtros opcionais baseados na strategy
         var retrievalSw = Stopwatch.StartNew();
-        var filters = BuildFilters(query);
+        
+        List<SearchMatch> candidates = null!;
+        string effectiveQuery = query.Query;
+        List<string> queryVariants = new List<string> { query.Query };
+        string? hydeVariant = null;
+        int candidatesRetrieved = 0;
 
-        // GAP-11 — Query Compression: otimiza query antes da busca vetorial
-        CompressedQuery? compressedQuery = null;
-        var queryVariants = new List<string> { query.Query };
-        if (_queryCompressor != null)
+        // Advanced Retrieval Branch
+        if (_advancedRetrievalService != null && (query.UseHybridSearch || query.UseMultiQuery || query.UseSelfCorrection || query.UseGraphSearch))
         {
-            try
+            _logger.LogInformation("🚀 Using Advanced Retrieval Engine (Hybrid={Hybrid}, MultiQuery={MQ}, SelfCorrection={SC}, Graph={Graph})", 
+                query.UseHybridSearch, query.UseMultiQuery, query.UseSelfCorrection, query.UseGraphSearch);
+
+            RAGContext advancedContext;
+            if (query.UseSelfCorrection)
+                advancedContext = await _advancedRetrievalService.SelfCorrectiveRetrieveAsync(query, ct: ct);
+            else if (query.UseMultiQuery)
+                advancedContext = await _advancedRetrievalService.MultiQueryRetrieveAsync(query, ct);
+            else if (query.UseGraphSearch)
+                advancedContext = await _advancedRetrievalService.GraphSearchAsync(query, ct: ct);
+            else
+                advancedContext = await _advancedRetrievalService.HybridSearchAsync(query, null, ct);
+
+            candidates = advancedContext.Chunks.Select(c => new SearchMatch
             {
-                compressedQuery = await _queryCompressor.CompressAsync(query.Query);
-                if (!string.IsNullOrEmpty(compressedQuery.CompressedText))
+                Id = c.Id,
+                Content = c.Content,
+                Score = c.ReRankedScore,
+                Metadata = c.Metadata
+            }).ToList();
+
+            effectiveQuery = advancedContext.EffectiveQuery;
+            queryVariants = advancedContext.QueryVariants;
+            candidatesRetrieved = advancedContext.CandidatesRetrieved;
+            retrievalSw.Stop();
+        }
+        else
+        {
+            var filters = BuildFilters(query);
+
+            // GAP-11 — Query Compression: otimiza query antes da busca vetorial
+            CompressedQuery? compressedQuery = null;
+            if (_queryCompressor != null)
+            {
+                try
                 {
-                    queryVariants = BuildQueryVariants(query.Query, compressedQuery);
-                    _logger.LogDebug(
-                        "🗜️ Query variants generated: {Original} → {Variants}",
-                        TruncateQuery(query.Query),
-                        string.Join(" | ", queryVariants.Select(TruncateQuery)));
+                    compressedQuery = await _queryCompressor.CompressAsync(query.Query);
+                    if (!string.IsNullOrEmpty(compressedQuery.CompressedText))
+                    {
+                        queryVariants = BuildQueryVariants(query.Query, compressedQuery);
+                        _logger.LogDebug(
+                            "🗜️ Query variants generated: {Original} → {Variants}",
+                            TruncateQuery(query.Query),
+                            string.Join(" | ", queryVariants.Select(TruncateQuery)));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Query compression falhou, usando query original");
                 }
             }
-            catch (Exception ex)
+
+            effectiveQuery = queryVariants[0];
+            var searchResult = await SearchAcrossVariantsAsync(query, filters, queryVariants);
+
+            if (ShouldGenerateHydeVariant(query, searchResult))
             {
-                _logger.LogDebug(ex, "Query compression falhou, usando query original");
+                hydeVariant = await GenerateHydeVariantAsync(query.Query, ct);
+                if (!string.IsNullOrWhiteSpace(hydeVariant))
+                {
+                    AddQueryVariant(queryVariants, hydeVariant);
+                    searchResult = await SearchAcrossVariantsAsync(query, filters, queryVariants);
+                    _logger.LogDebug(
+                        "🧠 HyDE variant generated for '{Query}': {Variant}",
+                        TruncateQuery(query.Query),
+                        TruncateQuery(hydeVariant));
+                }
             }
-        }
 
-        var effectiveQuery = queryVariants[0];
-        var searchResult = await SearchAcrossVariantsAsync(query, filters, queryVariants);
+            candidatesRetrieved = searchResult.Matches.Count;
+            retrievalSw.Stop();
 
-        string? hydeVariant = null;
-        if (ShouldGenerateHydeVariant(query, searchResult))
-        {
-            hydeVariant = await GenerateHydeVariantAsync(query.Query, ct);
-            if (!string.IsNullOrWhiteSpace(hydeVariant))
+            if (candidatesRetrieved == 0)
             {
-                AddQueryVariant(queryVariants, hydeVariant);
-                searchResult = await SearchAcrossVariantsAsync(query, filters, queryVariants);
-                _logger.LogDebug(
-                    "🧠 HyDE variant generated for '{Query}': {Variant}",
-                    TruncateQuery(query.Query),
-                    TruncateQuery(hydeVariant));
+                totalSw.Stop();
+                _logger.LogDebug("🔍 RAG: 0 results for query '{Query}'", TruncateQuery(query.Query));
+                return new RAGContext
+                {
+                    Query = query.Query,
+                    EffectiveQuery = effectiveQuery,
+                    QueryVariants = queryVariants,
+                    UsedHydeExpansion = !string.IsNullOrWhiteSpace(hydeVariant),
+                    HydeVariant = hydeVariant,
+                    StrategyUsed = query.Strategy,
+                    TotalTime = totalSw.Elapsed,
+                    RetrievalTime = retrievalSw.Elapsed
+                };
             }
+
+            candidates = searchResult.Matches
+                .Where(m => m.Score >= query.MinRelevanceScore)
+                .ToList();
         }
 
-        retrievalSw.Stop();
-
-        if (searchResult.Matches.Count == 0)
-        {
-            totalSw.Stop();
-            _logger.LogDebug("🔍 RAG: 0 results for query '{Query}'", TruncateQuery(query.Query));
-            return new RAGContext
-            {
-                Query = query.Query,
-                EffectiveQuery = effectiveQuery,
-                QueryVariants = queryVariants,
-                UsedHydeExpansion = !string.IsNullOrWhiteSpace(hydeVariant),
-                HydeVariant = hydeVariant,
-                StrategyUsed = query.Strategy,
-                TotalTime = totalSw.Elapsed,
-                RetrievalTime = retrievalSw.Elapsed
-            };
-        }
-
-        // 2. Filter by minimum score
-        var aboveThreshold = searchResult.Matches
-            .Where(m => m.Score >= query.MinRelevanceScore)
-            .ToList();
-
-        // 3. Re-rank
+        // 3. Re-rank (If not already re-ranked by advanced retrieval, though we usually re-run it for safety/consistency)
         var reRankSw = Stopwatch.StartNew();
-        var ranked = await _reRanker.ReRankAsync(query.Query, aboveThreshold, query.TopKAfterReRank, ct);
+        var ranked = await _reRanker.ReRankAsync(query.Query, candidates, query.TopKAfterReRank, ct);
         reRankSw.Stop();
 
         // 3.5 GAP-06 — Knowledge Freshness: penaliza chunks stale
@@ -193,7 +233,7 @@ public class RAGService : IRAGService
 
         _logger.LogInformation(
             "🔍 RAG: {Retrieved}→{Filtered}→{ReRanked} chunks, {Tokens} tokens, strategy={Strategy}, variants={VariantCount}, compressed={Compressed}, {Ms}ms",
-            searchResult.Matches.Count, aboveThreshold.Count, ranked.Count,
+            candidatesRetrieved, candidates.Count, ranked.Count,
             totalTokens, query.Strategy, queryVariants.Count, usedSemanticCompression, totalSw.ElapsedMilliseconds);
 
         if (_runtimeCoordinator is not null)
@@ -212,7 +252,7 @@ public class RAGService : IRAGService
                     ["queryVariants"] = queryVariants,
                     ["usedHydeExpansion"] = !string.IsNullOrWhiteSpace(hydeVariant),
                     ["hydeVariant"] = hydeVariant ?? string.Empty,
-                    ["retrieved"] = searchResult.Matches.Count,
+                    ["retrieved"] = candidatesRetrieved,
                     ["ranked"] = ranked.Count,
                     ["tokens"] = totalTokens,
                     ["originalTokens"] = originalContextTokens,
@@ -231,7 +271,7 @@ public class RAGService : IRAGService
                     ["effectiveQuery"] = effectiveQuery,
                     ["queryVariants"] = queryVariants,
                     ["usedHydeExpansion"] = !string.IsNullOrWhiteSpace(hydeVariant),
-                    ["retrieved"] = searchResult.Matches.Count,
+                    ["retrieved"] = candidatesRetrieved,
                     ["ranked"] = ranked.Count,
                     ["latencyMs"] = totalSw.Elapsed.TotalMilliseconds,
                     ["tokens"] = totalTokens,
@@ -253,7 +293,7 @@ public class RAGService : IRAGService
             UsedSemanticCompression = usedSemanticCompression,
             OriginalContextTokens = originalContextTokens,
             TotalTokensUsed = totalTokens,
-            CandidatesRetrieved = searchResult.Matches.Count,
+            CandidatesRetrieved = candidatesRetrieved,
             CandidatesAfterReRank = ranked.Count,
             StrategyUsed = query.Strategy,
             RetrievalTime = retrievalSw.Elapsed,

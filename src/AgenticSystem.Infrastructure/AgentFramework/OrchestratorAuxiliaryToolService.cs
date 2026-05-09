@@ -16,7 +16,8 @@ public class OrchestratorAuxiliaryToolService
         IRAGService? ragService = null,
         IContextBudgetManager? contextBudgetManager = null,
         ISmartRouter? smartRouter = null,
-        IContextAnalyzer? contextAnalyzer = null)
+        IContextAnalyzer? contextAnalyzer = null,
+        IDynamicAgentService? dynamicAgentService = null)
     {
         ArgumentNullException.ThrowIfNull(logger);
 
@@ -38,6 +39,12 @@ public class OrchestratorAuxiliaryToolService
         {
             tools.Add(
                 OrchestratorAuxiliaryTools.CreateAnalyzeRequestTool(contextAnalyzer));
+        }
+
+        if (dynamicAgentService is not null)
+        {
+            tools.Add(
+                OrchestratorAuxiliaryTools.CreateDynamicAgentTool(dynamicAgentService));
         }
 
         _tools = tools;

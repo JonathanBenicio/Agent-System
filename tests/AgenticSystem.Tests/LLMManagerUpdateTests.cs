@@ -27,7 +27,7 @@ public class LLMManagerUpdateTests
         _claude.DefaultModel.Returns("claude-sonnet-4-20250514");
 
         var logger = Substitute.For<ILogger<LLMManager>>();
-        _sut = new LLMManager(new[] { _openAi, _claude }, logger);
+        _sut = new LLMManager(new[] { _openAi, _claude }, logger, Substitute.For<IServiceProvider>());
     }
 
     [Fact]

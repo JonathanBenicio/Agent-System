@@ -16,6 +16,7 @@ public class PostgresAdvancedRetrievalService : IAdvancedRetrievalService
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly IEmbeddingProvider _embeddingProvider;
+    private readonly IKnowledgeGraphService _graphService;
     private readonly IChatClient _chatClient;
     private readonly ILogger<PostgresAdvancedRetrievalService> _logger;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
@@ -23,13 +24,81 @@ public class PostgresAdvancedRetrievalService : IAdvancedRetrievalService
     public PostgresAdvancedRetrievalService(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
         IEmbeddingProvider embeddingProvider,
+        IKnowledgeGraphService graphService,
         IChatClient chatClient,
         ILogger<PostgresAdvancedRetrievalService> logger)
     {
         _dbContextFactory = dbContextFactory;
         _embeddingProvider = embeddingProvider;
+        _graphService = graphService;
         _chatClient = chatClient;
         _logger = logger;
+    }
+
+    public async Task<RAGContext> GraphSearchAsync(RAGQuery query, int maxDepth = 2, CancellationToken ct = default)
+    {
+        _logger.LogInformation("🕸️ Performing Graph Search for: {Query}", query.Query);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        // 1. Initial vector/hybrid search to find entry points (entities)
+        var initialContext = await HybridSearchAsync(query, null, ct);
+        var entryChunks = initialContext.Chunks;
+
+        if (entryChunks.Count == 0) return initialContext;
+
+        // 2. Expand via knowledge graph
+        var allChunks = new List<RankedChunk>(entryChunks);
+        var seenIds = new HashSet<string>(entryChunks.Select(c => c.Id));
+
+        foreach (var chunk in entryChunks)
+        {
+            // Find nodes associated with this chunk or content
+            var relatedNodes = await _graphService.SearchNodesAsync(chunk.Content[..Math.Min(chunk.Content.Length, 100)], ct: ct);
+            
+            foreach (var node in relatedNodes)
+            {
+                var neighbors = await _graphService.GetNeighborsAsync(node.Id, ct: ct);
+                foreach (var neighbor in neighbors)
+                {
+                    // If neighbor has a source document/chunk, add it
+                    if (!string.IsNullOrEmpty(neighbor.SourceDocumentId) && seenIds.Add(neighbor.SourceDocumentId))
+                    {
+                        // Fetch the actual chunk content
+                        var neighborChunk = await FetchChunkAsync(neighbor.SourceDocumentId, ct);
+                        if (neighborChunk != null)
+                        {
+                            neighborChunk.ReRankedScore = chunk.ReRankedScore * 0.8; // Decay score for graph expansion
+                            allChunks.Add(neighborChunk);
+                        }
+                    }
+                }
+            }
+        }
+
+        sw.Stop();
+        _logger.LogInformation("🕸️ Graph expansion added {Count} related chunks in {Ms}ms", allChunks.Count - entryChunks.Count, sw.ElapsedMilliseconds);
+
+        return new RAGContext
+        {
+            Query = query.Query,
+            Chunks = allChunks.OrderByDescending(c => c.ReRankedScore).Take(query.MaxResults).ToList(),
+            CandidatesRetrieved = allChunks.Count,
+            TotalTime = sw.Elapsed
+        };
+    }
+
+    private async Task<RankedChunk?> FetchChunkAsync(string id, CancellationToken ct)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var doc = await db.VectorDocuments.FindAsync(new object[] { id }, ct);
+        if (doc == null) return null;
+
+        return new RankedChunk
+        {
+            Id = doc.Id,
+            Content = doc.Content,
+            Metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(doc.MetadataJson, JsonOptions) ?? new()
+        };
     }
 
     public async Task<RAGContext> HybridSearchAsync(RAGQuery query, HybridSearchOptions? options = null, CancellationToken ct = default)
@@ -41,7 +110,7 @@ public class PostgresAdvancedRetrievalService : IAdvancedRetrievalService
         var queryVector = new Vector(embeddingArray);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        
+
         var baseQuery = db.VectorDocuments.AsNoTracking();
         var collection = ScopeToCollection(query.Scope);
         if (!string.IsNullOrEmpty(collection))
@@ -49,33 +118,72 @@ public class PostgresAdvancedRetrievalService : IAdvancedRetrievalService
             baseQuery = baseQuery.Where(x => x.Collection == collection);
         }
 
-        // Vector Search
+        // === Vector Search (cosine similarity) ===
         var vectorResults = await baseQuery
             .OrderBy(x => x.Embedding!.CosineDistance(queryVector))
             .Take(query.MaxResults * 2)
             .ToListAsync(ct);
 
-        // Keyword Search (Fallback to ILIKE if no TsVector configured)
-        var keywordResults = await baseQuery
-            .Where(x => EF.Functions.ILike(x.Content, $"%{query.Query}%"))
-            .Take(query.MaxResults * 2)
-            .ToListAsync(ct);
+        // === Full-Text Search with BM25 ranking via ts_rank_cd ===
+        // Sanitize query for tsquery: split into terms and join with '&'
+        var tsQueryTerms = query.Query
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(t => t.Length > 1)
+            .Select(t => t.Replace("'", "").Replace("\\", ""))
+            .Where(t => !string.IsNullOrWhiteSpace(t));
+        var tsQueryString = string.Join(" & ", tsQueryTerms);
 
+        List<(VectorDocumentEntity Doc, float Rank)> ftsResults;
+
+        if (!string.IsNullOrWhiteSpace(tsQueryString))
+        {
+            // Use raw SQL for ts_rank_cd which isn't directly exposed via EF Core LINQ
+            ftsResults = await db.VectorDocuments
+                .FromSqlInterpolated($"""
+                    SELECT *, ts_rank_cd("SearchVector", plainto_tsquery('english', {query.Query})) AS rank_score
+                    FROM vector_documents
+                    WHERE "SearchVector" @@ plainto_tsquery('english', {query.Query})
+                    ORDER BY rank_score DESC
+                    LIMIT {query.MaxResults * 2}
+                """)
+                .AsNoTracking()
+                .Select(x => new { Doc = x, Rank = 0f })
+                .ToListAsync(ct)
+                .ContinueWith(t => t.Result.Select(r => (r.Doc, r.Rank)).ToList(), ct);
+
+            // If FTS returns no results, fallback to ILIKE for resilience
+            if (ftsResults.Count == 0)
+            {
+                _logger.LogDebug("FTS returned 0 results, falling back to ILIKE for query: {Query}", query.Query);
+                var ilikeFallback = await baseQuery
+                    .Where(x => EF.Functions.ILike(x.Content, $"%{query.Query}%"))
+                    .Take(query.MaxResults * 2)
+                    .ToListAsync(ct);
+                ftsResults = ilikeFallback.Select(d => (d, 0.5f)).ToList();
+            }
+        }
+        else
+        {
+            ftsResults = [];
+        }
+
+        var keywordDocs = ftsResults.Select(r => r.Doc).ToList();
+
+        // === RRF Merge ===
         var rrfScores = new Dictionary<string, double>();
 
         if (options.UseRRF)
         {
             CalculateRRF(vectorResults, rrfScores, options.RrfK, options.VectorWeight);
-            CalculateRRF(keywordResults, rrfScores, options.RrfK, options.KeywordWeight);
+            CalculateRRF(keywordDocs, rrfScores, options.RrfK, options.KeywordWeight);
         }
         else
         {
-            // Simple scoring
-            foreach(var v in vectorResults) rrfScores[v.Id] = rrfScores.GetValueOrDefault(v.Id) + options.VectorWeight;
-            foreach(var k in keywordResults) rrfScores[k.Id] = rrfScores.GetValueOrDefault(k.Id) + options.KeywordWeight;
+            foreach (var v in vectorResults) rrfScores[v.Id] = rrfScores.GetValueOrDefault(v.Id) + options.VectorWeight;
+            foreach (var k in keywordDocs) rrfScores[k.Id] = rrfScores.GetValueOrDefault(k.Id) + options.KeywordWeight;
         }
 
-        var combinedDocs = vectorResults.Concat(keywordResults).DistinctBy(x => x.Id).ToList();
+        var combinedDocs = vectorResults.Concat(keywordDocs).DistinctBy(x => x.Id).ToList();
 
         var rankedChunks = combinedDocs
             .Select(x => new RankedChunk
@@ -93,6 +201,9 @@ public class PostgresAdvancedRetrievalService : IAdvancedRetrievalService
         for (int i = 0; i < rankedChunks.Count; i++) rankedChunks[i].Rank = i + 1;
 
         sw.Stop();
+        _logger.LogInformation(
+            "HybridSearch completed: {VectorCount} vector + {FtsCount} FTS results merged to {FinalCount} in {Ms}ms",
+            vectorResults.Count, keywordDocs.Count, rankedChunks.Count, sw.ElapsedMilliseconds);
 
         return new RAGContext
         {

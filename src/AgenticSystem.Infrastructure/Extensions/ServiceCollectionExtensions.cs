@@ -64,11 +64,27 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LLMManager>();
         services.AddSingleton<ILLMAdministrationService>(sp => sp.GetRequiredService<LLMManager>());
         services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(sp.GetRequiredService<LLMManager>()));
-        services.AddSingleton<IChatClient>(sp => new GovernedChatClient(
-            sp.GetRequiredService<ContextAwareChatClient>(),
-            sp.GetRequiredService<IQualityGateService>(),
-            sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatClientMiddlewareOptions>>(),
-            sp.GetRequiredService<ILogger<GovernedChatClient>>()));
+        services.AddSingleton<IChatClient>(sp => 
+        {
+            var governedClient = new GovernedChatClient(
+                sp.GetRequiredService<ContextAwareChatClient>(),
+                sp.GetRequiredService<IQualityGateService>(),
+                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatClientMiddlewareOptions>>(),
+                sp.GetRequiredService<ILogger<GovernedChatClient>>());
+
+            var cacheService = sp.GetService<ISemanticCacheService>();
+            if (cacheService != null)
+            {
+                return new SemanticCacheChatClient(
+                    governedClient,
+                    cacheService,
+                    "AgenticSystem", // default agent name
+                    0.95, // threshold
+                    sp.GetRequiredService<ILogger<SemanticCacheChatClient>>());
+            }
+
+            return governedClient;
+        });
 
         // Gateway
         services.AddSingleton<ICostTracker, CostTracker>();
@@ -180,12 +196,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDocumentParser, MarkdownParser>();
         services.AddSingleton<IDocumentParser, PlainTextParser>();
         services.AddSingleton<IDocumentParser, HtmlParser>();
+        services.AddSingleton<IDocumentParser, PdfDocumentParser>();
+        services.AddSingleton<IDocumentParser, DocxDocumentParser>();
 
         // Chunking Strategy
         services.AddSingleton<IChunkingStrategy, HybridChunkingStrategy>();
 
         // Document Ingestion Pipeline
+        services.AddSingleton<IMultimodalProcessor, LlmMultimodalProcessor>();
         services.AddSingleton<IDocumentIngestionPipeline, DocumentIngestionPipeline>();
+        services.AddSingleton<IDataConnector, FileSystemDataConnector>();
+        services.AddHostedService<DataSyncBackgroundService>();
 
         // RAG
         services.AddSingleton<IRerankingAssetStore, InMemoryRerankingAssetStore>();
@@ -386,12 +407,72 @@ public static class ServiceCollectionExtensions
         services.UsePostgresVectorStore(connectionString);
         services.UsePostgresCostTracker(connectionString);
         services.UsePostgresSmartRouter(connectionString);
+        services.UsePostgresSemanticCache(connectionString);
         services.UsePostgresOperationalStore();
         services.UsePostgresSecurityAndAudit(connectionString);
         services.UsePostgresMigrationJobStore(connectionString);
         services.UsePostgresEmbeddingModelStore(connectionString);
         services.UsePostgresQualityStores(connectionString);
+        services.UsePostgresKnowledgeGraph(connectionString);
+        services.UsePostgresWorkflowEngine(connectionString);
+        services.UsePostgresAdvancedIntelligence(connectionString);
+        services.UsePostgresPlatformStores(connectionString);
 
+        return services;
+    }
+
+    /// <summary>
+    /// Substitui os stores de plataforma (Data Connectors, Marketplace, Memory Lifecycle) pelo PostgreSQL.
+    /// </summary>
+    public static IServiceCollection UsePostgresPlatformStores(this IServiceCollection services, string connectionString)
+    {
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IDataConnectorStore, PostgresDataConnectorStore>(services);
+        ReplaceSingleton<IAgentMarketplace, PostgresAgentMarketplace>(services);
+        ReplaceSingleton<IMemoryLifecycleStore, PostgresMemoryLifecycleStore>(services);
+        return services;
+    }
+
+    /// <summary>
+    /// Substitui os stores de inteligência avançada pelo PostgreSQL.
+    /// </summary>
+    public static IServiceCollection UsePostgresAdvancedIntelligence(this IServiceCollection services, string connectionString)
+    {
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IModelPerformanceStore, PostgresModelPerformanceStore>(services);
+        return services;
+    }
+
+    /// <summary>
+    /// Substitui o Workflow Engine in-memory pelo PostgreSQL.
+    /// </summary>
+    public static IServiceCollection UsePostgresWorkflowEngine(this IServiceCollection services, string connectionString)
+    {
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IWorkflowStore, PostgresWorkflowStore>(services);
+        // The core implementation is agnostic to the store
+        ReplaceSingleton<IWorkflowEngine, DefaultWorkflowEngine>(services);
+        return services;
+    }
+
+    /// <summary>
+    /// Substitui o Knowledge Graph in-memory pelo PostgreSQL.
+    /// </summary>
+    public static IServiceCollection UsePostgresKnowledgeGraph(this IServiceCollection services, string connectionString)
+    {
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IKnowledgeGraphService, PostgresKnowledgeGraphService>(services);
+        ReplaceSingleton<IKnowledgeGraphStore, PostgresKnowledgeGraphService>(services);
+        return services;
+    }
+
+    /// <summary>
+    /// Substitui a interface base de cache pelo PostgresSemanticCacheService.
+    /// </summary>
+    public static IServiceCollection UsePostgresSemanticCache(this IServiceCollection services, string connectionString)
+    {
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<ISemanticCacheService, PostgresSemanticCacheService>(services);
         return services;
     }
 

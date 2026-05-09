@@ -551,3 +551,198 @@ public class EvalSuiteResultConfiguration : IEntityTypeConfiguration<EvalSuiteRe
         builder.HasIndex(e => e.StartedAt).HasDatabaseName("ix_eval_suite_results_started_at");
     }
 }
+
+public class KnowledgeGraphNodeConfiguration : IEntityTypeConfiguration<KnowledgeGraphNodeEntity>
+{
+    public void Configure(EntityTypeBuilder<KnowledgeGraphNodeEntity> builder)
+    {
+        builder.ToTable("knowledge_graph_nodes");
+
+        builder.HasKey(n => n.Id);
+        builder.Property(n => n.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(n => n.Label).HasColumnName("label").HasMaxLength(256).IsRequired();
+        builder.Property(n => n.EntityType).HasColumnName("entity_type").HasMaxLength(128).IsRequired();
+        builder.Property(n => n.Description).HasColumnName("description");
+        builder.Property(n => n.PropertiesJson).HasColumnName("properties").HasColumnType("jsonb").IsRequired();
+        builder.Property(n => n.SourceDocumentId).HasColumnName("source_document_id").HasMaxLength(256);
+        builder.Property(n => n.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(n => n.Label).HasDatabaseName("ix_knowledge_graph_nodes_label");
+        builder.HasIndex(n => n.EntityType).HasDatabaseName("ix_knowledge_graph_nodes_entity_type");
+        builder.HasIndex(n => n.SourceDocumentId).HasDatabaseName("ix_knowledge_graph_nodes_source_document");
+    }
+}
+
+public class KnowledgeGraphEdgeConfiguration : IEntityTypeConfiguration<KnowledgeGraphEdgeEntity>
+{
+    public void Configure(EntityTypeBuilder<KnowledgeGraphEdgeEntity> builder)
+    {
+        builder.ToTable("knowledge_graph_edges");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.SourceNodeId).HasColumnName("source_node_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.TargetNodeId).HasColumnName("target_node_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.RelationType).HasColumnName("relation_type").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.Weight).HasColumnName("weight");
+        builder.Property(e => e.PropertiesJson).HasColumnName("properties").HasColumnType("jsonb").IsRequired();
+        builder.Property(e => e.SourceDocumentId).HasColumnName("source_document_id").HasMaxLength(256);
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(e => e.SourceNodeId).HasDatabaseName("ix_knowledge_graph_edges_source_node");
+        builder.HasIndex(e => e.TargetNodeId).HasDatabaseName("ix_knowledge_graph_edges_target_node");
+        builder.HasIndex(e => e.RelationType).HasDatabaseName("ix_knowledge_graph_edges_relation_type");
+        builder.HasIndex(e => new { e.SourceNodeId, e.TargetNodeId, e.RelationType }).HasDatabaseName("ix_knowledge_graph_edges_unique_relation").IsUnique();
+    }
+}
+
+public class WorkflowDefinitionConfiguration : IEntityTypeConfiguration<WorkflowDefinitionEntity>
+{
+    public void Configure(EntityTypeBuilder<WorkflowDefinitionEntity> builder)
+    {
+        builder.ToTable("workflow_definitions");
+        builder.HasKey(w => w.Id);
+        builder.Property(w => w.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(w => w.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(w => w.Version).HasColumnName("version");
+        builder.Property(w => w.DefinitionJson).HasColumnName("definition").HasColumnType("jsonb").IsRequired();
+        builder.Property(w => w.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(w => w.Name).HasDatabaseName("ix_workflow_definitions_name");
+    }
+}
+
+public class WorkflowExecutionConfiguration : IEntityTypeConfiguration<WorkflowExecutionEntity>
+{
+    public void Configure(EntityTypeBuilder<WorkflowExecutionEntity> builder)
+    {
+        builder.ToTable("workflow_executions");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.WorkflowId).HasColumnName("workflow_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.WorkflowName).HasColumnName("workflow_name").HasMaxLength(256).IsRequired();
+        builder.Property(e => e.Status).HasColumnName("status").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.VariablesJson).HasColumnName("variables").HasColumnType("jsonb").IsRequired();
+        builder.Property(e => e.InitiatedBy).HasColumnName("initiated_by").HasMaxLength(128);
+        builder.Property(e => e.ErrorMessage).HasColumnName("error_message");
+        builder.Property(e => e.StartedAt).HasColumnName("started_at");
+        builder.Property(e => e.CompletedAt).HasColumnName("completed_at");
+
+        builder.HasIndex(e => e.WorkflowId).HasDatabaseName("ix_workflow_executions_workflow_id");
+        builder.HasIndex(e => e.Status).HasDatabaseName("ix_workflow_executions_status");
+        builder.HasIndex(e => e.StartedAt).HasDatabaseName("ix_workflow_executions_started_at");
+    }
+}
+
+public class WorkflowStepExecutionConfiguration : IEntityTypeConfiguration<WorkflowStepExecutionEntity>
+{
+    public void Configure(EntityTypeBuilder<WorkflowStepExecutionEntity> builder)
+    {
+        builder.ToTable("workflow_step_executions");
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(s => s.ExecutionId).HasColumnName("execution_id").HasMaxLength(64).IsRequired();
+        builder.Property(s => s.StepId).HasColumnName("step_id").HasMaxLength(64).IsRequired();
+        builder.Property(s => s.StepName).HasColumnName("step_name").HasMaxLength(256).IsRequired();
+        builder.Property(s => s.Status).HasColumnName("status").HasMaxLength(64).IsRequired();
+        builder.Property(s => s.OutputJson).HasColumnName("output").HasColumnType("jsonb").IsRequired();
+        builder.Property(s => s.ErrorMessage).HasColumnName("error_message");
+        builder.Property(s => s.RetryCount).HasColumnName("retry_count");
+        builder.Property(s => s.CompensationExecuted).HasColumnName("compensation_executed");
+        builder.Property(s => s.StartedAt).HasColumnName("started_at");
+        builder.Property(s => s.CompletedAt).HasColumnName("completed_at");
+
+        builder.HasIndex(s => s.ExecutionId).HasDatabaseName("ix_workflow_step_executions_execution_id");
+        builder.HasIndex(s => new { s.ExecutionId, s.StepId }).IsUnique().HasDatabaseName("ix_workflow_step_executions_unique_step");
+    }
+}
+
+public class ModelPerformanceConfiguration : IEntityTypeConfiguration<ModelPerformanceEntity>
+{
+    public void Configure(EntityTypeBuilder<ModelPerformanceEntity> builder)
+    {
+        builder.ToTable("model_performance_records");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.ModelId).HasColumnName("model_id").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.LatencyMs).HasColumnName("latency_ms");
+        builder.Property(e => e.Success).HasColumnName("success");
+        builder.Property(e => e.InputTokens).HasColumnName("input_tokens");
+        builder.Property(e => e.OutputTokens).HasColumnName("output_tokens");
+        builder.Property(e => e.ActualCostUsd).HasColumnName("actual_cost_usd");
+        builder.Property(e => e.RecordedAt).HasColumnName("recorded_at");
+
+        builder.HasIndex(e => e.ModelId).HasDatabaseName("ix_model_performance_model_id");
+        builder.HasIndex(e => e.RecordedAt).HasDatabaseName("ix_model_performance_recorded_at");
+    }
+}
+
+public class DataConnectorConfiguration : IEntityTypeConfiguration<DataConnectorEntity>
+{
+    public void Configure(EntityTypeBuilder<DataConnectorEntity> builder)
+    {
+        builder.ToTable("data_connectors");
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(c => c.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(c => c.ConnectorType).HasColumnName("connector_type").HasMaxLength(64).IsRequired();
+        builder.Property(c => c.ConnectionString).HasColumnName("connection_string").HasMaxLength(512);
+        builder.Property(c => c.SettingsJson).HasColumnName("settings").HasColumnType("jsonb").IsRequired();
+        builder.Property(c => c.TenantId).HasColumnName("tenant_id").HasMaxLength(64);
+        builder.Property(c => c.SyncScheduleJson).HasColumnName("sync_schedule").HasColumnType("jsonb").IsRequired();
+        builder.Property(c => c.IsActive).HasColumnName("is_active");
+        builder.Property(c => c.LastSyncAt).HasColumnName("last_sync_at");
+        builder.Property(c => c.Status).HasColumnName("status").HasMaxLength(64).IsRequired();
+
+        builder.HasIndex(c => c.TenantId).HasDatabaseName("ix_data_connectors_tenant_id");
+    }
+}
+
+public class AgentMarketplaceEntryConfiguration : IEntityTypeConfiguration<AgentMarketplaceEntryEntity>
+{
+    public void Configure(EntityTypeBuilder<AgentMarketplaceEntryEntity> builder)
+    {
+        builder.ToTable("agent_marketplace_entries");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(e => e.Domain).HasColumnName("domain").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.Description).HasColumnName("description").IsRequired();
+        builder.Property(e => e.Author).HasColumnName("author").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.TagsJson).HasColumnName("tags").HasColumnType("jsonb").IsRequired();
+        builder.Property(e => e.AverageRating).HasColumnName("average_rating");
+        builder.Property(e => e.InstallCount).HasColumnName("install_count");
+        builder.Property(e => e.SpecificationJson).HasColumnName("specification").HasColumnType("jsonb").IsRequired();
+        builder.Property(e => e.PublishedAt).HasColumnName("published_at");
+
+        builder.HasIndex(e => e.Domain).HasDatabaseName("ix_marketplace_domain");
+        builder.HasIndex(e => e.Author).HasDatabaseName("ix_marketplace_author");
+    }
+}
+
+public class EnhancedMemoryConfiguration : IEntityTypeConfiguration<EnhancedMemoryEntity>
+{
+    public void Configure(EntityTypeBuilder<EnhancedMemoryEntity> builder)
+    {
+        builder.ToTable("enhanced_memories");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.AgentName).HasColumnName("agent_name").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.SessionId).HasColumnName("session_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.Content).HasColumnName("content").IsRequired();
+        builder.Property(e => e.MemoryType).HasColumnName("memory_type").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.Sensitivity).HasColumnName("sensitivity").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.Confidence).HasColumnName("confidence");
+        builder.Property(e => e.Freshness).HasColumnName("freshness");
+        builder.Property(e => e.DecayRate).HasColumnName("decay_rate");
+        builder.Property(e => e.AccessCount).HasColumnName("access_count");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.LastAccessedAt).HasColumnName("last_accessed_at");
+        builder.Property(e => e.ExpiresAt).HasColumnName("expires_at");
+        builder.Property(e => e.TagsJson).HasColumnName("tags").HasColumnType("jsonb").IsRequired();
+
+        builder.HasIndex(e => e.AgentName).HasDatabaseName("ix_enhanced_memory_agent");
+        builder.HasIndex(e => e.SessionId).HasDatabaseName("ix_enhanced_memory_session");
+        builder.HasIndex(e => e.MemoryType).HasDatabaseName("ix_enhanced_memory_type");
+    }
+}

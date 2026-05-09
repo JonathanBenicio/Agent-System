@@ -14,6 +14,12 @@ public class RAGQuery
     public double MinRelevanceScore { get; set; } = 0.3;
     public Dictionary<string, string>? Filters { get; set; }
     public RetrievalStrategy Strategy { get; set; } = RetrievalStrategy.Default;
+
+    // Advanced Retrieval Flags
+    public bool UseHybridSearch { get; set; } = false;
+    public bool UseMultiQuery { get; set; } = false;
+    public bool UseSelfCorrection { get; set; } = false;
+    public bool UseGraphSearch { get; set; } = false;
 }
 
 /// <summary>
