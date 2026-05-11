@@ -7,7 +7,7 @@
 
 ## Índice
 
-- [Backend — Maturity Levels (ML1–ML33)](#backend--maturity-levels-ml1ml33)
+- [Backend — Maturity Levels (ML1–ML34)](#backend--maturity-levels-ml1ml34)
 - [Frontend — Épicos e User Stories (US-01–US-30)](#frontend--épicos-e-user-stories-us-01us-30)
 
 ---
@@ -1070,7 +1070,7 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-### Agent Runtime Platform (ML29–ML33)
+### Agent Runtime Platform (ML29–ML34)
 
 #### ML29 — Agent Execution Workflow
 
@@ -1169,6 +1169,26 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
+#### ML34 — Protocol Hosting e Interoperabilidade
+
+**Como** plataforma extensível,
+**quero** hospedar os agentes via protocolos padronizados (A2A, AG-UI e OpenAI-compatible),
+**para que** sistemas externos, UIs especializadas e ferramentas do ecossistema interajam com o orquestrador nativamente.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `A2A Protocol`, `AG-UI Protocol`, `OpenAIChatCompletionController` |
+| Endpoints | `POST /a2a`, `POST /agui`, `POST /v1/chat/completions`, `GET /v1/models` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Hospedagem de endpoints via `Microsoft.Agents.AI.Hosting`
+- [x] O orquestrador hospedado reaproveita a sessão nativa do framework
+- [x] Compatibilidade total com requisições formato OpenAI (`/v1/chat/completions`)
+- [x] Rate limiting e autenticação centralizados via middlewares de protocolo
+
+---
+
 ## Backend — Resumo de Cobertura
 
 | Camada | MLs | Serviços | Testes |
@@ -1185,9 +1205,9 @@ TriggerEngine.EvaluateAsync(rule)
 | Observability & Self-Healing | ML24–ML25 | 3 | ✅ |
 | Vision | ML26 | 1 | ✅ |
 | MCP & Extensibility | ML27–ML28 | 3 | ✅ |
-| Agent Runtime Platform | ML29–ML33 | 5 | ✅ |
+| Agent Runtime Platform | ML29–ML34 | 6 | ✅ |
 | Transversal | T1–T10 | 10 | ✅ |
-| **Total** | **33 MLs + 10 Transversais** | **53 serviços** | **549+ testes** |
+| **Total** | **34 MLs + 10 Transversais** | **54 serviços** | **549+ testes** |
 
 ---
 

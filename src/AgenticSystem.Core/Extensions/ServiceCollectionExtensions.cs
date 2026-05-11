@@ -161,6 +161,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IComplianceService, ComplianceService>();
         services.AddSingleton<IMemoryLifecycleStore, InMemoryMemoryLifecycleStore>();
 
+        // Phase 5 — Enterprise Scoping & Sandboxing
+        services.AddSingleton<IQuotaEnforcer, QuotaEnforcer>();
+        services.AddSingleton<IAgentSandbox, AgentSandbox>();
+
         services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(ServiceCollectionExtensions).Assembly));
 
         return services;

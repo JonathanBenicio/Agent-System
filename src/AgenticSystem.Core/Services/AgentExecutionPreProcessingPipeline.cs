@@ -8,16 +8,28 @@ public class AgentExecutionPreProcessingPipeline : IAgentExecutionPreProcessingP
 {
     private readonly IQualityGateService? _qualityGateService;
     private readonly ICorrectionLoop? _correctionLoop;
+    private readonly IQuotaEnforcer? _quotaEnforcer;
+    private readonly ISetupFlowManager? _setupFlowManager;
+    private readonly IModelRouter? _modelRouter;
+    private readonly IAgentSandbox? _agentSandbox;
     private readonly ILogger<AgentExecutionPreProcessingPipeline> _logger;
 
     public AgentExecutionPreProcessingPipeline(
         ILogger<AgentExecutionPreProcessingPipeline> logger,
         IQualityGateService? qualityGateService = null,
-        ICorrectionLoop? correctionLoop = null)
+        ICorrectionLoop? correctionLoop = null,
+        IQuotaEnforcer? quotaEnforcer = null,
+        ISetupFlowManager? setupFlowManager = null,
+        IModelRouter? modelRouter = null,
+        IAgentSandbox? agentSandbox = null)
     {
         _logger = logger;
         _qualityGateService = qualityGateService;
         _correctionLoop = correctionLoop;
+        _quotaEnforcer = quotaEnforcer;
+        _setupFlowManager = setupFlowManager;
+        _modelRouter = modelRouter;
+        _agentSandbox = agentSandbox;
     }
 
     public async Task<AgentExecutionPreProcessingResult> ProcessAsync(
@@ -28,7 +40,46 @@ public class AgentExecutionPreProcessingPipeline : IAgentExecutionPreProcessingP
         ArgumentNullException.ThrowIfNull(context.UserContext);
         ArgumentException.ThrowIfNullOrWhiteSpace(context.SessionId);
 
+        // 1. Quota & Quality Validation
         await ValidateRequestAsync(context, ct);
+
+        // 2. Setup Flow Short-circuit (ML15)
+        if (_setupFlowManager != null && await _setupFlowManager.IsInSetupFlowAsync(context.UserContext.UserId))
+        {
+            _logger.LogInformation("Short-circuiting to Setup Flow for user {UserId}", context.UserContext.UserId);
+            context.Metadata["shortCircuitToSetup"] = true;
+        }
+
+        // 3. Adaptive Model Routing (Phase 3)
+        if (_modelRouter != null && context.Analysis != null)
+        {
+            var routingRequest = new ModelRoutingRequest
+            {
+                TaskDescription = context.Input,
+                Priority = ModelRoutingPriority.Balanced
+            };
+
+            var route = await _modelRouter.RouteToModelAsync(routingRequest, ct);
+            if (route != null)
+            {
+                context.UserContext.Preferences["llm.model"] = route.ModelId;
+                context.UserContext.Preferences["llm.provider"] = route.Provider;
+                _logger.LogDebug("Adaptive Routing selected {Provider}/{Model}", route.Provider, route.ModelId);
+            }
+        }
+
+        // 4. Sandbox Activation (ML22)
+        if (_agentSandbox != null && !string.IsNullOrEmpty(context.TargetAgent))
+        {
+            // Simple heuristic: if agent name starts with "test" or "dev", or metadata requires it
+            if (context.TargetAgent.StartsWith("Test", StringComparison.OrdinalIgnoreCase) || 
+                context.Metadata.ContainsKey("useSandbox"))
+            {
+                var sbConfig = await _agentSandbox.CreateSandboxAsync(context.TargetAgent, null, ct);
+                context.Metadata["sandboxId"] = sbConfig.Id;
+                _logger.LogInformation("Enabled sandbox {SandboxId} for execution", sbConfig.Id);
+            }
+        }
 
         var effectiveInput = context.Input;
         var appliedRuleCount = 0;
@@ -62,6 +113,16 @@ public class AgentExecutionPreProcessingPipeline : IAgentExecutionPreProcessingP
         AgentExecutionPreProcessingContext context,
         CancellationToken ct)
     {
+        // 1. Enforce Quotas (Phase 5)
+        if (_quotaEnforcer != null)
+        {
+            var quotaCheck = await _quotaEnforcer.CheckQuotaAsync(context.UserContext.TenantId ?? context.UserContext.UserId, ct: ct);
+            if (!quotaCheck.Allowed)
+            {
+                throw new InvalidOperationException($"Quota Exceeded: {quotaCheck.DenialReason}");
+            }
+        }
+
         if (!context.ValidateRequest)
         {
             return;

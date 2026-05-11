@@ -24,8 +24,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/agents",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "agents"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "agents"
+              ]
             },
             "description": "Retorna todos os agents atualmente ativos no sistema."
           },
@@ -61,8 +67,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/agents/tier/Chief",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "agents", "tier", "Chief"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "agents",
+                "tier",
+                "Chief"
+              ]
             },
             "description": "Lista agents do tier Chief (tier 0 — MetaAgent)."
           },
@@ -89,8 +103,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/agents/tier/Master",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "agents", "tier", "Master"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "agents",
+                "tier",
+                "Master"
+              ]
             },
             "description": "Lista agents do tier Master (tier 1)."
           },
@@ -117,8 +139,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/agents/tier/Specialist",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "agents", "tier", "Specialist"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "agents",
+                "tier",
+                "Specialist"
+              ]
             },
             "description": "Lista agents do tier Specialist (tier 2)."
           },
@@ -145,8 +175,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/agents/tier/Support",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "agents", "tier", "Support"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "agents",
+                "tier",
+                "Support"
+              ]
             },
             "description": "Lista agents do tier Support (tier 3)."
           },
@@ -171,7 +209,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -179,8 +220,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/agent/agents",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "agents"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "agents"
+              ]
             },
             "description": "Cria um agent customizado com spec definida pelo usuário."
           },
@@ -211,7 +258,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -219,8 +269,14 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/agent/agents",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "agents"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "agents"
+              ]
             },
             "description": "Cenário negativo: body sem campos obrigatórios."
           },
@@ -252,8 +308,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/tools",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "tools"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "tools"
+              ]
             },
             "description": "Lista todas as tools disponíveis no sistema."
           },
@@ -288,10 +350,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/tools?category=Api",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "tools"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "tools"
+              ],
               "query": [
-                { "key": "category", "value": "Api" }
+                {
+                  "key": "category",
+                  "value": "Api"
+                }
               ]
             },
             "description": "Filtra tools pela categoria informada (Calendar, Email, Storage, Notes, Tasks, Search, Api, Database)."
@@ -320,7 +391,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -328,8 +402,16 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/agent/tools/datetime/execute",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "tools", "datetime", "execute"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "tools",
+                "datetime",
+                "execute"
+              ]
             },
             "description": "Executa a tool DateTime para obter a data/hora atual."
           },
@@ -355,7 +437,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -363,8 +448,16 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/agent/tools/calculator/execute",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "tools", "calculator", "execute"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "tools",
+                "calculator",
+                "execute"
+              ]
             },
             "description": "Executa a tool Calculator para avaliar uma expressão matemática."
           },
@@ -389,7 +482,10 @@
           "request": {
             "method": "POST",
             "header": [
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -397,8 +493,16 @@
             },
             "url": {
               "raw": "{{baseUrl}}/api/agent/tools/tool-que-nao-existe/execute",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "tools", "tool-que-nao-existe", "execute"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "tools",
+                "tool-que-nao-existe",
+                "execute"
+              ]
             },
             "description": "Cenário negativo: tool ID inválido retorna erro."
           },
@@ -430,8 +534,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/skills",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "skills"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "skills"
+              ]
             },
             "description": "Lista skills sem filtro (agent=general, domain=general)."
           },
@@ -458,11 +568,23 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/skills?agent=code-reviewer&domain=development",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "skills"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "skills"
+              ],
               "query": [
-                { "key": "agent", "value": "code-reviewer" },
-                { "key": "domain", "value": "development" }
+                {
+                  "key": "agent",
+                  "value": "code-reviewer"
+                },
+                {
+                  "key": "domain",
+                  "value": "development"
+                }
               ]
             },
             "description": "Filtra skills por agent e domínio específicos."
@@ -496,10 +618,21 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/sessions/session-001/events?count=10",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "sessions", "session-001", "events"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "sessions",
+                "session-001",
+                "events"
+              ],
               "query": [
-                { "key": "count", "value": "10" }
+                {
+                  "key": "count",
+                  "value": "10"
+                }
               ]
             },
             "description": "Busca os últimos 10 eventos de uma sessão."
@@ -527,8 +660,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/sessions/session-001/events",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "sessions", "session-001", "events"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "sessions",
+                "session-001",
+                "events"
+              ]
             },
             "description": "Busca eventos com count default (20)."
           },
@@ -558,8 +699,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/maintenance/cleanup",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "maintenance", "cleanup"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "maintenance",
+                "cleanup"
+              ]
             },
             "description": "Dispara limpeza de agents inativos."
           },
@@ -587,6 +735,58 @@
       ]
     },
     {
+      "name": "Protocol Hosting",
+      "description": "Endpoints padronizados de interoperabilidade (MAF Phase 4)",
+      "item": [
+        {
+          "name": "POST — OpenAI Completions Compatible",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"AgenticSystem\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Olá, quem é você?\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "chat",
+                "completions"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET — OpenAI Models",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/v1/models",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "v1",
+                "models"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
       "name": "Gateway Admin",
       "description": "Endpoints administrativos do Gateway de serviços",
       "item": [
@@ -597,8 +797,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/dashboard",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "dashboard"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "dashboard"
+              ]
             },
             "description": "Retorna dashboard com health, custos e métricas consolidadas."
           },
@@ -628,8 +835,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/services",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "services"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "services"
+              ]
             },
             "description": "Lista status de todos os serviços registrados no gateway."
           },
@@ -656,8 +870,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/services/openai",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "services", "openai"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "services",
+                "openai"
+              ]
             },
             "description": "Busca status de um serviço pelo nome."
           },
@@ -690,8 +912,16 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/services/servico-que-nao-existe",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "services", "servico-que-nao-existe"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "services",
+                "servico-que-nao-existe"
+              ]
             },
             "description": "Cenário negativo: buscar serviço que não existe retorna 404."
           },
@@ -720,8 +950,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/services/category/llm",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "services", "category", "llm"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "services",
+                "category",
+                "llm"
+              ]
             },
             "description": "Filtra serviços do gateway pela categoria (ex: llm, embedding, search)."
           },
@@ -748,8 +987,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/costs",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "costs"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "costs"
+              ]
             },
             "description": "Relatório de custos consolidado — total, por serviço, por categoria, alerta de budget."
           },
@@ -780,8 +1026,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/health",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "health"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "health"
+              ]
             },
             "description": "Relatório de saúde de todos os serviços."
           },
@@ -810,8 +1063,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/services/openai/enable",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "services", "openai", "enable"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "services",
+                "openai",
+                "enable"
+              ]
             },
             "description": "Habilita um serviço no gateway."
           },
@@ -835,8 +1097,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/services/openai/disable",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "services", "openai", "disable"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "services",
+                "openai",
+                "disable"
+              ]
             },
             "description": "Desabilita um serviço no gateway."
           },
@@ -860,8 +1131,17 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/services/ollama/disable",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "services", "ollama", "disable"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "services",
+                "ollama",
+                "disable"
+              ]
             },
             "description": "Cenário: desabilitar e depois reabilitar um serviço (use com o próximo request)."
           },
@@ -903,8 +1183,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/agents",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "agent", "agents"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "agent",
+                "agents"
+              ]
             },
             "description": "Verifica se a API está respondendo."
           },
@@ -937,8 +1223,14 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/swagger/v1/swagger.json",
-              "host": ["{{baseUrl}}"],
-              "path": ["swagger", "v1", "swagger.json"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "swagger",
+                "v1",
+                "swagger.json"
+              ]
             },
             "description": "Verifica se o Swagger/OpenAPI está acessível."
           },
@@ -967,8 +1259,15 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/admin/gateway/dashboard",
-              "host": ["{{baseUrl}}"],
-              "path": ["api", "admin", "gateway", "dashboard"]
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "admin",
+                "gateway",
+                "dashboard"
+              ]
             },
             "description": "Valida que o dashboard do gateway responde corretamente."
           },
@@ -1001,10 +1300,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/hubs/chat/negotiate?negotiateVersion=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["hubs", "chat", "negotiate"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hubs",
+                "chat",
+                "negotiate"
+              ],
               "query": [
-                { "key": "negotiateVersion", "value": "1" }
+                {
+                  "key": "negotiateVersion",
+                  "value": "1"
+                }
               ]
             },
             "description": "Handshake SignalR do ChatHub. Retorna connectionId e transportes disponíveis (WebSockets, ServerSentEvents, LongPolling)."
@@ -1044,10 +1352,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/hubs/gateway/negotiate?negotiateVersion=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["hubs", "gateway", "negotiate"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hubs",
+                "gateway",
+                "negotiate"
+              ],
               "query": [
-                { "key": "negotiateVersion", "value": "1" }
+                {
+                  "key": "negotiateVersion",
+                  "value": "1"
+                }
               ]
             },
             "description": "Handshake SignalR do GatewayHub. Retorna connectionId e transportes disponíveis."
@@ -1082,10 +1399,19 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/hubs/hub-que-nao-existe/negotiate?negotiateVersion=1",
-              "host": ["{{baseUrl}}"],
-              "path": ["hubs", "hub-que-nao-existe", "negotiate"],
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "hubs",
+                "hub-que-nao-existe",
+                "negotiate"
+              ],
               "query": [
-                { "key": "negotiateVersion", "value": "1" }
+                {
+                  "key": "negotiateVersion",
+                  "value": "1"
+                }
               ]
             },
             "description": "Cenário negativo: negotiate para hub inexistente retorna 404."

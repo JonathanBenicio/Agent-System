@@ -15,6 +15,10 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
     private readonly ICorrectionLoop? _correctionLoop;
     private readonly IAgentMemoryService? _agentMemoryService;
     private readonly ICitationEngine? _citationEngine;
+    private readonly IAgentEvaluationService? _evaluationService;
+    private readonly ISelfImprovementEngine? _selfImprovementEngine;
+    private readonly IPromptManager? _promptManager;
+    private readonly IAgentVersioningService? _versioningService;
     private readonly ILogger<AgentExecutionPostProcessingPipeline> _logger;
 
     public AgentExecutionPostProcessingPipeline(
@@ -27,7 +31,11 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
         IReflectionEngine? reflectionEngine = null,
         ICorrectionLoop? correctionLoop = null,
         IAgentMemoryService? agentMemoryService = null,
-        ICitationEngine? citationEngine = null)
+        ICitationEngine? citationEngine = null,
+        IAgentEvaluationService? evaluationService = null,
+        ISelfImprovementEngine? selfImprovementEngine = null,
+        IPromptManager? promptManager = null,
+        IAgentVersioningService? versioningService = null)
     {
         _sessionManager = sessionManager;
         _runtimeCoordinator = runtimeCoordinator;
@@ -39,6 +47,10 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
         _correctionLoop = correctionLoop;
         _agentMemoryService = agentMemoryService;
         _citationEngine = citationEngine;
+        _evaluationService = evaluationService;
+        _selfImprovementEngine = selfImprovementEngine;
+        _promptManager = promptManager;
+        _versioningService = versioningService;
     }
 
     public async Task<AgentResponse> ProcessAsync(
@@ -76,12 +88,54 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
 
         await ValidatePostExecutionAsync(context, ct);
 
+        // 1. Evaluate Response (Phase 3 Integration)
+        if (_evaluationService != null)
+        {
+            var testCase = new EvalTestCase
+            {
+                AgentName = response.AgentName,
+                Input = context.Input,
+                ExpectedOutput = null // Ground truth unknown in runtime
+            };
+            var evalResult = await _evaluationService.EvaluateAsync(testCase, ct);
+            _logger.LogInformation("Execution Evaluated. Score: {Score}", evalResult.Score);
+            response.Metadata["evaluationScore"] = evalResult.Score;
+        }
+
         var reflectionOutcome = await ReflectAsync(context);
         response.Confidence = _confidenceCalculator.Calculate(
             response,
             ragContext: context.RagContext,
             reflections: reflectionOutcome.Reflections,
             toolAvailability: null);
+
+        // 2. Self-Improvement & Versioning (Phase 3 Integration)
+        if (_selfImprovementEngine != null && reflectionOutcome.LatestReflection != null && _promptManager != null && _versioningService != null)
+        {
+            var improvement = await _selfImprovementEngine.AnalyzeAndImproveAsync(response.AgentName, ct);
+            if (improvement.Status == "Proposed" && improvement.ProposedChanges.TryGetValue("instructions_update", out var newInstructions))
+            {
+                _logger.LogInformation("Proposed improvement found for {Agent}. Updating template.", response.AgentName);
+                
+                await _promptManager.SaveTemplateAsync(new PromptTemplate
+                {
+                    AgentName = response.AgentName,
+                    TemplateBody = newInstructions,
+                    Name = "Auto-improved Template",
+                    Description = $"Improved based on reflection in session {context.SessionId}",
+                    CreatedBy = "SelfImprovementEngine"
+                }, ct);
+
+                await _versioningService.CreateVersionAsync(
+                    response.AgentName, 
+                    description: $"Auto-improved via reflection in session {context.SessionId}", 
+                    changeLog: improvement.Rationale, 
+                    createdBy: "System", 
+                    ct: ct);
+
+                await _selfImprovementEngine.ApplyImprovementAsync(improvement.Id, ct);
+            }
+        }
 
         var approvalResponse = await ApplyFinalApprovalAsync(context, ct);
         if (approvalResponse is not null)

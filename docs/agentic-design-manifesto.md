@@ -101,7 +101,7 @@ Com ML11 (Dynamic Agent Creation), o sistema não precisa prever todo domínio a
 
 ### 7. Delegação é cooperação, não falha
 
-Com ML12 (Delegação Dinâmica), agents delegam contexto entre si mid-conversation. Não é fallback — é arquitetura intencional.
+Com ML12 (Delegação Dinâmica via Tool Bindings), agents delegam contexto entre si mid-conversation. Não é fallback — é arquitetura intencional orquestrada nativamente pelo Framework.
 
 | Strategy | Quando usar |
 |----------|-------------|
@@ -166,8 +166,8 @@ MLs mantêm estado em `ConcurrentDictionary`. Singleton garante consistência de
 ### Heuristic ReRanker em vez de Cross-Encoder
 Cross-encoders: 200-500ms/query, qualidade superior. Heuristic: <5ms/query, qualidade suficiente. A interface `IReRanker` permite trocar sem impacto no pipeline.
 
-### MetaAgent em vez de MediatR
-MediatR é fire-and-forget. Agents precisam de orquestração hierárquica com contexto propagado e decisão de delegação. O MetaAgent mantém sessão e decide routing.
+### Microsoft Agent Framework em vez de Orquestração Customizada (MediatR/MetaAgent antigo)
+Sistemas baseados em MediatR puro são "fire-and-forget". Agents precisam de orquestração hierárquica com contexto propagado e decisão de delegação. Utilizamos o **Microsoft Agent Framework** (`ChatClientAgent` via `AddAIAgent()`), que assume a orquestração central. O roteamento dinâmico ocorre via Tool Bindings nativos do MAF, e a sessão é gerenciada por `ISessionStore`.
 
 ### Query Compression pré-retrieval
 Comprimir depois do retrieval desperdiça tokens no vector search. Comprimir antes reduz ruído no embedding lookup e melhora precision@k.

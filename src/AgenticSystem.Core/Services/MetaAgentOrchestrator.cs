@@ -17,6 +17,9 @@ public class MetaAgentOrchestrator : IMetaAgent
     private readonly IAgentFactory _agentFactory;
     private readonly ISessionManager _sessionManager;
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
+    private readonly IContextAnalyzer _contextAnalyzer;
+    private readonly IAgentCollaborationWorkflow? _collaborationWorkflow;
+    private readonly IWorkflowEngine? _workflowEngine;
     private readonly ITenantIsolationEnforcer? _isolationEnforcer;
     private readonly ILogger<MetaAgentOrchestrator> _logger;
 
@@ -27,7 +30,10 @@ public class MetaAgentOrchestrator : IMetaAgent
         IAgentFactory agentFactory,
         ISessionManager sessionManager,
         IAgentRuntimeCoordinator runtimeCoordinator,
+        IContextAnalyzer contextAnalyzer,
         ILogger<MetaAgentOrchestrator> logger,
+        IAgentCollaborationWorkflow? collaborationWorkflow = null,
+        IWorkflowEngine? workflowEngine = null,
         ITenantIsolationEnforcer? isolationEnforcer = null)
     {
         _frameworkOrchestrator = frameworkOrchestrator;
@@ -36,7 +42,10 @@ public class MetaAgentOrchestrator : IMetaAgent
         _agentFactory = agentFactory;
         _sessionManager = sessionManager;
         _runtimeCoordinator = runtimeCoordinator;
+        _contextAnalyzer = contextAnalyzer;
         _logger = logger;
+        _collaborationWorkflow = collaborationWorkflow;
+        _workflowEngine = workflowEngine;
         _isolationEnforcer = isolationEnforcer;
     }
 
@@ -100,6 +109,27 @@ public class MetaAgentOrchestrator : IMetaAgent
         try
         {
             _logger.LogInformation("🎯 Workflow executando request: {Input}", input[..Math.Min(50, input.Length)]);
+
+            // 1. Analyze Context for Routing Decisions (Phase 2 Integration)
+            var analysis = await _contextAnalyzer.AnalyzeAsync(input, context);
+
+            // 2. Delegate to Workflow Engine if specific complex intent or workflow template is matched
+            if (_workflowEngine != null && (analysis.Intent == IntentType.Analyze || analysis.Intent == IntentType.Plan))
+            {
+                _logger.LogInformation("Delegating to Workflow Engine for intent: {Intent}", analysis.Intent);
+                // In a real implementation, we'd resolve the workflow definition first
+                // For this deep integration, we signal the intent
+                context.Preferences["workflow.intent"] = analysis.Intent.ToString();
+            }
+
+            // 3. Delegate to Collaboration Workflow if debate or high complexity (Phase 2 Integration)
+            if (_collaborationWorkflow != null && await _collaborationWorkflow.ShouldRunAsync(input, analysis, ct))
+            {
+                _logger.LogInformation("Delegating to Collaboration Workflow (Multi-Agent)");
+                return await _collaborationWorkflow.ExecuteAsync(sessionId, input, context, analysis, ct);
+            }
+
+            // 4. Fallback to Primary Framework Orchestrator
             _logger.LogDebug("Delegating to Framework Orchestrator");
             return await _frameworkOrchestrator.ExecuteAsync(sessionId, input, context, ct);
         }
@@ -123,7 +153,7 @@ public class MetaAgentOrchestrator : IMetaAgent
             return AgentResponse.Error("Erro interno ao processar a requisição.", "MetaAgentOrchestrator");
         }
     }
-    
+
     public async Task<IEnumerable<AgentInfo>> GetActiveAgentsAsync()
     {
         return await _agentFactory.GetAllAgentsAsync();
