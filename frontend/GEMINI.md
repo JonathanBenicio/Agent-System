@@ -1,93 +1,68 @@
-# GEMINI.md - Frontend Context (Tabatine)
+# GEMINI.md - Frontend Context
 
-Este arquivo define as regras e padrões específicos para o desenvolvimento do Frontend (Next.js) no projeto Tabatine.
+Este arquivo define as regras e padrões específicos para o desenvolvimento do Frontend neste projeto.
 
 ---
 
 ## 🚀 Stack Tecnológica
-- **Next.js 16.1.6** (App Router)
-- **React 19**
-- **TypeScript** (Strict Mode)
-- **Tailwind CSS 4**
-- **Zustand** (State Management)
-- **TanStack Query** (Data Fetching)
-- **Lucide React** (Icons)
+- **Framework**: Next.js (App Router preferencialmente)
+- **Library**: React
+- **Language**: TypeScript (Strict Mode)
+- **Styling**: Tailwind CSS
+- **State Management**: Zustand / Context API
+- **Data Fetching**: TanStack Query / SWR
 
 ---
 
 ## 🎨 Design System & UI Patterns
-- **Paleta**: Tailwind CSS (principalmente `zinc` para neutros).
-- **Dark Mode**: Fundo escuro obrigatório (`bg-black` ou `bg-zinc-950`).
-- **Bordas**: `border-zinc-800/50` para separação no dark mode.
+- **Paleta**: Definida via variáveis de CSS ou classes do Tailwind.
+- **Dark Mode**: Deve ser suportado conforme a configuração do projeto.
 - **Componentes Reutilizáveis**:
-  - `TableContainer`: Wrapper principal para tabelas.
-  - `TableSearch`: Input de busca padronizado.
-  - `TableSummaryCard`: Cards de estatísticas.
-  - `PageHeader`: Cabeçalho de página com breadcrumbs.
-  - `SectionCard`: Agrupamento de informações com ícone.
-  - `StatCard`: Exibição de métricas.
-- **Cores de Status**:
-  - Sucesso: `text-emerald-400`.
-  - Alerta: `text-amber-400`.
-  - Erro: `text-rose-400`.
-  - Info: `text-blue-400`.
+  - Priorize o uso de componentes atômicos e padrões de design estabelecidos.
+  - Siga a estrutura de componentes em `src/components/`.
 
 ---
 
 ## 🏗️ Arquitetura do Frontend
 
-### Diretórios Principais
-- `src/app/`: App Router (Pages & API Routes).
+### Diretórios Sugeridos
+- `src/app/` ou `src/pages/`: Roteamento.
 - `src/components/`: Componentes React reutilizáveis.
-- `src/hooks/`: Custom hooks (TanStack Query wrappers).
-- `src/lib/`: Lógica de negócio, mappers, parsers.
-- `src/store/`: Stores do Zustand (`use*Store.ts`).
+- `src/hooks/`: Custom hooks.
+- `src/lib/`: Lógica de negócio, mappers, utilitários.
+- `src/store/`: Gerenciamento de estado.
 - `src/types/`: Definições globais de TypeScript.
 
-### Data Fetching (TanStack Query)
-- Hooks em `src/hooks/use*Query.ts`.
-- Query Keys: `['resource', page, search, filters]`.
-- Use `placeholderData: (previousData) => previousData` para paginação suave.
-
-### State Management (Zustand)
-- Stores em `src/store/use*Store.ts`.
-- Interface de estado explícita.
-- Gerenciar `loading` e `error` dentro da store.
-
-### API Routes & Integração Omie
-- Proxy Omie: `/api/omie/[resource]/route.ts`.
-- Banco (Supabase): `/api/supabase/[resource]/route.ts`.
-- Webhooks: `/api/webhooks/[provider]/route.ts`.
-- **CRÍTICO**: Chamadas ao banco/Supabase APENAS no lado do servidor. Proibido usar client SDK em `'use client'`.
+### API & Data Fetching
+- Centralize chamadas de API em serviços ou hooks dedicados.
+- Trate estados de carregamento e erro de forma consistente.
 
 ---
 
 ## 📏 Convenções de Código
 
 ### Naming
-- **Components**: PascalCase (`LayoutWrapper.tsx`).
-- **Hooks/Stores**: camelCase com prefixo `use` (`useNfStore.ts`).
+- **Components**: PascalCase.
+- **Hooks/Stores**: camelCase com prefixo `use`.
 - **Types/Interfaces**: PascalCase.
-- **Files**: kebab-case (`nf-mapper.ts`).
+- **Files**: kebab-case.
 
 ### Import Organization
 1. React/Next.js core.
 2. Bibliotecas de terceiros.
-3. Imports internos (usando alias `@/`).
+3. Imports internos (usando alias `@/` se configurado).
 
 ---
 
 ## ✅ Qualidade & Testes
-- **Zero Tolerance**: `npm run lint` deve retornar 0 erros/avisos.
-- **Typing**: `any` é proibido. Use interfaces ou `Record<string, unknown>`.
-- **Unit Tests**: `*.test.ts` usando `node:test`.
-- **E2E Tests**: `*.spec.ts` usando Playwright.
-- **Validação**: Use **Zod** para todas as novas rotas de API e formulários.
+- **Linting**: O código deve passar em todas as verificações de lint.
+- **Typing**: Evite o uso de `any`. Use interfaces e tipos explícitos.
+- **Testing**: Implemente testes unitários e de integração conforme necessário.
 
 ---
 
 ## 🤖 Instruções para o Agente
-Ao trabalhar no diretório `frontend/`:
-1. Sempre verifique este arquivo.
-2. Siga os padrões de componentes em `.agents/rules/front.md` (se ainda existir) ou conforme definido aqui.
-3. Use `npx tsc --noEmit` para validar tipos antes de finalizar.
+Ao trabalhar no diretório de frontend:
+1. Sempre verifique este arquivo e os arquivos de configuração local.
+2. Siga os padrões de design e componentes já existentes no projeto.
+3. Valide as alterações com comandos de verificação de tipos e lint.

@@ -55,4 +55,4 @@ If creating a form, avoid traditional `onSubmit` with `e.preventDefault()`. Crea
 - Every font import via `<link>` is a failure; use `next/font`.
 - Always structure Tailwind classnames handling `dark:` to enforce the workspace standard `zinc` / `black` neutral tone palettes natively.
 
-Read `dev.md` and `front.md` for Tabatine-centric architecture rules.
+Read `GEMINI.md` for project-specific architecture rules.

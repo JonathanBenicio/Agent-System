@@ -1,12 +1,12 @@
 # GEMINI.md - Global Orchestrator
 
-Este é o arquivo central de instruções para o agente no projeto AgenticSystem.
+Este é o arquivo central de instruções para o agente neste workspace.
 
 ---
 
 ## 🏗️ Estrutura do Projeto & Roteamento de Regras
 
-O projeto é um monorepo dividido em Frontend (Next.js) e Backend (.NET). As regras específicas de cada domínio estão localizadas em seus respectivos diretórios:
+O projeto é um monorepo dividido em Frontend e Backend. As regras específicas de cada domínio estão localizadas em seus respectivos diretórios:
 
 - **Frontend**: `frontend/GEMINI.md`
 - **Backend**: `src/GEMINI.md`
@@ -34,11 +34,11 @@ Todas as definições de agentes, skills e workflows estão centralizadas no dir
 
 ### Limpeza & Qualidade
 - **Clean Code**: Siga rigorosamente a skill `@[skills/clean-code]`.
-- **Lint & Types**: Execute `npm run lint` (frontend) ou `dotnet build` (backend) antes de considerar uma tarefa concluída. **Zero tolerância para erros.**
+- **Lint & Types**: Execute os comandos de verificação (ex: lint, type-check, build) antes de considerar uma tarefa concluída. **Zero tolerância para erros.**
 
 ### Comunicação
-- Responda no idioma do usuário (Português, se for o caso).
-- Mantenha comentários e nomes de variáveis em Inglês (exceto entidades de negócio no backend que seguem o domínio em Português).
+- Responda no idioma do usuário.
+- Mantenha comentários e nomes de variáveis em Inglês, a menos que existam termos de domínio específicos já estabelecidos no projeto.
 
 ---
 

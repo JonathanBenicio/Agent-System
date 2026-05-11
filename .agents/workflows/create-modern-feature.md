@@ -34,6 +34,6 @@ description: Create a modern feature leveraging Server Components, Next.js 16 ca
 
 1. Check for nested `cat` commands or generic shell tools, prevent that.
 2. Run `npm run lint` and `npx tsc --noEmit` locally. 
-3. Verify that your UI adheres to Tabatine's `dev.md` and `front.md` rule restrictions. Dark-mode focus, strictly. 
+3. Verify that your UI adheres to the project's styling and layout rules. Dark-mode focus, strictly. 
 
 *Completion*: Present the fully integrated feature and optionally instruct the user on how the Server Component architecture is saving them main-thread payload size!

@@ -36,7 +36,7 @@ No arquivo `src/hooks/use<Entidade>Query.ts`:
 
 ### 5. Consumir na UI
 Utilize os campos planos da interface.
-- Se precisar dos dados brutos para um "Ver Detalhes JSON", use o campo `omieData` (opcional).
+- Se precisar dos dados brutos para depuração, mantenha uma referência ao objeto original (opcional).
 - As tabelas e dashboards devem consumir exclusivamente os campos mapeados (ex: `venda.statusComissao`).
 
 ### Checklist de Conclusão:

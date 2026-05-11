@@ -1,65 +1,51 @@
-# GEMINI.md - Backend Context (Tabatine Engine)
+# GEMINI.md - Backend Context
 
-Este arquivo define as regras e padrões específicos para o desenvolvimento do Backend (.NET) no projeto Tabatine Engine.
+Este arquivo define as regras e padrões específicos para o desenvolvimento do Backend neste projeto.
 
 ---
 
 ## 🚀 Stack Tecnológica
-- **.NET 10** / **C# 14**
-- **EF Core** (Entity Framework Core)
-- **PostgreSQL** (Supabase/Supavisor)
-- **Worker Services** (Background processing)
-- **xUnit** / **NSubstitute** (Testing)
+- **Language**: C# / .NET ou outra linguagem conforme o projeto.
+- **Framework**: ASP.NET Core ou similar.
+- **Persistence**: EF Core / Dapper / SQL direto.
+- **Database**: PostgreSQL / SQL Server / SQLite.
 
 ---
 
 ## 🏗️ Arquitetura & Padrões
 
-### Convenções Modernas de C#
-- **File-scoped Namespaces**: Obrigatório.
-- **Global Usings**: Gerenciado em `GlobalUsings.cs` na raiz de cada projeto.
-- **Primary Constructors**: Obrigatório para Injeção de Dependência.
-- **Records**: Obrigatório para DTOs (imultabilidade com `get; init;`).
+### Convenções de Codificação
+- Siga as convenções idiomáticas da linguagem escolhida.
+- Utilize injeção de dependência conforme os padrões do framework.
+- Mantenha uma separação clara de responsabilidades (Clean Architecture, Hexagonal, etc.).
 
-### Naming & Idiomas
-- **Entidades e Negócio**: Português (ex: `Cliente`, `PedidoVenda`).
-- **Arquitetura e Infra**: Inglês (ex: `SyncService`, `DbContext`, `Repository`).
-- **PascalCase**: Métodos, Propriedades, Classes, Interfaces (com prefixo `I`).
-- **Private Fields**: `_camelCase` (apenas se não puder usar Primary Constructor).
+### Naming
+- **Namespaces/Packages**: PascalCase ou conforme a linguagem.
+- **Classes/Interfaces**: PascalCase.
+- **Methods/Properties**: PascalCase ou camelCase dependendo da linguagem.
 
-### Database (EF Core)
-- **Fluent API**: Obrigatório para mapeamento. Proibido usar Data Annotations (`[Column]`, `[Table]`).
-- **Snake_case**: Automático via convenção. Não force manualmente.
-- **Entidades Omie**: Devem herdar de `OmieEntityBase`.
+### Database
+- Utilize migrations para gerenciar o esquema do banco de dados.
+- Siga os padrões de nomenclatura (ex: snake_case para tabelas/colunas em PostgreSQL).
 
 ---
 
-## ⚙️ Lógica de Sincronização & Performance
-
-### Memória (Regra Antigravity)
-- **Proibido `List<T>`** para retornos massivos.
-- **Uso Obrigatório de `IAsyncEnumerable<T>`** com `yield return` para paginação de APIs.
-
-### Fluxo de Controle
-- **Result Pattern**: Obrigatório. Nunca use exceções para controle de fluxo de negócio.
-- **Caminho Nulo Crítico**: Sempre logue `LogError` quando um re-fetch crítico retornar `null`.
-
-### API Omie
-- **Rate Limits**: Respeite os limites (240 req/min, 4 simultâneas).
-- **Incremental Sync**: Use `ISyncStateRepository` para gerenciar cursores de data.
+## ⚙️ Lógica & Performance
+- Evite alocações desnecessárias e otimize loops críticos.
+- Utilize fluxos assíncronos para operações de I/O.
+- Implemente logs de auditoria e monitoramento em pontos críticos.
 
 ---
 
 ## ✅ Qualidade & Testes
-- **Framework**: xUnit.
-- **Asserções**: Apenas nativas do xUnit. **FluentAssertions é proibido**.
-- **Mocking**: NSubstitute.
-- **AAA Pattern**: Arrange, Act, Assert.
+- **Automated Tests**: Implemente testes unitários, de integração e funcionais.
+- **Asserções**: Use as bibliotecas de teste padrão do ecossistema.
+- **Patterns**: Siga o padrão Arrange-Act-Assert (AAA).
 
 ---
 
 ## 🤖 Instruções para o Agente
-Ao trabalhar no diretório `src/`:
-1. Sempre verifique este arquivo.
-2. Siga os padrões definidos em `.agents/rules/dot-net-standards.md`.
-3. Garanta que novas entidades possuam configuração via Fluent API em `Data/Configurations/`.
+Ao trabalhar no diretório de backend:
+1. Sempre verifique este arquivo e as configurações globais do projeto.
+2. Siga os padrões arquiteturais já estabelecidos.
+3. Garanta que o código seja testável e bem documentado.

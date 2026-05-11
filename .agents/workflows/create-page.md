@@ -2,7 +2,7 @@
 description: Como criar uma nova página de Dashboard ou Detalhes
 ---
 
-Este workflow descreve os passos para criar uma nova tela seguindo o padrão visual do projeto Tabatine.
+Este workflow descreve os passos para criar uma nova tela seguindo o padrão visual do projeto.
 
 ### 1. Estrutura de Pastas
 Crie a pasta da rota em `src/app/` (ex: `src/app/financeiro/page.tsx`).

@@ -108,13 +108,13 @@ const data: UserData = ...
 ❓ QUESTION: What happens if user is null here?
 ```
 
-## .NET / EF Core Specific (Tabatine Engine)
+## .NET / EF Core Specific
 
 ### Anti-Patterns Críticos (Bloqueantes)
 
 ```csharp
 // 🔴 BLOCKING: Add() em entidade rastreada pelo EF Core
-var existing = await dbContext.Entidades.FirstOrDefaultAsync(e => e.OmieId == id, ct);
+var existing = await dbContext.Entidades.FirstOrDefaultAsync(e => e.Id == id, ct);
 dbContext.Entidades.Add(existing); // Causa InvalidOperationException ou INSERT duplicado
 // ✅ FIX: Modificar propriedades diretamente — EF detecta automaticamente
 
@@ -148,4 +148,4 @@ await Task.Delay(1000); // Anti-pattern de timing
 - [ ] Log de `Error` para caminhos null críticos?
 - [ ] `SyncKey` renomeada com migration de cursor?
 
-> **Referência completa:** `.agents/rules/sync-service-patterns.md`
+
