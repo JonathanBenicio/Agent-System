@@ -23,7 +23,6 @@ Documento canônico de arquitetura atual:
 |-----------|-----------|
 | [architecture/backend-architecture-explained.md](architecture/backend-architecture-explained.md) | Arquitetura canônica do backend atual, framework-first/hosted |
 | [architecture/diagrams.md](architecture/diagrams.md) | Diagramas Mermaid alinhados ao runtime atual |
-| [TECHNICAL_ARCHITECTURE_GUIDE.md](TECHNICAL_ARCHITECTURE_GUIDE.md) | Guia técnico complementar com detalhamento por subsistema |
 | [DSA-AgenticSystem.md](DSA-AgenticSystem.md) | Visão macro de solução, segurança, observabilidade e deploy |
 | [architecture/design-philosophy.md](architecture/design-philosophy.md) | Filosofia de design e decisões arquiteturais |
 | [architecture/agent-registry.md](architecture/agent-registry.md) | Referência funcional do catálogo de agents |

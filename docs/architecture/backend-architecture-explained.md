@@ -1,42 +1,47 @@
-# Backend AgenticSystem — Arquitetura Atual Revalidada
+# Backend & Frontend AgenticSystem — Arquitetura de Referência Consolidada
 
-> **Documento canônico de arquitetura do backend**. Use este arquivo como fonte de verdade do runtime atual, revalidado contra o código e contra o [plano de migração framework-first](../planejamento/framework-first-migration-plan.md).
+> **Documento canônico de arquitetura de software (SST - Single Source of Truth)**. Este arquivo consolida todas as decisões arquiteturais, topologias, fluxos de execução do backend e frontend, substituindo e unificando o antigo `TECHNICAL_ARCHITECTURE_GUIDE.md`.
 >
-> O sistema já roda framework-first no fluxo principal, com surface hosted do MAF, workflows nativos no slice colaborativo e protocol hosting ativo. Ainda existem dívidas locais abertas: uma composição local do orquestrador ainda concentrada em `OrchestratorContextFactory` + `OrchestratorHostBuilder` e middleware de reflection/quality gates via extensões locais.
->
-> [TECHNICAL_ARCHITECTURE_GUIDE.md](../TECHNICAL_ARCHITECTURE_GUIDE.md) e [DSA-AgenticSystem.md](../DSA-AgenticSystem.md) são documentos complementares e devem permanecer alinhados a este arquivo.
+> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.4.0** como runtime principal de agentes, com suporte a fluxos colaborativos e múltiplos canais de interface.
 
 ---
 
 ## Sumário
 
 1. [Visão Geral da Arquitetura](#1-visão-geral-da-arquitetura)
-2. [Stack Tecnológico](#2-stack-tecnológico)
-3. [Camadas e Responsabilidades](#3-camadas-e-responsabilidades)
-4. [Inicialização e Registro de Dependências](#4-inicialização-e-registro-de-dependências)
-5. [Padrão de Orquestração — Supervisor-with-Tools](#5-padrão-de-orquestração--supervisor-with-tools)
-6. [Fluxos de Request](#6-fluxos-de-request)
-7. [RAG Pipeline — RAGContextProvider + retrieve_context](#7-rag-pipeline--ragcontextprovider--retrieve_context)
-8. [Middleware Pipeline — Reflection e QualityGates](#8-middleware-pipeline--reflection-e-qualitygates)
-9. [Workflow de Colaboração — AgentWorkflowBuilder](#9-workflow-de-colaboração--agentworkflowbuilder)
-10. [Gestão de Sessões — ISessionStore + ISessionManager](#10-gestão-de-sessões--isessionstore--isessionmanager)
-11. [Sistema de Tools — MCP, Built-in e AIFunction](#11-sistema-de-tools--mcp-built-in-e-aifunction)
-12. [Ciclo de Vida dos Agentes](#12-ciclo-de-vida-dos-agentes)
-13. [Multi-Tenant](#13-multi-tenant)
-14. [Autenticação e Segurança](#14-autenticação-e-segurança)
-15. [Protocol Hosting — A2A, AG-UI, OpenAI-Compatible](#15-protocol-hosting--a2a-ag-ui-openai-compatible)
-16. [Funcionalidades Transversais](#16-funcionalidades-transversais)
-17. [Observabilidade e Gateway](#17-observabilidade-e-gateway)
-18. [Padrões Arquiteturais Utilizados](#18-padrões-arquiteturais-utilizados)
-19. [Glossário](#19-glossário)
+2. [Governança de Escopo (Core x Laboratório)](#2-governança-de-escopo-core-x-laboratório)
+3. [Stack Tecnológico](#3-stack-tecnológico)
+4. [Camadas e Responsabilidades](#4-camadas-e-responsabilidades)
+5. [Inicialização, Registro de Dependências e Pipeline LLM](#5-inicialização-registro-de-dependências-e-pipeline-llm)
+6. [Padrão de Orquestração — Supervisor-with-Tools](#6-padrão-de-orquestração--supervisor-with-tools)
+7. [Fluxos de Request (REST & Real-Time)](#7-fluxos-de-request-rest--real-time)
+8. [RAG Pipeline — RAGContextProvider + retrieve_context](#8-rag-pipeline--ragcontextprovider--retrieve_context)
+9. [Middleware Pipeline e Auto-Ajuste (Correction Loop)](#9-middleware-pipeline-e-auto-ajuste-correction-loop)
+10. [Workflow de Colaboração — AgentWorkflowBuilder](#10-workflow-de-colaboração--agentworkflowbuilder)
+11. [Gestão de Sessões — ISessionStore + ISessionManager](#11-gestão-de-sessões--isessionstore--isessionmanager)
+12. [Sistema de Tools — MCP, Built-in e Tool Versioning](#12-sistema-de-tools--mcp-built-in-e-tool-versioning)
+13. [Ciclo de Vida dos Agentes](#13-ciclo-de-vida-dos-agentes)
+14. [Multi-Tenant](#14-multi-tenant)
+15. [Autenticação e Segurança](#15-autenticação-e-segurança)
+16. [Service Gateway — Resiliência e Circuit Breaker](#16-service-gateway--resiliência-e-circuit-breaker)
+17. [SignalR — Comunicação Real-Time](#17-signalr--comunicação-real-time)
+18. [Protocol Hosting — A2A, AG-UI e OpenAI-Compatible](#18-protocol-hosting--a2a-ag-ui-e-openai-compatible)
+19. [Funcionalidades Transversais e Scheduler DAG-lite](#19-funcionalidades-transversais-e-scheduler-dag-lite)
+20. [Observabilidade e Monitoramento](#20-observabilidade-e-monitoramento)
+21. [Frontend — SPA React & Vite](#21-frontend--spa-react--vite)
+22. [Over-Engineering Check & Simplificações](#22-over-engineering-check--simplificações)
+23. [Padrões Arquiteturais Utilizados](#23-padrões-arquiteturais-utilizados)
+24. [Apêndice A: Mapa Geral de Arquivos](#apêndice-a-mapa-geral-de-arquivos)
+25. [Apêndice B: Maturity Levels (ML24–ML33)](#apêndice-b-maturity-levels-ml24ml33)
+26. [Glossário](#glossário)
 
 ---
 
 ## 1. Visão Geral da Arquitetura
 
-O AgenticSystem é uma plataforma multi-agent construída sobre .NET 10 e o **Microsoft Agent Framework (MAF) 1.4.0**. O backend expõe agentes de IA especializados por domínio (personal, work, learning, creative, finance, health, etc.) coordenados por um **orquestrador central** que usa o padrão **supervisor-with-tools**.
+O AgenticSystem é uma plataforma corporativa multi-agent construída sobre o **.NET 10** e o **Microsoft Agent Framework (MAF) 1.4.0**. O sistema expõe agentes de inteligência artificial especializados por domínio (Personal, Work, Learning, Creative, Finance, Health, etc.) que são coordenados por um orquestrador central usando o padrão **Supervisor-with-Tools**.
 
-O LLM do orquestrador decide qual especialista chamar com base no input do usuário, sem lógica imperativa de roteamento no `ExecuteAsync` principal. Cada especialista é exposto como uma `AIFunction` do orquestrador via `AsAIFunction()`, e o fluxo colaborativo planner → executor → reviewer já usa `AgentWorkflowBuilder.BuildSequential(...)`.
+O LLM do orquestrador decide dinamicamente para qual especialista delegar a tarefa com base no input do usuário, eliminando as antigas regras imperativas de roteamento do fluxo principal. Cada especialista é encapsulado e exposto como uma `AIFunction` do orquestrador por meio do método nativo `.AsAIFunction()`.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -83,1017 +88,668 @@ O LLM do orquestrador decide qual especialista chamar com base no input do usuá
 
 ---
 
-## 2. Stack Tecnológico
+## 2. Governança de Escopo (Core x Laboratório)
 
-| Camada | Tecnologia |
-|---|---|
-| **Runtime** | .NET 10 (ASP.NET Core) |
-| **Framework de Agentes** | Microsoft Agent Framework (MAF) 1.4.0 + hosting A2A/AG-UI preview (`Microsoft.Agents.AI`, `Microsoft.Agents.AI.Hosting`, `Microsoft.Agents.AI.Workflows`) |
-| **LLM** | `IChatClient` (Microsoft.Extensions.AI) — compatível com OpenAI, Azure OpenAI, Ollama, etc. |
-| **Embeddings** | `IEmbeddingGenerator<string, Embedding<float>>` (M.E.AI) |
-| **Vector Store** | In-Memory ou PostgreSQL (pgvector) |
-| **Banco de dados** | PostgreSQL |
-| **Real-time** | SignalR (WebSocket) |
-| **Frontend** | React + TypeScript + Vite |
-| **MCP** | Model Context Protocol (servidor com HttpTransport) |
-| **Observabilidade** | OpenTelemetry, structured logging |
-| **Autenticação** | Multi-scheme: API Key + JWT Bearer (`PolicyScheme "MultiAuth"`) |
-| **Containerização** | Docker + Kubernetes |
+Para manter o controle de complexidade do sistema, adotamos uma separação rígida entre as capacidades estáveis de produção e as trilhas de experimentação.
 
----
+### 2.1 Core de Produto
+O núcleo estável do produto deve passar por validações severas de CI, testes unitários de regressão e possuir acoplamento limpo. É composto por:
+*   Interface de Chat Principal (SignalR) com streaming ponta a ponta.
+*   Gestão de sessões corporativas e controle de ciclo de vida.
+*   Um único caminho principal de execução orquestrada (`FrameworkOrchestratorService`).
+*   Observabilidade essencial de custos, latência e traces de execução.
 
-## 3. Camadas e Responsabilidades
+### 2.2 Trilhas de Laboratório
+Capacidades em fase experimental ou protótipos de pesquisa não devem alterar o Core. Elas são isoladas usando:
+*   **Feature Flags**: Ativação explícita em arquivos de configuração.
+*   **Módulos Separados**: Classes em namespaces ou subpastas dedicadas.
+*   **Rollout Opcional & Fallbacks**: Se a capacidade falhar ou estiver desabilitada, o comportamento padrão do Core assume imediatamente.
 
-### 3.1 `AgenticSystem.Api` — Apresentação
-
-Responsável por endpoints HTTP, SignalR hubs, autenticação, middleware de tenant e configuração da aplicação.
-
-- **Controllers**: REST endpoints para agentes, sessões, documentos, configurações, gateway
-- **Hubs**: `ChatHub` (chat real-time com streaming), `GatewayHub` (dashboard e status de serviços)
-- **Middleware**: `TenantMiddleware` (resolve tenant por JWT claim ou header)
-- **Auth**: `ApiKeyAuthHandler` + JWT Bearer com `PolicyScheme` para seleção automática
-- **MCP Server**: servidor MCP com `HttpTransport` expondo tools do sistema
-- **Protocol Maps**: `MapA2AHttpJson("/a2a")`, `MapAGUI("/agui")` e controllers custom para OpenAI-compatible
-
-### 3.2 `AgenticSystem.Core` — Domínio
-
-Contém interfaces, modelos, agentes base e serviços de domínio. **Não referencia o MAF diretamente** — opera via interfaces (`IFrameworkOrchestratorService`, `IAgentExecutionWorkflow`).
-
-- **Agents**: `BaseAgent` (classe abstrata) + agentes built-in (Personal, Work, Learning, Creative, Calendar, Analysis, Notification, API, General)
-- **Services**: `MetaAgentOrchestrator`, `AgentExecutionWorkflow`, `ContextAnalyzer`, `SmartRouter`, `ReflectionEngine`, `CorrectionLoopService`, `DynamicAgentService`, `ConfidenceScoreCalculator`, `SessionManager`, `ScheduledTaskManager`
-- **Interfaces**: contratos para todas as funcionalidades (`IMetaAgent`, `IAgentFactory`, `IRAGService`, `ISessionManager`, `IFrameworkOrchestratorService`, etc.)
-
-### 3.3 `AgenticSystem.Infrastructure` — Implementação
-
-Implementa as interfaces do Core com dependências concretas (MAF, PostgreSQL, LLM providers, MCP, RAG).
-
-- **AgentFramework/**: `FrameworkOrchestratorService`, `AgentFrameworkFactory`, `SimpleSessionStoreAdapter`, `OrchestratorContextFactory`, `OrchestratorHostBuilder`, middleware wrappers
-- **RAG/**: `RAGService`, `LlmReRanker`, `JinaReRankerProvider`, `LocalOnnxCrossEncoderReRankerProvider`, `SemanticCompressorService`, `QueryCompressorService`
-- **AI/**: `AgentCollaborationWorkflow` (wrapper para `AgentWorkflowBuilder`), `ChatClientPlanner`, `UnifiedAIToolProvider`
-- **MCP/**: `McpToolsAIFunctionAdapter`, MCP client/server
-- **VectorStore/**: `InMemoryVectorStore`, `PostgreSQLVectorStore`
-- **Documents/**: parsers para PDF, DOCX, Markdown, TXT, HTML, JSON, YAML
+*Exemplos típicos*: Protocolos extras experimentais, fluxos concorrentes avançados de colaboração (`BuildConcurrent`), loops de auto-aperfeiçoamento profundo (`Self-Improvement`) e dashboards administrativos dedicados.
 
 ---
 
-## 4. Inicialização e Registro de Dependências
+## 3. Stack Tecnológico
 
-### Program.cs
+| Camada | Tecnologia | Escopo / Papel |
+|---|---|---|
+| **Runtime** | .NET 10 | ASP.NET Core Runtime para o Backend |
+| **Framework de Agentes** | Microsoft Agent Framework 1.4.0 | `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Hosting`, `Microsoft.Agents.AI.Workflows` |
+| **Abstração LLM** | `IChatClient` (M.E.AI) | Abstração comum de chat (Microsoft.Extensions.AI) |
+| **Geração de Embeddings**| `IEmbeddingGenerator<string, Embedding<float>>` | Abstração comum de vetores (Microsoft.Extensions.AI) |
+| **Vector Store** | In-Memory / PostgreSQL (pgvector) | Armazenamento de embeddings semânticos |
+| **Base de Dados** | PostgreSQL | Armazenamento relacional e operacional via EF Core |
+| **Comunicação Real-Time**| SignalR | Hubs WebSocket para Chat e Dashboard Gateway |
+| **Frontend** | React 19 + Vite 8 + TS 6 | Single Page Application moderna |
+| **MCP** | Model Context Protocol | Servidor interno com HttpTransport e integrações clientes |
+| **Estilização** | TailwindCSS v4 | Interface moderna zinc-950 com acentos violetas |
+| **Autenticação** | JWT Bearer + API Keys | Middleware customizado com `PolicyScheme "MultiAuth"` |
 
-```
-WebApplication.CreateBuilder(args)
-    │
-    ├─ AddAgenticSystemCore()              ← todos os serviços do Core (DI)
-    ├─ AddAgenticSystemInfrastructure()     ← todos os serviços do Infrastructure (DI)
-    │   ├─ IChatClient pipeline: ContextAwareChatClient → GovernedChatClient
-    │   ├─ EmbeddingGenerator (M.E.AI)
-    │   ├─ AddAIAgent("Orchestrator")       ← surface hosted do orquestrador principal
-    │   ├─ AddWorkflow("collaboration")     ← workflow nativo no slice colaborativo
-    │   ├─ SimpleSessionStoreAdapter
-    │   ├─ RAGContextProvider (provider concreto sobre `MessageAIContextProvider`)
-    │   ├─ Middleware local: UseQualityGates()
-    │   ├─ Pós-processamento compartilhado: AgentExecutionPostProcessingPipeline
-    │   ├─ MCP plugins (discovery + auto-connect)
-    │   ├─ Vector stores (InMemory / PostgreSQL)
-    │   ├─ Document parsers
-    │   └─ Obsidian sync
-    │
-    ├─ AddAuthentication (MultiAuth: ApiKey + JWT)
-    ├─ AddSignalR
-    ├─ AddSwagger (ApiKey + Bearer security)
-    ├─ AddA2AServer("AgenticSystem")
-    ├─ AddAGUI()
-    ├─ Controllers OpenAI-compatible
-    │
-    ▼
-app.Build()
-    ├─ UseAuthentication / UseAuthorization
-    ├─ UseTenantMiddleware
-    ├─ MapControllers                 ← inclui /v1/chat/completions e /v1/models
-    ├─ MapHub<ChatHub>("/hubs/chat")
-    ├─ MapHub<GatewayHub>("/hubs/gateway")
-    ├─ MapMcpServer()
-    ├─ MapA2AHttpJson("AgenticSystem", "/a2a")
-    └─ MapAGUI("AgenticSystem", "/agui")
-```
+---
 
-### Registro do fluxo principal
+## 4. Camadas e Responsabilidades
 
-No runtime atual, `IFrameworkOrchestratorService` faz parte do caminho principal. A referência a optional DI e fallback no plano explica a estratégia de migração, mas `AgentExecutionWorkflow.ExecuteAsync()` já delega diretamente ao orquestrador do framework e não mantém mais o fluxo anterior no método principal.
+### 4.1 `AgenticSystem.Api` — Apresentação
+Camada externa que gerencia a entrada de requests, canais de comunicação e infraestrutura HTTP/WebSocket:
+*   **Controllers**: REST endpoints para CRUD de agentes, controle de sessões, upload de documentos e gateway administrativo.
+*   **Hubs SignalR**: `ChatHub` (streaming de tokens, eventos de execução) e `GatewayHub` (status de microsserviços em tempo real).
+*   **Middlewares**: `TenantMiddleware` (resolução dinâmica de tenant por JWT ou Header) e `ApiKeyAuthHandler`.
+*   **Protocol Hosting**: Mapeamentos HTTP para interoperabilidade via A2A, AG-UI e controllers OpenAI-compatible (`/v1/chat/completions`).
 
-### AddAIAgent() — Hosting Nativo
+### 4.2 `AgenticSystem.Core` — Domínio e Regras de Negócio
+Independente de frameworks externos de orquestração. **Não referencia o MAF diretamente**, trabalhando sobre interfaces:
+*   **Domain Agents**: Agentes base (`BaseAgent`) e as especializações (Work, Personal, Learning, etc.).
+*   **Business Workflows**: `MetaAgentOrchestrator` (fachada de sessão) e `AgentExecutionWorkflow` (pipeline de orquestração conceitual).
+*   **Services**: `ConfidenceScoreCalculator`, `SessionManager`, `ScheduledTaskManager` (Scheduler), e `ReflectionEngine`.
+
+### 4.3 `AgenticSystem.Infrastructure` — Implementações e Conectores
+Camada que implementa as interfaces do Core usando tecnologias e frameworks específicos:
+*   **AgentFramework**: Integração real com o Microsoft Agent Framework. Contém `FrameworkOrchestratorService`, `PostgresSessionStore`, `OrchestratorContextFactory` e `FrameworkAgentChannelService`.
+*   **LLM Pipeline**: Abstrações baseadas em `Microsoft.Extensions.AI`, contendo decorators como `GovernedChatClient` e `ContextAwareChatClient`.
+*   **RAG / VectorStore**: Mecanismo de busca semântica, contendo o `RAGService`, `LlmReRanker`, ONNX CrossEncoder local e gerenciadores de arquivo.
+*   **Gateway**: Controle operacional de dependências via `ServiceGateway`, agregando Circuit Breaker, Rate Limiter e contadores de custos.
+
+---
+
+## 5. Inicialização, Registro de Dependências e Pipeline LLM
+
+### 5.1 Registro no Program.cs
+A inicialização do sistema resolve os microsserviços do Core e Infrastructure de forma estruturada:
 
 ```csharp
-var orchestratorMetadata = OrchestratorMetadata.Default;
+var builder = WebApplication.CreateBuilder(args);
 
-services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
+// 1. Registro de Dependências Básicas de Negócio e Banco
+builder.Services.AddAgenticSystemCore();
+builder.Services.AddAgenticSystemInfrastructure();
 
-services.AddAIAgent(
-    orchestratorMetadata.Name,
+// 2. Registro do Microsoft Agent Framework (Hosting Nativo)
+builder.Services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
+
+builder.Services.AddAIAgent(
+    OrchestratorMetadata.Default.Name,
     static (sp, _) => sp.GetRequiredService<OrchestratorContext>().OrchestratorAgent,
     ServiceLifetime.Scoped)
     .WithSessionStore(
         static (sp, _) => sp.GetRequiredService<SimpleSessionStoreAdapter>(),
         ServiceLifetime.Singleton);
-```
 
-No estado atual, a surface hosted já resolve o `AIAgent` e o `AgentSessionStore` keyed. O `OrchestratorContextFactory` lê a sessão ativa, lista os agentes, compõe o contexto final por sessão e monta o `ChatClientAgent` hospedado com AI context, quality gates, logging e OpenTelemetry; `OrchestratorAuxiliaryToolService` entrega o catálogo de tools auxiliares; e o `FrameworkOrchestratorService` fecha a resposta delegando o pós-processamento comum ao `AgentExecutionPostProcessingPipeline`. O DI já não precisa mais do wrapper `HostedOrchestratorResolution` nem de uma factory intermediária só para o hosted agent.
-
----
-
-## 5. Padrão de Orquestração — Supervisor-with-Tools
-
-### Conceito
-
-O orquestrador é um `ChatClientAgent` cujo LLM recebe um system prompt descrevendo todos os especialistas disponíveis e seus domínios. Cada especialista é exposto como uma `AIFunction` (tool) via `AsAIFunction()`. O LLM do orquestrador decide qual tool (= especialista) chamar com base no input do usuário.
-
-```
-User: "Preciso de ajuda para organizar meu calendário e criar um relatório financeiro"
-
-Orchestrator (LLM):
-  1. Analisa input → identifica 2 domínios (calendar + finance)
-  2. Chama tool "calendar_agent" com subtarefa de calendário
-  3. Chama tool "finance_agent" com subtarefa de relatório
-  4. Consolida respostas dos dois especialistas
-  5. Retorna resposta unificada ao usuário
-```
-
-### System Prompt do Orquestrador
-
-Gerado dinamicamente com base nos agentes ativos:
-
-```
-Você é o orquestrador central do sistema Labs.
-Sua responsabilidade é analisar a solicitação do usuário e delegar para o especialista mais adequado.
-
-## Regras de Delegação
-1. Analise o domínio, intent e complexidade da solicitação.
-2. Chame o tool do especialista mais adequado passando o input original do usuário.
-3. Se a solicitação envolver múltiplos domínios, chame múltiplos especialistas e consolide.
-4. Se nenhum especialista for adequado, responda diretamente.
-5. Retorne a resposta do especialista ao usuário.
-6. Sempre responda no mesmo idioma do usuário.
-
-## Especialistas Disponíveis
-
-### PersonalAgent
-- Domínio: personal
-- Tier: Specialist
-- Descrição: Assistente pessoal para organização e tarefas do dia a dia
-
-### WorkAgent
-- Domínio: work
-- Tier: Specialist
-- Descrição: Assistente profissional para projetos e tarefas de trabalho
-
-... (todos os agentes ativos)
-```
-
-### Tools Auxiliares do Orquestrador
-
-Além dos especialistas, o orquestrador tem acesso a tools auxiliares materializadas por `OrchestratorAuxiliaryToolService` a partir da fábrica `OrchestratorAuxiliaryTools`:
-
-| Tool | Origem | Quando é chamado |
-|---|---|---|
-| `retrieve_context` | `OrchestratorAuxiliaryTools.CreateRetrieveContextTool(...)` | Quando o LLM precisa de contexto adicional sob demanda |
-| `route_to_best_agent` | `OrchestratorAuxiliaryTools.CreateRouteToAgentTool(...)` | Quando quer dados de performance antes de decidir |
-| `analyze_request` | `OrchestratorAuxiliaryTools.CreateAnalyzeRequestTool(...)` | Quando quer análise estruturada do input |
-| `collaboration_workflow` | `AgentWorkflowBuilder.AddAsAIAgent()` | Quando identifica tarefa complexa que precisa de planner-executor-reviewer |
-
-### Diferença vs Roteamento Imperativo (Legado)
-
-| Aspecto | Legado | Framework |
-|---|---|---|
-| Quem decide o agente | `ContextAnalyzer` + `SmartRouter` + `HierarchicalAgentFactory` | LLM do orquestrador |
-| Como decide | Regras + ML heurístico | Tool calling nativo do LLM |
-| Multi-domínio | Regras e delegação imperativas | LLM chama múltiplos tools |
-| Determinismo | Alto (regras) | Baixo (LLM, mitigado por instructions) |
-| Flexibilidade | Limitada pelas regras | Alta (LLM adapta-se ao contexto) |
-
----
-
-## 6. Fluxos de Request
-
-### 6.1 Fluxo Principal — Chat via SignalR (Streaming)
-
-Este é o fluxo mais comum: usuário envia mensagem no chat, recebe resposta em streaming.
-
-```
-Frontend (React)
-    │
-    ▼
-ChatHub.SendMessage(message, agentName?, llmPreferences?)
-    │
-    ├─ Resolve ClaimsPrincipal (autenticação)
-    ├─ Cria UserContext (userId, role, language, preferences)
-    ├─ Se agentName == null:
-    │   └─ IMetaAgent.ProcessRequestStreamAsync(input, context)
-    │       │
-    │       ▼
-    │   MetaAgentOrchestrator.ProcessRequestStreamAsync
-    │       │
-    │       ├─ SessionManager.StartSessionAsync(context) → sessionId
-    │       ├─ AgentRuntimeCoordinator.StreamAsync(sessionId, context, executor)
-    │       │   │
-    │       │   ▼
-    │       │ AgentExecutionWorkflow.ExecuteAsync(sessionId, input, context, ct)
-    │       │   │
-    │       │   ├─ (LLM scope) LLMRuntimeContextAccessor.BeginScope
-    │       │   │
-    │       │   └─ FrameworkOrchestratorService.ExecuteAsync(sessionId, input, context, ct)
-    │       │       │
-    │       │       ├─ 1. Resolver orquestrador via surface hosted + OrchestratorContext
-    │       │       │      → ChatClientAgent montado por OrchestratorContextFactory
-    │       │       │      → RAGContextProvider injeta RAG via MessageAIContextProvider
-    │       │       │      → Middleware local: Reflection + QualityGates
-    │       │       │
-    │       │       ├─ 2. ISessionStore.GetSessionAsync(sessionId) → AgentSession
-    │       │       │
-    │       │       ├─ 3. Publica evento AgentSelected
-    │       │       │
-    │       │       ├─ 4. orchestrator.RunAsync(input, session)
-    │       │       │      │
-    │       │       │      ├─ RAGContextProvider.ProvideMessagesAsync(...)
-    │       │       │      │   └─ RAGService.RetrieveContextAsync(query)
-    │       │       │      │       ├─ VectorStore.SearchAsync (retrieve)
-    │       │       │      │       ├─ ReRanker.ReRankAsync (rerank)
-    │       │       │      │       ├─ KnowledgeFreshness (penalize stale)
-    │       │       │      │       └─ SemanticCompressor (compress if large)
-    │       │       │      │
-    │       │       │      ├─ LLM decide qual tool chamar
-    │       │       │      │   ├─ Tool: specialist_agent → AgentSession + RunAsync
-    │       │       │      │   ├─ Tool: retrieve_context → busca ad-hoc
-    │       │       │      │   └─ Tool: collaboration_workflow → planner→executor→reviewer
-    │       │       │      │
-    │       │       │      ├─ Middleware local: UseReflection()
-    │       │       │      │   └─ Avalia qualidade da resposta (auto-reflexão)
-    │       │       │      │
-    │       │       │      └─ Middleware local: UseQualityGates()
-    │       │       │          └─ Valida critérios mínimos (confiança, citação, etc.)
-    │       │       │
-    │       │       ├─ 5. ExtractContent(response) → string textual
-    │       │       │      └─ TextContent de mensagens Assistant; fallback para .Text
-    │       │       │
-    │       │       ├─ 6. IdentifyCalledAgent(response, bindings) → agentName
-    │       │       │      └─ FunctionCallContent → mapeia tool name → agent name
-    │       │       │
-    │       │       ├─ 7. ISessionStore.SaveSessionAsync(sessionId, session)
-    │       │       │
-    │       │       └─ 8. SessionManager.AddEventAsync (evento de negócio, sem bridge no fluxo principal)
-    │       │
-    │       └─ Yield AgentStreamEvents ao SignalR
-    │
-    └─ Cada evento é enviado ao frontend via SignalR:
-        ├─ ProcessingStarted
-        ├─ AgentSelected (qual agente foi escolhido)
-        ├─ RagStarted / RagCompleted (se RAG foi usado)
-        ├─ StreamEvent (tokens parciais)
-        └─ ReceiveMessage (resposta final)
-```
-
-### 6.2 Fluxo Direto — Chat com Agente Específico
-
-Quando o usuário seleciona um agente específico no frontend (chat dedicado):
-
-```
-Frontend → ChatHub.SendMessage(message, agentName: "WorkAgent")
-    │
-    ▼
-MetaAgentOrchestrator.ProcessDirectRequestStreamAsync(input, context, "WorkAgent")
-    │
-    ▼
-AgentExecutionWorkflow.ExecuteDirectAsync(sessionId, input, context, "WorkAgent", ct)
-    │
-    ├─ IDirectAgentRequestExecutor.ExecuteAsync(...)
-    │   │
-    │   ├─ Resolve agente por nome via IAgentFactory.GetAllAgentsAsync()
-    │   ├─ Cria AnalysisResult mock com o agente solicitado
-    │   ├─ IAgentExecutionPreProcessingPipeline.ProcessAsync(...)
-    │   ├─ IAgentFactory.ResolveAgentAsync(requestedAgent) → IAgent cru
-    │   ├─ IDirectAgentExecutionService.ExecuteDirectAsync(agent, sessionId, input, context)
-    │   ├─ Usa EffectiveInput enriquecido com correction rules ativas
-    │   ├─ Publica AgentSelected event
-    │   ├─ AgentFrameworkDirectExecutionService
-    │   │      └─ ChatClientAgent.RunAsync → IChatClient → LLM
-    │   └─ IAgentExecutionPostProcessingPipeline.ProcessAsync(...)
-    │          ├─ ReflectionEngine.ReflectAsync
-    │          ├─ CorrectionLoop.AddRuleAsync (se reflection gerou suggestion)
-    │          ├─ ConfidenceScoreCalculator.Calculate
-    │          ├─ FinalResponseApprovalService.EvaluateAsync (se ativado)
-    │          ├─ Persistência de sessão + artifacts
-    │          └─ AgentMemoryService.RecordInteractionAsync
-```
-
-**Diferença chave:** `ExecuteDirectAsync` **não passa pelo orquestrador**. O agente é chamado diretamente, sem tool calling. Este é o escape hatch para o frontend controlar a seleção.
-
-### 6.3 Fluxo REST — Controllers
-
-```
-POST /api/agents/chat    → AgentController → IMetaAgent.ProcessRequestAsync
-GET  /api/agents         → AgentController → IMetaAgent.GetActiveAgentsAsync
-POST /api/agents/create  → AgentController → IDynamicAgentService.HandleAgentCreationAsync
-GET  /api/sessions/{id}  → SessionController → ISessionManager.GetSessionAsync
-POST /api/documents      → DocumentController → Document ingestion pipeline
-GET  /api/config         → SettingsController → Configuração do sistema
-```
-
-### 6.4 Fluxo de Criação Dinâmica de Agente
-
-```
-Usuário: "Crie um agente especialista em direito trabalhista"
-    │
-    ▼
-ContextAnalyzer.AnalyzeAsync → intent = "CreateAgent"
-    │
-    ▼
-DynamicAgentService.HandleAgentCreationAsync(input, context)
-    ├─ GenerateSpecificationAsync(input) → LLM extrai spec JSON
-    │   → { name: "TrabalhistaAgent", domain: "legal", tier: "Specialist", ... }
-    ├─ IAgentFactory.CreateCustomAgentAsync(spec) → CustomAgent
-    ├─ Próximo build de OrchestratorContext percebe a nova lista de agentes
-    │   → instruções e tool bindings são recalculados para a sessão
-    └─ Retorna confirmação ao usuário
-
-Próximo request: orquestrador agora inclui "TrabalhistaAgent" como tool disponível.
-```
-
----
-
-## 7. RAG Pipeline — RAGContextProvider + retrieve_context
-
-### Conceito Dual
-
-O RAG opera com duas abordagens complementares:
-
-| Abordagem | Mecanismo | Quando | Determinismo |
-|---|---|---|---|
-| **`RAGContextProvider`** (primária) | Provider concreto que injeta contexto automaticamente a cada request | Sempre, antes de cada `RunAsync` | Determinístico |
-| **`retrieve_context`** (complementar) | `AIFunction` auxiliar decidida pelo LLM para buscas ad-hoc | Sob demanda | Não-determinístico |
-
-### RAGContextProvider
-
-Implementa `MessageAIContextProvider` do MAF. Antes de cada `RunAsync`, o builder chama `ProvideMessagesAsync(...)`, que:
-
-1. Identifica a última mensagem do usuário em `RequestMessages`
-2. Chama `IRAGService.RetrieveContextAsync(query)` com a query do usuário
-3. Aplica `IContextBudgetManager.TrimContextToBudgetAsync` para respeitar o budget de tokens
-4. Injeta o contexto RAG como mensagem `system` com marker próprio, evitando re-injeção em loops de tool calling
-
-```
-AgentSession.Messages:
-  [0] system: "Você é o orquestrador..."           ← system prompt
-  [1] user: "Qual a política de férias?"            ← mensagem anterior
-  [2] assistant: "A política de férias é..."        ← resposta anterior
-    [3] system: "[Contexto Relevante da Base de Conhecimento]\n..."  ← INJETADO pelo provider
-  [4] user: "E sobre licença maternidade?"          ← mensagem atual
-```
-
-### Pipeline RAG Completo
-
-```
-Query do usuário
-    │
-    ▼
-IQueryCompressor.CompressAsync(query)              ← otimiza query
-    │
-    ▼
-Gera variantes de query (original + comprimida)
-    │
-    ▼
-VectorStore.SearchAsync(variants, filters)          ← busca vetorial (pgvector / in-memory)
-    │
-    ├─ Se poucos resultados: HyDE variant generation
-    │   └─ LLM gera documento hipotético → nova busca
-    │
-    ▼
-Filtro por MinRelevanceScore (threshold)
-    │
-    ▼
-IReRanker.ReRankAsync(query, chunks, topK)          ← re-ranqueamento (`LlmReRanker`)
-    │
-    ├─ `LocalOnnxCrossEncoderReRankerProvider`      ← caminho local forte
-    ├─ `JinaReRankerProvider`                       ← provider externo opcional
-    ├─ Embeddings-based scorer                      ← fallback neural leve
-    └─ LLM-based scorer                             ← último recurso opcional
-    │
-    ▼
-IKnowledgeFreshnessService.CalculateFreshnessScoreAsync  ← penaliza chunks stale
-    │
-    ▼
-ISemanticCompressor.CompressRankedChunksAsync        ← comprime se contexto > budget
-    │
-    ▼
-RAGContext { BuiltContext, Chunks, EffectiveQuery, UsedHydeExpansion, SemanticSummary, ... }
-```
-
-### Fontes de Conhecimento
-
-O RAG ingere documentos de múltiplas fontes:
-
-| Fonte | Formato | Mecanismo |
-|---|---|---|
-| Upload manual | PDF, DOCX, MD, TXT, HTML, JSON, YAML | Document parsers → chunking → embedding → vector store |
-| Obsidian Vault | Markdown | Sync periódico via `ObsidianVaultSyncService` |
-| MCP Tools | Qualquer | Resultados de tools podem ser indexados |
-| Memórias de agente | Texto | `AgentMemoryService` persiste interações relevantes |
-
----
-
-## 8. Middleware e Pós-processamento
-
-### Conceito
-
-O MAF suporta pipeline de middleware via `AsBuilder().Use*().Build()`. No projeto atual, `UseQualityGates()` existe como **extensão local** em `AgentBuilderMiddlewareExtensions`; não é API nativa exposta pelo MAF 1.4. O request validation e a aplicação de correction rules convergiram para o `AgentExecutionPreProcessingPipeline` no Core, enquanto a fase final de reflection, confidence, final approval, persistência e agent memory converge no `AgentExecutionPostProcessingPipeline`.
-
-### Pipeline do Orquestrador
-
-```
-Input → AgentExecutionPreProcessingPipeline.ProcessAsync() → UseQualityGates() → UseLogging() → UseOpenTelemetry() → ChatClientAgent.RunAsync()
-                                                                                                      │
-                                                                                                  Response bruta
-                                                                                                      │
-                                                                                                      ▼
-                                                                                FrameworkOrchestratorService / DirectAgentRequestExecutor
-                                                                                                      │
-                                                                                                      ▼
-                                                                                 AgentExecutionPostProcessingPipeline.ProcessAsync()
-```
-
-### AgentExecutionPostProcessingPipeline
-
-Consolida a fase final dos dois caminhos de execução:
-
-- Reflection com `sessionId` de negócio
-- Aprendizado automático de correction rules quando há sugestão
-- Confidence score e final approval
-- Persistência de artifacts e memória do agent
-- Reflections são persistidas no `IOperationalStore` (PostgreSQL)
-- Se reflection gera `ImprovementSuggestion`, `CorrectionLoop.AddRuleAsync` é chamado automaticamente
-
-### AgentExecutionPreProcessingPipeline
-
-Consolida a fase de borda antes da execução nos dois caminhos principais:
-
-- Validation do request com `IQualityGateService` quando disponível
-- Fallback local para inputs vazios, muito longos ou com análise de baixa confiança
-- Aplicação de correction rules ativas via `ICorrectionLoop`
-- Produção de um `EffectiveInput` comum para o caminho direto e para o hosted/orchestrated path
-
-### UseQualityGates() — extensão local
-
-Valida critérios mínimos antes de retornar a resposta:
-
-```csharp
-gates => {
-    gates.MinConfidence = 0.7;
-    gates.RequireSourceCitation = true;
-}
-```
-
-- **Pre-execution gates**: migraram para o `AgentExecutionPreProcessingPipeline`, compartilhado entre o fluxo direto e o hosted
-- **Post-execution gates**: `ResponseQualityGate` — valida resposta (confiança mínima, citação de fontes, coerência)
-- O middleware local permanece apenas como guarda de resposta; correction rules não são mais aplicadas nele
-
-### CorrectionLoop como Complemento
-
-`CorrectionLoopService` gerencia regras de correção persistentes por usuário/agente:
-
-```
-Regras vêm de:
-  ├─ ReflectionEngine (auto-geradas por baixa confiança)
-  ├─ Correções humanas (usuário corrige resposta)
-  └─ Configuração manual
-
-Regras são aplicadas:
-    ├─ No `AgentExecutionPreProcessingPipeline`, antes da execução
-    └─ Aprendidas de volta no `AgentExecutionPostProcessingPipeline` quando a reflection gera sugestão útil
-```
-
----
-
-## 9. Workflow de Colaboração — AgentWorkflowBuilder
-
-### Quando é Ativado
-
-O workflow de colaboração é ativado quando a tarefa é complexa e requer planejamento. Critérios:
-
-- `analysis.Complexity == RequiresPlanning`
-- `analysis.RequiresDelegation == true`
-- Múltiplos domínios secundários
-- Input contém palavras-chave: "plan", "etapa", "passo"
-
-No estado atual, os enriquecimentos nativos de Fase 5 (`BuildConcurrent`, checkpointing, handoff review e group chat termination) permanecem restritos a este slice colaborativo e protegidos por flags de configuração desligadas por padrão. Eles ainda não fazem parte do caminho estável principal do produto.
-
-### Arquitetura com AgentWorkflowBuilder
-
-```csharp
-builder.AddWorkflow("collaboration", workflowBuilder => {
-    workflowBuilder
-        .BuildSequential([plannerAgent, executorAgent, reviewerAgent])
-        .AddAsAIAgent();  // exposto como tool do orquestrador
-});
-```
-
-### Fluxo
-
-```
-Orquestrador (LLM) detecta tarefa complexa
-    │
-    ▼ chama tool "collaboration_workflow"
-    │
-    ▼
-AgentWorkflowBuilder.BuildSequential
-    │
-    ├─ 1. Planner Agent (ChatClientAgent)
-    │      └─ Decompõe a tarefa em steps via function calling
-    │         Usa ITaskPlanManager para persistir plano
-    │         Output: TaskPlan { Steps[] }
-    │
-    ├─ 2. Executor Agent (ChatClientAgent)
-    │      └─ Para cada step do plano:
-    │         ├─ Resolve agente especialista via IAgentFactory
-    │         ├─ Executa step com contexto do channel
-    │         ├─ Persiste resultado
-    │         └─ Avança plano (ITaskPlanManager.AdvanceStepAsync)
-    │
-    └─ 3. Reviewer Agent (ChatClientAgent)
-           └─ Revisa todos os outputs dos steps
-              Avalia coerência, completude e qualidade
-              Pode solicitar re-execução de steps específicos
-              Output: resposta consolidada final
-    │
-    ▼
-Resposta retorna ao orquestrador → retorna ao usuário
-```
-
-### Vantagens do AgentWorkflowBuilder vs Custom
-
-| Capacidade | Custom (legado) | AgentWorkflowBuilder |
-|---|---|---|
-| Checkpointing | Não | Sim (resume em caso de falha) |
-| Streaming | Manual | Nativo (output de cada agent é streamado) |
-| Paralelismo | Sequencial apenas | `BuildConcurrent` para steps independentes |
-| Visualização | Logs | Grafo tipado com edges |
-| Human-in-the-loop | Não | `RequestInfoExecutor` nativo |
-
-### Decisão de rollout atual
-
-- O runtime principal continua framework-first no orquestrador hosted, sem depender do modo avançado do workflow colaborativo.
-- O modo avançado da Fase 5 segue como experimento controlado no `AgentCollaborationWorkflow`.
-- A promoção para caminhos mais centrais depende de stress test, validação manual end-to-end e aprovação explícita de produto.
-
-### FrameworkAgentChannelService
-
-Canal de comunicação estruturado entre agentes no workflow:
-
-- Publica mensagens planner → specialist, handoff → target, workflow → reviewer como `AgentEvent`
-- Reidrata mensagens recentes por target agent
-- Constrói bloco `[Native Agent Channel Context]` antes da execução do próximo agent
-- Permite que agentes compartilhem contexto sem concatenação manual de strings
-
----
-
-## 10. Gestão de Sessões — ISessionStore + ISessionManager
-
-### Duas Camadas de Sessão
-
-| Camada | Interface | Responsabilidade |
-|---|---|---|
-| **Framework** | `ISessionStore` (`PostgresSessionStore`) | Persistência de `AgentSession` (chat history do framework) |
-| **Negócio** | `ISessionManager` (`SessionManager`) | Eventos de negócio, consolidação, metadados, métricas |
-
-### ISessionStore — Sessão do Framework
-
-```csharp
-public class PostgresSessionStore : ISessionStore
-{
-    Task<AgentSession?> GetSessionAsync(string sessionId, CancellationToken ct);
-    Task SaveSessionAsync(string sessionId, AgentSession session, CancellationToken ct);
-}
-```
-
-- Sessões são **agent-specific** — cada agente tem sua própria sessão (isolamento por `agentId + sessionId`)
-- Serialização/deserialização via `agent.SerializeSessionAsync` / `agent.DeserializeSessionAsync`
-- Persistência em PostgreSQL com TTL para sessões inativas
-- O framework gerencia automaticamente via `WithSessionStore<PostgresSessionStore>()`
-
-### ISessionManager — Sessão de Negócio
-
-```
-SessionManager
-    ├─ StartSessionAsync(context) → sessionId
-    ├─ AddEventAsync(sessionId, AgentEvent)      ← cada interação é um evento
-    ├─ ConsolidateSessionAsync(sessionId)         ← sumarização via LLM
-    ├─ EndSessionAsync(sessionId)                 ← finalização com métricas
-    ├─ GetRecentEventsAsync(sessionId, count)
-    └─ GetSessionAsync(sessionId) → Session
-```
-
-- `ConsolidateSessionAsync` usa LLM para sumarizar a sessão (insights, temas, satisfação)
-- Chamada a cada N eventos ou quando a sessão atinge um threshold
-- Eventos de negócio incluem: input do usuário, resposta do agente, tools usadas, ações performadas, reflections
-
-### Fluxo de Sessão Completo
-
-```
-Primeiro request:
-  SessionManager.StartSessionAsync → cria sessão de negócio
-  ISessionStore → cria AgentSession do framework
-  
-Cada request subsequente:
-  ISessionStore.GetSessionAsync → restaura AgentSession (chat history)
-        RAGContextProvider → injeta RAG no contexto do request
-  RunAsync → executa com histórico completo
-  ISessionStore.SaveSessionAsync → persiste AgentSession atualizada
-  SessionManager.AddEventAsync → registra evento de negócio
-  
-A cada N eventos:
-  SessionManager.ConsolidateSessionAsync → sumariza via LLM
-
-Finalização (ou cleanup automático):
-  SessionManager.EndSessionAsync → registra métricas finais
-```
-
----
-
-## 11. Sistema de Tools — MCP, Built-in e AIFunction
-
-### Três Categorias de Tools
-
-```
-UnifiedAIToolProvider
-    │
-    ├─ MCP Tools (Model Context Protocol)
-    │   └─ Descobertas via McpToolsAIFunctionAdapter
-    │       ├─ Tools de servidores MCP externos (auto-connect)
-    │       └─ Tools do MCP server interno (HttpTransport)
-    │
-    ├─ Built-in Tools
-    │   └─ Registradas no UnifiedAIToolProvider
-    │       ├─ retrieve_context (RAG ad-hoc)
-    │       ├─ SmartRouter wrapper (route_to_best_agent)
-    │       ├─ ContextAnalyzer wrapper (analyze_request)
-    │       └─ CorrectionLoop wrapper (apply_corrections)
-    │
-    └─ Agent-as-Tool (AIFunction)
-        └─ Especialistas expostos via AsAIFunction()
-            ├─ PersonalAgent → personal_agent tool
-            ├─ WorkAgent → work_agent tool
-            ├─ LearningAgent → learning_agent tool
-            ├─ Custom agents → {name}_agent tool
-            └─ Collaboration workflow → collaboration_workflow tool
-```
-
-### ToolGovernanceService
-
-Governança centralizada de tools:
-
-- `IToolAvailabilityGuard.CheckAsync(requiredTools)` — verifica quais tools estão disponíveis
-- Se tools requeridas estão ausentes, retorna sugestões de extensões/MCPs para instalação
-- O `ConfidenceScoreCalculator` penaliza o score quando a cobertura de tools é parcial
-- Controle de acesso por tenant e por agente
-
-### MCP Plugins
-
-```
-Descoberta automática de MCP servers:
-  ├─ Configuração em appsettings.json (lista de servers)
-  ├─ Auto-connect com retry
-  ├─ Cada tool do MCP é convertida em AIFunction (IList<AITool>)
-  └─ Tools disponibilizadas ao orquestrador e especialistas via DI
-```
-
----
-
-## 12. Ciclo de Vida dos Agentes
-
-### Tipos de Agentes
-
-| Tipo | Criação | Persistência | Exemplo |
-|---|---|---|---|
-| **Built-in** | `HierarchicalAgentFactory.InitializeDefaultAgents()` | Sempre disponível | PersonalAgent, WorkAgent, GeneralAgent |
-| **Custom (dinâmico)** | `DynamicAgentService.HandleAgentCreationAsync` | In-memory (pool) | TrabalhistaAgent, MarketingAgent |
-| **Framework-hosted** | `AddAIAgent()` no DI | Lifecycle gerenciado pelo hosting | Orchestrator, Collaboration agents |
-
-### Pool de Agentes
-
-```
-HierarchicalAgentFactory (ConcurrentDictionary<string, IAgent>)
-    │
-    ├─ Built-in (inicializados no startup):
-    │   ├─ PersonalAgent (domain: personal)
-    │   ├─ WorkAgent (domain: work)
-    │   ├─ LearningAgent (domain: learning)
-    │   └─ GeneralAgent (domain: general)
-    │
-    ├─ On-demand (criados quando necessário):
-    │   ├─ CreativeAgent (domain: creative)
-    │   ├─ CalendarAgent (domain: calendar)
-    │   ├─ AnalysisAgent (domain: analysis)
-    │   ├─ NotificationAgent (domain: notification)
-    │   └─ APIAgent (domain: api)
-    │
-    └─ Custom (criados via linguagem natural):
-        └─ Qualquer agente criado pelo DynamicAgentService
-
-Cleanup automático:
-  MetaAgentOrchestrator.CleanupInactiveAgentsAsync()
-    └─ Remove agentes Support/Specialist inativos há >24h
-```
-
-### BaseAgent — Classe Abstrata
-
-Todos os agentes herdam de `BaseAgent`:
-
-```
-BaseAgent
-    ├─ IChatClient.GetResponseAsync() → execução LLM contextual
-    ├─ ISkillManager.BuildEnrichedPromptAsync() → system prompt + skills
-    ├─ IAgentMemoryService.GetRelevantMemoriesAsync() → memórias por agent/user
-    ├─ Properties: Name, Description, Tier, Domain, AvailableTools, Instructions
-    └─ abstract GetBaseSystemPrompt() → cada agent define seu prompt base
-```
-
-### Tiers de Agentes
-
-| Tier | Complexidade | Exemplo |
-|---|---|---|
-| **Support** | Simple | Assistentes básicos |
-| **Specialist** | Moderate | Agentes de domínio (Work, Learning, etc.) |
-| **Master** | Complex | Agentes com capabilities avançadas |
-| **Chief** | RequiresPlanning | Orquestrador, Planner |
-
----
-
-## 13. Multi-Tenant
-
-### Arquitetura
-
-```
-Request HTTP
-    │
-    ▼
-TenantMiddleware
-    ├─ Tenta resolver tenant por JWT claim ("tenantId")
-    ├─ Fallback: header X-Tenant-Id
-    ├─ ITenantResolver.ResolveAsync(tenantId) → TenantInfo
-    └─ Popula scoped TenantContext
-        │
-        ▼
-    Todos os serviços acessam TenantContext via DI (scoped)
-```
-
-### Serviços Multi-Tenant
-
-- **LLM**: cada tenant pode ter sua própria API key e configuração de modelo
-- **ReRanker**: `IRerankingSettingsAccessor` resolve `ReRankingOptions` por tenant em runtime
-- **Vector Store**: isolamento por tenant (filtro nos metadados)
-- **Settings**: `/config` salva API key, parâmetros e assets por tenant
-- **Sessões**: isolamento natural por `sessionId` (que inclui tenant context)
-- **Agent Memory**: memórias isoladas por `agentName + userId` (que inclui tenant)
-
-### Skip de Tenant
-
-Endpoints não autenticados (health check, swagger) skipam o middleware de tenant automaticamente.
-
----
-
-## 14. Autenticação e Segurança
-
-### Multi-Scheme Authentication
-
-```csharp
-builder.Services.AddAuthentication("MultiAuth")
-    .AddPolicyScheme("MultiAuth", options => {
-        options.ForwardDefaultSelector = context => {
-            // Se header Authorization contém "Bearer" → JWT
-            // Se header X-Api-Key presente → ApiKey scheme
-        };
-    })
-    .AddScheme<ApiKeyAuthHandler>("ApiKey")
-    .AddJwtBearer("Bearer", options => { ... });
-```
-
-### API Key Masking
-
-API keys são mascaradas em logs e embeddings para evitar vazamento:
-
-- `ApiKeyMaskingService` — mascara keys antes de persistir ou logar
-- Padrão: `sk-...****` (mostra prefixo, mascara restante)
-
-### Segurança em Endpoints de Protocolo
-
-Protocol hosting (A2A, AG-UI, OpenAI-compatible) requer:
-
-- Autenticação obrigatória
-- Rate limiting independente
-- Audit logging de todas as interações
-- Validação de input (injection prevention)
-
----
-
-## 15. Protocol Hosting — A2A, AG-UI, OpenAI-Compatible
-
-### Objetivo
-
-Expor agentes do AgenticSystem via protocolos padronizados para interoperabilidade com sistemas externos.
-
-### Protocolos
-
-| Protocolo | Uso | Endpoint |
-|---|---|---|
-| **A2A** (Agent-to-Agent) | Outros sistemas de agentes interagem com os agentes do AgenticSystem | `/a2a` via `MapA2AHttpJson(...)` |
-| **AG-UI** (Agent-UI) | Frontend usa protocolo padronizado com streaming e typed events | `/agui` via `MapAGUI(...)` |
-| **OpenAI-compatible** | Ferramentas que usam formato da API OpenAI (ChatGPT, etc.) | `/v1/chat/completions` e `/v1/models` via controller custom |
-
-### Registro
-
-```csharp
-// Program.cs
+// 3. Registro de Protocolos e Portas de Entrada
+builder.Services.AddAuthentication("MultiAuth").AddPolicyScheme(...);
+builder.Services.AddSignalR();
 builder.Services.AddA2AServer("AgenticSystem");
 builder.Services.AddAGUI();
-// OpenAI-compatible: controller custom mapeado por MapControllers()
-
-app.MapControllers();
-app.MapA2AHttpJson("AgenticSystem", "/a2a").RequireAuthorization();
-app.MapAGUI("AgenticSystem", "/agui").RequireAuthorization();
 ```
 
-### Requisitos
-
-- Agentes registrados via `AddAIAgent()` (hosting nativo)
-- `ISessionStore` implementado (persistência de sessões)
-- Middleware pipeline configurado
-- Zero mudança na lógica dos agentes — apenas exposição de endpoints adicionais
-
----
-
-## 16. Funcionalidades Transversais
-
-### 16.1 Criação Dinâmica de Agentes
-
-- Via linguagem natural: "Crie um agente de finanças"
-- `DynamicAgentService` usa `IChatClient` para extrair a spec → cria `CustomAgent`
-- O próximo build de `OrchestratorContext` já enxerga o novo agent porque a lista de especialistas muda e gera uma nova chave de instruções
-- Agente fica disponível imediatamente como tool do orquestrador
-
-### 16.2 Agent Memory
-
-- `IAgentMemoryService.RecordInteractionAsync` — persiste interações relevantes por agente + usuário
-- `IAgentMemoryService.GetRelevantMemoriesAsync` — recupera memórias para enriquecer system prompt
-- Memórias são injetadas no system prompt do agente antes da execução
-
-### 16.3 Skills
-
-- `ISkillManager.BuildEnrichedPromptAsync` — enriquece system prompt com skills relevantes
-- Skills built-in seeded no startup
-- Skills declarativas carregadas de `skills/*.yaml|*.yml|*.json`
-- Skills são contextuais (ativadas baseado no domínio/intent do request)
-
-### 16.4 Scheduled Tasks
-
-- `ScheduledTaskManager` — execução de tarefas agendadas
-- Suporte a retry com backoff exponencial
-- Dead-letter para falhas repetidas
-- Configuração por tenant
-
-### 16.5 Embedding Migration
-
-- `IEmbeddingMigrationService` — migração de embeddings entre modelos/providers
-- Necessário quando troca de modelo de embedding (ex: text-embedding-ada-002 → text-embedding-3-small)
-
-### 16.6 Document Ingestion
+### 5.2 IChatClient Pipeline (Microsoft.Extensions.AI)
+Para garantir governança, custos previsíveis e flexibilidade de provedores, o `IChatClient` é registrado como um pipeline decorator de múltiplas camadas:
 
 ```
-Upload de documento
-    │
-    ▼
-Parser selecionado por extensão:
-    ├─ PdfDocumentParser
-    ├─ DocxDocumentParser
-    ├─ MarkdownDocumentParser
-    ├─ HtmlDocumentParser
-    ├─ JsonDocumentParser
-    ├─ YamlDocumentParser
-    └─ PlainTextParser
-    │
-    ▼
-Chunking (divisão em trechos)
-    │
-    ▼
-EmbeddingGenerator (M.E.AI) → vetores
-    │
-    ▼
-VectorStore.UpsertAsync (pgvector / in-memory)
+┌───────────────────────────────────────────────┐
+│              GovernedChatClient               │  <-- Concurrency Cap, Queue Timeout & Quality Gates
+└──────────────────────┬────────────────────────┘
+                       ▼
+┌───────────────────────────────────────────────┐
+│            ContextAwareChatClient             │  <-- Resolução dinâmica de Model/Provider por request
+└──────────────────────┬────────────────────────┘
+                       ▼
+┌───────────────────────────────────────────────┐
+│            Provider-Specific Client           │  <-- OpenAI, Azure OpenAI, Claude, Ollama (via LLMManager)
+└───────────────────────────────────────────────┘
 ```
 
-### 16.7 Obsidian Vault Sync
-
-- `ObsidianVaultSyncService` — sincroniza vault Obsidian com vector store
-- Detecta mudanças incrementais
-- Preserva metadados (tags, links, frontmatter)
-
-### 16.8 Confidence Score
-
-`ConfidenceScoreCalculator` calcula score de confiança baseado em 5 fatores:
-
-1. **Sucesso da execução** (1.0 se sucesso, 0.1 se erro)
-2. **Qualidade do RAG** (média dos scores de re-rank)
-3. **Tools utilizadas** (0.8 se usou tools, 0.5 se não)
-4. **Histórico de reflexão** (média de confiança das reflections)
-5. **Cobertura de tools** (penalidade se tools requeridas estão ausentes)
-
-Resultado: `ConfidenceScore { Value, Level (High/Medium/Low/RequiresHumanReview), Label, Factors[] }`
-
-### 16.9 Final Response Approval (Human-in-the-Loop)
-
-- `IFinalResponseApprovalService.EvaluateAsync` — avalia se resposta precisa de aprovação humana
-- Se necessário, resposta fica pendente com metadata `pendingFinalApproval`
-- Aprovação via endpoint dedicado
-- Critérios configuráveis por tenant/agente
+*   **GovernedChatClient**: Controla limites de chamadas simultâneas (semaphore) e protege o sistema contra estouro de concorrência. Também valida inputs em borda (`ValidateRequestAsync`) e buffers de saída para checar as regras antes do retorno.
+*   **ContextAwareChatClient**: Inspeciona o escopo atual (via `ILLMRuntimeContextAccessor`) e escolhe o provedor/modelo correto associado ao Tenant ou Sessão de chat.
+*   **ToolAIFunctionFactory**: Fábrica na infraestrutura responsável por mapear qualquer `ITool` do Core para um `AIFunction` nativo da Microsoft, permitindo que os agentes chamem ferramentas do Core de forma uniforme.
 
 ---
 
-## 17. Observabilidade e Gateway
+## 6. Padrão de Orquestração — Supervisor-with-Tools
 
-### OpenTelemetry
+O AgenticSystem utiliza o padrão **Supervisor-with-Tools**. O Orquestrador Central é um `ChatClientAgent` do MAF enriquecido com instruções que descrevem as competências de cada especialista registrado.
 
-- Traces distribuídos com `UseOpenTelemetry("AgenticSystem.Orchestrator")`
-- Cada agente tem seu próprio scope de telemetria
-- Métricas de latência, sucesso, tool usage
-- Integração com exporters (Jaeger, OTLP, etc.)
+```
+                  ┌───────────────────────────────┐
+                  │      Orquestrador Central     │
+                  │   ("Supervisor-with-Tools")   │
+                  └──────┬─────────┬─────────┬────┘
+                         │         │         │
+      ┌──────────────────┘         │         └──────────────────┐
+      ▼ (AsAIFunction)             ▼ (AsAIFunction)             ▼ (AsAIFunction)
+┌───────────┐                ┌───────────┐                ┌───────────┐
+│ Personal  │                │   Work    │                │ Learning  │
+│   Agent   │                │   Agent   │                │   Agent   │
+└───────────┘                └───────────┘                └───────────┘
+```
 
-### Structured Logging
-
-- Logging por componente (controller → workflow → orchestrator → agent)
-- Emoji-based log markers: 🎯 (routing), 🔍 (RAG), ✅ (success), ❌ (error), 🔄 (handoff), 🏗️ (agent creation), 🧹 (cleanup)
-
-### Gateway Dashboard
-
-- `GatewayHub` (SignalR) — eventos em tempo real do sistema
-- `GetDashboard` — status geral dos serviços
-- `GetServiceStatus` — health check de cada serviço
-- Subscribe/Unsubscribe para grupos de eventos
-
-### Runtime Coordinator
-
-- `IAgentRuntimeCoordinator` — coordena eventos em tempo real durante execução
-- `PublishEventAsync` — publica eventos (AgentSelected, RagStarted, StepCompleted, etc.)
-- `RecordArtifactAsync` — registra artefatos (planos, steps, reviews, RAG context)
-- `BeginExecutionScope` / `BeginAgentScope` — gerencia scopes de execução
-- `StreamAsync` — streaming de eventos para o frontend via SignalR
+### 6.1 Funcionamento Dinâmico
+1.  O input do usuário ("Organize minhas tarefas e veja as novidades de ontem") chega ao Orquestrador.
+2.  O prompt do Orquestrador lista os agentes disponíveis como ferramentas executáveis por meio de bindings criados via `AsAIFunction()`.
+3.  O LLM do orquestrador emite chamadas de ferramenta (`FunctionCallContent`) para os agentes que deseja consultar.
+4.  O runtime do MAF intercepta, executa os agentes especialistas informando seus respectivos históricos persistidos, e retorna o feedback para o orquestrador consolidar o retorno final.
 
 ---
 
-## 18. Padrões Arquiteturais Utilizados
+## 7. Fluxos de Request (REST & Real-Time)
 
-### Padrão | Onde é Aplicado
+### 7.1 Fluxo Orquestrado via SignalR (Streaming)
+Este é o principal fluxo do produto, unindo o tempo real do SignalR com a orquestração hospedada do MAF:
 
-| Padrão | Aplicação |
-|---|---|
-| **Clean Architecture** | Core (domínio) → Infrastructure (implementação) → Api (apresentação) |
-| **Supervisor-with-Tools** | Orquestrador central que delega via tool calling do LLM |
-| **Agent-as-Tool** | Especialistas expostos como `AIFunction` via `AsAIFunction()` |
-| **Factory** | `AgentFrameworkFactory` cria `ChatClientAgent`; o path direto não precisa mais de factory de wrapper |
-| **Service** | `AgentFrameworkDirectExecutionService` executa `IAgent` cru no framework apenas no `ExecuteDirectAsync` |
-| **Bridge** | Separação entre sessão do framework (`SimpleSessionStoreAdapter`) e sessão de negócio (`ISessionManager`) |
-| **Strategy** | `HandoffStrategy` (SingleDelegate, FanOut, Chain) para delegação entre agentes |
-| **Pipeline/Middleware** | `UseReflection()` e `UseQualityGates()` via extensões locais + `UseLogging()` e `UseOpenTelemetry()` |
-| **Factory** | `HierarchicalAgentFactory` cria agentes por domínio; `AgentFrameworkFactory` cria `ChatClientAgent` |
-| **Feature Flag** | O plano de migração previa optional DI; o runtime principal atual já opera framework-first em `ExecuteAsync` |
-| **CQRS (leve)** | Separação entre execução (workflow) e consulta (session manager, rankings) |
-| **Event-driven** | `AgentStreamEvent` para comunicação real-time; `AgentEvent` para persistência |
-| **Scoped Context** | `TenantContext`, `LLMRuntimeContext` — contexto por request via DI scoped |
-| **Workflow/Pipeline** | `AgentWorkflowBuilder.BuildSequential` para planner → executor → reviewer |
+```
+Frontend (React) ──[SendMessage]──> ChatHub
+  │
+  ├─ 1. Resolve ClaimsPrincipal & TenantContext
+  │
+  ├─ 2. Invoca MetaAgentOrchestrator.ProcessRequestStreamAsync()
+  │       │
+  │       ▼
+  │     AgentRuntimeCoordinator.StreamAsync()
+  │       │
+  │       ▼
+  │     AgentExecutionWorkflow.ExecuteAsync() (Abre escopo de telemetria)
+  │       │
+  │       ▼
+  │     FrameworkOrchestratorService.ExecuteAsync()
+  │       │
+  │       ├─ 1. Resolve OrchestratorContext scoped via OrchestratorContextFactory
+  │       ├─ 2. Injeta RAGContextProvider (MAF MessageAIContextProvider)
+  │       ├─ 3. Carrega histórico de chat via ISessionStore (SimpleSessionStoreAdapter)
+  │       │
+  │       ├─ 4. Executa OrchestratorAgent.RunAsync(input, session)
+  │       │      ├─ RAGContextProvider executa busca semântica em lote
+  │       │      ├─ LLM avalia e invoca os Specialists agentes via tool calling
+  │       │      └─ Middleware local: UseReflection() & UseQualityGates()
+  │       │
+  │       ├─ 5. Extrai conteúdo textual consolidado das mensagens de retorno
+  │       ├─ 6. Identifica qual agente foi invocado para atualizar o frontend
+  │       └─ 7. Salva a sessão atualizada via ISessionStore
+  │
+  └─ 3. Envia eventos em real-time para o frontend via Hub (ProcessingStarted, AgentSelected, StreamEvent, ReceiveMessage)
+```
+
+### 7.2 Fluxo Direto (Direct Chat)
+Quando o usuário seleciona explicitamente um agente na barra lateral ("Conversar com o especialista de Trabalho"), o sistema ignora o Orquestrador Central:
+
+```
+User ──> ChatHub.SendMessage(targetAgent: "WorkAgent")
+          │
+          ▼
+        MetaAgentOrchestrator.ProcessDirectRequestStreamAsync()
+          │
+          ▼
+        AgentExecutionWorkflow.ExecuteDirectAsync()
+          │
+          ├─ 1. Executa Pré-Processamento (Validações, Correction Rules)
+          ├─ 2. Resolve o agente cru via HierarchicalAgentFactory
+          ├─ 3. Delega para AgentFrameworkDirectExecutionService
+          │       └─ Invoca ChatClientAgent.RunAsync() diretamente (sem ferramentas de supervisão)
+          ├─ 4. Executa Pós-Processamento (Reflection, auto-ajuste, Confidence, memórias)
+          └─ 5. Persiste a sessão dedicada do agente
+```
 
 ---
 
-## 19. Glossário
+## 8. RAG Pipeline — RAGContextProvider + retrieve_context
 
-| Termo | Definição |
-|---|---|
-| **MAF** | Microsoft Agent Framework — framework de agentes de IA da Microsoft |
-| **ChatClientAgent** | Tipo base de agente no MAF que usa `IChatClient` para execução LLM |
-| **AsAIFunction()** | Método do MAF que converte um agente em uma `AIFunction` (tool) que pode ser chamada por outro agente |
-| **AddAIAgent()** | Hosting nativo do MAF que resolve DI, session store, tools e middleware automaticamente |
-| **IHostedAgentBuilder** | Interface retornada por `AddAIAgent()` para configurar o agente (tools, session store, middleware) |
-| **AgentSession** | Sessão do framework que mantém chat history e estado do agente |
-| **ISessionStore** | Interface nativa do MAF para persistência de sessões |
-| **RAGContextProvider** | Provider concreto do projeto que estende `MessageAIContextProvider` e injeta RAG automaticamente antes de cada request |
-| **MessageAIContextProvider** | Abstração do MAF usada como base do `RAGContextProvider` para injeção automática de contexto |
-| **ChatHistoryProvider** | Conceito relacionado do MAF; o projeto atual preferiu `MessageAIContextProvider` para o RAG do orquestrador |
-| **AgentWorkflowBuilder** | API do MAF para construção de workflows multi-agent (`BuildSequential`, `BuildConcurrent`) |
-| **RunAsync(input, session)** | Método de execução do agente no MAF — aceita 2 argumentos, sem `CancellationToken` |
-| **Tool binding** | Associação entre um agente e sua representação como `AIFunction` (tool) |
-| **Supervisor-with-tools** | Padrão onde um agente supervisor (orquestrador) coordena especialistas via tool calling |
-| **A2A** | Agent-to-Agent protocol — protocolo de comunicação entre sistemas de agentes |
-| **AG-UI** | Agent-UI protocol — protocolo de comunicação entre agentes e interfaces de usuário |
-| **MCP** | Model Context Protocol — protocolo para exposição de tools e contexto para LLMs |
-| **IChatClient** | Interface de Microsoft.Extensions.AI para interação com LLMs |
-| **RAG** | Retrieval-Augmented Generation — busca de contexto relevante para enriquecer prompts |
-| **Re-Ranker** | Componente que reordena chunks por relevância semântica (Jina, ONNX, LLM-based) |
-| **HyDE** | Hypothetical Document Embeddings — técnica que gera documento hipotético para melhorar retrieval |
-| **Quality Gate** | Validação de critérios mínimos na entrada (pre) e na saída (post) do agente |
-| **Reflection** | Auto-avaliação da qualidade da resposta com registro de deviations e lessons learned |
-| **Correction Loop** | Regras de correção persistentes por usuário/agente, aplicadas no prompt |
-| **Confidence Score** | Score calculado multi-fator que indica o nível de confiança na resposta |
+Para maximizar a precisão contextual sem estourar a janela de contexto dos modelos, o AgenticSystem opera um modelo dual de RAG:
+
+| Modo de Ativação | Mecanismo | Momento de Execução | Propósito |
+|---|---|---|---|
+| **RAGContextProvider** | Provider nativo do MAF (`MessageAIContextProvider`) | Executado deterministicamente antes de qualquer `RunAsync` do orquestrador | Garante que dados básicos sobre a pergunta do usuário estejam no prompt inicial |
+| **`retrieve_context`** | Ferramenta explícita do orquestrador (`AIFunction`) | Executado sob demanda, apenas se o LLM do orquestrador decidir chamá-lo | Permite realizar buscas adicionais ou aprofundadas com queries modificadas |
+
+### 8.1 O Pipeline Semântico de Busca
+```
+                      Query do Usuário
+                             │
+                             ▼
+              [ 1. Query Compressor Service ]
+                             │  (Normaliza e reduz ruído da query)
+                             ▼
+              [ 2. VectorStore.SearchAsync ]
+                             │  (Busca vetorial pgvector / in-memory)
+                             ▼
+              [ 3. LlmReRanker / ONNX CrossEncoder ]
+                             │  (Reordena e seleciona os Top-K mais relevantes)
+                             ▼
+              [ 4. Knowledge Freshness Service ]
+                             │  (Aplica decaimento temporal em registros velhos)
+                             ▼
+              [ 5. Semantic Compressor Service ]
+                             │  (Resume e limpa os trechos para caber no budget)
+                             ▼
+                      Contexto RAG Final
+```
+
+---
+
+## 9. Middleware Pipeline e Auto-Ajuste (Correction Loop)
+
+### 9.1 Middleware do Microsoft Agent Framework
+A configuração de comportamento dos agentes no MAF é feita por middlewares anexados ao builder na infraestrutura:
+
+```csharp
+agentBuilder
+    .UseLogging()
+    .UseOpenTelemetry()
+    .UseReflection()     // Extensão local para auto-avaliação pós-execução
+    .UseQualityGates();  // Extensão local de regras de qualidade
+```
+
+*   **UseQualityGates()**: Valida se a resposta final cumpre critérios corporativos como confiança semântica mínima, presença de citações caso tenha ocorrido RAG e ausência de termos ofensivos.
+*   **UseReflection()**: Executa uma análise assíncrona pós-resposta (`ReflectionEngine`) gerando metadados sobre desvios da instrução e aprendizados práticos.
+
+### 9.2 Pipeline de Pré e Pós-Processamento Integrados
+Para garantir que as correções operem tanto em chamadas diretas quanto hospedadas, o processamento se consolida em dois barramentos do Core:
+
+```
+                      ┌───────────────────────────────┐
+                      │    Request do Usuário / API   │
+                      └──────────────┬────────────────┘
+                                     ▼
+                [ AgentExecutionPreProcessingPipeline ]
+                   ├─ Executa validações básicas de input
+                   └─ Aplica Correction Rules do banco
+                                     ▼
+                      [ Execução do Agente (MAF) ]
+                                     ▼
+                [ AgentExecutionPostProcessingPipeline ]
+                   ├─ Calcula ConfidenceScore final
+                   ├─ Armazena interações na Agent Memory (Episódica)
+                   ├─ Executa auto-reflexão via ReflectionEngine
+                   └─ Se houver falha persistente:
+                        AddRuleAsync(CorrectionLoop) -> Auto-Ajuste
+```
+
+---
+
+## 10. Workflow de Colaboração — AgentWorkflowBuilder
+
+Quando uma tarefa é identificada como de alta complexidade ou envolve múltiplos domínios (ex: planejar um projeto de marketing, gerar o código e revisar o plano), o sistema ativa o **Workflow de Colaboração** (`AgentCollaborationWorkflow`).
+
+```
+                              Orquestrador Central
+                                       │
+                         (Tarefa complexa detectada)
+                                       ▼
+                       Invoca tool "collaboration_workflow"
+                                       │
+                                       ▼
+                     [ AgentWorkflowBuilder.BuildSequential ]
+                                       │
+                                       ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. Planner Agent                                                            │
+│    └─ Cria TaskPlan (lista de passos ordenados e agrupa em ITaskPlanManager)│
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 2. Executor Agent                                                           │
+│    └─ Para cada passo: resolve o Specialist ideal e executa via canal nativo │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 3. Reviewer Agent                                                           │
+│    └─ Analisa o compilado de saídas e faz correções ou aprova a versão final │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+*   **FrameworkAgentChannelService**: Canal de comunicação estruturado entre agentes, que permite a troca de eventos (`AgentEvent`) e dados de contexto nativos sem poluir o histórico de chat direto do usuário.
+*   **Controle de Rollout**: Recursos de colaboração avançados (como `BuildConcurrent` ou Human-in-the-Loop em frentes paralelas) permanecem como trilhas de laboratório sob feature flag, garantindo o funcionamento do fluxo sequencial padrão do Core.
+
+---
+
+## 11. Gestão de Sessões — ISessionStore + ISessionManager
+
+O AgenticSystem trabalha com uma arquitetura de sessões em duas camadas independentes:
+
+```
+┌───────────────────────────────────────────────────────────────────────────┐
+│                           SESSÃO DE NEGÓCIO                               │
+│                         (ISessionManager)                                 │
+│                                                                           │
+│ - Controla metadados gerais de auditoria corporativa.                     │
+│ - Consolida sessões antigas com resumos gerados por LLM.                  │
+│ - Gerencia status, tempo de vida útil e métricas operacionais globais.    │
+└─────────────────────────────────────┬─────────────────────────────────────┘
+                                      │  (Vínculo por SessionId)
+                                      ▼
+┌───────────────────────────────────────────────────────────────────────────┐
+│                         SESSÃO DO FRAMEWORK                               │
+│                   (ISessionStore -> PostgresSessionStore)                 │
+│                                                                           │
+│ - Armazena o AgentSession nativo do MAF.                                  │
+│ - Mantém o histórico de mensagens exato de cada agente isoladamente.      │
+│ - Isolamento por "agentId + sessionId" no banco de dados relacional.      │
+└───────────────────────────────────────────────────────────────────────────┘
+```
+
+*   **SimpleSessionStoreAdapter**: Wrapper na infraestrutura que adapta o `ISessionStore` nativo do MAF para as chamadas de banco do AgenticSystem, integrando o controle de tempo de expiração de contexto (TTL).
+
+---
+
+## 12. Sistema de Tools — MCP, Built-in e Tool Versioning
+
+O sistema de execução de funções externas do AgenticSystem unifica as ferramentas em três frentes:
+
+```
+                              UnifiedAIToolProvider
+                                       │
+        ┌──────────────────────────────┼──────────────────────────────┐
+        ▼                              ▼                              ▼
+  [ MCP Tools ]                [ Built-in Tools ]            [ Agent-as-Tool ]
+  - Servidores externos        - Data, hora, calculadora     - Especialistas expostos
+  - Servidor local (SSE)       - Busca de arquivos local     - Workflow colaborativo
+```
+
+### 12.1 Tool Versioning / A-B Testing
+O `InMemoryToolManager` suporta múltiplas versões para as ferramentas registradas (ex: v1.0.0 e v1.1.0 de uma ferramenta de busca no calendário). 
+*   **Roteamento de Versão**: No momento de resolver a execução de uma ferramenta, o manager avalia o ID do usuário ou o contexto da sessão para aplicar um rollout percentual gradual (ex: 90% dos usuários usam v1.0, 10% testam a v1.1).
+*   **Garantia de Fallback**: Caso uma chamada falhe em uma variante experimental, o sistema re-executa a chamada na versão estável (v1.0) de forma automática e transparente.
+
+### 12.2 Baseline Local de Tools
+Para ambientes de desenvolvimento que não possuem servidores MCP externos configurados, o Core inicializa ferramentas locais de prontidão:
+*   `DateTimeTool` (Data e hora local sincronizada).
+*   `CalculatorTool` (Motor básico matemático isolado).
+*   `FileSearchTool` (Busca superficial local e indexação do workspace).
+*   `FileObsidianSync` (Atualizador do vector store com base em pastas markdown).
+
+---
+
+## 13. Ciclo de Vida dos Agentes
+
+Os agentes no AgenticSystem são categorizados pelo seu ciclo de vida e escopo de criação:
+
+| Tipo de Agente | Criação / Registro | Ciclo de Vida e Escopo | Exemplo de Uso |
+|---|---|---|---|
+| **Built-in (Nativo)** | Inicializado no startup via `HierarchicalAgentFactory` | Singleton (está ativo durante toda a execução da aplicação) | PersonalAgent, WorkAgent, GeneralAgent |
+| **Custom (Dinâmico)** | Criado por prompt do usuário via `DynamicAgentService` | Scoped ou In-Memory Pool (persiste as configurações em banco relacional) | "Agente de Direito Trabalhista" |
+| **Framework-hosted** | Registrado via `AddAIAgent()` no arquivo `Program.cs` | Scoped por requisição de chat (gerenciado pelo container de DI) | OrchestratorAgent |
+
+*   **Cleanup de Inativos**: Para evitar vazamentos de memória e sobrecarga do banco de dados, o `AgentCleanupHostedService` (ML25) executa rotinas em background limpando agentes customizados e dados temporários inativos há mais de 24 horas.
+
+---
+
+## 14. Multi-Tenant
+
+O AgenticSystem foi desenhado para ser multi-inquilino (multi-tenant) desde as camadas mais baixas:
+
+```
+                 Request HTTP / SignalR Connection
+                                │
+                                ▼
+                       [ TenantMiddleware ]
+                                ├─ Resolve JWT claim: "tenantId"
+                                └─ Fallback: Header "X-Tenant-Id"
+                                │
+                                ▼
+                   Registra scoped TenantContext
+                                │
+                                ▼
+           [ Serviços de Infraestrutura Resolvidos via DI ]
+  ├─ LLMManager: Resolve as chaves de API específicas do Tenant
+  ├─ Vector Store: Filtra os resultados de busca semântica por "tenant_id"
+  ├─ Settings: Armazena e expõe configurações personalizadas
+  └─ SessionManager: Isola as auditorias de negócio de cada empresa
+```
+
+---
+
+## 15. Autenticação e Segurança
+
+### 15.1 Multi-Scheme Authentication
+O sistema de autenticação unifica requisições do frontend e integrações de microsserviços por meio do esquema inteligente de policiamento `MultiAuth`:
+
+```csharp
+// Camada de borda Api
+builder.Services.AddAuthentication("MultiAuth")
+    .AddPolicyScheme("MultiAuth", "ApiKey ou JWT Bearer", options => {
+        options.ForwardDefaultSelector = context => {
+            if (context.Request.Headers.ContainsKey("X-Api-Key"))
+                return "ApiKey"; // Validação de chave administrativa estática
+            return "Bearer"; // Validação padrão de Token JWT OAuth/OIDC
+        };
+    });
+```
+
+### 15.2 API Key Masking nos Logs
+Para estar em conformidade com as melhores práticas de auditoria e segurança, chaves secretas e tokens de provedores LLM informados pelos Tenants passam por um serviço de higienização de string (`ApiKeyMaskingService`) antes de serem escritos em qualquer log persistente ou trace do OpenTelemetry.
+*   *Formato de mascaramento*: `sk-proj-ab...c3de` (preserva apenas caracteres iniciais e finais, ocultando o miolo).
+
+---
+
+## 16. Service Gateway — Resiliência e Circuit Breaker
+
+Para conexões com APIs externas (OpenAI, Anthropic, Claude, Jina, etc.), o sistema de infraestrutura centraliza as chamadas em um **Service Gateway** (`ServiceGateway`).
+
+```
+                              ServiceGateway.ExecuteAsync<T>()
+                                             │
+                                             ▼
+                             [ 1. Valida Registro de Serviço ]
+                                             │
+                                             ▼
+                             [ 2. CircuitBreaker.AllowRequest() ]
+                                             ├─ Closed (Permite requisição)
+                                             ├─ Open (Barra chamada imediata se falhou N vezes)
+                                             └─ Half-Open (Testa 1 requisição para auto-recuperar)
+                                             │
+                                             ▼
+                             [ 3. RateLimiter.AllowRequest() ]
+                                             │  (Garante limite de requisições por minuto)
+                                             ▼
+                             [ 4. Executa Action & Mede Custo ]
+                                             └─ Grava métricas e custos no CostTracker
+```
+
+*   **CostTracker**: Subsistema que monitora tokens consumidos, custos de API por provedor/modelo de forma consolidada, gerando alertas quando o consumo diário do Tenant se aproxima de 90% do budget configurado.
+
+---
+
+## 17. SignalR — Comunicação Real-Time
+
+O backend expõe dois Hubs SignalR para garantir dinamismo e monitoramento em tempo real de longo prazo.
+
+### 17.1 ChatHub (`/hubs/chat`)
+Gerencia o canal principal de interações do chat.
+
+*Métodos expostos pelo Servidor:*
+*   `SendMessage(string message, string? targetAgent, string? provider, string? model, string? apiKey)`: Inicia o processamento orquestrado de IA com parâmetros opcionais de infraestrutura.
+
+*Eventos emitidos para os Clientes:*
+
+| Evento | Payload | Descrição |
+|---|---|---|
+| `ProcessingStarted` | `{ DateTime timestamp }` | Indica ao frontend para ligar o spinner de "IA pensando" |
+| `AgentSelected` | `{ string name, string tier }` | Informa qual agente foi escolhido pelo supervisor |
+| `StreamEvent` | `{ string token }` | Envia tokens de texto parciais em streaming |
+| `ReceiveMessage` | `{ string content, string agentName, string sessionId, bool success }` | Envia a mensagem consolidada final e fecha o ciclo de resposta |
+| `ReceiveError` | `{ string error }` | Notifica o frontend sobre falhas de execução |
+
+### 17.2 GatewayHub (`/hubs/gateway`)
+Canal real-time reservado para dashboards de monitoramento operacional.
+
+*Métodos expostos pelo Servidor:*
+*   `GetDashboard()`: Devolve o relatório de saúde completo e acumulados de latência.
+*   `SubscribeToService(string serviceName)`: Inscreve o cliente em um grupo do SignalR correspondente àquele serviço externo específico.
+*   `UnsubscribeFromService(string serviceName)`: Cancela a inscrição naquele grupo de atualizações.
+
+*Eventos emitidos para os Clientes:*
+*   `DashboardUpdate`: Notifica alterações consolidadas de estatísticas globais do gateway.
+*   `ServiceStatusChanged`: Alerta imediato se um Circuit Breaker de serviço mudou de estado (ex: de Closed para Open).
+
+---
+
+## 18. Protocol Hosting — A2A, AG-UI e OpenAI-Compatible
+
+Para permitir interoperabilidade de sistemas externos com a rede de agentes, o AgenticSystem implementa três superfícies de comunicação:
+
+```
+                            Portas de Comunicação (Hosting)
+                                           │
+         ┌─────────────────────────────────┼─────────────────────────────────┐
+         ▼                                 ▼                                 ▼
+   [ A2A Server ]                    [ AGUI Server ]                [ OpenAI Controller ]
+   - /a2a                            - /agui                        - /v1/chat/completions
+   - Comunicação JSON                - Stream de eventos tipados     - Emula a API oficial
+   - Agent-to-Agent                  - Chat rico para frontends      - Plugável em ferramentas
+```
+
+*   **A2A (Agent-to-Agent)**: Endereçamento padronizado para que agentes de outros sistemas façam chamadas a agentes especialistas do AgenticSystem usando formatos semânticos puros.
+*   **AGUI (Agentic UI)**: Superfície focada em simplificar conexões de frontends com controle robusto de metadados, actions recomendadas e diagramação dinâmica.
+*   **OpenAI-Compatible**: Controller customizado que traduz requests JSON padrão da OpenAI e converte internamente para chamadas ao `MetaAgentOrchestrator`, devolvendo respostas formatadas no padrão do SDK oficial da OpenAI.
+
+---
+
+## 19. Funcionalidades Transversais e Scheduler DAG-lite
+
+### 19.1 Scheduler — Task Chaining DAG-lite
+O gerenciador de tarefas agendadas (`ScheduledTaskManager`) estende as execuções clássicas por período ou CRON, implementando um motor simples de grafo acíclico dirigido de tarefas (**DAG-lite**):
+
+```
+                        [ Tarefa A (Cron Trigger) ]
+                                     │  (Conclui com Sucesso)
+                                     ▼
+                        [ Tarefa B (Continuation) ]
+                                     │  (Conclui com Sucesso)
+                                     ▼
+                        [ Tarefa C (Continuation) ]
+```
+
+*   **DependencyTaskIds**: Coleção de IDs de tarefas das quais o registro atual depende. O scheduler impede que tarefas com dependências sejam executadas, mantendo seu agendamento pausado (`NextRunAt = null`) até que os predecessores terminem com sucesso.
+*   **ContinuationTaskIds**: Lista de tarefas sucessoras que devem ser desatilhadas e agendadas para execução imediata no momento em que a tarefa pai atual for concluída com sucesso.
+*   **Garantia de Ciclos**: O método `LinkTasksAsync` executa uma busca em profundidade (DFS) de alcançabilidade no grafo de conexões para impedir que relações cíclicas (como `A -> B -> A`) sejam salvas no banco de dados.
+
+### 19.2 Confidence Score
+A classe `ConfidenceScoreCalculator` compõe dinamicamente um veredito numérico e qualitativo de confiança para cada retorno de agente com base em quatro eixos:
+1.  **Status Operacional** (1.0 se executou sem falhas de timeout ou erros internos; 0.1 se houve queda de rede).
+2.  **Relevância Semântica RAG** (média aritmética de score de proximidade cossexual dos chunks recuperados de banco).
+3.  **Análise de Ferramentas** (reforça a nota se ferramentas precisas como MCPs foram acionadas ao invés de mera opinião direta do LLM).
+4.  **Histórico de Auto-Reflexão** (penaliza se a auto-reflexão indicou desvios anteriores graves de prompt naquela sessão).
+
+O resultado é encapsulado como `ConfidenceScore` (High, Medium, Low, ou RequiresHumanReview).
+
+### 19.3 Final Response Approval (Human-in-the-Loop)
+Se a nota de confiança obtida for menor que o limite definido para o Tenant ou se a ação envolver comandos financeiros/alterações estruturais de dados, o `IFinalResponseApprovalService` intercepta o fluxo.
+*   **Pendente de Aprovação**: A mensagem é persistida no banco com a tag `pendingFinalApproval` e não é retornada ao usuário final.
+*   **Liberação**: Uma requisição POST no endpoint administrativo aprova ou rejeita a mensagem, liberando o envio para o chat do usuário caso aprovado.
+
+---
+
+## 20. Observabilidade e Monitoramento
+
+*   **OpenTelemetry**: Rastreamento estruturado adicionando tags detalhadas nos spans (ex: `agent.name`, `agent.tier`, `session.id`, `rag.chunks_count`, `llm.total_tokens`).
+*   **Markers Temáticos de Logs**: Para facilitar o rastreamento em terminais ou servidores de log:
+    *   🎯 `[Routing]` — Decisões de direcionamento e mapeamento de agentes.
+    *   🔍 `[RAG]` — Chamadas e consultas na base semântica de conhecimentos.
+    *   ✅ `[Success]` — Sucesso na execução operacional do pipeline.
+    *   ❌ `[Error]` — Exceções tratadas e não-tratadas do runtime.
+    *   🔄 `[Handoff]` — Passagem de contexto entre especialistas de domínio.
+    *   🏗️ `[Creation]` — Inicialização de agentes dinâmicos via linguagem natural.
+    *   🧹 `[Cleanup]` — Processos em background de remoção de agentes inativos.
+
+---
+
+## 21. Frontend — SPA React & Vite
+
+O frontend do AgenticSystem é uma aplicação de página única (SPA) rica e moderna.
+
+### 21.1 Arquitetura de Fluxo do Frontend
+```
+                              ┌───────────────────────────────┐
+                              │          App Router           │  (App.tsx)
+                              └──────────────┬────────────────┘
+                                             ▼
+                              ┌───────────────────────────────┐
+                              │      Main Layout (Sidebar)    │
+                              └──────────────┬────────────────┘
+                                             ▼
+                               ┌─────────────────────────────┐
+                               │         Active Page         │
+                               └─────────────┬───────────────┘
+                                             ▼
+                              ┌───────────────────────────────┐
+                              │    Custom Hooks (useChat...)  │
+                              └──────────────┬────────────────┘
+                                             ▼
+                              ┌───────────────────────────────┐
+                              │    Lib Layer (signalr.ts...)  │
+                              └───────────────────────────────┘
+```
+
+*   **signalr.ts**: Gerencia a conexão Singleton com o `/hubs/chat` utilizando reconexão automática e gerenciamento de buffers para mensagens pendentes.
+*   **api.ts**: Exporta serviços tipados para cada domínio do backend (ex: `agentApi` para gerenciar agentes, `llmApi` para gerenciar as IAs e providers).
+
+### 21.2 Componentes de Destaque
+*   **MessageBubble**: Renderizador de mensagens do chat com suporte completo a Markdown formatado de forma segura e badges customizados por Tier de agente. Mostra tags visuais indicando quais ferramentas (🔧) e ações (⚡) a IA disparou no backend.
+*   **DashboardPage**: Tela operacional que consome dados em tempo real do `/hubs/gateway`. Mostra gráficos de latência, consumo de créditos, alertas ativos do Circuit Breaker e um painel de status de microsserviços.
+*   **PluginsPage**: Tela administrativa para gerenciar servidores MCP, conectando novos endpoints STDIO ou SSE.
+
+---
+
+## 22. Over-Engineering Check & Simplificações
+
+Durante a revalidação da arquitetura, mapeamos pontos de complexidade acidental que foram simplificados na evolução do sistema:
+
+| Ponto de Complexidade | Evidência Identificada | Decisão de Simplificação Aplicada |
+|---|---|---|
+| **Excesso de Construtores** | `MetaAgentOrchestrator` possuía acoplamento com mais de 15 dependências de suporte | Agrupamento de dependências afins em objetos estruturados (`ExecutionPolicies`, `ExecutionObservability`) |
+| **Duplicidade de Fluxos** | O fluxo de streaming possuía regras de persistência diferentes do fluxo síncrono REST | Consolidação de toda a lógica central de pós-processamento de borda no `AgentExecutionPostProcessingPipeline` |
+| **Boundaries de ML** | Dezenas de pequenas interfaces redundantes na pasta `Interfaces/` | Fusão de interfaces correlatas com alta coesão e simplificação do registro de DI |
+
+---
+
+## 23. Padrões Arquiteturais Utilizados
+
+1.  **Clean Architecture (Onion)**: Divisão de responsabilidade nítida entre Api, Core e Infrastructure.
+2.  **Supervisor-with-Tools**: Roteador central inteligente coordenando agentes especialistas por meio de chamadas de funções.
+3.  **Pipeline (Chain of Responsibility)**: Pipelines de pré e pós-processamento interceptando requests de chat para validar dados, aplicar correção em lote e monitorar qualidade.
+4.  **Decorator**: Múltiplos decorators envolvendo o `IChatClient` padrão para incluir concorrência, governança de chaves e logs de telemetria de forma transparente.
+5.  **Circuit Breaker & Rate Limiter**: Mecanismos de resiliência corporativa para conexões e integrações de borda externas.
+6.  **DAG (Grafo Acíclico Dirigido)**: Implementação DAG-lite no scheduler para controle de tarefas com relação de dependência e gatilhos de continuação.
+
+---
+
+## Apêndice A: Mapa Geral de Arquivos
+
+| Camada | Pasta / Namespace | Atribuição Técnica |
+|---|---|---|
+| **Api** | `Controllers/` | Endpoints REST públicos e administrativos |
+| **Api** | `Hubs/` | Hubs SignalR para comunicação bidirecional com frontends |
+| **Api** | `Auth/` | Manipulador do esquema composto de segurança `MultiAuth` |
+| **Core**| `Agents/` | Definições básicas de Agente (`BaseAgent`) e Tiers |
+| **Core**| `Interfaces/` | Contratos abstratos de memória, RAG, sessões e execução |
+| **Core**| `Services/` | Lógicas centrais: orquestração, loops de correção, scheduler |
+| **Infra**| `AgentFramework/` | Acoplamentos e adaptadores para o Microsoft Agent Framework |
+| **Infra**| `LLM/` | Decorators de governança (`GovernedChatClient`, `ContextAwareChatClient`) |
+| **Infra**| `RAG/` | Mecanismos de vetorização, busca semântica, rerankers ONNX/Jina |
+| **Infra**| `Persistence/`| Implementações EF Core com PostgreSQL para banco relacional |
+| **Front**| `frontend/src/components/` | Páginas visuais do chat, dashboards e componentes unificados |
+| **Front**| `frontend/src/hooks/` | Hooks React customizados conectando APIs REST e SignalR |
+
+---
+
+## Apêndice B: Maturity Levels (ML24–ML33)
+
+| Nível | Capacidade Técnica | Serviços de Referência | Domínio de Impacto |
+|---|---|---|---|
+| **ML24** | Quality Gates Pipeline | `IQualityGateService`, `InputValidationGate`, `ResponseQualityGate` | Qualidade & Filtros de Entrada/Saída |
+| **ML25** | Agent Cleanup Daemon | `AgentCleanupHostedService` | Ciclo de Vida & Higienização de Banco |
+| **ML26** | Vision Integration | `IVisionProvider`, `OpenAIVisionProvider` | Análise Multimodal de Imagens |
+| **ML27** | MCP Plugin Gateway | `IMCPPluginManager`, `McpToolsAIFunctionAdapter` | Extensibilidade por Protocolo MCP |
+| **ML28** | Storage Abstraction | `IStorageProvider`, `StorageFile` | Gerenciamento de Arquivos e Uploads |
+| **ML29** | Agent Execution Workflow | `IAgentExecutionWorkflow`, `AgentExecutionWorkflow` | Infraestrutura de Orquestração no Core |
+| **ML30** | End-to-End Streaming | `IAgentRuntimeCoordinator`, `ChatHub` | Comunicação Dinâmica em Real-Time |
+| **ML31** | Governed Capabilities | `IToolGovernanceService`, Approvals de ferramentas | Controle de Acesso e Governança de Tools |
+| **ML32** | Operational Artifacts | `AgentExecutionArtifact`, `AgentRuntimeMetricsSnapshot` | Armazenamento de Planos e Métricas de Traces |
+| **ML33** | Final Human Approval | `IFinalResponseApprovalService`, endpoint `final-approvals` | Mecanismo Human-in-the-Loop de Borda |
+
+*Nota*: Os níveis de maturidade anteriores (ML1 a ML23) referem-se à especificação de base e estão detalhados em [USER-STORIES.md](../USER-STORIES.md).
+
+---
+
+## Glossário
+
+*   **MAF (Microsoft Agent Framework)**: Framework corporativo de agentes e workflows distribuído pela Microsoft para ecossistema .NET.
+*   **AsAIFunction()**: Extension method nativo do MAF que transforma qualquer agente em um tool formatado em JSONSchema compatível com chamada de função de LLMs.
+*   **RAG (Retrieval-Augmented Generation)**: Técnica de busca e injeção de conhecimentos corporativos para diminuir alucinações e atualizar o contexto da IA.
+*   **Cross-Encoder ReRanker**: Modelo de rede neural especializado que avalia a relevância de pares (pergunta, resposta) com precisão superior aos embeddings tradicionais.
+*   **Circuit Breaker**: Padrão de design de software que intercepta chamadas de rede externas e abre o circuito (bloqueia requisições) se o servidor de destino estiver apresentando falhas seguidas, protegendo o sistema de travamentos.
+*   **Model Context Protocol (MCP)**: Protocolo padronizado que unifica a forma como agentes de IA descobrem e chamam ferramentas em servidores locais ou remotos.
+*   **DAG-lite**: Grafo acíclico direcionado de tarefas com checagens de ciclo simplificadas, embarcado no motor do agendador do AgenticSystem.
