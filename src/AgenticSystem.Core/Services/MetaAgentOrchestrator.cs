@@ -31,7 +31,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         ISessionManager sessionManager,
         IAgentRuntimeCoordinator runtimeCoordinator,
         IContextAnalyzer contextAnalyzer,
-        ILogger<MetaAgentOrchestrator> logger,
+        ILogger<MetaAgentOrchestrator>? logger = null,
         IAgentCollaborationWorkflow? collaborationWorkflow = null,
         IWorkflowEngine? workflowEngine = null,
         ITenantIsolationEnforcer? isolationEnforcer = null)
@@ -42,11 +42,44 @@ public class MetaAgentOrchestrator : IMetaAgent
         _agentFactory = agentFactory;
         _sessionManager = sessionManager;
         _runtimeCoordinator = runtimeCoordinator;
-        _contextAnalyzer = contextAnalyzer;
-        _logger = logger;
+        _contextAnalyzer = contextAnalyzer ?? new NullContextAnalyzer();
+        _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<MetaAgentOrchestrator>.Instance;
         _collaborationWorkflow = collaborationWorkflow;
         _workflowEngine = workflowEngine;
         _isolationEnforcer = isolationEnforcer;
+    }
+
+    // Backwards-compatible constructor for existing tests and custom setups
+    public MetaAgentOrchestrator(
+        IFrameworkOrchestratorService frameworkOrchestrator,
+        IDirectAgentRequestExecutor directAgentRequestExecutor,
+        ILLMRuntimeContextAccessor llmRuntimeContextAccessor,
+        IAgentFactory agentFactory,
+        ISessionManager sessionManager,
+        IAgentRuntimeCoordinator runtimeCoordinator,
+        ILogger<MetaAgentOrchestrator>? logger = null)
+        : this(
+            frameworkOrchestrator,
+            directAgentRequestExecutor,
+            llmRuntimeContextAccessor,
+            agentFactory,
+            sessionManager,
+            runtimeCoordinator,
+            new NullContextAnalyzer(),
+            logger)
+    {
+    }
+
+    private class NullContextAnalyzer : IContextAnalyzer
+    {
+        public Task<AnalysisResult> AnalyzeAsync(string input, UserContext userContext) =>
+            Task.FromResult(new AnalysisResult { Intent = IntentType.Chat, Confidence = 1.0f });
+
+        public Task<System.Collections.Generic.List<ExtractedEntity>> ExtractEntitiesAsync(string input) =>
+            Task.FromResult(new System.Collections.Generic.List<ExtractedEntity>());
+
+        public Task<bool> RequiresDelegationAsync(AnalysisResult analysis) =>
+            Task.FromResult(false);
     }
 
     public async Task<AgentResponse> ProcessRequestAsync(string input, UserContext context)

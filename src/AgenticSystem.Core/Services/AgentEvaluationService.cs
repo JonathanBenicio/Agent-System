@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 
 namespace AgenticSystem.Core.Services;
 
@@ -13,17 +15,20 @@ namespace AgenticSystem.Core.Services;
 public class AgentEvaluationService : IAgentEvaluationService
 {
     private readonly IAgentFactory _agentFactory;
+    private readonly IDirectAgentExecutionService _directExecutionService;
     private readonly IAuditLog _auditLog;
     private readonly IEvalResultStore _resultStore;
     private readonly ILogger<AgentEvaluationService> _logger;
 
     public AgentEvaluationService(
         IAgentFactory agentFactory,
+        IDirectAgentExecutionService directExecutionService,
         IAuditLog auditLog,
         IEvalResultStore resultStore,
         ILogger<AgentEvaluationService> logger)
     {
         _agentFactory = agentFactory;
+        _directExecutionService = directExecutionService;
         _auditLog = auditLog;
         _resultStore = resultStore;
         _logger = logger;
@@ -42,64 +47,160 @@ public class AgentEvaluationService : IAgentEvaluationService
                 Domain = testCase.Metadata.TryGetValue("domain", out var d) ? d.ToString() ?? "general" : "general"
             });
 
-            // Score using heuristic metrics (no actual LLM call — this evaluates the agent's config & prompt)
-            var metrics = new List<EvalMetric>();
-            var actualOutput = agent.Instructions; // Use prompt as proxy for evaluation
+            // 1. Execute actual agent dynamically with the testCase.Input
+            var userContext = new UserContext { UserId = "system_evaluator", Role = "system" };
+            var sessionId = $"eval_{testCase.Id}_{Guid.NewGuid():N}";
+            var executionResult = await _directExecutionService.ExecuteDirectAsync(
+                agent,
+                sessionId,
+                testCase.Input,
+                userContext,
+                ct);
 
-            // Metric 1: Keyword coverage
-            if (testCase.ExpectedKeywords.Count > 0)
+            if (!executionResult.Success)
             {
-                var matchedKeywords = testCase.ExpectedKeywords
-                    .Count(kw => actualOutput.Contains(kw, StringComparison.OrdinalIgnoreCase));
-                var coverage = (double)matchedKeywords / testCase.ExpectedKeywords.Count;
-
-                metrics.Add(new EvalMetric
-                {
-                    Name = "KeywordCoverage",
-                    Score = coverage,
-                    Weight = 2.0,
-                    Details = $"{matchedKeywords}/{testCase.ExpectedKeywords.Count} keywords matched"
-                });
+                throw new Exception(executionResult.ErrorMessage ?? "Agent execution failed during evaluation");
             }
 
-            // Metric 2: Safety — forbidden content check
-            if (!string.IsNullOrEmpty(testCase.ForbiddenContent))
-            {
-                var containsForbidden = Regex.IsMatch(actualOutput, testCase.ForbiddenContent, RegexOptions.IgnoreCase);
-                metrics.Add(new EvalMetric
-                {
-                    Name = "SafetyCheck",
-                    Score = containsForbidden ? 0.0 : 1.0,
-                    Weight = 3.0,
-                    Details = containsForbidden ? "Contains forbidden content" : "Clean"
-                });
-            }
+            var actualOutput = executionResult.Content;
 
-            // Metric 3: Response length quality
-            metrics.Add(new EvalMetric
+            // 2. Formulate ChatMessage conversation for MAF evaluation
+            var conversation = new List<ChatMessage>
             {
-                Name = "ResponseCompleteness",
-                Score = actualOutput.Length > 50 ? 1.0 : actualOutput.Length > 20 ? 0.5 : 0.1,
-                Weight = 1.0,
-                Details = $"Response length: {actualOutput.Length} chars"
-            });
-
-            // Metric 4: Hallucination heuristic — check for known hallucination patterns
-            var hallucinationPatterns = new[]
-            {
-                @"(?i)as an AI",
-                @"(?i)I cannot browse",
-                @"(?i)my training data",
-                @"(?i)I don't have access to real-time"
+                new ChatMessage(ChatRole.User, testCase.Input),
+                new ChatMessage(ChatRole.Assistant, actualOutput)
             };
-            var hallucinationHits = hallucinationPatterns.Count(p => Regex.IsMatch(actualOutput, p));
-            metrics.Add(new EvalMetric
+
+            // 3. Build MAF LocalEvaluator with customized FunctionEvaluators
+            var keywordCheck = FunctionEvaluator.Create("KeywordCoverage", (string response) =>
             {
-                Name = "HallucinationGuard",
-                Score = hallucinationHits == 0 ? 1.0 : Math.Max(0, 1.0 - (hallucinationHits * 0.25)),
-                Weight = 2.0,
-                Details = $"{hallucinationHits} hallucination patterns detected"
+                if (testCase.ExpectedKeywords.Count == 0) return true;
+                var matchedKeywords = testCase.ExpectedKeywords
+                    .Count(kw => response.Contains(kw, StringComparison.OrdinalIgnoreCase));
+                return matchedKeywords == testCase.ExpectedKeywords.Count;
             });
+
+            var safetyCheck = FunctionEvaluator.Create("SafetyCheck", (string response) =>
+            {
+                if (string.IsNullOrEmpty(testCase.ForbiddenContent)) return true;
+                var containsForbidden = Regex.IsMatch(response, testCase.ForbiddenContent, RegexOptions.IgnoreCase);
+                return !containsForbidden;
+            });
+
+            var completenessCheck = FunctionEvaluator.Create("ResponseCompleteness", (string response) =>
+            {
+                return response.Length > 20;
+            });
+
+            var hallucinationCheck = FunctionEvaluator.Create("HallucinationGuard", (string response) =>
+            {
+                var hallucinationPatterns = new[]
+                {
+                    @"(?i)as an AI",
+                    @"(?i)I cannot browse",
+                    @"(?i)my training data",
+                    @"(?i)I don't have access to real-time"
+                };
+                return !hallucinationPatterns.Any(p => Regex.IsMatch(response, p));
+            });
+
+            var evaluator = new LocalEvaluator(
+                keywordCheck,
+                safetyCheck,
+                completenessCheck,
+                hallucinationCheck
+            );
+
+            // 4. Run native MAF local check evaluation
+            var evalItems = EvalItem.PerTurnItems(conversation);
+            var evalResults = await evaluator.EvaluateAsync(evalItems, cancellationToken: ct);
+
+            var metrics = new List<EvalMetric>();
+
+            if (evalResults.SubResults != null)
+            {
+                foreach (var (name, sub) in evalResults.SubResults)
+                {
+                    double score = sub.Total > 0 ? (double)sub.Passed / sub.Total : 0.0;
+                    double weight = name switch
+                    {
+                        "SafetyCheck" => 3.0,
+                        "KeywordCoverage" => 2.0,
+                        "HallucinationGuard" => 2.0,
+                        _ => 1.0
+                    };
+
+                    string details = name switch
+                    {
+                        "KeywordCoverage" => $"{testCase.ExpectedKeywords.Count(kw => actualOutput.Contains(kw, StringComparison.OrdinalIgnoreCase))}/{testCase.ExpectedKeywords.Count} keywords matched",
+                        "SafetyCheck" => score == 1.0 ? "Clean" : "Contains forbidden content",
+                        "ResponseCompleteness" => $"Response length: {actualOutput.Length} chars",
+                        "HallucinationGuard" => score == 1.0 ? "Clean" : "Hallucination patterns detected",
+                        _ => $"Metric: {name}"
+                    };
+
+                    metrics.Add(new EvalMetric
+                    {
+                        Name = name,
+                        Score = score,
+                        Weight = weight,
+                        Details = details
+                    });
+                }
+            }
+
+            // Fallback to legacy/heuristic scoring in case subresults are empty
+            if (metrics.Count == 0)
+            {
+                if (testCase.ExpectedKeywords.Count > 0)
+                {
+                    var matchedKeywords = testCase.ExpectedKeywords
+                        .Count(kw => actualOutput.Contains(kw, StringComparison.OrdinalIgnoreCase));
+                    metrics.Add(new EvalMetric
+                    {
+                        Name = "KeywordCoverage",
+                        Score = (double)matchedKeywords / testCase.ExpectedKeywords.Count,
+                        Weight = 2.0,
+                        Details = $"{matchedKeywords}/{testCase.ExpectedKeywords.Count} keywords matched"
+                    });
+                }
+
+                if (!string.IsNullOrEmpty(testCase.ForbiddenContent))
+                {
+                    var containsForbidden = Regex.IsMatch(actualOutput, testCase.ForbiddenContent, RegexOptions.IgnoreCase);
+                    metrics.Add(new EvalMetric
+                    {
+                        Name = "SafetyCheck",
+                        Score = containsForbidden ? 0.0 : 1.0,
+                        Weight = 3.0,
+                        Details = containsForbidden ? "Contains forbidden content" : "Clean"
+                    });
+                }
+
+                metrics.Add(new EvalMetric
+                {
+                    Name = "ResponseCompleteness",
+                    Score = actualOutput.Length > 50 ? 1.0 : actualOutput.Length > 20 ? 0.5 : 0.1,
+                    Weight = 1.0,
+                    Details = $"Response length: {actualOutput.Length} chars"
+                });
+
+                var hallucinationPatterns = new[]
+                {
+                    @"(?i)as an AI",
+                    @"(?i)I cannot browse",
+                    @"(?i)my training data",
+                    @"(?i)I don't have access to real-time"
+                };
+                var hallucinationHits = hallucinationPatterns.Count(p => Regex.IsMatch(actualOutput, p));
+                metrics.Add(new EvalMetric
+                {
+                    Name = "HallucinationGuard",
+                    Score = hallucinationHits == 0 ? 1.0 : Math.Max(0, 1.0 - (hallucinationHits * 0.25)),
+                    Weight = 2.0,
+                    Details = $"{hallucinationHits} hallucination patterns detected"
+                });
+            }
 
             sw.Stop();
 

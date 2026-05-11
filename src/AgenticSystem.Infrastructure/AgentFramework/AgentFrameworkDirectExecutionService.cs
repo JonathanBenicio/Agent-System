@@ -90,12 +90,35 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
                 var schemaAttribute = agent.GetType().GetCustomAttributes(typeof(AgenticSystem.Core.Attributes.AgenticJsonSchemaAttribute), true).FirstOrDefault() as AgenticSystem.Core.Attributes.AgenticJsonSchemaAttribute;
                 var validator = _serviceProvider.GetService(typeof(IStructuredOutputValidator)) as IStructuredOutputValidator;
                 
+                var runOptions = new Microsoft.Agents.AI.AgentRunOptions();
+                if (schemaAttribute != null && !string.IsNullOrEmpty(schemaAttribute.CustomSchemaJson))
+                {
+                    try
+                    {
+                        var schemaElement = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(schemaAttribute.CustomSchemaJson);
+                        runOptions.ResponseFormat = ChatResponseFormat.ForJsonSchema(
+                            schemaElement,
+                            schemaName: agent.Name,
+                            schemaDescription: $"Schema constraints for {agent.Name}"
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to parse CustomSchemaJson, falling back to ChatResponseFormat.Json");
+                        runOptions.ResponseFormat = ChatResponseFormat.Json;
+                    }
+                }
+                else if (schemaAttribute != null)
+                {
+                    runOptions.ResponseFormat = ChatResponseFormat.Json;
+                }
+
                 int maxRetries = schemaAttribute?.AutoRetryOnFailure == true ? schemaAttribute.MaxRetries : 1;
                 string currentInput = input;
                 
                 for (int attempt = 1; attempt <= maxRetries; attempt++)
                 {
-                    frameworkResponse = await frameworkAgent.RunAsync(currentInput, session);
+                    frameworkResponse = await frameworkAgent.RunAsync(currentInput, session, options: runOptions, cancellationToken: ct);
 
                     content = string.Join("\n", frameworkResponse.Messages
                         .Where(m => m.Role == ChatRole.Assistant)
