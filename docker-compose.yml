@@ -1,4 +1,16 @@
 services:
+  agentic-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    depends_on:
+      agentic-api:
+        condition: service_healthy
+    networks:
+      - agentic-net
+
   agentic-api:
     build:
       context: .
@@ -11,21 +23,24 @@ services:
       - AgenticSystem__OpenAI__DefaultModel=gpt-4o-mini
       - AgenticSystem__Ollama__BaseUrl=http://ollama:11434
       - AgenticSystem__Ollama__Enabled=true
+      - AgenticSystem__LocalExecution__StorageMode=PostgreSQL
+      - AgenticSystem__Memory__VectorStoreType=PostgreSQL
       - ConnectionStrings__SessionStore=Host=postgres;Port=5432;Database=agentic;Username=agentic;Password=${POSTGRES_PASSWORD:-agentic_dev}
     depends_on:
       postgres:
         condition: service_healthy
       ollama:
+        condition: service_started
     healthcheck:
       test: ["CMD", "wget", "--spider", "--quiet", "http://localhost:8080/health"]
-      interval: 30s
+      interval: 15s
       timeout: 3s
       retries: 3
     networks:
       - agentic-net
 
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:16-pgvector
     ports:
       - "5432:5432"
     environment:

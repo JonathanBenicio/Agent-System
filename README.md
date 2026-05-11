@@ -417,8 +417,8 @@ POST /api/admin/mcp/plugins                    # Registrar plugin
 | Document Ingestion Pipeline | ✅ |
 | Hybrid Chunking (structural + semantic + size) | ✅ |
 | Agentic RAG + Heuristic Re-Ranking | ✅ |
-| ML11 — Dynamic Agent Creation (agents via chat + LLM) | ✅ |
-| ML12 — Dynamic Handoffs (SingleDelegate / FanOut / Chain) | ✅ |
+| ML11 — Dynamic Agent Creation (agents via chat + LLM) | 🟡 Lab |
+| ML12 — Native Workflows (AgentWorkflowBuilder / Tool Bindings) | ✅ |
 | ML13 — Session Consolidation (LLM summarization + insights) | ✅ |
 | ML14 — Smart Routing (performance + user preferences) | ✅ |
 | ML15 — Setup Flow (conversational onboarding wizard) | ✅ |
@@ -571,7 +571,7 @@ O sistema implementa 10 níveis de maturidade que elevam o agente de um "chatbot
 |:-----:|------|---------|------------------|
 | ML1 | Chunk Lifecycle | `IChunkLifecycleManager` | Aging, decay e promoção de chunks — gerencia o ciclo New → Active → Consolidated → Archived |
 | ML2 | Context Budget | `IContextBudgetManager` | Orçamento semântico de tokens — aloca contexto entre memória recente, domínio, episódica e histórico de decisões |
-| ML3 | Task Planning | `ITaskPlanManager` | Decomposição multi-step — cria planos com steps, avança/falha etapas, pausa e cancela execuções |
+| ML3 | Native Workflows | `AgentWorkflowBuilder` | Decomposição nativa de tarefas complexas via MAF (planner → executor → reviewer) com checkpointing |
 | ML4 | Reflection | `IReflectionEngine` | Auto-reflexão pós-resposta — analisa qualidade, identifica gaps e gera insights acionáveis |
 | ML5 | Correction Loop | `ICorrectionLoop` | Aprendizado com correções humanas — registra correções, extrai regras e aplica em respostas futuras |
 | ML6 | Knowledge Freshness | `IKnowledgeFreshnessService` | Detecção de drift — monitora freshness de chunks e gera relatórios de conhecimento desatualizado |
@@ -580,11 +580,11 @@ O sistema implementa 10 níveis de maturidade que elevam o agente de um "chatbot
 | ML9 | Query Compression | `IQueryCompressor` | Compressão de queries antes do search — remove redundância, extrai key terms, normaliza intent semântico |
 | ML10 | User Personalization | `IUserPreferenceEngine` | Perfis de preferência por usuário — estilo de comunicação, tolerância a risco, agentes preferidos, EMA de satisfação |
 | ML11 | Dynamic Agent Creation | `IDynamicAgentService` | Criação de agents via linguagem natural — detecção de intent, geração de spec via LLM, fallback por keywords, registro automático |
-| ML12 | Dynamic Handoffs | `IFrameworkOrchestratorService` + `IAgentChannelService` | Delegação mid-conversation por tool bindings, canais estruturados e workflow colaborativo |
+| ML12 | Native Delegation | `Tool Bindings` (MAF) | Delegação governada pelo LLM do orquestrador via `AsAIFunction()`, substituindo roteamento imperativo manual |
 | ML13 | Session Consolidation | `ISessionConsolidator` | Sumarização de sessão via LLM — extração de fatos, decisões, preferências, action items. Memória de longo prazo |
 | ML14 | Smart Routing | `ISmartRouter` | Roteamento multi-critério — preferências do usuário, histórico de performance, EMA de latência e qualidade |
 | ML15 | Setup Flow | `ISetupFlowManager` | Onboarding conversacional — wizard step-by-step (Welcome→Identity→Workspace→Jira→Profile→Team→Projects→Complete) |
-| ML16 | Session Persistence | `ISessionStore` | Abstração de persistência de sessões — InMemory (default) e PostgreSQL (produção). Swap transparente via DI |
+| ML16 | Native Session | `ISessionStore` (MAF) | Persistência usando interface nativa do Microsoft Agent Framework acoplada ao banco via `SimpleSessionStoreAdapter` |
 | ML17 | IChatClient Compatibility | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` | Seleção contextual de provider/modelo e compatibilidade explícita entre `IChatClient` e `ILLMProvider` |
 | ML18 | Voice Interface | `VoiceController` | Endpoint voice-friendly `/api/voice/ask` — timeout 7s, StripMarkdown para TTS, Alexa/Google Assistant ready |
 | ML19 | Multi-Tenant | `ITenantStore` · `ITenantResolver` · `TenantContext` | Isolamento por tenant — resolução via header/token, store in-memory (default), contexto propagado por middleware |

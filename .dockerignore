@@ -1,0 +1,31 @@
+# Build artifacts do .NET
+**/bin/
+**/obj/
+
+# Dependências locais do Frontend
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Pastas de controle de versão e IDEs
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+.gemini/
+*.user
+*.suo
+
+# Docker e Deploy
+.dockerignore
+docker-compose*.yml
+Dockerfile*
+k8s/
+
+# Outros diretórios de utilitários locais
+postman/
+scratch/
+artifacts/
+logs/
+temp/

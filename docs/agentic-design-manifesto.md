@@ -53,12 +53,12 @@ O sistema evolui em camadas incrementais de maturidade (**Maturity Levels — ML
 | **Compression** | 8 | Semantic Compression | Histórico longo vira princípio e resumo executivo. |
 | **Compression** | 9 | Query Compression | Menos ruído, mais sinal no retrieval de embeddings. |
 | **Personalization**| 10 | User Personalization | Cada usuário é único sem lock-in coercitivo. |
-| **Autonomy** | 11 | Dynamic Agent Creation | O sistema cresce e cria novos agentes em runtime sob demanda. |
-| **Autonomy** | 12 | Dynamic Handoffs | Delegação em cadeia via canais estruturados e colaboração. |
+| **Autonomy** | 11 | Dynamic Agent Creation | [Lab] O sistema cresce e cria novos agentes em runtime sob demanda. |
+| **Autonomy** | 12 | Native Workflows | Delegação nativa governada por LLM via Tool Bindings e AgentWorkflows. |
 | **Autonomy** | 13 | Session Consolidation | Esquecer com critério estruturado é lembrar melhor. |
 | **Autonomy** | 14 | Smart Routing | Seleção heurística baseada em intenção, carga e performance. |
 | **Autonomy** | 15 | Setup Flow | Onboarding guiado e resiliente por step define a adoção. |
-| **Persistence** | 16 | Session Persistence | Estado durável e persistente reidratado entre processos. |
+| **Persistence** | 16 | Native Session Persistence | Sessões nativas do framework (ISessionStore) isoladas por agente. |
 | **Compatibility**| 17 | IChatClient Compatibility| Coexistência entre runtime de agentes e provedores legados. |
 | **Accessibility**| 18 | Voice Interface | Interface de voz (ASK/TTS) pronta para integrações externas. |
 
