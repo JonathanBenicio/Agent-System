@@ -89,6 +89,7 @@ public static class ServiceCollectionExtensions
         // Gateway
         services.AddSingleton<ICostTracker, CostTracker>();
         services.AddSingleton<IServiceGateway, ServiceGateway>();
+        services.AddSingleton<ITokenAuditService, AgenticSystem.Infrastructure.Observability.TokenAuditService>();
 
         // Quality Gates
         services.AddSingleton<IQualityGate, InputValidationGate>();

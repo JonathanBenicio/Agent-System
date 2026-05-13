@@ -13,6 +13,12 @@ export function DashboardPage() {
 
   return (
     <div className="h-full overflow-y-auto">
+      <head>
+        <title>Dashboard - Agentic System</title>
+        <meta name="description" content="Dashboard de monitoramento e governança de agentes de IA." />
+        <meta property="og:title" content="Dashboard - Agentic System" />
+      </head>
+      <label className="sr-only" aria-label="Dashboard Monitoring">Dashboard</label>
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         <Header onRefresh={refresh} timestamp={data.timestamp} />
         <MetricsRow metrics={data.metrics} />

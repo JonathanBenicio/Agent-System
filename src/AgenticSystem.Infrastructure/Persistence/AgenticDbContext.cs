@@ -43,6 +43,7 @@ public class AgenticDbContext : DbContext
     public DbSet<DataConnectorEntity> DataConnectors => Set<DataConnectorEntity>();
     public DbSet<AgentMarketplaceEntryEntity> AgentMarketplaceEntries => Set<AgentMarketplaceEntryEntity>();
     public DbSet<EnhancedMemoryEntity> EnhancedMemories => Set<EnhancedMemoryEntity>();
+    public DbSet<LlmPricingRuleEntity> LlmPricingRules => Set<LlmPricingRuleEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

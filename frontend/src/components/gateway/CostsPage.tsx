@@ -4,7 +4,20 @@ import { gatewayApi } from '@/lib/api'
 import { PageLoading, PageError } from '@/components/shared/Loading'
 import { Badge } from '@/components/shared/Badge'
 import { cn } from '@/lib/utils'
+import { getGatewayConnection, startGatewayConnection } from '@/lib/signalr-gateway'
 import type { CostReport } from '@/types/api'
+
+interface TurnCostSummary {
+  turnId: string
+  tenantId: string
+  provider: string
+  model: string
+  promptTokens: number
+  completionTokens: number
+  totalCost: number
+  timestamp: string
+  costBreakdown: Record<string, number>
+}
 
 export function CostsPage() {
   const [data, setData] = useState<CostReport | null>(null)
@@ -24,7 +37,44 @@ export function CostsPage() {
     }
   }
 
-  useEffect(() => { refresh() }, [])
+  useEffect(() => {
+    refresh()
+
+    // Conectar SignalR Gateway Hub para atualizações de custo em tempo real (P2 FinOps)
+    const conn = getGatewayConnection()
+    startGatewayConnection().catch(err => console.error('Erro ao iniciar Gateway Hub:', err))
+
+    const handleCostUpdated = (summary: TurnCostSummary) => {
+      setData(prev => {
+        if (!prev) return prev
+        const newTotal = prev.totalCost + Number(summary.totalCost)
+        const newPercent = prev.dailyBudget > 0 ? (newTotal / prev.dailyBudget) : 0
+        const modelName = summary.model || 'gpt-4o'
+        const providerName = summary.provider || 'OpenAI'
+
+        return {
+          ...prev,
+          totalCost: newTotal,
+          usagePercent: newPercent,
+          budgetAlert: newPercent > 0.9,
+          costByModel: {
+            ...prev.costByModel,
+            [modelName]: (prev.costByModel[modelName] || 0) + Number(summary.totalCost)
+          },
+          costByService: {
+            ...prev.costByService,
+            [providerName]: (prev.costByService[providerName] || 0) + Number(summary.totalCost)
+          }
+        }
+      })
+    }
+
+    conn.on('TurnCostSummaryUpdated', handleCostUpdated)
+
+    return () => {
+      conn.off('TurnCostSummaryUpdated', handleCostUpdated)
+    }
+  }, [])
 
   if (loading) return <PageLoading />
   if (error || !data) return <PageError message={error ?? 'Sem dados'} onRetry={refresh} />
@@ -35,6 +85,7 @@ export function CostsPage() {
 
   return (
     <div className="h-full overflow-y-auto">
+      <label className="sr-only" aria-label="Custos de IA">Custos</label>
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-zinc-100">Custos</h1>

@@ -57,22 +57,22 @@ graph TD
 
 ---
 
-### 🤖 Fase P1: Ecossistema de Agentes MAF 1.5 & RAG
+### 🤖 Fase P1: Ecossistema de Agentes MAF 1.5 & RAG (✅ CONCLUÍDA)
 **Objetivo**: Consolidar o motor de IA baseado na versão 1.5 do Microsoft Agent Framework e fluxos de RAG.
 > ⚠️ **Decisão de Infraestrutura Estrita**: É terminantemente proibido o uso de Redis. Toda persistência vetorial, busca semântica e armazenamento de embeddings em RAG utilizarão exclusivamente **PostgreSQL com extensão `pgvector`**.
 
 #### Backend (.NET 10)
-- [ ] **Task 1.1 (MAF 1.5 Core)**: Estruturar as especificações de agentes, catálogo de ferramentas e histórico de versões no domínio DDD.
-- [ ] **Task 1.2 (PostgreSQL pgvector RAG)**: Construir serviços de ingestão de documentos, chunking e busca semântica em banco vetorial PostgreSQL.
-- [ ] **Task 1.3 (Memory Management)**: Persistência de memória de curto e longo prazo para sessões de agentes.
+- [x] **Task 1.1 (MAF 1.5 Core)**: Estruturar as especificações de agentes, catálogo de ferramentas e histórico de versões no domínio DDD.
+- [x] **Task 1.2 (PostgreSQL pgvector RAG)**: Construir serviços de ingestão de documentos, chunking e busca semântica em banco vetorial PostgreSQL.
+- [x] **Task 1.3 (Memory Management)**: Persistência de memória de curto e longo prazo para sessões de agentes.
 
 #### Frontend (React 19)
-- [ ] **Task 1.4 (RAG & Docs UI)**: Desenvolver a interface de gerenciamento de bases de conhecimento, upload de arquivos e teste de recuperação semântica.
-- [ ] **Task 1.5 (Agent Chat Workbench)**: Painel interativo de chat exibindo a árvore de raciocínio do agente, ferramentas executadas e logs em tempo real.
+- [x] **Task 1.4 (RAG & Docs UI)**: Desenvolver a interface de gerenciamento de bases de conhecimento, upload de arquivos e teste de recuperação semântica.
+- [x] **Task 1.5 (Agent Chat Workbench)**: Painel interativo de chat exibindo a árvore de raciocínio do agente, ferramentas executadas e logs em tempo real.
 
 ---
 
-### 📊 Fase P2: Gateway Observability & FinOps
+### 📊 Fase P2: Gateway Observability & FinOps (⏳ EM ANDAMENTO / PLANNING)
 **Objetivo**: Trazer total transparência operacional, telemetria e controle de custos de IA (FinOps).
 
 #### Backend (.NET 10)

@@ -434,3 +434,20 @@ public class EnhancedMemoryEntity
     public DateTime? ExpiresAt { get; set; }
     public string TagsJson { get; set; } = "{}";
 }
+
+// ═══════════════════════════════════════════════════════════
+// Phase 2 FinOps & Observability Entities
+// ═══════════════════════════════════════════════════════════
+
+public class LlmPricingRuleEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Provider { get; set; } = string.Empty;
+    public string ModelId { get; set; } = string.Empty;
+    public decimal CostPerMillionPromptTokens { get; set; }
+    public decimal CostPerMillionCompletionTokens { get; set; }
+    public decimal CostPerMillionCachedTokens { get; set; }
+    public DateTime EffectiveDate { get; set; } = DateTime.UtcNow;
+    public bool IsActive { get; set; } = true;
+}
+

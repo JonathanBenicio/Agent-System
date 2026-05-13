@@ -394,6 +394,16 @@ app.MapPost("/api/chat/stream", async (ChatRequest request, IMetaAgent metaAgent
 app.Services.SeedAgenticDefaults();
 app.Services.SeedInfrastructureTools();
 
+var eventBus = app.Services.GetRequiredService<AgenticSystem.Core.Interfaces.IEventBus>();
+var gatewayHub = app.Services.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<GatewayHub>>();
+await eventBus.SubscribeAsync("FinOps.TurnCostUpdated", "GatewayHubPublisher", async busEvent =>
+{
+    if (busEvent.Payload.TryGetValue("TurnCostSummary", out var summaryObj))
+    {
+        await gatewayHub.Clients.All.SendAsync("TurnCostSummaryUpdated", summaryObj);
+    }
+});
+
 Log.Information("Agentic System starting up...");
 app.Run();
 
