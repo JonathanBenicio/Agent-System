@@ -72,31 +72,31 @@ graph TD
 
 ---
 
-### 📊 Fase P2: Gateway Observability & FinOps (⏳ EM ANDAMENTO / PLANNING)
+### 📊 Fase P2: Gateway Observability & FinOps (✅ CONCLUÍDA)
 **Objetivo**: Trazer total transparência operacional, telemetria e controle de custos de IA (FinOps).
 
 #### Backend (.NET 10)
-- [ ] **Task 2.1 (OpenTelemetry Integration)**: Rastreamento distribuído (Tracing) e métricas de tempo de resposta dos provedores de LLM.
-- [ ] **Task 2.2 (Cost & Token Auditor)**: Registro centralizado de consumo de tokens (Prompt/Completion) por modelo e cálculo em tempo real de custos.
-- [ ] **Task 2.3 (Health Monitoring)**: Verificação contínua de integridade (Health Checks) para serviços externos e banco de dados.
+- [x] **Task 2.1 (OpenTelemetry Integration)**: Rastreamento distribuído (Tracing) e métricas de tempo de resposta dos provedores de LLM.
+- [x] **Task 2.2 (Cost & Token Auditor)**: Registro centralizado de consumo de tokens (Prompt/Completion) por modelo e cálculo em tempo real de custos.
+- [x] **Task 2.3 (Health Monitoring)**: Verificação contínua de integridade (Health Checks) para serviços externos e banco de dados.
 
 #### Frontend (React 19)
-- [ ] **Task 2.4 (FinOps Dashboard)**: Telas de relatórios de custos com gráficos dinâmicos de consumo por agente/modelo.
-- [ ] **Task 2.5 (Gateway Health Board)**: Status ao vivo dos serviços com indicadores de pulsação e latência.
+- [x] **Task 2.4 (FinOps Dashboard)**: Telas de relatórios de custos com gráficos dinâmicos de consumo por agente/modelo.
+- [x] **Task 2.5 (Gateway Health Board)**: Status ao vivo dos serviços com indicadores de pulsação e latência.
 
 ---
 
-### ⚡ Fase P3: Extensibilidade & Automação (MCP & Jobs)
+### ⚡ Fase P3: Extensibilidade & Automação (MCP & Jobs) (✅ CONCLUÍDA)
 **Objetivo**: Tornar o sistema autônomo, agendável e dinamicamente expansível via MCP (Model Context Protocol).
 
 #### Backend (.NET 10)
-- [ ] **Task 3.1 (MCP Plugin Host)**: Carregamento dinâmico de servidores MCP externos, registro de ferramentas e mapeamento de recursos.
-- [ ] **Task 3.2 (Scheduled Tasks Engine)**: Motor de execução de tarefas agendadas em segundo plano via Cron/Quartz.
-- [ ] **Task 3.3 (Trigger Rules)**: Mecanismo de avaliação de regras condicionais para disparo autônomo de fluxos de agentes.
+- [x] **Task 3.1 (MCP Plugin Host)**: Carregamento dinâmico de servidores MCP externos, registro de ferramentas e mapeamento de recursos.
+- [x] **Task 3.2 (Scheduled Tasks Engine)**: Motor de execução de tarefas agendadas em segundo plano via Cron/Quartz.
+- [x] **Task 3.3 (Trigger Rules)**: Mecanismo de avaliação de regras condicionais para disparo autônomo de fluxos de agentes.
 
 #### Frontend (React 19)
-- [ ] **Task 3.4 (Plugin & Studio UI)**: Interface de descoberta, conexão e teste de plugins MCP.
-- [ ] **Task 3.5 (Task Scheduler Board)**: Gerenciador de tarefas agendadas com controle de pausa, retomada e logs de execução.
+- [x] **Task 3.4 (Plugin & Studio UI)**: Interface de descoberta, conexão e teste de plugins MCP.
+- [x] **Task 3.5 (Task Scheduler Board)**: Gerenciador de tarefas agendadas com controle de pausa, retomada e logs de execução.
 
 ---
 
