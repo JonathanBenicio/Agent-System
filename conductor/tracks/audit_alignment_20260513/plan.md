@@ -18,7 +18,7 @@
     - [x] Verify if "Trilhas de Laboratório" have feature flags and fallbacks as required
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Gap Analysis and Alignment' (Protocol in workflow.md)
 
-## Phase 3: Documentation Updates and Refinement
+## Phase 3: Documentation Updates and Refinement [checkpoint: 61139b2]
 - [x] Task: Update Technical and Business Documentation
     - [x] Fix inconsistencies in `README.md`
     - [x] Update architecture guides in `docs/` to reflect the current Runtime V2
