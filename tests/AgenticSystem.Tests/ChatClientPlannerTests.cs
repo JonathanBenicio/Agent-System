@@ -47,7 +47,7 @@ public class ChatClientPlannerTests
     [Fact]
     public void Constructor_AcceptsNullToolManager()
     {
-        var act = () => new ChatClientPlanner(_chatClient, _taskPlanManager, _loggerFactory, toolManager: null);
+        var act = () => new ChatClientPlanner(_chatClient, _taskPlanManager, _loggerFactory, toolProvider: null);
         act.Should().NotThrow();
     }
 
@@ -164,7 +164,8 @@ public class ChatClientPlannerTests
         _taskPlanManager.CreatePlanAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<List<TaskStep>>())
             .Returns(new TaskPlan());
 
-        var sut = new ChatClientPlanner(_chatClient, _taskPlanManager, _loggerFactory, _toolManager);
+        var toolProvider = new UnifiedAIToolProvider(_loggerFactory, _toolManager);
+        var sut = new ChatClientPlanner(_chatClient, _taskPlanManager, _loggerFactory, toolProvider);
         await sut.PlanAsync("user1", "check my schedule");
 
         await _toolManager.Received(1).GetAvailableToolsAsync(null);

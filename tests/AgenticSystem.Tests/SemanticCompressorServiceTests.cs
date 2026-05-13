@@ -15,8 +15,10 @@ public class SemanticCompressorServiceTests
     public SemanticCompressorServiceTests()
     {
         _sessionManager = Substitute.For<ISessionManager>();
+        var serviceProvider = Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(ISessionManager)).Returns(_sessionManager);
         var logger = Substitute.For<ILogger<SemanticCompressorService>>();
-        _sut = new SemanticCompressorService(_sessionManager, logger);
+        _sut = new SemanticCompressorService(serviceProvider, logger);
     }
 
     [Fact]

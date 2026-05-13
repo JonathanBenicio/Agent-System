@@ -45,3 +45,17 @@ export const useAuthStore = create<AuthState>((set) => {
     },
   }
 })
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'agentic_auth_token' || event.key === 'agentic_api_key') {
+      const newToken = getAuthToken()
+      const newApiKey = getApiKey()
+      useAuthStore.setState({
+        token: newToken,
+        apiKey: newApiKey,
+        isAuthenticated: Boolean(newToken || newApiKey),
+      })
+    }
+  })
+}

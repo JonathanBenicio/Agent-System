@@ -26,14 +26,30 @@ public class JwtTenantAuthenticationHandler : AuthenticationHandler<JwtTenantAut
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Headers.TryGetValue("Authorization", out var authHeader))
-            return Task.FromResult(AuthenticateResult.NoResult());
+        string? token = null;
 
-        var headerValue = authHeader.FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(headerValue) || !headerValue.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            return Task.FromResult(AuthenticateResult.NoResult());
+        if (Request.Headers.TryGetValue("Authorization", out var authHeader))
+        {
+            var headerValue = authHeader.FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(headerValue) && headerValue.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                token = headerValue["Bearer ".Length..].Trim();
+            }
+        }
 
-        var token = headerValue["Bearer ".Length..].Trim();
+        // Suporte a WebSockets / SignalR via query string access_token
+        if (string.IsNullOrWhiteSpace(token) && Request.Path.StartsWithSegments("/hubs"))
+        {
+            if (Request.Query.TryGetValue("access_token", out var queryToken))
+            {
+                token = queryToken.FirstOrDefault()?.Trim();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return Task.FromResult(AuthenticateResult.NoResult());
+        }
 
         try
         {

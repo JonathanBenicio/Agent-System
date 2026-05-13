@@ -25,10 +25,23 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Headers.TryGetValue(HeaderName, out var apiKeyValues))
-            return Task.FromResult(AuthenticateResult.Fail("Missing X-Api-Key header."));
+        string? providedKey = null;
 
-        var providedKey = apiKeyValues.FirstOrDefault();
+        if (Request.Headers.TryGetValue(HeaderName, out var apiKeyValues))
+        {
+            providedKey = apiKeyValues.FirstOrDefault()?.Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(providedKey) && Request.Path.StartsWithSegments("/hubs"))
+        {
+            if (Request.Query.TryGetValue("api_key", out var queryKey) || Request.Query.TryGetValue("X-Api-Key", out queryKey))
+            {
+                providedKey = queryKey.FirstOrDefault()?.Trim();
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(providedKey))
+            return Task.FromResult(AuthenticateResult.Fail("Missing X-Api-Key header or query parameter."));
         var configuredKey = _configuration["AgenticSystem:AdminApiKey"];
 
         if (string.IsNullOrWhiteSpace(configuredKey))

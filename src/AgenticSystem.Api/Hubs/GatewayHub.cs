@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using AgenticSystem.Core.Interfaces;
 
@@ -7,6 +8,7 @@ namespace AgenticSystem.Api.Hubs;
 /// SignalR Hub para eventos de Gateway em tempo real.
 /// Eventos: ServiceStatusChanged, CostAlertTriggered, CircuitStateChanged, RateLimitWarning
 /// </summary>
+[Authorize]
 public class GatewayHub : Hub
 {
     private readonly IServiceGateway _gateway;
