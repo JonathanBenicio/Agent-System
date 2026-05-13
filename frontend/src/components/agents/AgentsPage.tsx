@@ -11,6 +11,7 @@ import { AgentDetailModal } from './AgentDetailModal'
 import { cn } from '@/lib/utils'
 import { TierLabels, TierColors } from '@/types/api'
 import type { AgentInfo } from '@/types/api'
+import { agentApi } from '@/lib/api'
 
 export function AgentsPage() {
   const { agents, loading, error, refresh, createAgent, updateAgent, deleteAgent } = useAgents()
@@ -101,15 +102,21 @@ export function AgentsPage() {
       {formOpen && (
         <AgentFormModal
           agent={editingAgent}
-          onSave={async (spec) => {
+          onSave={async (spec, yaml) => {
             try {
-              if (editingAgent) {
-                await updateAgent(editingAgent.name, spec)
-                addToast('Agent atualizado', 'success')
+              if (yaml) {
+                await agentApi.saveYaml(yaml)
+                addToast('Configuração YAML declarativa salva', 'success')
               } else {
-                await createAgent(spec)
-                addToast('Agent criado', 'success')
+                if (editingAgent) {
+                  await updateAgent(editingAgent.name, spec)
+                  addToast('Agent atualizado', 'success')
+                } else {
+                  await createAgent(spec)
+                  addToast('Agent criado', 'success')
+                }
               }
+              await refresh()
               setFormOpen(false)
             } catch {
               addToast('Erro ao salvar agent', 'error')
@@ -120,7 +127,11 @@ export function AgentsPage() {
       )}
 
       {viewingAgent && (
-        <AgentDetailModal agent={viewingAgent} onClose={() => setViewingAgent(null)} />
+        <AgentDetailModal
+          agent={viewingAgent}
+          onClose={() => setViewingAgent(null)}
+          onRefresh={refresh}
+        />
       )}
 
       <ConfirmModal

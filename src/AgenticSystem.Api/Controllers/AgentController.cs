@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.AgentFramework;
 
 namespace AgenticSystem.Api.Controllers;
 
@@ -20,6 +21,7 @@ public class AgentController : ControllerBase
     private readonly ISkillManager _skillManager;
     private readonly IOperationalStore? _operationalStore;
     private readonly IRuntimeEvaluator? _runtimeEvaluator;
+    private readonly IAgentVersioningService? _versioningService;
     private readonly ILogger<AgentController> _logger;
 
     public AgentController(
@@ -33,7 +35,8 @@ public class AgentController : ControllerBase
         ISkillManager skillManager,
         ILogger<AgentController> logger,
         IOperationalStore? operationalStore = null,
-        IRuntimeEvaluator? runtimeEvaluator = null)
+        IRuntimeEvaluator? runtimeEvaluator = null,
+        IAgentVersioningService? versioningService = null)
     {
         _metaAgent = metaAgent;
         _agentFactory = agentFactory;
@@ -45,6 +48,7 @@ public class AgentController : ControllerBase
         _skillManager = skillManager;
         _operationalStore = operationalStore;
         _runtimeEvaluator = runtimeEvaluator;
+        _versioningService = versioningService;
         _logger = logger;
     }
 
@@ -425,6 +429,159 @@ public class AgentController : ControllerBase
 
         var regressions = await _runtimeEvaluator.DetectRegressionsAsync(since, ct);
         return Ok(regressions);
+    }
+
+    /// <summary>
+    /// Modelo de requisição contendo a string de YAML.
+    /// </summary>
+    public record YamlRequest(string Yaml);
+
+    /// <summary>
+    /// Valida o YAML de configuração declarativa de um agente.
+    /// </summary>
+    [HttpPost("agents/validate-yaml")]
+    public async Task<IActionResult> ValidateYaml([FromBody] YamlRequest request, CancellationToken ct)
+    {
+        var validator = new AgentYamlValidator(_toolManager);
+        var result = await validator.ValidateAsync(request.Yaml, ct);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Salva ou atualiza um agente a partir de sua especificação em YAML declarativo.
+    /// </summary>
+    [HttpPost("agents/save-yaml")]
+    public async Task<IActionResult> SaveAgentYaml([FromBody] YamlRequest request, CancellationToken ct)
+    {
+        var validator = new AgentYamlValidator(_toolManager);
+        var result = await validator.ValidateAsync(request.Yaml, ct);
+        if (!result.IsValid || result.Specification is null)
+        {
+            return BadRequest(result);
+        }
+
+        var spec = result.Specification;
+        
+        // Remove agente existente se houver
+        var agents = await _agentFactory.GetAllAgentsAsync();
+        var existing = agents.FirstOrDefault(a => a.Name.Equals(spec.Name, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            await _agentFactory.RemoveAgentAsync(spec.Name);
+        }
+
+        var agent = await _agentFactory.CreateCustomAgentAsync(spec);
+
+        AgentVersion? version = null;
+        if (_versioningService is not null)
+        {
+            try
+            {
+                version = await _versioningService.CreateVersionAsync(
+                    spec.Name,
+                    description: "Salvo via YAML Declarativo",
+                    changeLog: "Declarative YAML Update",
+                    createdBy: "UI-Editor",
+                    ct: ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Erro ao registrar a versão do agente {Name} no versioning store.", spec.Name);
+            }
+        }
+
+        return Ok(new
+        {
+            Agent = new AgentInfo
+            {
+                Name = agent.Name,
+                Description = agent.Description,
+                Tier = agent.Tier,
+                IsActive = agent.IsActive,
+                CreatedAt = agent.CreatedAt
+            },
+            Version = version
+        });
+    }
+
+    /// <summary>
+    /// Obtém o histórico de versões registradas de um agente.
+    /// </summary>
+    [HttpGet("agents/{name}/history")]
+    public async Task<IActionResult> GetAgentHistory(string name, [FromQuery] int limit = 20, CancellationToken ct = default)
+    {
+        if (_versioningService is null)
+        {
+            return StatusCode(503, new { error = "Serviço de versionamento não disponível." });
+        }
+
+        var history = await _versioningService.GetVersionHistoryAsync(name, limit, ct);
+        return Ok(history);
+    }
+
+    /// <summary>
+    /// Restaura um agente para uma versão de configuração específica (Rollback).
+    /// </summary>
+    [HttpPost("agents/{name}/rollback/{versionId}")]
+    public async Task<IActionResult> RollbackAgent(string name, string versionId, [FromQuery] string rolledBackBy = "UI-Editor", CancellationToken ct = default)
+    {
+        if (_versioningService is null)
+        {
+            return StatusCode(503, new { error = "Serviço de versionamento não disponível." });
+        }
+
+        var rollbackResult = await _versioningService.RollbackAsync(name, versionId, rolledBackBy, ct);
+        if (!rollbackResult.Success || rollbackResult.Version is null)
+        {
+            return BadRequest(rollbackResult);
+        }
+
+        var targetVersion = rollbackResult.Version;
+        var spec = new AgentSpecification
+        {
+            Name = name,
+            Instructions = targetVersion.SystemPrompt ?? string.Empty,
+            AllowedTools = targetVersion.Tools?.ToList() ?? new List<string>(),
+            Description = targetVersion.Description ?? "Versão restaurada via rollback"
+        };
+
+        if (targetVersion.Parameters is not null)
+        {
+            if (targetVersion.Parameters.TryGetValue("model", out var modelObj) && modelObj is not null)
+            {
+                spec.Configuration["model"] = modelObj.ToString()!;
+            }
+            if (targetVersion.Parameters.TryGetValue("temperature", out var tempObj) && tempObj is not null && double.TryParse(tempObj.ToString(), out var tempVal))
+            {
+                spec.Configuration["temperature"] = tempVal;
+            }
+        }
+
+        var agents = await _agentFactory.GetAllAgentsAsync();
+        var existing = agents.FirstOrDefault(a => a.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            spec.Tier = existing.Tier;
+            spec.Domain = existing.Domain;
+            spec.AutonomyLevel = existing.AutonomyLevel;
+        }
+
+        await _agentFactory.RemoveAgentAsync(name);
+        var restoredAgent = await _agentFactory.CreateCustomAgentAsync(spec);
+
+        return Ok(new
+        {
+            Message = rollbackResult.Message,
+            Agent = new AgentInfo
+            {
+                Name = restoredAgent.Name,
+                Description = restoredAgent.Description,
+                Tier = restoredAgent.Tier,
+                IsActive = restoredAgent.IsActive,
+                CreatedAt = restoredAgent.CreatedAt
+            },
+            Version = targetVersion
+        });
     }
 }
 

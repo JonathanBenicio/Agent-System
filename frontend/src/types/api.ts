@@ -33,6 +33,35 @@ export const CircuitState = {
 
 export type CircuitState = (typeof CircuitState)[keyof typeof CircuitState]
 
+export const AutonomyLevel = {
+  Manual: 0,
+  Assisted: 1,
+  Supervised: 2,
+  SemiAutonomous: 3,
+  Autonomous: 4,
+  FullAutonomy: 5,
+} as const
+
+export type AutonomyLevel = (typeof AutonomyLevel)[keyof typeof AutonomyLevel]
+
+export const AutonomyLabels: Record<number, string> = {
+  0: 'L0 - Manual',
+  1: 'L1 - Assistido',
+  2: 'L2 - Supervisionado',
+  3: 'L3 - Semi-Autônomo',
+  4: 'L4 - Autônomo',
+  5: 'L5 - Autonomia Total',
+}
+
+export const AutonomyColors: Record<number, string> = {
+  0: 'bg-zinc-600 text-zinc-100',
+  1: 'bg-sky-600 text-sky-100',
+  2: 'bg-emerald-600 text-emerald-100',
+  3: 'bg-indigo-600 text-indigo-100',
+  4: 'bg-orange-600 text-orange-100',
+  5: 'bg-red-600 text-red-100',
+}
+
 // ══════════════════════════════════════
 // Agent Models
 // ══════════════════════════════════════
@@ -53,6 +82,7 @@ export interface AgentInfo {
   timeoutSeconds: number
   toolNames?: string[]
   skillNames?: string[]
+  autonomyLevel?: AutonomyLevel
 }
 
 export interface AgentSpecification {
@@ -68,6 +98,7 @@ export interface AgentSpecification {
   systemPrompt: string
   maxConcurrency: number
   timeoutSeconds: number
+  autonomyLevel?: AutonomyLevel
 }
 
 export interface AgentEvent {
@@ -498,4 +529,67 @@ export interface CreateTaskRequest {
   cronExpression?: string
   intervalSeconds?: number
   associatedRule?: TriggerRule
+}
+
+// ══════════════════════════════════════
+// Agent Versioning & YAML validation
+// ══════════════════════════════════════
+
+export const AgentVersionStatus = {
+  Draft: 0,
+  Active: 1,
+  Promoted: 2,
+  Deprecated: 3,
+  RolledBack: 4,
+} as const
+
+export type AgentVersionStatus = (typeof AgentVersionStatus)[keyof typeof AgentVersionStatus]
+
+export const AgentVersionStatusLabels: Record<number, string> = {
+  0: 'Rascunho',
+  1: 'Ativo',
+  2: 'Promovido',
+  3: 'Depreciado',
+  4: 'Restaurado (Rollback)',
+}
+
+export const AgentVersionEnvironment = {
+  Staging: 0,
+  Production: 1,
+  Canary: 2,
+} as const
+
+export type AgentVersionEnvironment = (typeof AgentVersionEnvironment)[keyof typeof AgentVersionEnvironment]
+
+export interface AgentVersion {
+  id: string
+  agentName: string
+  versionNumber: number
+  label: string
+  status: AgentVersionStatus
+  environment: AgentVersionEnvironment
+  systemPrompt: string
+  modelProvider?: string
+  modelId?: string
+  tools: string[]
+  parameters: Record<string, unknown>
+  description?: string
+  changeLog?: string
+  createdBy?: string
+  createdAt: string
+  parentVersionId?: string
+}
+
+export interface YamlValidationError {
+  line: number
+  column: number
+  errorCode: string
+  message: string
+  severity: string
+}
+
+export interface YamlValidationResult {
+  isValid: boolean
+  errors: YamlValidationError[]
+  specification?: AgentSpecification
 }

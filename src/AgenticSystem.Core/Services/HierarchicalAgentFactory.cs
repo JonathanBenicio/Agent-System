@@ -91,6 +91,7 @@ public class HierarchicalAgentFactory : IAgentFactory
                 CreatedAt = a.CreatedAt,
                 LastUsedAt = a.LastUsedAt,
                 IsActive = a.IsActive,
+                AutonomyLevel = a.AutonomyLevel,
                 AvailableTools = a.AvailableTools.ToList()
             });
 
@@ -110,6 +111,7 @@ public class HierarchicalAgentFactory : IAgentFactory
                 CreatedAt = a.CreatedAt,
                 LastUsedAt = a.LastUsedAt,
                 IsActive = a.IsActive,
+                AutonomyLevel = a.AutonomyLevel,
                 AvailableTools = a.AvailableTools.ToList()
             });
 
@@ -209,6 +211,7 @@ internal class CustomAgent : BaseAgent
     public override string Description => _spec.Description;
     public override AgentTier Tier => _spec.Tier;
     public override string Domain => _spec.Domain;
+    public override AutonomyLevel AutonomyLevel => _spec.AutonomyLevel;
     public override IEnumerable<string> AvailableTools => _spec.AllowedTools;
 
     protected override string GetBaseSystemPrompt() => _spec.Instructions;

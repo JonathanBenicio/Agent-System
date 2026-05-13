@@ -29,6 +29,7 @@ public abstract class BaseAgent : IAgent
     public DateTime CreatedAt { get; }
     public DateTime LastUsedAt { get; private set; }
     public bool IsActive { get; set; } = true;
+    public virtual AutonomyLevel AutonomyLevel => AutonomyLevel.Supervised;
     public virtual IEnumerable<string> AvailableTools => Enumerable.Empty<string>();
     
     public virtual string Instructions => GetBaseSystemPrompt();

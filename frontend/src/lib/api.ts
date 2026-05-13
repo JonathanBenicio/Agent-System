@@ -103,6 +103,8 @@ import type {
   ScheduledTasksHealthReport,
   CreateTaskRequest,
   DeliveryResult,
+  AgentVersion,
+  YamlValidationResult,
 } from '@/types/api'
 
 export const agentApi = {
@@ -114,6 +116,10 @@ export const agentApi = {
   update: (name: string, spec: AgentSpecification) =>
     put<AgentInfo>(`/api/agent/agents/${encodeURIComponent(name)}`, spec),
   delete: (name: string) => del(`/api/agent/agents/${encodeURIComponent(name)}`),
+  validateYaml: (yaml: string) => post<YamlValidationResult>('/api/agent/agents/validate-yaml', { yaml }),
+  saveYaml: (yaml: string) => post<{ agent: AgentInfo; version?: AgentVersion }>('/api/agent/agents/save-yaml', { yaml }),
+  getHistory: (name: string, limit?: number) => get<AgentVersion[]>(`/api/agent/agents/${encodeURIComponent(name)}/history${limit ? `?limit=${limit}` : ''}`),
+  rollback: (name: string, versionId: string) => post<{ message: string; agent: AgentInfo; version: AgentVersion }>(`/api/agent/agents/${encodeURIComponent(name)}/rollback/${encodeURIComponent(versionId)}`),
 }
 
 export const toolApi = {

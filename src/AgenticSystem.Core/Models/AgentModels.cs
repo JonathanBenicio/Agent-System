@@ -12,6 +12,7 @@ public class AgentInfo
     public DateTime CreatedAt { get; set; }
     public DateTime LastUsedAt { get; set; }
     public bool IsActive { get; set; }
+    public AutonomyLevel AutonomyLevel { get; set; } = AutonomyLevel.Supervised;
     public List<string> AvailableTools { get; set; } = new();
     public Dictionary<string, object> Configuration { get; set; } = new();
 }

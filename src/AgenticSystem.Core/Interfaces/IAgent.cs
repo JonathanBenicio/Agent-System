@@ -15,6 +15,7 @@ public interface IAgent
     DateTime CreatedAt { get; }
     DateTime LastUsedAt { get; }
     bool IsActive { get; }
+    AutonomyLevel AutonomyLevel { get; }
     
     
     /// <summary>
