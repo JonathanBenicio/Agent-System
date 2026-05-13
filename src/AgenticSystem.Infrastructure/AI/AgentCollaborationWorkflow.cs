@@ -85,7 +85,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             AdvancedWorkflowEnabled = _workflowOptions.EnableAdvancedWorkflow,
             CheckpointingRequested = _workflowOptions.EnableCheckpointing
         };
-        var workflow = BuildCollaborationWorkflow(state);
+        var workflow = await BuildCollaborationWorkflowAsync(state, ct);
 
         try
         {
@@ -153,9 +153,9 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         }
 
         // 1. Resolver agentes reais via Factory (Adoção Agressiva: Agentes como First-Class Steps)
-        var plannerAgent = await _agentFactory.ResolveAgentAsync("project-planner", ct) as WorkflowAgent;
-        var executorAgent = await _agentFactory.ResolveAgentAsync("backend-specialist", ct) as WorkflowAgent;
-        var reviewerAgent = await _agentFactory.ResolveAgentAsync("test-engineer", ct) as WorkflowAgent;
+        var plannerAgent = await _agentFactory.ResolveAgentAsync(new AgentInfo { Name = "project-planner" }) as WorkflowAgent;
+        var executorAgent = await _agentFactory.ResolveAgentAsync(new AgentInfo { Name = "backend-specialist" }) as WorkflowAgent;
+        var reviewerAgent = await _agentFactory.ResolveAgentAsync(new AgentInfo { Name = "test-engineer" }) as WorkflowAgent;
 
         // Se falhar ao resolver nativos, mantém o fallback para as lógicas internas (mas agora preferindo os nativos)
         if (plannerAgent != null) agents.Add(plannerAgent);

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
+using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -157,12 +158,18 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
 
     private static string? ExtractHandoffAgent(FrameworkAgentResponse response)
     {
-        // Tenta encontrar eventos de handoff nas metadatas ou conteúdos especiais
         foreach (var msg in response.Messages)
         {
-            if (msg.Contents.OfType<HandoffContent>().Any())
+            foreach (var fc in msg.Contents.OfType<FunctionCallContent>())
             {
-                return msg.Contents.OfType<HandoffContent>().First().TargetAgentName;
+                if (fc.Name.StartsWith("handoff_to_", StringComparison.OrdinalIgnoreCase))
+                {
+                    return fc.Name["handoff_to_".Length..];
+                }
+                if (fc.Name.StartsWith("handoff_", StringComparison.OrdinalIgnoreCase))
+                {
+                    return fc.Name["handoff_".Length..];
+                }
             }
         }
         return null;

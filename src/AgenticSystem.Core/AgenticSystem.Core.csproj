@@ -8,14 +8,14 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.6" />
-    <PackageReference Include="Microsoft.Extensions.AI" Version="10.5.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.Evaluation" Version="10.5.0" />
-    <PackageReference Include="Microsoft.Extensions.AI.Evaluation.Quality" Version="10.5.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.5.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.Evaluation" Version="10.5.1" />
+    <PackageReference Include="Microsoft.Extensions.AI.Evaluation.Quality" Version="10.5.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.6" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.6" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.6" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.6" />
-    <PackageReference Include="Microsoft.Agents.AI" Version="1.4.0" />
+    <PackageReference Include="Microsoft.Agents.AI" Version="1.5.0" />
     <PackageReference Include="FluentValidation" Version="11.8.0" />
     <PackageReference Include="MediatR" Version="12.2.0" />
     <PackageReference Include="NJsonSchema" Version="11.6.1" />

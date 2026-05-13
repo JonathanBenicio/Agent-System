@@ -1,4 +1,5 @@
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
@@ -92,7 +93,7 @@ public class OrchestratorHostBuilder
         var specialistAgents = new List<AIAgent>();
         foreach (var info in activeAgents)
         {
-            var agent = await _agentFactory.ResolveAgentAsync(info.Name, ct);
+            var agent = await _agentFactory.ResolveAgentAsync(info);
             if (agent is AIAgent frameworkAgent)
             {
                 specialistAgents.Add(frameworkAgent);
@@ -113,7 +114,7 @@ public class OrchestratorHostBuilder
             "Handoff workflow built with mesh topology: 1 Orchestrator <-> {SpecialistCount} Specialists",
             specialistAgents.Count);
 
-        return builder.Build("orchestrator-handoff-mesh");
+        return builder.Build();
     }
 
     /// <summary>
