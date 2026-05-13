@@ -593,3 +593,51 @@ export interface YamlValidationResult {
   errors: YamlValidationError[]
   specification?: AgentSpecification
 }
+
+// ══════════════════════════════════════
+// RAG & Embedding Migration Models
+// ══════════════════════════════════════
+
+export interface IngestDocumentResponse {
+  documentId: string
+  fileName: string
+  chunksCreated: number
+  tokensProcessed: number
+  contentHash: string
+  durationMs: number
+}
+
+export interface EmbeddingModelConfig {
+  id: string
+  name: string
+  provider: string
+  modelName: string
+  dimensions: number
+  baseUrl?: string
+  apiKey?: string
+  isActive: boolean
+  createdAt: string
+}
+
+export interface StartMigrationRequest {
+  sourceModelId: string
+  targetModelId: string
+  batchSize?: number
+  maxConcurrency?: number
+  targetCollectionName?: string
+}
+
+export interface MigrationJob {
+  id: string
+  sourceModelId: string
+  targetModelId: string
+  status: 'Pending' | 'Processing' | 'Completed' | 'Failed' | 'Cancelled' | 'Switching'
+  totalDocuments: number
+  processedDocuments: number
+  failedDocuments: number
+  estimatedRemainingSeconds?: number
+  errorMessage?: string
+  startedAt: string
+  completedAt?: string
+}
+

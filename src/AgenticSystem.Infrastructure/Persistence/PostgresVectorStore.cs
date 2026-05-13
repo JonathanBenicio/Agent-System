@@ -3,25 +3,31 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Pgvector.EntityFrameworkCore;
 
 namespace AgenticSystem.Infrastructure.Persistence;
 
 /// <summary>
-/// Implementação PostgreSQL de IVectorStore com busca textual.
-/// Utiliza tabela vector_documents com coluna metadata JSONB.
-/// Para busca vetorial real com pgvector, substituir CalculateRelevance por cosine similarity SQL.
+/// Implementação PostgreSQL de IVectorStore com busca vetorial nativa via pgvector.
+/// Utiliza tabela vector_documents com similaridade do cosseno SQL e fallback para busca textual/ONNX.
 /// </summary>
 public class PostgresVectorStore : IVectorStore
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresVectorStore> _logger;
+    private readonly IEmbeddingGenerator<string, Embedding<float>>? _embeddingGenerator;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public PostgresVectorStore(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresVectorStore> logger)
+    public PostgresVectorStore(
+        IDbContextFactory<AgenticDbContext> dbContextFactory,
+        ILogger<PostgresVectorStore> logger,
+        IEmbeddingGenerator<string, Embedding<float>>? embeddingGenerator = null)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;
+        _embeddingGenerator = embeddingGenerator;
     }
 
     public async Task UpsertAsync(EmbeddingDocument document)
@@ -74,38 +80,79 @@ public class PostgresVectorStore : IVectorStore
         await using var db = await _dbContextFactory.CreateDbContextAsync();
         var collection = scope != SearchScope.All ? ScopeToCollection(scope) : null;
 
+        float[]? queryEmbedding = null;
+        if (!string.IsNullOrWhiteSpace(query) && _embeddingGenerator != null)
+        {
+            try
+            {
+                var generated = await _embeddingGenerator.GenerateAsync(query);
+                queryEmbedding = generated.Vector.ToArray();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao gerar embedding para query: {Query}. Utilizando fallback textual/ONNX.", query);
+            }
+        }
+
         var candidatesQuery = db.VectorDocuments.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(collection))
         {
             candidatesQuery = candidatesQuery.Where(item => item.Collection == collection);
         }
 
-        if (!string.IsNullOrWhiteSpace(query))
+        if (queryEmbedding != null)
         {
-            candidatesQuery = candidatesQuery.Where(item => EF.Functions.ILike(item.Content, $"%{query}%"));
+            var vector = new Pgvector.Vector(queryEmbedding);
+            var candidates = await candidatesQuery
+                .Where(item => item.Embedding != null)
+                .OrderBy(item => item.Embedding!.CosineDistance(vector))
+                .Take(maxResults)
+                .ToListAsync();
+
+            var matches = candidates
+                .Select(item => MapToSearchMatch(item, 1d - (item.Embedding != null ? CalculateCosineDistanceLocal(item.Embedding.ToArray(), queryEmbedding) : 0d)))
+                .OrderByDescending(item => item.Score)
+                .ToList();
+
+            sw.Stop();
+            return new SearchResult
+            {
+                Query = query,
+                Scope = scope,
+                Matches = matches,
+                TotalFound = matches.Count,
+                ExecutionTime = sw.Elapsed
+            };
         }
-
-        var candidates = await candidatesQuery
-            .OrderByDescending(item => item.IndexedAt)
-            .Take(Math.Max(maxResults * 5, maxResults))
-            .ToListAsync();
-
-        var matches = candidates
-            .Select(item => MapToSearchMatch(item, ScoreContent(item.Content, query)))
-            .OrderByDescending(item => item.Score)
-            .Take(maxResults)
-            .ToList();
-
-        sw.Stop();
-
-        return new SearchResult
+        else
         {
-            Query = query,
-            Scope = scope,
-            Matches = matches.Take(maxResults).ToList(),
-            TotalFound = matches.Count,
-            ExecutionTime = sw.Elapsed
-        };
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                candidatesQuery = candidatesQuery.Where(item => EF.Functions.ILike(item.Content, $"%{query}%"));
+            }
+
+            var candidates = await candidatesQuery
+                .OrderByDescending(item => item.IndexedAt)
+                .Take(Math.Max(maxResults * 5, maxResults))
+                .ToListAsync();
+
+            var matches = candidates
+                .Select(item => MapToSearchMatch(item, ScoreContent(item.Content, query)))
+                .OrderByDescending(item => item.Score)
+                .Take(maxResults)
+                .ToList();
+
+            sw.Stop();
+
+            return new SearchResult
+            {
+                Query = query,
+                Scope = scope,
+                Matches = matches.Take(maxResults).ToList(),
+                TotalFound = matches.Count,
+                ExecutionTime = sw.Elapsed
+            };
+        }
     }
 
     public async Task<SearchResult> SearchWithFiltersAsync(string query, Dictionary<string, string> filters)
@@ -132,27 +179,67 @@ public class PostgresVectorStore : IVectorStore
             dataQuery = dataQuery.Where(item => item.Id == idFilter);
         }
 
-        if (hasQuery)
+        float[]? queryEmbedding = null;
+        if (hasQuery && _embeddingGenerator != null)
         {
-            dataQuery = dataQuery.Where(item => EF.Functions.ILike(item.Content, $"%{normalizedQuery}%"));
+            try
+            {
+                var generated = await _embeddingGenerator.GenerateAsync(normalizedQuery);
+                queryEmbedding = generated.Vector.ToArray();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falha ao gerar embedding para query em filtros: {Query}. Utilizando fallback textual/ONNX.", normalizedQuery);
+            }
         }
 
-        var candidates = await dataQuery
-            .OrderByDescending(item => item.IndexedAt)
-            .Take(hasQuery ? 50 : 200)
-            .ToListAsync();
+        List<VectorDocumentEntity> candidates;
+        if (queryEmbedding != null)
+        {
+            var vector = new Pgvector.Vector(queryEmbedding);
+            candidates = await dataQuery
+                .Where(item => item.Embedding != null)
+                .OrderBy(item => item.Embedding!.CosineDistance(vector))
+                .Take(50)
+                .ToListAsync();
+        }
+        else
+        {
+            if (hasQuery)
+            {
+                dataQuery = dataQuery.Where(item => EF.Functions.ILike(item.Content, $"%{normalizedQuery}%"));
+            }
+
+            candidates = await dataQuery
+                .OrderByDescending(item => item.IndexedAt)
+                .Take(hasQuery ? 50 : 200)
+                .ToListAsync();
+        }
 
         var remainingFilters = filters
             .Where(item => item.Key is not ("type" or "collection" or "id"))
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
 
         var filtered = candidates.Where(item => MetadataMatches(item.MetadataJson, remainingFilters));
-        var matches = filtered
-            .Select(item => MapToSearchMatch(item, hasQuery ? ScoreContent(item.Content, normalizedQuery) : 1d))
-            .OrderByDescending(item => item.Score)
-            .ThenByDescending(item => item.IndexedAt)
-            .Take(10)
-            .ToList();
+
+        List<SearchMatch> matches;
+        if (queryEmbedding != null)
+        {
+            matches = filtered
+                .Select(item => MapToSearchMatch(item, 1d - (item.Embedding != null ? CalculateCosineDistanceLocal(item.Embedding.ToArray(), queryEmbedding) : 0d)))
+                .OrderByDescending(item => item.Score)
+                .Take(10)
+                .ToList();
+        }
+        else
+        {
+            matches = filtered
+                .Select(item => MapToSearchMatch(item, hasQuery ? ScoreContent(item.Content, normalizedQuery) : 1d))
+                .OrderByDescending(item => item.Score)
+                .ThenByDescending(item => item.IndexedAt)
+                .Take(10)
+                .ToList();
+        }
 
         sw.Stop();
 
@@ -249,6 +336,21 @@ public class PostgresVectorStore : IVectorStore
 
         var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(metadataJson, JsonOptions) ?? new();
         return filters.All(filter => metadata.TryGetValue(filter.Key, out var value) && string.Equals(value, filter.Value, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static double CalculateCosineDistanceLocal(float[] v1, float[] v2)
+    {
+        if (v1.Length != v2.Length || v1.Length == 0) return 1d;
+        double dot = 0d, norm1 = 0d, norm2 = 0d;
+        for (int i = 0; i < v1.Length; i++)
+        {
+            dot += v1[i] * v2[i];
+            norm1 += v1[i] * v1[i];
+            norm2 += v2[i] * v2[i];
+        }
+        if (norm1 == 0d || norm2 == 0d) return 1d;
+        var similarity = dot / (Math.Sqrt(norm1) * Math.Sqrt(norm2));
+        return Math.Clamp(1d - similarity, 0d, 1d);
     }
 
     private static double ScoreContent(string content, string query)

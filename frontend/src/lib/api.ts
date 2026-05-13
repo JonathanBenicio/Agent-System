@@ -263,4 +263,46 @@ export const scheduledTasksApi = {
   health: () => get<ScheduledTasksHealthReport>('/api/admin/scheduled-tasks/health'),
 }
 
+// ══════════════════════════════════════
+// RAG & Embedding Migration API
+// ══════════════════════════════════════
+
+import type {
+  IngestDocumentResponse,
+  EmbeddingModelConfig,
+  StartMigrationRequest,
+  MigrationJob,
+} from '@/types/api'
+
+export const ragApi = {
+  ingest: (file: File, source?: string) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const qs = source ? `?source=${encodeURIComponent(source)}` : ''
+    return postForm<IngestDocumentResponse>(`/api/document/ingest${qs}`, formData)
+  },
+  ingestBatch: (files: FileList | File[], source?: string) => {
+    const formData = new FormData()
+    for (let i = 0; i < files.length; i++) {
+      formData.append('files', files[i])
+    }
+    const qs = source ? `?source=${encodeURIComponent(source)}` : ''
+    return postForm<{ total: number; succeeded: number; failed: number; results: unknown[] }>(`/api/document/ingest/batch${qs}`, formData)
+  },
+}
+
+export const embeddingMigrationApi = {
+  models: () => get<EmbeddingModelConfig[]>('/api/admin/embedding-migration/models'),
+  activeModel: () => get<EmbeddingModelConfig>('/api/admin/embedding-migration/models/active'),
+  saveModel: (config: Partial<EmbeddingModelConfig>) => post<EmbeddingModelConfig>('/api/admin/embedding-migration/models', config),
+  activateModel: (id: string) => post<{ message: string }>(`/api/admin/embedding-migration/models/${encodeURIComponent(id)}/activate`),
+  deleteModel: (id: string) => del(`/api/admin/embedding-migration/models/${encodeURIComponent(id)}`),
+  jobs: () => get<MigrationJob[]>('/api/admin/embedding-migration/jobs'),
+  startJob: (req: StartMigrationRequest) => post<MigrationJob>('/api/admin/embedding-migration/jobs', req),
+  cancelJob: (id: string) => post<{ message: string }>(`/api/admin/embedding-migration/jobs/${encodeURIComponent(id)}/cancel`),
+  retryJob: (id: string) => post<{ message: string }>(`/api/admin/embedding-migration/jobs/${encodeURIComponent(id)}/retry`),
+  switchCollection: (id: string) => post<{ message: string }>(`/api/admin/embedding-migration/jobs/${encodeURIComponent(id)}/switch`),
+}
+
 export { ApiError }
+
