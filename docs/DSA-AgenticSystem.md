@@ -35,12 +35,12 @@ Plataforma de orquestração multi-agent com IA generativa que analisa contexto 
 - MultiAuth: API Key + JWT Bearer com resolução automática por `PolicyScheme`
 - Chat dedicado: roteamento direto a agents específicos
 - Módulo administrativo ativo de embedding migration
+- Módulo de Voice Assistant (Protótipo Ativo em /api/voice)
 
 ### Fora de Escopo
 
 - Deploy em produção multi-tenant (escopo futuro)
 - Integrações financeiras/pagamento
-- Módulo de Voice Assistant em produção (experimental)
 
 ---
 
@@ -123,7 +123,7 @@ graph LR
 | Runtime | .NET | 10.0 |
 | Web Framework | ASP.NET Core | 10.x |
 | Real-time | SignalR | 10.x |
-| Agent Runtime | Microsoft Agent Framework | 1.4.0 |
+| Agent Runtime | Microsoft Agent Framework | 1.5.0 |
 | LLM SDK | OpenAI (oficial) | 2.10 |
 | LLM Abstraction | Microsoft.Extensions.AI (IChatClient) | 10.5 |
 | LLM Bridge | Microsoft.Extensions.AI.OpenAI | 10.5.1 |

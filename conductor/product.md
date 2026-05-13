@@ -7,6 +7,8 @@ Developers, system administrators, and AI integrators needing a centralized, gov
 ## Key Features
 - Centralized agent execution via `AgentExecutionWorkflow`.
 - End-to-end streaming through SignalR and Server-Sent Events (SSE).
+- Dedicated Chat for direct agent interaction bypassing automatic routing.
+- Active Voice Assistant prototype via `/api/voice`.
 - Authenticated MCP server for agent listing, RAG querying, and execution.
 - Tool governance with risk policies, approval workflows, and auditing.
 - Human-in-the-loop approvals for sensitive actions.

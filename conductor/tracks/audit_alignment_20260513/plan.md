@@ -19,12 +19,12 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Gap Analysis and Alignment' (Protocol in workflow.md)
 
 ## Phase 3: Documentation Updates and Refinement
-- [ ] Task: Update Technical and Business Documentation
-    - [ ] Fix inconsistencies in `README.md`
-    - [ ] Update architecture guides in `docs/` to reflect the current Runtime V2
-- [ ] Task: Align Conductor Context Files
-    - [ ] Update `conductor/product.md` and `conductor/tech-stack.md` based on findings
-- [ ] Task: Conductor - User Manual Verification 'Phase 3: Documentation Updates and Refinement' (Protocol in workflow.md)
+- [x] Task: Update Technical and Business Documentation
+    - [x] Fix inconsistencies in `README.md`
+    - [x] Update architecture guides in `docs/` to reflect the current Runtime V2
+- [x] Task: Align Conductor Context Files
+    - [x] Update `conductor/product.md` and `conductor/tech-stack.md` based on findings
+- [x] Task: Conductor - User Manual Verification 'Phase 3: Documentation Updates and Refinement' (Protocol in workflow.md)
 
 ## Phase 4: Final Review and Checkpointing
 - [ ] Task: Final Quality Gate Review
