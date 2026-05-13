@@ -4,5 +4,5 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ---
 
-- [ ] **Track: Implement Tool Governance Risk Policies and Audit Logging**
-  *Link: [./tracks/tool_governance_20260513/](./tracks/tool_governance_20260513/)*
+- [~] **Track: Project Audit and Documentation Alignment**
+  *Link: [./tracks/audit_alignment_20260513/](./tracks/audit_alignment_20260513/)*
