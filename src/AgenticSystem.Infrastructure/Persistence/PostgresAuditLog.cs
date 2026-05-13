@@ -8,15 +8,17 @@ namespace AgenticSystem.Infrastructure.Persistence;
 
 public class PostgresAuditLog : IAuditLog
 {
-    private readonly AgenticDbContext _dbContext;
+    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
 
-    public PostgresAuditLog(AgenticDbContext dbContext)
+    public PostgresAuditLog(IDbContextFactory<AgenticDbContext> dbContextFactory)
     {
-        _dbContext = dbContext;
+        _dbContextFactory = dbContextFactory;
     }
 
     public async Task RecordAsync(AuditEntry entry, CancellationToken ct = default)
     {
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(ct);
+        
         var entity = new AuditEntryEntity
         {
             Id = Guid.NewGuid().ToString("N"),
@@ -39,13 +41,14 @@ public class PostgresAuditLog : IAuditLog
             DetailsJson = entry.Metadata != null ? JsonSerializer.Serialize(entry.Metadata) : "{}"
         };
 
-        _dbContext.AuditEntries.Add(entity);
-        await _dbContext.SaveChangesAsync(ct);
+        dbContext.AuditEntries.Add(entity);
+        await dbContext.SaveChangesAsync(ct);
     }
 
     public async Task<IReadOnlyList<AuditEntry>> QueryAsync(AuditQuery queryParams, CancellationToken ct = default)
     {
-        var query = _dbContext.AuditEntries.AsNoTracking();
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(ct);
+        var query = dbContext.AuditEntries.AsNoTracking();
         
         if (queryParams.TenantId != null)
             query = query.Where(a => a.TenantId == queryParams.TenantId);
@@ -97,7 +100,8 @@ public class PostgresAuditLog : IAuditLog
 
     public async Task<long> CountAsync(AuditQuery queryParams, CancellationToken ct = default)
     {
-        var query = _dbContext.AuditEntries.AsNoTracking();
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(ct);
+        var query = dbContext.AuditEntries.AsNoTracking();
         
         if (queryParams.TenantId != null)
             query = query.Where(a => a.TenantId == queryParams.TenantId);

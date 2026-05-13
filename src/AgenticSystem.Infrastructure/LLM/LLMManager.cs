@@ -47,7 +47,7 @@ public class LLMManager : ILLMAdministrationService
     private string? _defaultProviderOverride;
     private string? _defaultModelOverride;
 
-    public LLMManager(
+    internal LLMManager(
         IEnumerable<ILLMProvider> providers,
         ILogger<LLMManager> logger,
         IServiceProvider serviceProvider)
@@ -74,6 +74,7 @@ public class LLMManager : ILLMAdministrationService
             string.Join(", ", _providers.Keys));
     }
 
+    [ActivatorUtilitiesConstructor]
     public LLMManager(
         IOptions<AgenticSystemSettings> settingsOptions,
         ILogger<LLMManager> logger,

@@ -40,9 +40,9 @@ services:
       - agentic-net
 
   postgres:
-    image: pgvector/pgvector:16-pgvector
+    image: pgvector/pgvector:pg16
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       - POSTGRES_DB=agentic
       - POSTGRES_USER=agentic

@@ -8,16 +8,33 @@ O RAG atual combina compressão de query, retrieval vetorial, HyDE condicional, 
 
 ```
 User Query
-    → IQueryCompressor.CompressAsync()
-    → VectorStore.SearchAsync/SearchWithFiltersAsync()
+    → [Semantic Caching Layer (Bypass se houver tools)]
+    → (Cache Miss) → IQueryCompressor.CompressAsync()
+    → VectorStore.SearchAsync/SearchWithFiltersAsync() (pgvector com Contextual Retrieval)
     → HyDE condicional (se recall inicial vier fraco)
     → IReRanker.ReRankAsync() via LlmReRanker
     → IKnowledgeFreshnessService
     → ISemanticCompressor (quando excede budget)
     → BuildContextString()
     → IContextBudgetManager.TrimContextToBudgetAsync()
-    → RAGContext
+    → RAGContext (Retorno em Cache ou LLM)
 ```
+
+## Camada de Cache Semântico (`SemanticCacheChatClient`)
+
+O runtime opera um decorator transparente no `IChatClient` focado em otimização agressiva de latência e custos via busca de similaridade no pgvector.
+
+```csharp
+// Interceptação via DelegatingChatClient
+var cacheResult = await _cacheService.GetCachedResponseAsync(prompt, _agentName, _threshold, cancellationToken);
+if (cacheResult.IsHit) {
+    return new ChatResponse(new[] { new ChatMessage(ChatRole.Assistant, cacheResult.CachedResponse) });
+}
+```
+
+**Mecanismo de Ação**:
+1. **Limiar de Similaridade**: Usa distância de cosseno (Cosine Distance) no pgvector (`semantic_cache`) com threshold configurado em **95%**.
+2. **Tool Bypass Dinâmico**: O cache é automaticamente contornado se a requisição de chat exigir o uso de ferramentas (`options?.Tools != null`), garantindo que chamadas funcionais dinâmicas sempre executem.
 
 ## Superfícies de Uso
 

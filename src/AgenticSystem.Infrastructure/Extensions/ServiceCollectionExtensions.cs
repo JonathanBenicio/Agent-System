@@ -319,8 +319,8 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static IServiceCollection UsePostgresOperationalStore(this IServiceCollection services)
     {
-        services.AddScoped<IOperationalStore, PostgresOperationalStore>();
-        services.AddScoped<IRuntimeEvaluator, RuntimeEvaluatorService>();
+        ReplaceSingleton<IOperationalStore, PostgresOperationalStore>(services);
+        ReplaceSingleton<IRuntimeEvaluator, RuntimeEvaluatorService>(services);
         return services;
     }
 
@@ -510,7 +510,7 @@ public static class ServiceCollectionExtensions
                 {
                     npgsql.MigrationsHistoryTable("__ef_migrations_history");
                     npgsql.UseVector();
-                }));
+                }), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
         }
 
         if (!services.Any(descriptor => descriptor.ServiceType == typeof(IDbContextFactory<AgenticDbContext>)))

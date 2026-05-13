@@ -19,8 +19,11 @@ import {
   Clock,
   Shield,
   ArrowLeftRight,
+  LogOut,
+  User,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useAuthStore } from '@/store/authStore'
 
 interface NavItem {
   icon: React.ElementType
@@ -53,6 +56,7 @@ interface SidebarProps {
 export function Sidebar({ onNewChat }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
+  const { token, apiKey, logout } = useAuthStore()
 
   return (
     <aside
@@ -112,6 +116,42 @@ export function Sidebar({ onNewChat }: SidebarProps) {
           )
         })}
       </nav>
+
+      {/* User Status / Logout */}
+      <div className="p-3 border-t border-zinc-800 bg-zinc-925/50 flex flex-col gap-2">
+        {!collapsed ? (
+          <div className="flex items-center justify-between min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <div className="w-7 h-7 rounded-lg bg-teal-600/20 border border-teal-500/30 flex items-center justify-center shrink-0">
+                <User className="w-3.5 h-3.5 text-teal-400" />
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-xs font-semibold text-zinc-200 truncate">
+                  Administrador
+                </span>
+                <span className="text-[10px] text-teal-500 truncate font-mono">
+                  {token ? 'JWT Bearer' : apiKey ? 'API Key Ativa' : 'Desconectado'}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              className="text-zinc-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-zinc-850 transition-colors"
+              title="Sair do sistema"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={logout}
+            className="flex items-center justify-center w-full py-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-850 transition-colors"
+            title="Sair do sistema"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        )}
+      </div>
 
       {/* Collapse toggle */}
       <div className="p-2 border-t border-zinc-800">

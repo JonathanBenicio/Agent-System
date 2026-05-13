@@ -12,12 +12,12 @@ namespace AgenticSystem.Infrastructure.Persistence;
 /// </summary>
 public class PostgresOperationalStore : IOperationalStore
 {
-    private readonly AgenticDbContext _db;
+    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresOperationalStore> _logger;
 
-    public PostgresOperationalStore(AgenticDbContext db, ILogger<PostgresOperationalStore> logger)
+    public PostgresOperationalStore(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresOperationalStore> logger)
     {
-        _db = db;
+        _dbContextFactory = dbContextFactory;
         _logger = logger;
     }
 
@@ -25,6 +25,7 @@ public class PostgresOperationalStore : IOperationalStore
 
     public async Task SaveArtifactAsync(AgentExecutionArtifact artifact, CancellationToken ct = default)
     {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var entity = new RuntimeArtifactEntity
         {
             Id = artifact.Id,
@@ -39,13 +40,14 @@ public class PostgresOperationalStore : IOperationalStore
             CreatedAt = artifact.CreatedAt
         };
 
-        _db.RuntimeArtifacts.Add(entity);
-        await _db.SaveChangesAsync(ct);
+        db.RuntimeArtifacts.Add(entity);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<IReadOnlyList<AgentExecutionArtifact>> GetArtifactsAsync(string sessionId, CancellationToken ct = default)
     {
-        var entities = await _db.RuntimeArtifacts
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entities = await db.RuntimeArtifacts
             .AsNoTracking()
             .Where(a => a.SessionId == sessionId)
             .OrderBy(a => a.CreatedAt)
@@ -62,7 +64,8 @@ public class PostgresOperationalStore : IOperationalStore
         int limit = 100,
         CancellationToken ct = default)
     {
-        var query = _db.RuntimeArtifacts.AsNoTracking().AsQueryable();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var query = db.RuntimeArtifacts.AsNoTracking().AsQueryable();
 
         if (sessionId is not null)
             query = query.Where(a => a.SessionId == sessionId);
@@ -85,6 +88,7 @@ public class PostgresOperationalStore : IOperationalStore
 
     public async Task SaveMetricsSnapshotAsync(AgentRuntimeMetricsSnapshot snapshot, CancellationToken ct = default)
     {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var entity = new RuntimeMetricsSnapshotEntity
         {
             SessionId = snapshot.SessionId,
@@ -106,13 +110,14 @@ public class PostgresOperationalStore : IOperationalStore
             SnapshotAt = snapshot.UpdatedAt
         };
 
-        _db.RuntimeMetricsSnapshots.Add(entity);
-        await _db.SaveChangesAsync(ct);
+        db.RuntimeMetricsSnapshots.Add(entity);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<AgentRuntimeMetricsSnapshot?> GetLatestMetricsAsync(string? sessionId = null, CancellationToken ct = default)
     {
-        var query = _db.RuntimeMetricsSnapshots.AsNoTracking().AsQueryable();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var query = db.RuntimeMetricsSnapshots.AsNoTracking().AsQueryable();
 
         if (sessionId is not null)
             query = query.Where(m => m.SessionId == sessionId);
@@ -128,7 +133,8 @@ public class PostgresOperationalStore : IOperationalStore
         int limit = 100,
         CancellationToken ct = default)
     {
-        var query = _db.RuntimeMetricsSnapshots.AsNoTracking().AsQueryable();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var query = db.RuntimeMetricsSnapshots.AsNoTracking().AsQueryable();
 
         if (sessionId is not null)
             query = query.Where(m => m.SessionId == sessionId);
@@ -149,6 +155,7 @@ public class PostgresOperationalStore : IOperationalStore
 
     public async Task SaveReflectionAsync(Reflection reflection, CancellationToken ct = default)
     {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var entity = new ReflectionEntity
         {
             Id = reflection.Id,
@@ -164,13 +171,14 @@ public class PostgresOperationalStore : IOperationalStore
             CreatedAt = reflection.CreatedAt
         };
 
-        _db.Reflections.Add(entity);
-        await _db.SaveChangesAsync(ct);
+        db.Reflections.Add(entity);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<IReadOnlyList<Reflection>> GetReflectionsAsync(string sessionId, CancellationToken ct = default)
     {
-        var entities = await _db.Reflections
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entities = await db.Reflections
             .AsNoTracking()
             .Where(r => r.SessionId == sessionId)
             .OrderByDescending(r => r.CreatedAt)
@@ -181,7 +189,8 @@ public class PostgresOperationalStore : IOperationalStore
 
     public async Task<IReadOnlyList<Reflection>> GetRecentLearningsAsync(int count = 10, CancellationToken ct = default)
     {
-        var entities = await _db.Reflections
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entities = await db.Reflections
             .AsNoTracking()
             .Where(r => r.LessonsLearnedJson != "[]")
             .OrderByDescending(r => r.CreatedAt)
@@ -195,6 +204,7 @@ public class PostgresOperationalStore : IOperationalStore
 
     public async Task SaveEvaluationAsync(RuntimeEvaluationResult evaluation, CancellationToken ct = default)
     {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var entity = new EvaluationScoreEntity
         {
             Id = evaluation.Id,
@@ -209,8 +219,8 @@ public class PostgresOperationalStore : IOperationalStore
             CreatedAt = evaluation.CreatedAt
         };
 
-        _db.EvaluationScores.Add(entity);
-        await _db.SaveChangesAsync(ct);
+        db.EvaluationScores.Add(entity);
+        await db.SaveChangesAsync(ct);
     }
 
     public async Task<IReadOnlyList<RuntimeEvaluationResult>> GetEvaluationsAsync(
@@ -221,7 +231,8 @@ public class PostgresOperationalStore : IOperationalStore
         int limit = 50,
         CancellationToken ct = default)
     {
-        var query = _db.EvaluationScores.AsNoTracking().AsQueryable();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var query = db.EvaluationScores.AsNoTracking().AsQueryable();
 
         if (sessionId is not null)
             query = query.Where(e => e.SessionId == sessionId);
@@ -242,7 +253,8 @@ public class PostgresOperationalStore : IOperationalStore
 
     public async Task<RuntimeEvaluationResult?> GetLatestEvaluationAsync(string? agentName = null, CancellationToken ct = default)
     {
-        var query = _db.EvaluationScores.AsNoTracking().AsQueryable();
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var query = db.EvaluationScores.AsNoTracking().AsQueryable();
 
         if (agentName is not null)
             query = query.Where(e => e.AgentName == agentName);

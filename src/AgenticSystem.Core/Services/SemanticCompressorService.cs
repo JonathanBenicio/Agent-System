@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace AgenticSystem.Core.Services;
@@ -12,7 +13,7 @@ namespace AgenticSystem.Core.Services;
 /// </summary>
 public class SemanticCompressorService : ISemanticCompressor
 {
-    private readonly ISessionManager _sessionManager;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ConcurrentBag<SemanticSummary> _summaries = new();
     private readonly ILogger<SemanticCompressorService> _logger;
 
@@ -24,15 +25,16 @@ public class SemanticCompressorService : ISemanticCompressor
         "você", "voce", "need", "want", "your", "user", "agent", "session"
     };
 
-    public SemanticCompressorService(ISessionManager sessionManager, ILogger<SemanticCompressorService> logger)
+    public SemanticCompressorService(IServiceProvider serviceProvider, ILogger<SemanticCompressorService> logger)
     {
-        _sessionManager = sessionManager;
+        _serviceProvider = serviceProvider;
         _logger = logger;
     }
 
     public async Task<SemanticSummary> CompressSessionAsync(string sessionId)
     {
-        var events = await _sessionManager.GetRecentEventsAsync(sessionId, 50);
+        var sessionManager = _serviceProvider.GetRequiredService<ISessionManager>();
+        var events = await sessionManager.GetRecentEventsAsync(sessionId, 50);
 
         if (events.Count == 0)
         {

@@ -36,12 +36,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddAgenticSystemCore();
 builder.Services.AddAgenticSystemInfrastructure(builder.Configuration);
-builder.Services.AddMcpServer()
-    .WithHttpTransport(options =>
-    {
-        options.IdleTimeout = TimeSpan.FromMinutes(30);
-    })
-    .WithTools<AgenticMcpTools>();
+// builder.Services.AddMcpServer()
+//     .WithHttpTransport(options =>
+//     {
+//         options.IdleTimeout = TimeSpan.FromMinutes(30);
+//     })
+//     .WithTools<AgenticMcpTools>();
 
 builder.Services.UseLocalExecutionStorageMode(builder.Configuration);
 
@@ -59,23 +59,17 @@ var protocolRateLimitQueueLimit = protocolHosting.GetValue("RateLimiting:QueueLi
 
 if (a2aEnabled || agUiEnabled)
 {
-    // Protocol hosting now aliases the native hosted orchestrator instead of a custom IChatClient wrapper.
-    var protocolAgentBuilder = builder.Services.AddAIAgent(
-        "AgenticSystem",
-        static (sp, _) =>
-        {
-            var metadata = sp.GetRequiredService<OrchestratorMetadata>();
-            return sp.GetRequiredKeyedService<Microsoft.Agents.AI.AIAgent>(metadata.Name);
-        },
-        ServiceLifetime.Scoped);
-
-    protocolAgentBuilder.WithSessionStore(
-        static (sp, _) =>
-        {
-            var metadata = sp.GetRequiredService<OrchestratorMetadata>();
-            return sp.GetRequiredKeyedService<AgentSessionStore>(metadata.Name);
-        },
-        ServiceLifetime.Singleton);
+    // Register the proxy as a Singleton, hiding the Scoped orchestrator behind it
+    builder.Services.AddKeyedSingleton<Microsoft.Agents.AI.AIAgent>("AgenticSystem", (sp, key) =>
+    {
+        var metadata = sp.GetRequiredService<OrchestratorMetadata>();
+        return new ScopedAgentProxy(
+            rootServiceProvider: sp,
+            targetAgentKey: metadata.Name,
+            name: "AgenticSystem",
+            description: "Agentic System Protocol Proxy"
+        );
+    });
 
     if (a2aEnabled)
     {
@@ -272,11 +266,11 @@ app.UseTenantMiddleware();
 app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
-app.MapMcp("/mcp").RequireAuthorization();
+// app.MapMcp("/mcp").RequireAuthorization();
 app.MapHub<ChatHub>("/hubs/chat").RequireAuthorization();
 app.MapHub<GatewayHub>("/hubs/gateway").RequireAuthorization();
 
-app.MapGet("/health", () => new { Status = "Healthy", Timestamp = DateTime.UtcNow });
+app.MapMethods("/health", new[] { "GET", "HEAD" }, () => new { Status = "Healthy", Timestamp = DateTime.UtcNow }).AllowAnonymous();
 app.MapGet("/version", () => new { Version = "1.0.0", Build = DateTime.UtcNow.ToString("yyyyMMdd-HHmm") });
 
 // Protocol hosting endpoints — A2A + AG-UI

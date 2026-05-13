@@ -29,6 +29,11 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   })
 
   if (!res.ok) {
+    if (res.status === 401) {
+      import('@/store/authStore').then(({ useAuthStore }) => {
+        useAuthStore.getState().logout()
+      })
+    }
     const body = await res.text()
     throw new ApiError(res.status, body || res.statusText)
   }

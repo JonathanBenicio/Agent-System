@@ -15,7 +15,6 @@ Referências:
 - [docs/INDEX.md](docs/INDEX.md)
 - [docs/architecture/backend-architecture-explained.md](docs/architecture/backend-architecture-explained.md)
 - [docs/USER-STORIES.md](docs/USER-STORIES.md)
-- [docs/TECHNICAL_ARCHITECTURE_GUIDE.md](docs/TECHNICAL_ARCHITECTURE_GUIDE.md)
 - [docs/planejamento/AI_Advanced_Capabilities_Roadmap.md](docs/planejamento/AI_Advanced_Capabilities_Roadmap.md)
 
 ## 🧭 Governança de Escopo (Core x Laboratório)

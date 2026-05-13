@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -32,6 +33,7 @@ public class ChatClientPlanner
         - Maximum 10 steps per plan
         """;
 
+    [ActivatorUtilitiesConstructor]
     public ChatClientPlanner(
         IChatClient chatClient,
         ITaskPlanManager taskPlanManager,
@@ -43,17 +45,6 @@ public class ChatClientPlanner
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _toolProvider = toolProvider;
         _logger = loggerFactory.CreateLogger<ChatClientPlanner>();
-    }
-
-    // Backward-compatible overload used by existing tests and callers.
-    public ChatClientPlanner(
-        IChatClient chatClient,
-        ITaskPlanManager taskPlanManager,
-        ILoggerFactory loggerFactory,
-        IToolManager? toolManager)
-        : this(chatClient, taskPlanManager, loggerFactory,
-            toolManager is null ? null : new UnifiedAIToolProvider(loggerFactory, toolManager))
-    {
     }
 
     /// <summary>

@@ -1,8 +1,8 @@
 {
   "info": {
     "name": "Agentic System API",
-    "_postman_id": "agentic-system-v1",
-    "description": "Coleção completa da API do Agentic System — agents, tools, skills, sessions, gateway admin.",
+    "_postman_id": "agentic-system-v1-pro",
+    "description": "Coleção completa e atualizada da API do Agentic System. Contém mapeamento exato de todos os controllers (Agent, Config, Gateway, LLM, Document, Embedding, MCP Plugins, Obsidian, Planner, Scheduled Tasks, Settings, Setup, Voice e OpenAI Compatibility).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -10,30 +10,34 @@
       "key": "baseUrl",
       "value": "http://localhost:5000",
       "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "admin-super-secret-key",
+      "type": "string"
+    },
+    {
+      "key": "bearerToken",
+      "value": "admin-super-secret-key",
+      "type": "string"
     }
   ],
   "item": [
     {
-      "name": "Agent",
-      "description": "Endpoints de gestão de agents",
+      "name": "System Minimal APIs",
+      "description": "Endpoints globais e Minimal APIs configuradas no Program.cs",
       "item": [
         {
-          "name": "GET — Listar agents ativos",
+          "name": "GET — Health Check",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/agent/agents",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "agents"
-              ]
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
             },
-            "description": "Retorna todos os agents atualmente ativos no sistema."
+            "description": "Verifica a integridade do sistema."
           },
           "response": [],
           "event": [
@@ -42,43 +46,23 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.be.an('array');",
-                  "});",
-                  "pm.test('Agents possuem campos obrigatórios', () => {",
-                  "    const body = pm.response.json();",
-                  "    if (body.length > 0) {",
-                  "        pm.expect(body[0]).to.have.property('name');",
-                  "        pm.expect(body[0]).to.have.property('tier');",
-                  "        pm.expect(body[0]).to.have.property('isActive');",
-                  "    }",
-                  "});"
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "GET — Agents por tier (Chief)",
+          "name": "GET — Version",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/agent/agents/tier/Chief",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "agents",
-                "tier",
-                "Chief"
-              ]
+              "raw": "{{baseUrl}}/version",
+              "host": ["{{baseUrl}}"],
+              "path": ["version"]
             },
-            "description": "Lista agents do tier Chief (tier 0 — MetaAgent)."
+            "description": "Retorna a versão atual da API e do Microsoft Agent Framework (MAF 1.5)."
           },
           "response": [],
           "event": [
@@ -87,125 +71,14 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
-                  "});"
+                  "pm.test('Status 200 OK', () => pm.response.to.have.status(200));"
                 ]
               }
             }
           ]
         },
         {
-          "name": "GET — Agents por tier (Master)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/agent/agents/tier/Master",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "agents",
-                "tier",
-                "Master"
-              ]
-            },
-            "description": "Lista agents do tier Master (tier 1)."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET — Agents por tier (Specialist)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/agent/agents/tier/Specialist",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "agents",
-                "tier",
-                "Specialist"
-              ]
-            },
-            "description": "Lista agents do tier Specialist (tier 2)."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET — Agents por tier (Support)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/agent/agents/tier/Support",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "agents",
-                "tier",
-                "Support"
-              ]
-            },
-            "description": "Lista agents do tier Support (tier 3)."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "POST — Criar agent customizado",
+          "name": "POST — Chat Síncrono",
           "request": {
             "method": "POST",
             "header": [
@@ -216,45 +89,19 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"code-reviewer\",\n  \"description\": \"Agent especializado em code review .NET\",\n  \"tier\": \"Specialist\",\n  \"capabilities\": [\"code-review\", \"security-scan\", \"best-practices\"],\n  \"systemPrompt\": \"Você é um reviewer experiente em .NET/C#. Analise código com foco em segurança, performance e Clean Architecture.\"\n}"
+              "raw": "{\n  \"message\": \"Olá, MetaAgent!\",\n  \"userId\": \"user-01\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/agent/agents",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "agents"
-              ]
+              "raw": "{{baseUrl}}/api/chat",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "chat"]
             },
-            "description": "Cria um agent customizado com spec definida pelo usuário."
+            "description": "Interação síncrona com o MetaAgent."
           },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 201 Created', () => pm.response.to.have.status(201));",
-                  "pm.test('Retorna agent criado', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('name', 'code-reviewer');",
-                  "    pm.expect(body).to.have.property('tier');",
-                  "    pm.expect(body).to.have.property('isActive', true);",
-                  "});",
-                  "pm.test('Header Location presente', () => {",
-                  "    pm.response.to.have.header('Location');",
-                  "});"
-                ]
-              }
-            }
-          ]
+          "response": []
         },
         {
-          "name": "POST — Criar agent — body vazio (400)",
+          "name": "POST — Chat Streaming",
           "request": {
             "method": "POST",
             "header": [
@@ -265,285 +112,2414 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{}"
+              "raw": "{\n  \"message\": \"Me explique como funciona o RAG em tópicos.\",\n  \"userId\": \"user-01\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/agent/agents",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "agents"
-              ]
+              "raw": "{{baseUrl}}/api/chat/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "chat", "stream"]
             },
-            "description": "Cenário negativo: body sem campos obrigatórios."
+            "description": "Interação com o MetaAgent via streaming de texto."
           },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 400 ou 422', () => {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
-                  "});"
-                ]
-              }
-            }
-          ]
+          "response": []
+        },
+        {
+          "name": "GET — Manifesto A2A",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/a2a",
+              "host": ["{{baseUrl}}"],
+              "path": ["a2a"]
+            },
+            "description": "Manifesto do Agent-to-Agent protocol."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Manifesto AGUI",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/agui",
+              "host": ["{{baseUrl}}"],
+              "path": ["agui"]
+            },
+            "description": "Manifesto do Agent-to-GUI protocol."
+          },
+          "response": []
         }
       ]
     },
     {
-      "name": "Tools",
-      "description": "Endpoints de tools (ferramentas executáveis)",
+      "name": "Agent Lifecycle & Operations",
+      "description": "Endpoints do AgentController para gestão e execução de agentes",
       "item": [
         {
-          "name": "GET — Listar todas as tools",
+          "name": "POST — Start Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agentName\": \"code-reviewer\",\n  \"context\": {\n    \"userId\": \"dev-01\",\n    \"name\": \"Jonathan\",\n    \"language\": \"pt-BR\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "start"]
+            },
+            "description": "Inicia uma nova sessão de execução de agente."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Execute Prompt",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"session-001\",\n  \"prompt\": \"Verifique o padrão Clean Code neste trecho de código.\",\n  \"context\": {\n    \"userId\": \"dev-01\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "execute"]
+            },
+            "description": "Envia um prompt para ser processado por um agente em uma sessão."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Agent Turn",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"session-001\",\n  \"message\": \"Qual é a próxima etapa do review?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/turn",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "turn"]
+            },
+            "description": "Avança um turno na conversação com o agente."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Hand-off",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"session-001\",\n  \"targetAgent\": \"security-auditor\",\n  \"reason\": \"Análise profunda de vulnerabilidades e chaves expostas.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/hand-off",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "hand-off"]
+            },
+            "description": "Realiza o hand-off (transferência de contexto) entre dois agentes."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Execute Tool",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sessionId\": \"session-001\",\n  \"toolName\": \"calculator\",\n  \"parameters\": {\n    \"expression\": \"150 * 1.05\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/execute-tool",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "execute-tool"]
+            },
+            "description": "Solicita a execução direta de uma ferramenta em nome do agente."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Session State",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/state/session-001",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "state", "session-001"]
+            },
+            "description": "Obtém o estado atual da sessão do agente."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Session History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/history/session-001",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "history", "session-001"]
+            },
+            "description": "Recupera todo o histórico de mensagens e ações da sessão."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Active Sessions / Agents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "active"]
+            },
+            "description": "Lista todas as sessões e agentes em execução."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Kill Session",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/kill/session-001",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "kill", "session-001"]
+            },
+            "description": "Encerra e limpa uma sessão ativa."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tools & Skills Management",
+      "description": "Endpoints para consulta de ferramentas e habilidades no AgentController",
+      "item": [
+        {
+          "name": "GET — Listar Tools",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/tools",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "tools"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "tools"]
             },
-            "description": "Lista todas as tools disponíveis no sistema."
+            "description": "Retorna o catálogo completo de ferramentas."
           },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
-                  "});",
-                  "pm.test('Tools possuem id, name, category', () => {",
-                  "    const body = pm.response.json();",
-                  "    if (body.length > 0) {",
-                  "        pm.expect(body[0]).to.have.property('id');",
-                  "        pm.expect(body[0]).to.have.property('name');",
-                  "        pm.expect(body[0]).to.have.property('category');",
-                  "    }",
-                  "});"
-                ]
-              }
-            }
-          ]
+          "response": []
         },
         {
-          "name": "GET — Tools filtradas por categoria",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/agent/tools?category=Api",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "tools"
-              ],
-              "query": [
-                {
-                  "key": "category",
-                  "value": "Api"
-                }
-              ]
-            },
-            "description": "Filtra tools pela categoria informada (Calendar, Email, Storage, Notes, Tasks, Search, Api, Database)."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Todas são da categoria filtrada', () => {",
-                  "    const body = pm.response.json();",
-                  "    body.forEach(tool => {",
-                  "        pm.expect(tool.category).to.eql('Api');",
-                  "    });",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "POST — Executar tool (DateTime)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"parameters\": {\n    \"action\": \"now\"\n  }\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/agent/tools/datetime/execute",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "tools",
-                "datetime",
-                "execute"
-              ]
-            },
-            "description": "Executa a tool DateTime para obter a data/hora atual."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resultado contém success', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('success');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "POST — Executar tool (Calculator)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"parameters\": {\n    \"expression\": \"2 + 2 * 3\"\n  }\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/agent/tools/calculator/execute",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "tools",
-                "calculator",
-                "execute"
-              ]
-            },
-            "description": "Executa a tool Calculator para avaliar uma expressão matemática."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resultado contém success', () => {",
-                  "    pm.expect(pm.response.json().success).to.be.true;",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "POST — Executar tool inexistente (400)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"parameters\": {}\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/agent/tools/tool-que-nao-existe/execute",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "tools",
-                "tool-que-nao-existe",
-                "execute"
-              ]
-            },
-            "description": "Cenário negativo: tool ID inválido retorna erro."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 400 ou 404', () => {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([400, 404]);",
-                  "});"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Skills",
-      "description": "Endpoints de skills (conhecimento e templates)",
-      "item": [
-        {
-          "name": "GET — Listar skills (default)",
+          "name": "GET — Listar Skills",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/api/agent/skills",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "skills"
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "skills"]
+            },
+            "description": "Retorna o catálogo de habilidades e templates."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Obter Skill por Nome",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/skills/clean-code",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "skills", "clean-code"]
+            },
+            "description": "Obtém detalhes específicos de uma habilidade."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Governance & Maintenance",
+      "description": "Aprovações de governança, respostas finais e rotinas de manutenção",
+      "item": [
+        {
+          "name": "POST — Clean Sessions",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/maintenance/clean-sessions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "maintenance", "clean-sessions"]
+            },
+            "description": "Limpa sessões expiradas ou inativas."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Maintenance Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/maintenance/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "maintenance", "stats"]
+            },
+            "description": "Retorna métricas e estatísticas do motor de agentes."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Governance Approval",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approved\": true,\n  \"feedback\": \"Aprovado para execução na infraestrutura local.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/governance/approval/session-001",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "governance", "approval", "session-001"]
+            },
+            "description": "Aprova ou rejeita uma ação pendente de governança humana."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Governance Final Response",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Resposta final validada e aprovada pelo operador.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/governance/final-response/session-001",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "governance", "final-response", "session-001"]
+            },
+            "description": "Submete a resposta final validada pela governança."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Operational Store & Metrics",
+      "description": "Endpoints de consulta a regressões, avaliações e histórico de métricas",
+      "item": [
+        {
+          "name": "GET — Regressions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/store/regressions",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "store", "regressions"]
+            },
+            "description": "Lista relatórios de regressão cadastrados no Operational Store."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Evaluations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/store/evaluations",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "store", "evaluations"]
+            },
+            "description": "Lista histórico de avaliações dos agentes."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Metrics History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/store/metrics/history",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "store", "metrics", "history"]
+            },
+            "description": "Retorna o histórico de métricas de telemetria e execução."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Declarative YAML Configuration",
+      "description": "Endpoints de gestão, validação e versionamento de arquivos YAML",
+      "item": [
+        {
+          "name": "POST — Validate YAML",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"yamlContent\": \"name: sample-agent\\ntier: Specialist\\ncapabilities: [code-review]\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/yaml/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "yaml", "validate"]
+            },
+            "description": "Valida a sintaxe e estrutura de uma especificação YAML de agente."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Save YAML",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"yamlContent\": \"name: sample-agent\\ntier: Specialist\\ncapabilities: [code-review]\",\n  \"commitMessage\": \"Atualizando capabilities do agente\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/yaml/save",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "yaml", "save"]
+            },
+            "description": "Salva e cria uma nova versão do arquivo YAML."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — YAML Versions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/yaml/versions?agentName=sample-agent",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "yaml", "versions"],
+              "query": [
+                {
+                  "key": "agentName",
+                  "value": "sample-agent"
+                }
               ]
             },
-            "description": "Lista skills sem filtro (agent=general, domain=general)."
+            "description": "Lista todas as versões históricas salvas de um YAML."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Rollback YAML",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"agentName\": \"sample-agent\",\n  \"versionId\": \"v1\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/agent/yaml/rollback",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "agent", "yaml", "rollback"]
+            },
+            "description": "Restaura o arquivo YAML para uma versão anterior específica."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "System Configuration (ConfigController)",
+      "description": "Admin API para gerenciamento de chaves de API e entradas de configuração",
+      "item": [
+        {
+          "name": "GET — Listar Keys",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/config/keys",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "config", "keys"]
+            },
+            "description": "Lista as chaves de API configuradas no sistema."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Criar Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"AppClientKey\",\n  \"tier\": \"Client\",\n  \"expiresAt\": \"2027-12-31T23:59:59Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/config/keys",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "config", "keys"]
+            },
+            "description": "Gera uma nova chave de API de acesso."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE — Deletar Key",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/config/keys/key-id-exemplo",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "config", "keys", "key-id-exemplo"]
+            },
+            "description": "Revoga e remove uma chave de API existente."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Listar Config Entries",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/config/entries",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "config", "entries"]
+            },
+            "description": "Lista todas as entradas de configuração (chave/valor)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Obter Config Entry",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/config/entries/MaxRetryAttempts",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "config", "entries", "MaxRetryAttempts"]
+            },
+            "description": "Obtém o valor de uma entrada de configuração específica."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Criar Config Entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"MaxTimeoutSeconds\",\n  \"value\": \"30\",\n  \"category\": \"General\",\n  \"isSecret\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/config/entries",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "config", "entries"]
+            },
+            "description": "Cadastra uma nova entrada de configuração."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT — Atualizar Config Entry",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"key\": \"MaxTimeoutSeconds\",\n  \"value\": \"60\",\n  \"category\": \"General\",\n  \"isSecret\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/config/entries/MaxTimeoutSeconds",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "config", "entries", "MaxTimeoutSeconds"]
+            },
+            "description": "Atualiza o valor de uma configuração."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE — Deletar Config Entry",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/config/entries/MaxTimeoutSeconds",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "config", "entries", "MaxTimeoutSeconds"]
+            },
+            "description": "Remove uma configuração cadastrada."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Gateway Admin",
+      "description": "Endpoints de monitoramento e gestão do Gateway de serviços",
+      "item": [
+        {
+          "name": "GET — Dashboard",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/dashboard",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "dashboard"]
+            },
+            "description": "Dashboard consolidado do Gateway com status e custos."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Services",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services"]
+            },
+            "description": "Status de todos os serviços registrados no gateway."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Service by Name",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services/openai",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services", "openai"]
+            },
+            "description": "Status de um serviço específico."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Services by Category",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services/category/llm",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services", "category", "llm"]
+            },
+            "description": "Serviços filtrados por categoria."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Costs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/costs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "costs"]
+            },
+            "description": "Relatório de custos do gateway."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Health",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "health"]
+            },
+            "description": "Relatório de integridade do gateway."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Enable Service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services/openai/enable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services", "openai", "enable"]
+            },
+            "description": "Habilita um serviço no gateway."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Disable Service",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/gateway/services/openai/disable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "gateway", "services", "openai", "disable"]
+            },
+            "description": "Desabilita um serviço no gateway."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "LLM Administration",
+      "description": "Gestão de provedores e configurações de LLM (OpenAI, Ollama, Gemini, Claude)",
+      "item": [
+        {
+          "name": "GET — Get Configuration",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/llm/configuration",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "llm", "configuration"]
+            },
+            "description": "Obtém a configuração completa de LLM."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Providers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/llm/providers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "llm", "providers"]
+            },
+            "description": "Lista todos os provedores cadastrados."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Provider by Name",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/llm/providers/openai",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "llm", "providers", "openai"]
+            },
+            "description": "Obtém detalhes de um provedor específico."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Enabled Providers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/llm/providers/enabled",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "llm", "providers", "enabled"]
+            },
+            "description": "Lista apenas os provedores atualmente ativos."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Default Provider",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/llm/providers/default",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "llm", "providers", "default"]
+            },
+            "description": "Retorna o provedor padrão configurado."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Test Provider",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/llm/providers/openai/test",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "llm", "providers", "openai", "test"]
+            },
+            "description": "Realiza um teste de conectividade com o provedor."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT — Update Default Selection",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"providerName\": \"gemini\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/llm/default-selection",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "llm", "default-selection"]
+            },
+            "description": "Altera o provedor padrão do sistema."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT — Update Provider",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"baseUrl\": \"https://api.openai.com/v1\",\n  \"apiKey\": \"nova-api-key\",\n  \"defaultModel\": \"gpt-4o\",\n  \"enabled\": true,\n  \"priority\": 1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/llm/providers/openai",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "llm", "providers", "openai"]
+            },
+            "description": "Atualiza os parâmetros de um provedor LLM."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Document Ingestion (RAG)",
+      "description": "Pipeline de ingestão de arquivos para RAG (parse, chunk, embed, index)",
+      "item": [
+        {
+          "name": "POST — Ingest Document",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/document/ingest?source=upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "document", "ingest"],
+              "query": [
+                {
+                  "key": "source",
+                  "value": "upload"
+                }
+              ]
+            },
+            "description": "Faz a ingestão de um documento único no pipeline RAG."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Batch Ingest",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/document/ingest/batch?source=batch-upload",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "document", "ingest", "batch"],
+              "query": [
+                {
+                  "key": "source",
+                  "value": "batch-upload"
+                }
+              ]
+            },
+            "description": "Ingere múltiplos documentos simultaneamente."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Embedding Models & Migration",
+      "description": "Gestão de modelos de embedding e jobs de migração de vetores",
+      "item": [
+        {
+          "name": "GET — Get Models",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/models",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "models"]
+            },
+            "description": "Lista todos os modelos de embedding configurados."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Model by Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/models/model-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "models", "model-01"]
+            },
+            "description": "Obtém configuração de um modelo de embedding."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Active Model",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/models/active",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "models", "active"]
+            },
+            "description": "Retorna o modelo de embedding ativo."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Save Model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"text-embedding-3-small\",\n  \"name\": \"OpenAI Embedding Small\",\n  \"provider\": \"OpenAI\",\n  \"modelName\": \"text-embedding-3-small\",\n  \"dimensions\": 1536,\n  \"baseUrl\": \"https://api.openai.com/v1\",\n  \"apiKey\": \"secret-key\",\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/models",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "models"]
+            },
+            "description": "Cadastra ou atualiza um modelo de embedding."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE — Delete Model",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/models/text-embedding-3-small",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "models", "text-embedding-3-small"]
+            },
+            "description": "Remove um modelo de embedding."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Activate Model",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/models/text-embedding-3-small/activate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "models", "text-embedding-3-small", "activate"]
+            },
+            "description": "Ativa um modelo de embedding como principal."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Start Migration Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetModelId\": \"text-embedding-3-large\",\n  \"batchSize\": 100\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/jobs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "jobs"]
+            },
+            "description": "Inicia um job de migração e re-embed de coleções vetoriais."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — List Migration Jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/jobs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "jobs"]
+            },
+            "description": "Lista jobs de migração executados ou em andamento."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Job Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/jobs/job-001/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "jobs", "job-001", "status"]
+            },
+            "description": "Obtém status detalhado de progresso do job."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Cancel Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/jobs/job-001/cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "jobs", "job-001", "cancel"]
+            },
+            "description": "Cancela um job de migração em andamento."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Retry Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/jobs/job-001/retry",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "jobs", "job-001", "retry"]
+            },
+            "description": "Tenta novamente um job que falhou."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Switch Collection",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/embedding-migration/jobs/job-001/switch",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "embedding-migration", "jobs", "job-001", "switch"]
+            },
+            "description": "Alterna o alias da coleção vetorial para a nova coleção migrada."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "MCP Plugins Management",
+      "description": "Endpoints do Model Context Protocol (MCP) para plugins, tools e resources",
+      "item": [
+        {
+          "name": "GET — Get Plugins",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/plugins",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "plugins"]
+            },
+            "description": "Lista plugins MCP carregados."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Plugin by Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/plugins/plugin-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "plugins", "plugin-01"]
+            },
+            "description": "Obtém detalhes de um plugin MCP."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Load Plugin",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"brave-search\",\n  \"command\": \"npx\",\n  \"args\": [\"-y\", \"@modelcontextprotocol/server-brave-search\"],\n  \"env\": {\n    \"BRAVE_API_KEY\": \"sua-chave-aqui\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/plugins/load",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "plugins", "load"]
+            },
+            "description": "Carrega um servidor MCP via stdio ou SSE."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE — Unload Plugin",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/plugins/plugin-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "plugins", "plugin-01"]
+            },
+            "description": "Descarrega e encerra um plugin MCP."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get All Plugin Tools",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/plugins/tools",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "plugins", "tools"]
+            },
+            "description": "Lista todas as tools fornecidas por todos os plugins MCP."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Execute Plugin Tool",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Agentic systems architecture 2026\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/plugins/brave-search/tools/brave_web_search/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "plugins", "brave-search", "tools", "brave_web_search", "execute"]
+            },
+            "description": "Executa uma tool exposta por um plugin MCP."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Plugin Resources",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/plugins/plugin-01/resources",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "plugins", "plugin-01", "resources"]
+            },
+            "description": "Lista os recursos disponibilizados pelo plugin MCP."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Read Plugin Resource",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/plugins/plugin-01/resources/file%3A%2F%2F%2Fexemplo.txt",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "plugins", "plugin-01", "resources", "file%3A%2F%2F%2Fexemplo.txt"]
+            },
+            "description": "Lê o conteúdo de um recurso do plugin."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Plugins Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/plugins/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "plugins", "status"]
+            },
+            "description": "Retorna o status operacional dos plugins."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Obsidian Vault Sync",
+      "description": "Integração e indexação com cofres de notas do Obsidian",
+      "item": [
+        {
+          "name": "POST — Index Vault",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/obsidian/index",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "obsidian", "index"]
+            },
+            "description": "Indexa todas as notas existentes do Obsidian Vault configurado."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Search Notes",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/obsidian/search?query=arquitetura",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "obsidian", "search"],
+              "query": [
+                {
+                  "key": "query",
+                  "value": "arquitetura"
+                }
+              ]
+            },
+            "description": "Busca notas relevantes no Vault usando embeddings."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Start Watcher",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/obsidian/watch/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "obsidian", "watch", "start"]
+            },
+            "description": "Inicia o monitoramento em tempo real de alterações nos arquivos do Obsidian."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Planner AI",
+      "description": "Geração de planos de execução de objetivos complexos",
+      "item": [
+        {
+          "name": "POST — Create Plan",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"user-01\",\n  \"objective\": \"Construir uma API REST completa em ASP.NET Core com autenticação JWT e Swagger.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/planner/plan",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "planner", "plan"]
+            },
+            "description": "Decompõe um objetivo em passos e tarefas sequenciais."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Scheduled Tasks & Trigger Rules",
+      "description": "Admin API para automação de tarefas, regras de gatilho e canais de notificação",
+      "item": [
+        {
+          "name": "GET — List Tasks",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "tasks"]
+            },
+            "description": "Lista tarefas agendadas."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Task by Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/tasks/task-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "tasks", "task-01"]
+            },
+            "description": "Obtém detalhes de uma tarefa agendada."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Create Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"BackupDiario\",\n  \"cronExpression\": \"0 2 * * *\",\n  \"maxRetryAttempts\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "tasks"]
+            },
+            "description": "Cria uma nova tarefa agendada via Cron ou intervalo de segundos."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Pause Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/tasks/task-01/pause",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "tasks", "task-01", "pause"]
+            },
+            "description": "Pausa a execução de uma tarefa agendada."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Resume Task",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/tasks/task-01/resume",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "tasks", "task-01", "resume"]
+            },
+            "description": "Retoma uma tarefa agendada."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Execute Task Now",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/tasks/task-01/execute",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "tasks", "task-01", "execute"]
+            },
+            "description": "Dispara a execução imediata de uma tarefa."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE — Delete Task",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/tasks/task-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "tasks", "task-01"]
+            },
+            "description": "Remove uma tarefa agendada."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — List Rules",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "rules"]
+            },
+            "description": "Lista regras de gatilho cadastradas."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Rule by Id",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/rules/rule-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "rules", "rule-01"]
+            },
+            "description": "Obtém detalhes de uma regra de gatilho."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Create Rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"AlertaCPU\",\n  \"source\": \"SystemTelemetry\",\n  \"condition\": \"cpu > 90\",\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/rules",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "rules"]
+            },
+            "description": "Cadastra uma nova regra de monitoramento e disparo."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT — Update Rule",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"AlertaCPU\",\n  \"source\": \"SystemTelemetry\",\n  \"condition\": \"cpu > 85\",\n  \"enabled\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/rules/rule-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "rules", "rule-01"]
+            },
+            "description": "Atualiza os parâmetros de uma regra."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Enable Rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/rules/rule-01/enable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "rules", "rule-01", "enable"]
+            },
+            "description": "Habilita uma regra de gatilho."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Disable Rule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/rules/rule-01/disable",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "rules", "rule-01", "disable"]
+            },
+            "description": "Desabilita uma regra."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Evaluate Rule Now",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/rules/rule-01/evaluate",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "rules", "rule-01", "evaluate"]
+            },
+            "description": "Avalia as condições da regra imediatamente."
+          },
+          "response": []
+        },
+        {
+          "name": "DELETE — Delete Rule",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/rules/rule-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "rules", "rule-01"]
+            },
+            "description": "Remove uma regra de gatilho."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — List Channels",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/channels",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "channels"]
+            },
+            "description": "Lista canais de notificação disponíveis."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Test Channel",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"webhookUrl\": \"https://exemplo.com/webhook\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/channels/Webhook/test",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "channels", "Webhook", "test"]
+            },
+            "description": "Envia uma notificação de teste para o canal configurado."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Automation Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/scheduled-tasks/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "scheduled-tasks", "health"]
+            },
+            "description": "Relatório de saúde do sistema de automação e tarefas."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Settings Administration",
+      "description": "Configurações avançadas do sistema (Gateway, Memória, Reranking e Provedores)",
+      "item": [
+        {
+          "name": "GET — Get All Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/settings",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "settings"]
+            },
+            "description": "Retorna o panorama geral das configurações."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Gateway Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/settings/gateway",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "settings", "gateway"]
+            },
+            "description": "Retorna as configurações do Gateway."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Memory Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/settings/memory",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "settings", "memory"]
+            },
+            "description": "Retorna configurações de armazenamento vetorial e Obsidian."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Re-ranking Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/settings/reranking",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "settings", "reranking"]
+            },
+            "description": "Obtém parâmetros de reranking neural e heurístico."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Provider Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/settings/providers",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "settings", "providers"]
+            },
+            "description": "Configurações de modelos e URLs base dos provedores de LLM."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT — Update Gateway Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"defaultDailyBudget\": 50.0,\n  \"defaultFailureThreshold\": 5,\n  \"defaultBreakDurationSeconds\": 30,\n  \"defaultRequestsPerMinute\": 120\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/settings/gateway",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "settings", "gateway"]
+            },
+            "description": "Atualiza limites e orçamentos do Gateway."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT — Update Memory Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"obsidianVaultPath\": \"C:/Vaults/Personal\",\n  \"vectorStoreType\": \"PgVector\",\n  \"connectionString\": \"Host=localhost;Database=vectors;Username=postgres;Password=senha\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/settings/memory",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "settings", "memory"]
+            },
+            "description": "Atualiza caminhos e provedores de memória."
+          },
+          "response": []
+        },
+        {
+          "name": "PUT — Update Re-ranking Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true,\n  \"useDedicatedProvider\": false,\n  \"useEmbeddingReRanking\": true,\n  \"useLlmReRanking\": false,\n  \"candidatePoolSize\": 50,\n  \"maxSnippetCharacters\": 1000\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/settings/reranking",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "settings", "reranking"]
+            },
+            "description": "Atualiza regras e pesos do motor de reranking."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Upload Re-ranking Assets",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "packageFile",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/settings/reranking/assets",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "settings", "reranking", "assets"]
+            },
+            "description": "Faz upload do modelo ONNX e vocabulário para reranking local."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Setup & Onboarding",
+      "description": "Fluxo de configuração inicial guiado para novos usuários",
+      "item": [
+        {
+          "name": "POST — Start Setup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"user-01\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/setup/start",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "setup", "start"]
+            },
+            "description": "Inicia o fluxo de onboarding."
+          },
+          "response": []
+        },
+        {
+          "name": "POST — Process Step",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"user-01\",\n  \"response\": \"Avançar para o próximo passo\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/setup/step",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "setup", "step"]
+            },
+            "description": "Submete a resposta ao passo atual do setup."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Get Setup State",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/setup/state/user-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "setup", "state", "user-01"]
+            },
+            "description": "Verifica o progresso do onboarding."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Is Active Setup",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/setup/active/user-01",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "setup", "active", "user-01"]
+            },
+            "description": "Retorna se o usuário está em um fluxo de configuração pendente."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Voice Assistant",
+      "description": "Integração amigável com Alexa, Google Assistant e clientes de voz",
+      "item": [
+        {
+          "name": "POST — Ask Voice",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"Me dê um resumo das minhas tarefas de hoje.\",\n  \"userId\": \"voice-user\",\n  \"userName\": \"Jonathan\",\n  \"locale\": \"pt-BR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/voice/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "voice", "ask"]
+            },
+            "description": "Retorna texto limpo (sem markdown) formatado para síntese de fala (TTS)."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Protocol Hosting (OpenAI Compatible)",
+      "description": "Endpoints de interoperabilidade compatíveis com o padrão OpenAI",
+      "item": [
+        {
+          "name": "POST — Chat Completions (/v1/chat/completions)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"AgenticSystem\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Olá, quem é você?\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/v1/chat/completions",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "chat", "completions"]
+            },
+            "description": "Endpoint para consumo por ferramentas que utilizam o ecossistema OpenAI (Cursor, Continue.dev, LangChain)."
+          },
+          "response": []
+        },
+        {
+          "name": "GET — Models (/v1/models)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{bearerToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/v1/models",
+              "host": ["{{baseUrl}}"],
+              "path": ["v1", "models"]
+            },
+            "description": "Lista os modelos servidos por este endpoint compatível."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Smoke Tests",
+      "description": "Testes rápidos de verificação da API e Swagger",
+      "item": [
+        {
+          "name": "Health Check — API respondendo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Verifica se a API está respondendo rapidamente."
           },
           "response": [],
           "event": [
@@ -552,9 +2528,11 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "pm.test('API está respondendo', () => {",
+                  "    pm.expect(pm.response.code).to.be.below(500);",
+                  "});",
+                  "pm.test('Tempo de resposta < 2s', () => {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
                   "});"
                 ]
               }
@@ -562,32 +2540,16 @@
           ]
         },
         {
-          "name": "GET — Skills por agent e domínio",
+          "name": "Swagger disponível",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/agent/skills?agent=code-reviewer&domain=development",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "skills"
-              ],
-              "query": [
-                {
-                  "key": "agent",
-                  "value": "code-reviewer"
-                },
-                {
-                  "key": "domain",
-                  "value": "development"
-                }
-              ]
+              "raw": "{{baseUrl}}/swagger/v1/swagger.json",
+              "host": ["{{baseUrl}}"],
+              "path": ["swagger", "v1", "swagger.json"]
             },
-            "description": "Filtra skills por agent e domínio específicos."
+            "description": "Verifica se o arquivo OpenAPI/Swagger está gerado corretamente."
           },
           "response": [],
           "event": [
@@ -597,8 +2559,9 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "pm.test('É um OpenAPI válido', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('openapi');",
                   "});"
                 ]
               }
@@ -608,34 +2571,26 @@
       ]
     },
     {
-      "name": "Sessions",
-      "description": "Endpoints de sessão e eventos",
+      "name": "SignalR Hubs",
+      "description": "Endpoints de negociação WebSocket para Chat e Gateway Hubs",
       "item": [
         {
-          "name": "GET — Eventos de sessão (válido)",
+          "name": "POST — ChatHub Negotiate",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/agent/sessions/session-001/events?count=10",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "sessions",
-                "session-001",
-                "events"
-              ],
+              "raw": "{{baseUrl}}/hubs/chat/negotiate?negotiateVersion=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["hubs", "chat", "negotiate"],
               "query": [
                 {
-                  "key": "count",
-                  "value": "10"
+                  "key": "negotiateVersion",
+                  "value": "1"
                 }
               ]
             },
-            "description": "Busca os últimos 10 eventos de uma sessão."
+            "description": "Negociação inicial para conexão WebSocket com o Hub de Chat."
           },
           "response": [],
           "event": [
@@ -645,8 +2600,9 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "pm.test('Retorna connectionId', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('connectionId');",
                   "});"
                 ]
               }
@@ -654,24 +2610,22 @@
           ]
         },
         {
-          "name": "GET — Eventos de sessão (default count=20)",
+          "name": "POST — GatewayHub Negotiate",
           "request": {
-            "method": "GET",
+            "method": "POST",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/api/agent/sessions/session-001/events",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "sessions",
-                "session-001",
-                "events"
+              "raw": "{{baseUrl}}/hubs/gateway/negotiate?negotiateVersion=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["hubs", "gateway", "negotiate"],
+              "query": [
+                {
+                  "key": "negotiateVersion",
+                  "value": "1"
+                }
               ]
             },
-            "description": "Busca eventos com count default (20)."
+            "description": "Negociação de conexão com o Hub de monitoramento do Gateway."
           },
           "response": [],
           "event": [
@@ -687,749 +2641,6 @@
           ]
         }
       ]
-    },
-    {
-      "name": "Maintenance",
-      "description": "Endpoints administrativos de manutenção",
-      "item": [
-        {
-          "name": "POST — Cleanup agents inativos",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/agent/maintenance/cleanup",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "maintenance",
-                "cleanup"
-              ]
-            },
-            "description": "Dispara limpeza de agents inativos."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Mensagem de sucesso', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('message');",
-                  "    pm.expect(body.message).to.include('sucesso');",
-                  "});",
-                  "pm.test('Timestamp presente', () => {",
-                  "    pm.expect(pm.response.json()).to.have.property('timestamp');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Protocol Hosting",
-      "description": "Endpoints padronizados de interoperabilidade (MAF Phase 4)",
-      "item": [
-        {
-          "name": "POST — OpenAI Completions Compatible",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"model\": \"AgenticSystem\",\n  \"messages\": [\n    { \"role\": \"user\", \"content\": \"Olá, quem é você?\" }\n  ]\n}"
-            },
-            "url": {
-              "raw": "{{baseUrl}}/v1/chat/completions",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "chat",
-                "completions"
-              ]
-            }
-          },
-          "response": []
-        },
-        {
-          "name": "GET — OpenAI Models",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/v1/models",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "v1",
-                "models"
-              ]
-            }
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Gateway Admin",
-      "description": "Endpoints administrativos do Gateway de serviços",
-      "item": [
-        {
-          "name": "GET — Dashboard consolidado",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/dashboard",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "dashboard"
-              ]
-            },
-            "description": "Retorna dashboard com health, custos e métricas consolidadas."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Dashboard possui campos esperados', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('totalServices');",
-                  "    pm.expect(body).to.have.property('healthyServices');",
-                  "    pm.expect(body).to.have.property('totalCost');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET — Listar todos os serviços",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/services",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "services"
-              ]
-            },
-            "description": "Lista status de todos os serviços registrados no gateway."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET — Serviço por nome (existente)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/services/openai",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "services",
-                "openai"
-              ]
-            },
-            "description": "Busca status de um serviço pelo nome."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200 ou 404', () => {",
-                  "    pm.expect(pm.response.code).to.be.oneOf([200, 404]);",
-                  "});",
-                  "if (pm.response.code === 200) {",
-                  "    pm.test('Serviço possui name e isEnabled', () => {",
-                  "        const body = pm.response.json();",
-                  "        pm.expect(body).to.have.property('name');",
-                  "        pm.expect(body).to.have.property('isEnabled');",
-                  "    });",
-                  "}"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET — Serviço inexistente (404)",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/services/servico-que-nao-existe",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "services",
-                "servico-que-nao-existe"
-              ]
-            },
-            "description": "Cenário negativo: buscar serviço que não existe retorna 404."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
-                  "pm.test('Mensagem de erro', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('error');",
-                  "    pm.expect(body.error).to.include('not found');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET — Serviços por categoria",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/services/category/llm",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "services",
-                "category",
-                "llm"
-              ]
-            },
-            "description": "Filtra serviços do gateway pela categoria (ex: llm, embedding, search)."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Resposta é array', () => {",
-                  "    pm.expect(pm.response.json()).to.be.an('array');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET — Relatório de custos",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/costs",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "costs"
-              ]
-            },
-            "description": "Relatório de custos consolidado — total, por serviço, por categoria, alerta de budget."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Relatório possui campos de custo', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('totalCost');",
-                  "    pm.expect(body).to.have.property('costByService');",
-                  "    pm.expect(body).to.have.property('costByCategory');",
-                  "    pm.expect(body).to.have.property('budgetAlert');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET — Relatório de saúde",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/health",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "health"
-              ]
-            },
-            "description": "Relatório de saúde de todos os serviços."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Relatório possui campos de saúde', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('overallHealthy');",
-                  "    pm.expect(body).to.have.property('services');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "POST — Habilitar serviço",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/services/openai/enable",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "services",
-                "openai",
-                "enable"
-              ]
-            },
-            "description": "Habilita um serviço no gateway."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 204 No Content', () => pm.response.to.have.status(204));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "POST — Desabilitar serviço",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/services/openai/disable",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "services",
-                "openai",
-                "disable"
-              ]
-            },
-            "description": "Desabilita um serviço no gateway."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 204 No Content', () => pm.response.to.have.status(204));"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "POST — Enable + Disable (fluxo completo)",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/services/ollama/disable",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "services",
-                "ollama",
-                "disable"
-              ]
-            },
-            "description": "Cenário: desabilitar e depois reabilitar um serviço (use com o próximo request)."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 204', () => pm.response.to.have.status(204));",
-                  "",
-                  "// Após desabilitar, verifica status",
-                  "pm.sendRequest({",
-                  "    url: pm.variables.get('baseUrl') + '/api/admin/gateway/services/ollama',",
-                  "    method: 'GET'",
-                  "}, (err, res) => {",
-                  "    if (res.code === 200) {",
-                  "        pm.test('Serviço está desabilitado', () => {",
-                  "            pm.expect(res.json().isEnabled).to.be.false;",
-                  "        });",
-                  "    }",
-                  "});"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "Smoke Tests",
-      "description": "Cenários de smoke test para validação rápida da API",
-      "item": [
-        {
-          "name": "Health Check — API respondendo",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/agent/agents",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "agent",
-                "agents"
-              ]
-            },
-            "description": "Verifica se a API está respondendo."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('API está respondendo', () => {",
-                  "    pm.expect(pm.response.code).to.be.below(500);",
-                  "});",
-                  "pm.test('Tempo de resposta < 2s', () => {",
-                  "    pm.expect(pm.response.responseTime).to.be.below(2000);",
-                  "});",
-                  "pm.test('Content-Type é JSON', () => {",
-                  "    pm.response.to.have.header('Content-Type');",
-                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Swagger disponível",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/swagger/v1/swagger.json",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "swagger",
-                "v1",
-                "swagger.json"
-              ]
-            },
-            "description": "Verifica se o Swagger/OpenAPI está acessível."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('É um OpenAPI válido', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('openapi');",
-                  "    pm.expect(body.info.title).to.eql('Agentic System API');",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "Gateway Dashboard OK",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/api/admin/gateway/dashboard",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "admin",
-                "gateway",
-                "dashboard"
-              ]
-            },
-            "description": "Valida que o dashboard do gateway responde corretamente."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Tempo de resposta < 1s', () => {",
-                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
-                  "});"
-                ]
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "name": "SignalR Hubs",
-      "description": "Endpoints SignalR (WebSocket). O Postman testa o handshake HTTP 'negotiate'. Para testar métodos do Hub (SendMessage, GetDashboard etc.), use um client SignalR (ex: @microsoft/signalr no Node.js).\n\n## ChatHub — /hubs/chat\n### Métodos (Client → Server)\n- `SendMessage(userId: string, message: string)` — Envia mensagem ao MetaAgent\n### Eventos (Server → Client)\n- `Connected` — { connectionId, timestamp }\n- `ProcessingStarted` — { timestamp }\n- `ReceiveMessage` — { content, agentName, agentTier, actions, tools, success, sessionId, timestamp }\n- `ReceiveError` — { error, timestamp }\n\n## GatewayHub — /hubs/gateway\n### Métodos (Client → Server)\n- `GetDashboard()` — Solicita dashboard consolidado\n- `GetServiceStatus(serviceName: string)` — Status de um serviço\n- `SubscribeToService(serviceName: string)` — Inscreve-se em updates de um serviço\n- `UnsubscribeFromService(serviceName: string)` — Cancela inscrição\n### Eventos (Server → Client)\n- `DashboardUpdate` — GatewayDashboard completo\n- `ServiceStatusChanged` — ServiceStatus atualizado\n- `Error` — Mensagem de erro",
-      "item": [
-        {
-          "name": "POST — ChatHub Negotiate",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/hubs/chat/negotiate?negotiateVersion=1",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "hubs",
-                "chat",
-                "negotiate"
-              ],
-              "query": [
-                {
-                  "key": "negotiateVersion",
-                  "value": "1"
-                }
-              ]
-            },
-            "description": "Handshake SignalR do ChatHub. Retorna connectionId e transportes disponíveis (WebSockets, ServerSentEvents, LongPolling)."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Retorna connectionId', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('connectionId');",
-                  "    pm.expect(body.connectionId).to.be.a('string').and.not.empty;",
-                  "});",
-                  "pm.test('Lista transportes disponíveis', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('availableTransports');",
-                  "    pm.expect(body.availableTransports).to.be.an('array').with.length.greaterThan(0);",
-                  "});",
-                  "pm.test('Suporta WebSockets', () => {",
-                  "    const transports = pm.response.json().availableTransports;",
-                  "    const ws = transports.find(t => t.transport === 'WebSockets');",
-                  "    pm.expect(ws).to.not.be.undefined;",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "POST — GatewayHub Negotiate",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/hubs/gateway/negotiate?negotiateVersion=1",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "hubs",
-                "gateway",
-                "negotiate"
-              ],
-              "query": [
-                {
-                  "key": "negotiateVersion",
-                  "value": "1"
-                }
-              ]
-            },
-            "description": "Handshake SignalR do GatewayHub. Retorna connectionId e transportes disponíveis."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                  "pm.test('Retorna connectionId', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('connectionId');",
-                  "    pm.expect(body.connectionId).to.be.a('string').and.not.empty;",
-                  "});",
-                  "pm.test('Lista transportes disponíveis', () => {",
-                  "    const body = pm.response.json();",
-                  "    pm.expect(body).to.have.property('availableTransports');",
-                  "    pm.expect(body.availableTransports).to.be.an('array').with.length.greaterThan(0);",
-                  "});"
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "name": "GET — ChatHub negotiate inexistente (404 sanity)",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/hubs/hub-que-nao-existe/negotiate?negotiateVersion=1",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "hubs",
-                "hub-que-nao-existe",
-                "negotiate"
-              ],
-              "query": [
-                {
-                  "key": "negotiateVersion",
-                  "value": "1"
-                }
-              ]
-            },
-            "description": "Cenário negativo: negotiate para hub inexistente retorna 404."
-          },
-          "response": [],
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
-                ]
-              }
-            }
-          ]
-        }
-      ]
     }
   ],
   "event": [
@@ -1438,8 +2649,8 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "// Pre-request global — pode adicionar headers de auth aqui",
-          "// pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('token') });"
+          "// Pre-request global para autenticação via Bearer token ou X-Api-Key",
+          "// pm.request.headers.add({ key: 'Authorization', value: 'Bearer ' + pm.environment.get('bearerToken') });"
         ]
       }
     },

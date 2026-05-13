@@ -2,7 +2,7 @@
 
 > **Documento canônico de arquitetura de software (SST - Single Source of Truth)**. Este arquivo consolida todas as decisões arquiteturais, topologias, fluxos de execução do backend e frontend, substituindo e unificando o antigo `TECHNICAL_ARCHITECTURE_GUIDE.md`.
 >
-> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.4.0** como runtime principal de agentes, com suporte a fluxos colaborativos e múltiplos canais de interface.
+> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.5.0** como runtime principal de agentes, com suporte a fluxos colaborativos e múltiplos canais de interface.
 
 ---
 
@@ -39,7 +39,7 @@
 
 ## 1. Visão Geral da Arquitetura
 
-O AgenticSystem é uma plataforma corporativa multi-agent construída sobre o **.NET 10** e o **Microsoft Agent Framework (MAF) 1.4.0**. O sistema expõe agentes de inteligência artificial especializados por domínio (Personal, Work, Learning, Creative, Finance, Health, etc.) que são coordenados por um orquestrador central usando o padrão **Supervisor-with-Tools**.
+O AgenticSystem é uma plataforma corporativa multi-agent construída sobre o **.NET 10** e o **Microsoft Agent Framework (MAF) 1.5.0**. O sistema expõe agentes de inteligência artificial especializados por domínio (Personal, Work, Learning, Creative, Finance, Health, etc.) que são coordenados por um orquestrador central usando o padrão **Supervisor-with-Tools**.
 
 O LLM do orquestrador decide dinamicamente para qual especialista delegar a tarefa com base no input do usuário, eliminando as antigas regras imperativas de roteamento do fluxo principal. Cada especialista é encapsulado e exposto como uma `AIFunction` do orquestrador por meio do método nativo `.AsAIFunction()`.
 
@@ -111,10 +111,10 @@ Capacidades em fase experimental ou protótipos de pesquisa não devem alterar o
 
 ## 3. Stack Tecnológico
 
-| Camada | Tecnologia | Escopo / Papel |
+| **Camada** | **Tecnologia** | **Escopo / Papel** |
 |---|---|---|
 | **Runtime** | .NET 10 | ASP.NET Core Runtime para o Backend |
-| **Framework de Agentes** | Microsoft Agent Framework 1.4.0 | `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Hosting`, `Microsoft.Agents.AI.Workflows` |
+| **Framework de Agentes** | Microsoft Agent Framework 1.5.0 | `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Hosting`, `Microsoft.Agents.AI.Workflows` |
 | **Abstração LLM** | `IChatClient` (M.E.AI) | Abstração comum de chat (Microsoft.Extensions.AI) |
 | **Geração de Embeddings**| `IEmbeddingGenerator<string, Embedding<float>>` | Abstração comum de vetores (Microsoft.Extensions.AI) |
 | **Vector Store** | In-Memory / PostgreSQL (pgvector) | Armazenamento de embeddings semânticos |
@@ -145,13 +145,33 @@ Independente de frameworks externos de orquestração. **Não referencia o MAF d
 ### 4.3 `AgenticSystem.Infrastructure` — Implementações e Conectores
 Camada que implementa as interfaces do Core usando tecnologias e frameworks específicos:
 *   **AgentFramework**: Integração real com o Microsoft Agent Framework. Contém `FrameworkOrchestratorService`, `PostgresSessionStore`, `OrchestratorContextFactory` e `FrameworkAgentChannelService`.
-*   **LLM Pipeline**: Abstrações baseadas em `Microsoft.Extensions.AI`, contendo decorators como `GovernedChatClient` e `ContextAwareChatClient`.
+*   **LLM Pipeline**: Abstrações baseadas em `Microsoft.Extensions.AI`, contendo decorators como `GovernedChatClient`, `ContextAwareChatClient` e `SemanticCacheChatClient`.
 *   **RAG / VectorStore**: Mecanismo de busca semântica, contendo o `RAGService`, `LlmReRanker`, ONNX CrossEncoder local e gerenciadores de arquivo.
 *   **Gateway**: Controle operacional de dependências via `ServiceGateway`, agregando Circuit Breaker, Rate Limiter e contadores de custos.
 
 ---
 
-## 5. Inicialização, Registro de Dependências e Pipeline LLM
+### 5.1 Host Scoped Agents (ScopedAgentProxy Pattern)
+
+Para resolver o conflito entre a natureza `Singleton` do `Microsoft.Agent.AI` (A2A/AG-UI hosting) e a necessidade de `Scoped` services (DbContext/TenantContext) no Orquestrador, implementamos o **ScopedAgentProxy**.
+
+- **Problema**: O framework tenta resolver o agente no *Root Provider* durante o setup do protocolo, causando erros de *Captive Dependency*.
+- **Solução**:
+  1. Registramos um `ScopedAgentProxy` como `KeyedSingleton("AgenticSystem")`.
+  2. Este proxy recebe o `IServiceProvider` raiz.
+  3. Ao ser invocado pelo protocolo, o proxy cria um novo `AsyncScope` e resolve o Orquestrador Scoped real, delegando a execução.
+  4. Isso garante que o contexto de Tenant e o DBContext sejam perfeitamente preservados em cada requisição de protocolo.
+
+```csharp
+// Exemplo de registro no Program.cs
+builder.Services.AddKeyedSingleton<AIAgent>("AgenticSystem", (sp, key) =>
+{
+    return new ScopedAgentProxy(rootServiceProvider: sp, targetAgentKey: "OrchestratorName", ...);
+});
+```
+
+> **Nota de Infraestrutura**: Containers Linux que utilizam clientes Npgsql requerem a biblioteca `libgssapi-krb5-2` instalada no `Dockerfile` para evitar erros de biblioteca compartilhada em tempo de execução.
+> **Nota de Compatibilidade**: A versão atual do `ModelContextProtocol.AspNetCore` apresenta `TypeLoadException` com `Microsoft.Extensions.AI` 10.6.0. O MCP está temporariamente desabilitado aguardando alinhamento de versões.
 
 ### 5.1 Registro no Program.cs
 A inicialização do sistema resolve os microsserviços do Core e Infrastructure de forma estruturada:
@@ -190,6 +210,10 @@ Para garantir governança, custos previsíveis e flexibilidade de provedores, o 
 └──────────────────────┬────────────────────────┘
                        ▼
 ┌───────────────────────────────────────────────┐
+│            SemanticCacheChatClient            │  <-- Interceptação rápida via pgvector Cosine Distance (95%)
+└──────────────────────┬────────────────────────┘
+                       ▼
+┌───────────────────────────────────────────────┐
 │            ContextAwareChatClient             │  <-- Resolução dinâmica de Model/Provider por request
 └──────────────────────┬────────────────────────┘
                        ▼
@@ -199,6 +223,7 @@ Para garantir governança, custos previsíveis e flexibilidade de provedores, o 
 ```
 
 *   **GovernedChatClient**: Controla limites de chamadas simultâneas (semaphore) e protege o sistema contra estouro de concorrência. Também valida inputs em borda (`ValidateRequestAsync`) e buffers de saída para checar as regras antes do retorno.
+*   **SemanticCacheChatClient**: Verifica hits de cache semântico antes de acionar o LLM. Faz bypass automático caso a requisição envolva chamadas de ferramentas.
 *   **ContextAwareChatClient**: Inspeciona o escopo atual (via `ILLMRuntimeContextAccessor`) e escolhe o provedor/modelo correto associado ao Tenant ou Sessão de chat.
 *   **ToolAIFunctionFactory**: Fábrica na infraestrutura responsável por mapear qualquer `ITool` do Core para um `AIFunction` nativo da Microsoft, permitindo que os agentes chamem ferramentas do Core de forma uniforme.
 
@@ -291,12 +316,13 @@ User ──> ChatHub.SendMessage(targetAgent: "WorkAgent")
 
 ## 8. RAG Pipeline — RAGContextProvider + retrieve_context
 
-Para maximizar a precisão contextual sem estourar a janela de contexto dos modelos, o AgenticSystem opera um modelo dual de RAG:
+Para maximizar a precisão contextual sem estourar a janela de contexto dos modelos, o AgenticSystem opera um modelo dual de RAG com **Contextual Retrieval**:
 
 | Modo de Ativação | Mecanismo | Momento de Execução | Propósito |
 |---|---|---|---|
 | **RAGContextProvider** | Provider nativo do MAF (`MessageAIContextProvider`) | Executado deterministicamente antes de qualquer `RunAsync` do orquestrador | Garante que dados básicos sobre a pergunta do usuário estejam no prompt inicial |
 | **`retrieve_context`** | Ferramenta explícita do orquestrador (`AIFunction`) | Executado sob demanda, apenas se o LLM do orquestrador decidir chamá-lo | Permite realizar buscas adicionais ou aprofundadas com queries modificadas |
+| **Contextual Retrieval** | Enriquecimento por IA no Ingestion Pipeline | Executado no momento do parse e chunking de documentos (`DocumentIngestionPipeline`) | Gera um resumo via LLM prefixado ao chunk antes do embedding no pgvector para preservar escopo semântico |
 
 ### 8.1 O Pipeline Semântico de Busca
 ```
@@ -307,7 +333,7 @@ Para maximizar a precisão contextual sem estourar a janela de contexto dos mode
                              │  (Normaliza e reduz ruído da query)
                              ▼
               [ 2. VectorStore.SearchAsync ]
-                             │  (Busca vetorial pgvector / in-memory)
+                             │  (Busca vetorial pgvector com chunks enriquecidos)
                              ▼
               [ 3. LlmReRanker / ONNX CrossEncoder ]
                              │  (Reordena e seleciona os Top-K mais relevantes)

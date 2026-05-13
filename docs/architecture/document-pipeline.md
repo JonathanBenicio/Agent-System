@@ -5,7 +5,7 @@
 Pipeline de ingestão de documentos que transforma arquivos brutos em chunks indexados no VectorStore, prontos para busca semântica via RAG.
 
 ```
-RawDocument → [Parser] → ParsedDocument → [Chunking] → DocumentChunk[] → [Embedding] → [VectorStore]
+RawDocument → [Parser] → ParsedDocument → [Chunking] → DocumentChunk[] → [Contextual Retrieval] → [Embedding] → [VectorStore]
 ```
 
 ## Componentes
@@ -41,6 +41,25 @@ O `HybridChunkingStrategy` combina três abordagens:
 | `Collection`    | default | Coleção destino no VectorStore      |
 | `ContentType`   | document| Tipo para metadados                 |
 
+### 2.5 Contextual Retrieval (Enriquecimento Semântico por IA)
+
+Antes da vetorização, o pipeline executa o enriquecimento de contexto de cada chunk extraído, utilizando o `IChatClient` configurado.
+
+```csharp
+// Fluxo executado em DocumentIngestionPipeline.cs
+if (_chatClient != null && chunks.Count > 0 && document.Type != DocumentType.Image)
+{
+    var docContent = string.Join("\n\n", chunks.Select(c => c.Content));
+    // Passa o documento inteiro e o chunk específico para o LLM gerar o contexto:
+    // "Please give a short, concise context of this chunk within the overall document (1 to 2 sentences)..."
+}
+```
+
+**Mecanismo e Benefícios**:
+1. **Preservação de Escopo**: O LLM gera um resumo de 1 a 2 sentenças explicando onde o chunk se encaixa no documento geral.
+2. **Concatenação**: O resumo gerado é prefixado ao chunk original (`$"{c.ContextualSummary}\n\n{c.Content}"`) antes de ser enviado ao `IEmbeddingProvider`.
+3. **Garantia de Recall no RAG**: Evita que trechos isolados percam sentido na busca vetorial, aumentando substancialmente a precisão do RAG no pgvector.
+
 ### 3. Document Ingestion Pipeline (`IDocumentIngestionPipeline`)
 
 Orquestra o fluxo completo:
@@ -50,8 +69,9 @@ IngestAsync(RawDocument)
   1. Resolve parser por DocumentType
   2. Parse → ParsedDocument
   3. Chunk → DocumentChunk[]
-  4. Embed (batch via IEmbeddingProvider)
-  5. Upsert cada chunk no IVectorStore
+  4. Contextual Retrieval (Enriquecimento de contexto via LLM)
+  5. Embed (batch via IEmbeddingProvider com conteúdo enriquecido)
+  6. Upsert cada chunk no IVectorStore
   → IngestionResult (sucesso/falha + métricas)
 ```
 

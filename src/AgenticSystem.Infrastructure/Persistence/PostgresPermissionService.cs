@@ -7,11 +7,11 @@ namespace AgenticSystem.Infrastructure.Persistence;
 
 public class PostgresPermissionService : IPermissionService
 {
-    private readonly AgenticDbContext _dbContext;
+    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
 
-    public PostgresPermissionService(AgenticDbContext dbContext)
+    public PostgresPermissionService(IDbContextFactory<AgenticDbContext> dbContextFactory)
     {
-        _dbContext = dbContext;
+        _dbContextFactory = dbContextFactory;
     }
 
     public async Task<bool> HasPermissionAsync(string userId, string resource, Permission permission, CancellationToken ct = default)
@@ -22,7 +22,8 @@ public class PostgresPermissionService : IPermissionService
 
     public async Task<IReadOnlyList<RoleAssignment>> GetRolesAsync(string userId, CancellationToken ct = default)
     {
-        return await _dbContext.RoleAssignments
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(ct);
+        return await dbContext.RoleAssignments
             .AsNoTracking()
             .Where(r => r.UserId == userId)
             .Select(r => new RoleAssignment { UserId = r.UserId, RoleName = r.RoleId, TenantId = r.TenantId, AssignedAt = r.GrantedAt })
@@ -31,12 +32,13 @@ public class PostgresPermissionService : IPermissionService
 
     public async Task AssignRoleAsync(string userId, string role, string? tenantId = null, CancellationToken ct = default)
     {
-        var existing = await _dbContext.RoleAssignments
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(ct);
+        var existing = await dbContext.RoleAssignments
             .FirstOrDefaultAsync(r => r.UserId == userId && r.RoleId == role && r.TenantId == tenantId, ct);
 
         if (existing is null)
         {
-            _dbContext.RoleAssignments.Add(new RoleAssignmentEntity
+            dbContext.RoleAssignments.Add(new RoleAssignmentEntity
             {
                 Id = Guid.NewGuid().ToString("N"),
                 UserId = userId,
@@ -44,25 +46,27 @@ public class PostgresPermissionService : IPermissionService
                 TenantId = tenantId,
                 GrantedAt = DateTime.UtcNow
             });
-            await _dbContext.SaveChangesAsync(ct);
+            await dbContext.SaveChangesAsync(ct);
         }
     }
 
     public async Task RevokeRoleAsync(string userId, string role, string? tenantId = null, CancellationToken ct = default)
     {
-        var existing = await _dbContext.RoleAssignments
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(ct);
+        var existing = await dbContext.RoleAssignments
             .FirstOrDefaultAsync(r => r.UserId == userId && r.RoleId == role && r.TenantId == tenantId, ct);
 
         if (existing is not null)
         {
-            _dbContext.RoleAssignments.Remove(existing);
-            await _dbContext.SaveChangesAsync(ct);
+            dbContext.RoleAssignments.Remove(existing);
+            await dbContext.SaveChangesAsync(ct);
         }
     }
 
     public async Task<Permission> GetEffectivePermissionsAsync(string userId, string resource, CancellationToken ct = default)
     {
-        var roleNames = await _dbContext.RoleAssignments
+        await using var dbContext = await _dbContextFactory.CreateDbContextAsync(ct);
+        var roleNames = await dbContext.RoleAssignments
             .AsNoTracking()
             .Where(r => r.UserId == userId)
             .Select(r => r.RoleId)

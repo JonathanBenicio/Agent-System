@@ -1,8 +1,20 @@
 import { lazy, Suspense, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Layout } from '@/components/layout/Layout'
 import { PageLoading } from '@/components/shared/Loading'
 import { ChatProvider, useChat } from '@/hooks/useChat'
+import { useSignalRAuth } from '@/hooks/useSignalRAuth'
+import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      refetchOnWindowFocus: false,
+    },
+  },
+})
 
 const ChatPage = lazy(() => import('@/components/chat/ChatPage').then(module => ({ default: module.ChatPage })))
 const AgentChatPage = lazy(() => import('@/components/chat/AgentChatPage').then(module => ({ default: module.AgentChatPage })))
@@ -26,6 +38,8 @@ function RouteBoundary({ children }: { children: ReactNode }) {
 }
 
 function AppRoutes() {
+  useSignalRAuth()
+
   const {
     messages,
     isConnected,
@@ -42,49 +56,51 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route
-        element={
-          <Layout
-            isConnected={isConnected}
-            connectionState={connectionState}
-            onNewChat={clearMessages}
-          />
-        }
-      >
+      <Route element={<ProtectedRoute />}>
         <Route
-          index
           element={
-            <RouteBoundary>
-              <ChatPage
-                messages={messages}
-                isProcessing={isProcessing}
-                isConnected={isConnected}
-                providers={providers}
-                selectedProvider={selectedProvider}
-                selectedModel={selectedModel}
-                onProviderChange={setSelectedProvider}
-                onModelChange={setSelectedModel}
-                onSend={sendMessage}
-              />
-            </RouteBoundary>
+            <Layout
+              isConnected={isConnected}
+              connectionState={connectionState}
+              onNewChat={clearMessages}
+            />
           }
-        />
-        <Route path="/dashboard" element={<RouteBoundary><DashboardPage /></RouteBoundary>} />
-        <Route path="/agents" element={<RouteBoundary><AgentsPage /></RouteBoundary>} />
-        <Route path="/chat/:agentName" element={<RouteBoundary><AgentChatPage /></RouteBoundary>} />
-        <Route path="/tools" element={<RouteBoundary><ToolsPage /></RouteBoundary>} />
-        <Route path="/skills" element={<RouteBoundary><SkillsPage /></RouteBoundary>} />
-        <Route path="/rag" element={<RouteBoundary><RAGPage /></RouteBoundary>} />
-        <Route path="/gateway" element={<RouteBoundary><ServicesPage /></RouteBoundary>} />
-        <Route path="/gateway/health" element={<RouteBoundary><HealthPage /></RouteBoundary>} />
-        <Route path="/costs" element={<RouteBoundary><CostsPage /></RouteBoundary>} />
-        <Route path="/ai" element={<RouteBoundary><ProvidersPage /></RouteBoundary>} />
-        <Route path="/providers" element={<Navigate to="/ai" replace />} />
-        <Route path="/plugins" element={<RouteBoundary><PluginsPage /></RouteBoundary>} />
-        <Route path="/scheduled-tasks" element={<RouteBoundary><ScheduledTasksPage /></RouteBoundary>} />
-        <Route path="/config" element={<RouteBoundary><SettingsPage /></RouteBoundary>} />
-        <Route path="/config/advanced" element={<RouteBoundary><ConfigAdvancedPage /></RouteBoundary>} />
-        <Route path="/embedding-migration" element={<RouteBoundary><EmbeddingMigrationWizard /></RouteBoundary>} />
+        >
+          <Route
+            index
+            element={
+              <RouteBoundary>
+                <ChatPage
+                  messages={messages}
+                  isProcessing={isProcessing}
+                  isConnected={isConnected}
+                  providers={providers}
+                  selectedProvider={selectedProvider}
+                  selectedModel={selectedModel}
+                  onProviderChange={setSelectedProvider}
+                  onModelChange={setSelectedModel}
+                  onSend={sendMessage}
+                />
+              </RouteBoundary>
+            }
+          />
+          <Route path="/dashboard" element={<RouteBoundary><DashboardPage /></RouteBoundary>} />
+          <Route path="/agents" element={<RouteBoundary><AgentsPage /></RouteBoundary>} />
+          <Route path="/chat/:agentName" element={<RouteBoundary><AgentChatPage /></RouteBoundary>} />
+          <Route path="/tools" element={<RouteBoundary><ToolsPage /></RouteBoundary>} />
+          <Route path="/skills" element={<RouteBoundary><SkillsPage /></RouteBoundary>} />
+          <Route path="/rag" element={<RouteBoundary><RAGPage /></RouteBoundary>} />
+          <Route path="/gateway" element={<RouteBoundary><ServicesPage /></RouteBoundary>} />
+          <Route path="/gateway/health" element={<RouteBoundary><HealthPage /></RouteBoundary>} />
+          <Route path="/costs" element={<RouteBoundary><CostsPage /></RouteBoundary>} />
+          <Route path="/ai" element={<RouteBoundary><ProvidersPage /></RouteBoundary>} />
+          <Route path="/providers" element={<Navigate to="/ai" replace />} />
+          <Route path="/plugins" element={<RouteBoundary><PluginsPage /></RouteBoundary>} />
+          <Route path="/scheduled-tasks" element={<RouteBoundary><ScheduledTasksPage /></RouteBoundary>} />
+          <Route path="/config" element={<RouteBoundary><SettingsPage /></RouteBoundary>} />
+          <Route path="/config/advanced" element={<RouteBoundary><ConfigAdvancedPage /></RouteBoundary>} />
+          <Route path="/embedding-migration" element={<RouteBoundary><EmbeddingMigrationWizard /></RouteBoundary>} />
+        </Route>
       </Route>
     </Routes>
   )
@@ -92,10 +108,12 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <ChatProvider>
-        <AppRoutes />
-      </ChatProvider>
-    </BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <BrowserRouter>
+        <ChatProvider>
+          <AppRoutes />
+        </ChatProvider>
+      </BrowserRouter>
+    </QueryClientProvider>
   )
 }
