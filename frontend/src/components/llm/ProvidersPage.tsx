@@ -154,7 +154,7 @@ export function ProvidersPage() {
 
             <div className="flex flex-wrap items-center gap-2">
               {defaultProvider ? <Badge variant="success">Provider atual: {defaultProvider}</Badge> : null}
-              {defaultModel ? <Badge variant="violet">Modelo atual: {defaultModel}</Badge> : null}
+              {defaultModel ? <Badge variant="teal">Modelo atual: {defaultModel}</Badge> : null}
               <button
                 onClick={handleSaveDefaultSelection}
                 disabled={!defaultSelection.providerName}
@@ -174,9 +174,9 @@ export function ProvidersPage() {
                 <div className="flex items-start gap-3">
                   <div className={cn(
                     'flex items-center justify-center w-10 h-10 rounded-lg',
-                    p.isEnabled ? 'bg-violet-900/50' : 'bg-zinc-800'
+                    p.isEnabled ? 'bg-teal-900/50' : 'bg-zinc-800'
                   )}>
-                    <Cpu className={cn('w-5 h-5', p.isEnabled ? 'text-violet-400' : 'text-zinc-500')} />
+                    <Cpu className={cn('w-5 h-5', p.isEnabled ? 'text-teal-400' : 'text-zinc-500')} />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -272,7 +272,7 @@ export function ProvidersPage() {
                         type="checkbox"
                         checked={editForm.isEnabled}
                         onChange={e => setEditForm(prev => ({ ...prev, isEnabled: e.target.checked }))}
-                        className="rounded border-zinc-700 bg-zinc-800 text-violet-600"
+                        className="rounded border-zinc-700 bg-zinc-800 text-teal-600"
                       />
                       <span className="text-sm text-zinc-300">Ativado</span>
                     </label>
@@ -287,7 +287,7 @@ export function ProvidersPage() {
                     </button>
                     <button
                       onClick={() => handleSave(p.name)}
-                      className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-violet-600 text-white hover:bg-violet-500"
+                      className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-teal-600 text-white hover:bg-teal-500"
                     >
                       <Check className="w-3 h-3" />
                       Salvar

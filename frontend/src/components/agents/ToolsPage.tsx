@@ -62,7 +62,7 @@ export function ToolsPage() {
               placeholder="Buscar tools..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-violet-600"
+              className="w-full pl-10 pr-4 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-teal-600"
             />
           </div>
           <select
@@ -81,7 +81,7 @@ export function ToolsPage() {
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-3">
                   <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-zinc-800 mt-0.5">
-                    <Wrench className="w-4 h-4 text-violet-400" />
+                    <Wrench className="w-4 h-4 text-teal-400" />
                   </div>
                   <div>
                     <h3 className="text-sm font-semibold text-zinc-100">{tool.name}</h3>

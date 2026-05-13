@@ -398,7 +398,7 @@ For deeper guidance on specific areas:
 | Skill | When to Use |
 |-------|-------------|
 | **frontend-design** (this) | Before coding - Learn design principles (color, typography, UX psychology) |
-| **[web-design-guidelines](../web-design-guidelines/SKILL.md)** | After coding - Audit for accessibility, performance, and best practices |
+| **[agentic-web-design](../agentic-web-design/SKILL.md)** | After coding - Audit for accessibility, performance, and best practices |
 
 ## Post-Design Workflow
 
@@ -407,11 +407,11 @@ After implementing your design, run the audit:
 ```
 1. DESIGN   → Read frontend-design principles ← YOU ARE HERE
 2. CODE     → Implement the design
-3. AUDIT    → Run web-design-guidelines review
+3. AUDIT    → Run agentic-web-design review
 4. FIX      → Address findings from audit
 ```
 
-> **Next Step:** After coding, use `web-design-guidelines` skill to audit your implementation for accessibility, focus states, animations, and performance issues.
+> **Next Step:** After coding, use `agentic-web-design` skill to audit your implementation for accessibility, focus states, animations, and performance issues.
 
 ---
 

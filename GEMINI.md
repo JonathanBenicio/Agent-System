@@ -32,9 +32,15 @@ Todas as definições de agentes, skills e workflows estão centralizadas no dir
 
 ## 🧹 Regras Globais (TIER 0)
 
-### Limpeza & Qualidade
+### Limpeza & Qualidade (Superpowers-Driven)
+- **Superpowers Engine**: O desenvolvimento local é guiado pelas regras de qualidade extrema da extensão `obra/superpowers`. Todo código escrito deve ser modular, sem placeholders, totalmente testável (padrão AAA) e livre de acoplamento desnecessário.
 - **Clean Code**: Siga rigorosamente a skill `@[skills/clean-code]`.
 - **Lint & Types**: Execute os comandos de verificação (ex: lint, type-check, build) antes de considerar uma tarefa concluída. **Zero tolerância para erros.**
+
+### Pipeline de Execução de Agentes
+1. **Pensamento (Conductor)**: Todo planejamento de tarefas complexas é guiado pela extensão `gemini-cli-extensions/conductor`, exigindo mapeamento socrático profundo, estimativas de risco e tabelas detalhadas de trade-offs antes de qualquer código ser escrito.
+2. **Orquestração Concorrente (Antigravity Swarm)**: O gerenciamento de subagentes paralelos é feito através da orquestração concurrente do Swarm, garantindo que as fronteiras de cada agente sejam rigorosamente respeitadas.
+3. **Barreira de Qualidade (Security Gate)**: Todo build, deploy ou finalização de tarefa deve passar pela validação de segurança da extensão `gemini-cli-extensions/security`, que bloqueia a conclusão em caso de vulnerabilidades críticas.
 
 ### Comunicação
 - Responda no idioma do usuário.

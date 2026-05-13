@@ -70,7 +70,7 @@ function MetricsRow({ metrics }: { metrics: GatewayMetrics }) {
       label: 'Latência Média',
       value: metrics.averageLatency,
       icon: Activity,
-      color: 'text-violet-400',
+      color: 'text-teal-400',
     },
   ]
 

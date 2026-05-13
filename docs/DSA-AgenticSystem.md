@@ -76,24 +76,20 @@ Plataforma de orquestração multi-agent com IA generativa que analisa contexto 
 
 **Regra fundamental**: Complexidade flui para baixo. Agents de tier inferior nunca chamam tiers superiores — evita ciclos e simplifica debugging.
 
-### 3.3 Maturity Levels (ML1–ML33)
+### 3.3 Framework Baseline & Capabilities
 
-Sistema evolui em camadas incrementais sem quebrar capabilities anteriores. O detalhamento funcional completo vive em [USER-STORIES.md](USER-STORIES.md); abaixo ficam os grupos mais relevantes para a arquitetura:
+O sistema opera sobre uma baseline unificada baseada no **Microsoft Agent Framework (MAF)**. O modelo anterior de Platform Capabilities foi consolidado em capacidades nativas da plataforma:
 
-| ML | Capability | Descrição |
-|----|-----------|-----------|
-| ML1 | Chunk Lifecycle | Aging/decay/promoção de chunks de memória |
-| ML2 | Context Budget | Controle de tokens por contexto (custo previsível) |
-| ML3 | Task Planning | Decomposição de tarefas complexas |
-| ML4 | Reflection | Agents aprendem com erros |
-| ML5 | Document Pipeline | Ingestão, parsing, chunking híbrido |
-| ML6 | RAG + Re-Ranking | Retrieval semântico com re-rankeamento heurístico |
-| ML7 | Multi-Provider LLM | Failover entre OpenAI/Gemini/Claude/Ollama |
-| ML8 | External Service Gateway | Circuit Breaker + Rate Limiter + Cost Tracker |
-| ML9 | Context Compression | Remove redundância antes do retrieval |
-| ML10–ML18 | Personalização, agents dinâmicos, handoffs, persistência, voice | Capabilities operacionais avançadas |
-| ML19–ML23 | Multi-tenant, scheduler, embedding migration | Plataforma e operações |
-| ML24–ML33 | Quality gates, streaming, governança, approvals | Runtime agentic moderno |
+| Domínio | Descrição | Status |
+| :--- | :--- | :--- |
+| **Foundation** | Ciclo de vida de Chunks e Controle de Budget de Contexto. | Integrado |
+| **Reasoning** | Planejamento adaptativo e roteamento via **Handoffs nativos**. | Integrado |
+| **Quality** | Trust Scoring, Auto-reflexão e Quality Gates via Middleware. | Integrado |
+| **Memory** | Memória Semântica (pgvector) e Episódica (Obsidian). | Integrado |
+| **Autonomy** | Workflows Colaborativos e Criação Dinâmica de Agentes. | Integrado |
+| **Persistence** | Persistência de sessão unificada com Checkpointing. | Integrado |
+| **Protocols** | A2A, AG-UI, MCP e Compatibilidade OpenAI. | Integrado |
+| **Vision** | Processamento Multimodal de Imagens. | Integrado |
 
 ### 3.4 Service Gateway
 

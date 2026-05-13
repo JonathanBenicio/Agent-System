@@ -76,6 +76,47 @@ public class OrchestratorHostBuilder
     }
 
     /// <summary>
+    /// [PHASE 1] Constrói um workflow de Handoff nativo para orquestração dinâmica.
+    /// Permite que agentes especialistas transfiram o controle entre si autonomamente.
+    /// </summary>
+    public async Task<Workflow> BuildHandoffWorkflowAsync(
+        IReadOnlyList<AgentInfo> activeAgents,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(activeAgents);
+
+        // 1. Criar o orquestrador principal (triage agent)
+        var orchestratorAgent = await BuildAsync(activeAgents, ct);
+
+        // 2. Resolver as instâncias reais dos agentes especialistas
+        var specialistAgents = new List<AIAgent>();
+        foreach (var info in activeAgents)
+        {
+            var agent = await _agentFactory.ResolveAgentAsync(info.Name, ct);
+            if (agent is AIAgent frameworkAgent)
+            {
+                specialistAgents.Add(frameworkAgent);
+            }
+        }
+
+        // 3. Configurar o grafo de handoffs: Orquestrador pode enviar para qualquer especialista e vice-versa
+        var builder = AgentWorkflowBuilder.CreateHandoffBuilderWith(orchestratorAgent)
+            .WithHandoffs(orchestratorAgent, specialistAgents);
+
+        // Especialistas podem devolver para o orquestrador ou passar entre si (Mesh Topology)
+        foreach (var specialist in specialistAgents)
+        {
+            builder = builder.WithHandoffs(specialist, specialistAgents.Where(a => a != specialist).Append(orchestratorAgent));
+        }
+
+        _logger.LogInformation(
+            "Handoff workflow built with mesh topology: 1 Orchestrator <-> {SpecialistCount} Specialists",
+            specialistAgents.Count);
+
+        return builder.Build("orchestrator-handoff-mesh");
+    }
+
+    /// <summary>
     /// Constrói versão síncrona (necessária para DI que ainda exige Resolve síncrono).
     /// </summary>
     public AIAgent Build(IReadOnlyList<AgentInfo> activeAgents)

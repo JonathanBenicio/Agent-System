@@ -126,7 +126,7 @@ export function EmbeddingMigrationWizard() {
       <div className="flex items-center gap-4 pb-4">
         {['Modelos', 'Iniciar Migração', 'Jobs'].map((label, i) => (
           <button key={i} onClick={() => setStep(i)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${step === i ? 'bg-violet-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'}`}>
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-colors ${step === i ? 'bg-teal-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'}`}>
             <span className="w-5 h-5 flex items-center justify-center rounded-full bg-zinc-700 text-xs">{i + 1}</span>
             {label}
           </button>
@@ -138,7 +138,7 @@ export function EmbeddingMigrationWizard() {
         <div className="space-y-4">
           <div className="flex justify-between items-center">
             <h2 className="text-lg text-zinc-200">Modelos de Embedding Configurados</h2>
-            <button onClick={() => setShowModelForm(true)} className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700">
+            <button onClick={() => setShowModelForm(true)} className="flex items-center gap-2 px-3 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700">
               <Plus className="w-4 h-4" /> Novo Modelo
             </button>
           </div>
@@ -176,7 +176,7 @@ export function EmbeddingMigrationWizard() {
               </div>
               <div className="flex gap-2 justify-end">
                 <button type="button" onClick={() => setShowModelForm(false)} className="px-3 py-2 text-sm text-zinc-400 hover:text-zinc-200">Cancelar</button>
-                <button type="submit" className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700">Salvar</button>
+                <button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700">Salvar</button>
               </div>
             </form>
           )}
@@ -205,7 +205,7 @@ export function EmbeddingMigrationWizard() {
       {/* Step 1: Start Migration */}
       {step === 1 && (
         <form onSubmit={startMigration} className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-6">
-          <h2 className="text-lg text-zinc-200 flex items-center gap-2"><ArrowLeftRight className="w-5 h-5 text-violet-400" /> Nova Migração</h2>
+          <h2 className="text-lg text-zinc-200 flex items-center gap-2"><ArrowLeftRight className="w-5 h-5 text-teal-400" /> Nova Migração</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
               <label className="block text-xs text-zinc-400 mb-1">Modelo Origem</label>
@@ -230,7 +230,7 @@ export function EmbeddingMigrationWizard() {
             <input value={migrationForm.sourceCollection} onChange={e => setMigrationForm({ ...migrationForm, sourceCollection: e.target.value })}
               className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-100" placeholder="default" />
           </div>
-          <button type="submit" className="flex items-center gap-2 px-6 py-3 bg-violet-600 text-white rounded-lg hover:bg-violet-700">
+          <button type="submit" className="flex items-center gap-2 px-6 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700">
             <Play className="w-4 h-4" /> Iniciar Migração
           </button>
         </form>
@@ -243,13 +243,13 @@ export function EmbeddingMigrationWizard() {
 
           {/* Status tracker for selected job */}
           {jobStatus && (
-            <div className="bg-zinc-900 border border-violet-800 rounded-xl p-4 space-y-3">
+            <div className="bg-zinc-900 border border-teal-800 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-zinc-100 font-medium">{jobStatus.sourceModel} → {jobStatus.targetModel}</span>
                 <span className={`px-2 py-0.5 rounded-full text-xs ${statusColors[jobStatus.status] || 'bg-zinc-800 text-zinc-400'}`}>{jobStatus.status}</span>
               </div>
               <div className="relative w-full h-3 bg-zinc-800 rounded-full overflow-hidden">
-                <div className="absolute inset-y-0 left-0 bg-violet-600 rounded-full transition-all duration-500" style={{ width: `${jobStatus.progressPercentage}%` }} />
+                <div className="absolute inset-y-0 left-0 bg-teal-600 rounded-full transition-all duration-500" style={{ width: `${jobStatus.progressPercentage}%` }} />
               </div>
               <div className="flex justify-between text-xs text-zinc-400">
                 <span>{jobStatus.processedDocuments}/{jobStatus.totalDocuments} docs</span>

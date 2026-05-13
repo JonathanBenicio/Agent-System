@@ -36,8 +36,8 @@ Agent activated → Check frontmatter "skills:" → Read SKILL.md (INDEX) → Re
 | **QUESTION**     | "what is", "how does", "explain"           | TIER 0 only                    | Text Response               |
 | **SURVEY/INTEL** | "analyze", "list files", "overview"        | TIER 0 + Explorer              | Session Intel (No File)     |
 | **SIMPLE CODE**  | "fix", "add", "change" (single file)       | TIER 0 + TIER 1 (lite)         | Inline Edit                 |
-| **COMPLEX CODE** | "build", "create", "implement", "refactor" | TIER 0 + TIER 1 (full) + Agent | **{task-slug}.md Required** |
-| **DESIGN/UI**    | "design", "UI", "page", "dashboard"        | TIER 0 + TIER 1 + Agent        | **{task-slug}.md Required** |
+| **COMPLEX CODE** | "build", "create", "implement", "refactor" | TIER 0 + TIER 1 (full) + Agent | **docs/plan/{task-slug}.md Required** |
+| **DESIGN/UI**    | "design", "UI", "page", "dashboard"        | TIER 0 + TIER 1 + Agent        | **docs/plan/{task-slug}.md Required** |
 | **SLASH CMD**    | /create, /orchestrate, /debug              | Command-specific flow          | Variable                    |
 
 ---
@@ -178,7 +178,7 @@ When user's prompt is NOT in English:
 1. **Never Assume:** If even 1% is unclear, ASK.
 2. **Handle Spec-heavy Requests:** When user gives a list (Answers 1, 2, 3...), do NOT skip the gate. Instead, ask about **Trade-offs** or **Edge Cases** (e.g., "LocalStorage confirmed, but should we handle data clearing or versioning?") before starting.
 3. **Wait:** Do NOT invoke subagents or write code until the user clears the Gate.
-4. **Reference:** Full protocol in `@[skills/brainstorming]`.
+4. **Reference:** Full protocol in `@[skills/agentic-brainstorming]`.
 
 ### 🏁 Final Checklist Protocol
 
@@ -223,16 +223,16 @@ When user's prompt is NOT in English:
 | -------- | ----------------- | -------------------------------------------- |
 | **plan** | `project-planner` | 4-phase methodology. NO CODE before Phase 4. |
 | **ask**  | -                 | Focus on understanding. Ask questions.       |
-| **edit** | `orchestrator`    | Execute. Check `{task-slug}.md` first.       |
+| **edit** | `orchestrator`    | Execute. Check `docs/plan/{task-slug}.md` first.       |
 
 **Plan Mode (4-Phase):**
 
 1. ANALYSIS → Research, questions
-2. PLANNING → `{task-slug}.md`, task breakdown
+2. PLANNING → `docs/plan/{task-slug}.md`, task breakdown
 3. SOLUTIONING → Architecture, design (NO CODE!)
 4. IMPLEMENTATION → Code + tests
 
-> 🔴 **Edit mode:** If multi-file or structural change → Offer to create `{task-slug}.md`. For single-file fixes → Proceed directly.
+> 🔴 **Edit mode:** If multi-file or structural change → Offer to create `docs/plan/{task-slug}.md`. For single-file fixes → Proceed directly.
 
 ---
 
@@ -261,7 +261,7 @@ When user's prompt is NOT in English:
 ### Agents & Skills
 
 - **Masters**: `orchestrator`, `project-planner`, `security-auditor` (Cyber/Audit), `backend-specialist` (API/DB), `frontend-specialist` (UI/UX), `mobile-developer`, `debugger`, `game-developer`
-- **Key Skills**: `clean-code`, `brainstorming`, `app-builder`, `frontend-design`, `mobile-design`, `plan-writing`, `behavioral-modes`
+- **Key Skills**: `clean-code`, `agentic-brainstorming`, `app-builder`, `frontend-design`, `mobile-design`, `plan-writing`, `behavioral-modes`
 
 ### Key Scripts
 

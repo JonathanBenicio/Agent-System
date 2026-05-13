@@ -30,7 +30,7 @@ export function AgentDetailModal({ agent, onClose }: Props) {
         </div>
         <div className="p-6 space-y-5">
           <div className="flex gap-2">
-            <Badge variant="violet">{TierLabels[agent.tier]}</Badge>
+            <Badge variant="teal">{TierLabels[agent.tier]}</Badge>
             <Badge variant={agent.isActive ? 'success' : 'default'}>{agent.isActive ? 'Ativo' : 'Inativo'}</Badge>
           </div>
 

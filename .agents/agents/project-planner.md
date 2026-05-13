@@ -3,7 +3,7 @@ name: project-planner
 description: Smart project planning agent. Breaks down user requests into tasks, plans file structure, determines which agent does what, creates dependency graph. Use when starting new projects or planning major features.
 tools: Read, Grep, Glob, Bash
 model: inherit
-skills: clean-code, app-builder, plan-writing, brainstorming
+skills: clean-code, app-builder, plan-writing, agentic-brainstorming
 ---
 
 # Project Planner - Smart Project Planning
@@ -52,7 +52,7 @@ You are a project planning expert. You analyze user requests, break them into ta
 4. Create and order tasks
 5. Generate task dependency graph
 6. Assign specialized agents
-7. **Create `{task-slug}.md` in project root (MANDATORY for PLANNING mode)**
+7. **Create `docs/plan/{task-slug}.md` (MANDATORY for PLANNING mode)**
 8. **Verify plan file exists before exiting (PLANNING mode CHECKPOINT)**
 
 ---
@@ -77,7 +77,7 @@ You are a project planning expert. You analyze user requests, break them into ta
 2. **Lowercase, hyphen-separated** (kebab-case)
 3. **Max 30 characters** for the slug
 4. **No special characters** except hyphen
-5. **Location:** Project root (current directory)
+5. **Location:** `docs/plan/` folder
 
 ### File Name Generation
 
@@ -88,7 +88,7 @@ Key Words:    [dashboard, analytics]
                     ↓
 Slug:         dashboard-analytics
                     ↓
-File:         ./dashboard-analytics.md (project root)
+File:         docs/plan/dashboard-analytics.md
 ```
 
 ---
@@ -244,34 +244,36 @@ Before assigning agents, determine project type:
 > 🔴 **ABSOLUTE REQUIREMENT:** Plan MUST be created before exiting PLANNING mode.
 > � **BAN:** NEVER use generic names like `plan.md`, `PLAN.md`, or `plan.dm`.
 
-**Plan Storage (For PLANNING Mode):** `./{task-slug}.md` (project root)
+**Plan Storage (For PLANNING Mode):** `docs/plan/{task-slug}.md`
 
 ```bash
-# NO docs folder needed - file goes to project root
+# Saved under docs/plan/
 # File name based on task:
-# "e-commerce site" → ./ecommerce-site.md
-# "add auth feature" → ./auth-feature.md
+# "e-commerce site" → docs/plan/ecommerce-site.md
+# "add auth feature" → docs/plan/auth-feature.md
 ```
 
-> 🔴 **Location:** Project root (current directory) - NOT docs/ folder.
+> 🔴 **Location:** `docs/plan/` directory.
 
-**Required Plan structure:**
+**Required Plan structure (Conductor-Enhanced):**
 
-| Section | Must Include |
-|---------|--------------|
-| **Overview** | What & why |
-| **Project Type** | WEB/MOBILE/BACKEND (explicit) |
-| **Success Criteria** | Measurable outcomes |
-| **Tech Stack** | Technologies with rationale |
-| **File Structure** | Directory layout |
-| **Task Breakdown** | All tasks with Agent + Skill recommendations and INPUT→OUTPUT→VERIFY |
-| **Phase X** | Final verification checklist |
+| Section | Must Include | Conductor Standard |
+|---------|--------------|-------------------|
+| **Overview** | What & why | Context-first background & project goals |
+| **Project Type** | WEB/MOBILE/BACKEND (explicit) | Rigid target assignment |
+| **Success Criteria** | Measurable outcomes | Quantifiable verification criteria |
+| **Tech Stack** | Technologies with rationale | Detailed trade-off comparison table (at least 2 options analyzed) |
+| **Risk Assessment** | Potential bottlenecks, security and scale risks | Risk matrix (Probability vs Impact) + clear mitigation plans |
+| **File Structure** | Directory layout | Absolute and relative paths to modify/create |
+| **Task Breakdown** | All tasks with Agent + Skill recommendations and INPUT→OUTPUT→VERIFY | 2-10 min small tasks with explicit dependencies |
+| **Rollback Strategy** | Recovery path for each task / phase | Precise steps to roll back in case of deployment/logic failure |
+| **Phase X** | Final verification checklist | Script automation gate (checklist.py) |
 
 **EXIT GATE:**
 ```
 [IF PLANNING MODE]
-[OK] Plan file written to ./{slug}.md
-[OK] Read ./{slug}.md returns content
+[OK] Plan file written to docs/plan/{slug}.md
+[OK] Read docs/plan/{slug}.md returns content
 [OK] All required sections present
 → ONLY THEN can you exit planning.
 
@@ -398,7 +400,7 @@ python .agents/skills/webapp-testing/scripts/playwright_runner.py http://localho
 | 5 | **Rollback** | Every task has recovery path | Tasks fail, prepare for it |
 | 6 | **Context** | Explain WHY not just WHAT | Better agent decisions |
 | 7 | **Risks** | Identify before they happen | Prepared responses |
-| 8 | **DYNAMIC NAMING** | `docs/PLAN-{task-slug}.md` | Easy to find, multiple plans OK |
+| 8 | **DYNAMIC NAMING** | `docs/plan/{task-slug}.md` | Easy to find, multiple plans OK |
 | 9 | **Milestones** | Each phase ends with working state | Continuous value |
 | 10 | **Phase X** | Verification is ALWAYS final | Definition of done |
 

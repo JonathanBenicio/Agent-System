@@ -49,7 +49,7 @@ export function ConfirmModal({
               'px-4 py-2 text-sm rounded-lg font-medium text-white',
               variant === 'danger'
                 ? 'bg-red-600 hover:bg-red-500'
-                : 'bg-violet-600 hover:bg-violet-500'
+                : 'bg-teal-600 hover:bg-teal-500'
             )}
           >
             {confirmLabel}

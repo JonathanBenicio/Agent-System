@@ -333,7 +333,7 @@ graph TB
     style PG_SVC fill:#336791,stroke:#333,color:#fff
 ```
 
-## 7. Voice Pipeline (ML18)
+## 7. Voice Pipeline 
 
 ```mermaid
 sequenceDiagram
@@ -358,7 +358,7 @@ sequenceDiagram
     VC-->>Voice: VoiceResponse{text, agentUsed, timestamp}
 ```
 
-## 8. Session Store Architecture (ML16)
+## 8. Session Store Architecture 
 
 ```mermaid
 graph TB
@@ -387,7 +387,7 @@ graph TB
     style POSTGRES fill:#336791,stroke:#333,color:#fff
 ```
 
-## 9. IChatClient Compatibility (ML17)
+## 9. IChatClient Compatibility 
 
 ```mermaid
 graph LR

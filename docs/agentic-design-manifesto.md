@@ -35,50 +35,38 @@ Tier 3 — Support     → Operações utilitárias atômicas (notificações, A
 
 ---
 
-### 2. Maturidade Incremental Standalone (Maturity Levels)
+### 2. Capacidades Nativas e Evolução (Core Baseline)
 
-O sistema evolui em camadas incrementais de maturidade (**Maturity Levels — ML1 a ML18**). Cada nível adiciona uma nova capacidade técnica e de inteligência sem introduzir regressões ou quebrar as camadas anteriores.
+O sistema abandonou o modelo de "Platform Capabilities" (ML) isolados em favor de uma **Baseline de Framework Unificada**. Todas as capacidades técnicas agora são integradas nativamente via Microsoft Agent Framework (MAF) e Antigravity Kit.
 
-#### Tabela Consolidada de Maturity Levels
+#### Tabela de Capacidades do Ecossistema
 
-| Camada | ML | Tema | Essência |
-| :--- | :---: | :--- | :--- |
-| **Foundation** | 1 | Chunk Lifecycle | Dados têm prazo de validade. Drift é inevitável — detecte-o. |
-| **Foundation** | 2 | Context Budget | Contexto tem custo — otimize tokens gastos com rigor. |
-| **Intelligence**| 3 | Task Planning | Tarefas complexas se decompõem antes de executar. |
-| **Intelligence**| 4 | Reflection | Agents aprendem com seus próprios erros e auto-refletem. |
-| **Intelligence**| 5 | Human Correction | Humanos refinam e ensinam novas regras persistentes. |
-| **Quality** | 6 | Knowledge Freshness | Penalização de conhecimento antigo e drift de documentos. |
-| **Quality** | 7 | Confidence Score | Honestidade algorítmica: transparência > precisão ilusória. |
-| **Compression** | 8 | Semantic Compression | Histórico longo vira princípio e resumo executivo. |
-| **Compression** | 9 | Query Compression | Menos ruído, mais sinal no retrieval de embeddings. |
-| **Personalization**| 10 | User Personalization | Cada usuário é único sem lock-in coercitivo. |
-| **Autonomy** | 11 | Dynamic Agent Creation | [Lab] O sistema cresce e cria novos agentes em runtime sob demanda. |
-| **Autonomy** | 12 | Native Workflows | Delegação nativa governada por LLM via Tool Bindings e AgentWorkflows. |
-| **Autonomy** | 13 | Session Consolidation | Esquecer com critério estruturado é lembrar melhor. |
-| **Autonomy** | 14 | Smart Routing | Seleção heurística baseada em intenção, carga e performance. |
-| **Autonomy** | 15 | Setup Flow | Onboarding guiado e resiliente por step define a adoção. |
-| **Persistence** | 16 | Native Session Persistence | Sessões nativas do framework (ISessionStore) isoladas por agente. |
-| **Compatibility**| 17 | IChatClient Compatibility| Coexistência entre runtime de agentes e provedores legados. |
-| **Accessibility**| 18 | Voice Interface | Interface de voz (ASK/TTS) pronta para integrações externas. |
+| Domínio | Capacidade | Essência |
+| :--- | :--- | :--- |
+| **Foundation** | Chunk & Budget | Chunks expiram; contexto tem custo controlado via `ContextBudget`. |
+| **Reasoning** | Adaptive Planning | Decomposição multi-step e roteamento baseado em Handoffs nativos. |
+| **Quality** | Trust & Reflection | Score de confiança e auto-reflexão pós-resposta integrados via Middleware. |
+| **Memory** | Semantic Memory | Compressão de sessões e histórico episódico via Obsidian + pgvector. |
+| **Autonomy** | Native Workflows | Orquestração autônoma (Sequential, Concurrent, Handoff) via `AgentWorkflowBuilder`. |
+| **Ops** | Native Hosting | Hosting resiliente com persistência de sessão isolada por agente (`AddAIAgent`). |
 
-*   **Regra de Ouro:** Cada ML funciona de forma independente (*standalone*). Um deploy específico em produção pode ativar o ML18 (Voz) sem ativar o ML11 (Agentes Dinâmicos). Cada nível é protegido por capability flags independentes.
+*   **Padrão de Ouro:** A arquitetura é orientada a **Capability Flags**. O sistema não é medido por "níveis", mas pela ativação de skills e protocolos (A2A, AG-UI, MCP) sobre o core estável.
 
 ---
 
-### 3. Contexto (RAG) como Cidadão de Primeira Classe
+### 3. Contexto (RAG) como Pipeline Nativo
 
-O RAG não é um addon ou um "remendo" para prompts — ele é o pipeline central de decisão de entrada do sistema.
+O RAG não é um addon — ele é injetado via `AIContextProvider` de forma transparente.
 
 ```
-Query → Compress(ML9) → Retrieve → ReRank → Budget(ML2) → Inject → Agent → Respond
+Query → Compress → Retrieve → ReRank → Budget → Inject → Agent → Respond
 ```
 
 Cada etapa é isolada e substituível:
-*   **Compress (ML9):** Remove ruídos e redundâncias da query do usuário antes do vetorizador.
+*   **Compress :** Remove ruídos e redundâncias da query do usuário antes do vetorizador.
 *   **Retrieve:** Busca vetorial robusta em bancos como PostgreSQL (pgvector).
 *   **ReRank:** Re-ranqueamento neural com scoring de relevância heurístico ou ONNX Cross-Encoder.
-*   **Budget (ML2):** Limita de forma rigorosa os tokens consumidos pelo contexto na janela do LLM.
+*   **Budget :** Limita de forma rigorosa os tokens consumidos pelo contexto na janela do LLM.
 *   **Inject:** Injeta os blocos de contexto como mensagens `system` estruturadas para evitar loops de tool calling.
 
 > [!NOTE]
@@ -88,7 +76,7 @@ Cada etapa é isolada e substituível:
 
 ### 4. Transparência de Confiança (Honestidade Algorítmica)
 
-O sistema **nunca** finge saber o que não sabe. Todo output gerado carrega um `ConfidenceScore` calibrado (ML7):
+O sistema **nunca** finge saber o que não sabe. Todo output gerado carrega um `ConfidenceScore` calibrado :
 
 | Score | Comportamento do Sistema |
 | :--- | :--- |
@@ -103,7 +91,7 @@ O sistema **nunca** finge saber o que não sabe. Todo output gerado carrega um `
 
 ### 5. Human-in-the-Loop por Design
 
-O `CorrectionLoop` (ML5) não é tratado como um fallback para falhas, mas sim como o motor primário de aprendizado contínuo do ecossistema.
+O `CorrectionLoop`  não é tratado como um fallback para falhas, mas sim como o motor primário de aprendizado contínuo do ecossistema.
 
 ```
 Humano corrige → Sistema extrai regra → Regra aplica-se a futuras respostas → TimesApplied++
@@ -115,7 +103,7 @@ Humano corrige → Sistema extrai regra → Regra aplica-se a futuras respostas 
 
 ### 6. Personalização sem Lock-in
 
-O `UserPreferenceEngine` (ML10) personaliza as interações de forma sugestiva e adaptativa, sem forçar o usuário a um fluxo engessado.
+O `UserPreferenceEngine`  personaliza as interações de forma sugestiva e adaptativa, sem forçar o usuário a um fluxo engessado.
 
 *   Perfis de preferência do usuário são usados para modular prompts, mas nunca para restringir escolhas.
 *   O usuário possui total transparência e pode desligar a personalização com um clique (*opt-out*).
@@ -144,13 +132,13 @@ Para manter a clareza arquitetural e evitar confusão de responsabilidades, dife
 | Anti-Pattern | Descrição | Alternativa do Sistema |
 | :--- | :--- | :--- |
 | **God Agent** | Um agente massivo que tenta processar todas as intenções e fluxos. | O `MetaAgent` apenas analisa e delega, nunca executa nada diretamente. |
-| **RAG Brute-Force** | "Inundar" o prompt com gigabytes de chunks de documentos brutos. | `ContextBudgetManager` (ML2) controla rigorosamente os limites e tokens de contexto. |
+| **RAG Brute-Force** | "Inundar" o prompt com gigabytes de chunks de documentos brutos. | `ContextBudgetManager`  controla rigorosamente os limites e tokens de contexto. |
 | **Confidence Theater** | Exibir score de confiança artificialmente alto sem base real. | `ConfidenceScore` calibrado matematicamente com base em cobertura RAG e acurácia. |
 | **Preference Dictatorship** | Forçar respostas ultra-personalizadas sem chance de fuga. | Perfis de preferências são sugestivos, aceitando opt-out completo do usuário. |
 | **Correction Overfit** | Criar regras de correção tão específicas que quebram outros fluxos. | Escopar de forma ampla e abstrata primeiro, refinando granularmente depois. |
-| **Static Catalog** | Definir estaticamente todo catálogo de agentes em tempo de compilação. | `DynamicAgentService` (ML11) que cria e registra agentes sob demanda em runtime. |
+| **Static Catalog** | Definir estaticamente todo catálogo de agentes em tempo de compilação. | `DynamicAgentService`  que cria e registra agentes sob demanda em runtime. |
 | **Context Amnesia** | Perder o histórico e metadados ao delegar tarefas entre agentes. | Sessões estruturadas, channels compartilhados e `ISessionStore` nativo. |
-| **Infinite Memory** | Manter discussões brutas longas infinitamente, poluindo o contexto. | `SessionConsolidator` (ML13) comprime logs brutos em summaries semânticos. |
+| **Infinite Memory** | Manter discussões brutas longas infinitamente, poluindo o contexto. | `SessionConsolidator`  comprime logs brutos em summaries semânticos. |
 
 ---
 
@@ -163,7 +151,7 @@ Sistemas de mensageria tradicionais (como MediatR puro) são fundamentalmente *f
 Apesar de ser excelente para desacoplamento em arquiteturas limpas tradicionais, o MediatR não oferece suporte a canais bi-direcionais estritos com histórico reidratado por chamada. O `MetaAgentOrchestrator` necessita reter controle sobre o fluxo conversacional por request para garantir auditoria, aplicar middlewares de barreira e acionar loops de correção antes de renderizar os tokens no hub SignalR.
 
 ### 3. Singleton para Maturity Services
-Os serviços dos Maturity Levels (como tracking de regras e histórico temporário) mantêm estado de alta performance em memória (`ConcurrentDictionary`/`ConcurrentBag`). O ciclo de vida como `Singleton` no container DI garante integridade transacional concorrente dentro do processo web, permitindo a substituição simples de sua infraestrutura por stores persistentes (PostgreSQL/Redis) alterando apenas suas implementações concretas de repositório.
+Os serviços dos Platform Capabilities (como tracking de regras e histórico temporário) mantêm estado de alta performance em memória (`ConcurrentDictionary`/`ConcurrentBag`). O ciclo de vida como `Singleton` no container DI garante integridade transacional concorrente dentro do processo web, permitindo a substituição simples de sua infraestrutura por stores persistentes (PostgreSQL/Redis) alterando apenas suas implementações concretas de repositório.
 
 ### 4. Heuristic ReRanker em vez de Cross-Encoder Pesado
 Cross-encoders profundos entregam qualidade excepcional de ranqueamento, mas introduzem uma penalidade severa de latência (200ms a 500ms por query). O `HeuristicReRanker` opera em menos de 5ms utilizando similaridade cosseno de embeddings combinada com ponderações de palavras-chave. Caso um caso de uso exija precisão extrema, a interface `IReRanker` permite a substituição indolor por Cross-Encoders locais via ONNX.
@@ -194,10 +182,10 @@ Qualquer provedor de linguagem (OpenAI, Gemini, Ollama, Claude) é consumido de 
 ## Evolução Filosófica
 
 ```
-v1.0 — Foundation (ML1-10)
+v1.0 — Foundation 
        "Um sistema determinístico que responde com contexto relevante e aprende com correções humanas."
 
-v2.0 — Autonomy (ML11-18)
+v2.0 — Autonomy 
        "Um ecossistema descentralizado que se adapta, cria novos agentes em runtime, delega tarefas e consolida sessões."
 
 v3.0 — [Futuro / Próximos Passos]
@@ -208,7 +196,7 @@ v3.0 — [Futuro / Próximos Passos]
 
 ## Assinatura
 
-Este manifesto é um documento vivo. Cada novo Maturity Level, cada decisão arquitetural relevante e cada anti-pattern combatido no código deve ser registrado aqui. O manifesto evolui com o sistema — nunca atrás dele.
+Este manifesto é um documento vivo. Cada novo Platform Capability, cada decisão arquitetural relevante e cada anti-pattern combatido no código deve ser registrado aqui. O manifesto evolui com o sistema — nunca atrás dele.
 
 > *"Automatizar o repetitivo para focar no criativo."*
 > — Labs, Casas Bahia Tech

@@ -1,0 +1,6 @@
+{
+  "agents_directory": ".agents/agents",
+  "skills_directory": ".agents/skills",
+  "rules_directory": ".agents/rules",
+  "cli_bridge": ".gemini/agents"
+}

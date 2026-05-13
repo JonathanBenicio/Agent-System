@@ -19,7 +19,7 @@ export const TierLabels: Record<number, string> = {
 }
 
 export const TierColors: Record<number, string> = {
-  0: 'bg-violet-600',
+  0: 'bg-teal-600',
   1: 'bg-blue-600',
   2: 'bg-emerald-600',
   3: 'bg-amber-600',

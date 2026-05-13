@@ -64,7 +64,7 @@ export function Sidebar({ onNewChat }: SidebarProps) {
       {/* Logo area */}
       <div className="flex items-center h-14 px-3 border-b border-zinc-800">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-violet-600 shrink-0">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-teal-600 shrink-0">
             <Bot className="w-5 h-5 text-white" />
           </div>
           {!collapsed && (

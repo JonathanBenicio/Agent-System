@@ -32,7 +32,7 @@ export function AgentChatPage() {
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="flex items-center gap-2">
-          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-violet-600">
+          <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-teal-600">
             <Bot className="w-3.5 h-3.5 text-white" />
           </div>
           <div>

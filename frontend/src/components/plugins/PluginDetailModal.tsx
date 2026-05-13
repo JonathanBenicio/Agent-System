@@ -22,7 +22,7 @@ export function PluginDetailModal({ plugin, onClose }: Props) {
       <div className="relative bg-zinc-900 border border-zinc-700 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl">
         <div className="sticky top-0 bg-zinc-900 px-6 py-4 border-b border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Plug className="w-5 h-5 text-violet-400" />
+            <Plug className="w-5 h-5 text-teal-400" />
             <h2 className="text-lg font-semibold text-zinc-100">{plugin.name}</h2>
           </div>
           <button onClick={onClose} className="text-zinc-500 hover:text-zinc-300">

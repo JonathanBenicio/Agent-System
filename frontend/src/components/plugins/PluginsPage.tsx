@@ -44,7 +44,7 @@ export function PluginsPage() {
           </h1>
           <button
             onClick={() => setLoadOpen(true)}
-            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-violet-600 text-white hover:bg-violet-500"
+            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500"
           >
             <Plus className="w-4 h-4" />
             Carregar Plugin
@@ -58,7 +58,7 @@ export function PluginsPage() {
             placeholder="Buscar plugins..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-violet-600"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-teal-600"
           />
         </div>
 
@@ -67,7 +67,7 @@ export function PluginsPage() {
             <div key={plugin.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <Plug className="w-4 h-4 text-violet-400" />
+                  <Plug className="w-4 h-4 text-teal-400" />
                   <h3 className="text-sm font-semibold text-zinc-100">{plugin.name}</h3>
                 </div>
                 <Badge variant={plugin.isConnected ? 'success' : 'danger'}>

@@ -51,7 +51,7 @@ export function AgentsPage() {
           <h1 className="text-xl font-semibold text-zinc-100">Agents ({agents.length})</h1>
           <button
             onClick={() => { setEditingAgent(null); setFormOpen(true) }}
-            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-violet-600 text-white hover:bg-violet-500"
+            className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500"
           >
             <Plus className="w-4 h-4" />
             Novo Agent
@@ -67,7 +67,7 @@ export function AgentsPage() {
               placeholder="Buscar agents..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-violet-600"
+              className="w-full pl-10 pr-4 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-teal-600"
             />
           </div>
           <div className="flex gap-1">
@@ -172,7 +172,7 @@ function AgentCard({
       </div>
       <p className="text-xs text-zinc-400 mb-3 line-clamp-2">{agent.description}</p>
       <div className="flex items-center justify-between">
-        <Badge variant="violet">{TierLabels[agent.tier] ?? `T${agent.tier}`}</Badge>
+        <Badge variant="teal">{TierLabels[agent.tier] ?? `T${agent.tier}`}</Badge>
         <div className="flex gap-1">
           <IconBtn icon={MessageSquare} onClick={onChat} title="Chat direto" />
           <IconBtn icon={Eye} onClick={onView} title="Ver detalhes" />
@@ -190,7 +190,7 @@ function FilterBtn({ label, active, onClick }: { label: string; active: boolean;
       onClick={onClick}
       className={cn(
         'px-3 py-1.5 text-xs rounded-lg border transition-colors',
-        active ? 'bg-violet-600 border-violet-500 text-white' : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
+        active ? 'bg-teal-600 border-teal-500 text-white' : 'border-zinc-700 text-zinc-400 hover:bg-zinc-800'
       )}
     >
       {label}

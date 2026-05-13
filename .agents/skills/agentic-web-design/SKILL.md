@@ -1,5 +1,5 @@
 ---
-name: web-design-guidelines
+name: agentic-web-design
 description: Review UI code for Web Interface Guidelines compliance. Use when asked to "review my UI", "check accessibility", "audit design", "review UX", or "check my site against best practices".
 metadata:
   author: vercel
@@ -45,13 +45,13 @@ If no files specified, ask the user which files to review.
 | Skill | When to Use |
 |-------|-------------|
 | **[frontend-design](../frontend-design/SKILL.md)** | Before coding - Learn design principles (color, typography, UX psychology) |
-| **web-design-guidelines** (this) | After coding - Audit for accessibility, performance, and best practices |
+| **agentic-web-design** (this) | After coding - Audit for accessibility, performance, and best practices |
 
 ## Design Workflow
 
 ```
 1. DESIGN   → Read frontend-design principles
 2. CODE     → Implement the design
-3. AUDIT    → Run web-design-guidelines review ← YOU ARE HERE
+3. AUDIT    → Run agentic-web-design review ← YOU ARE HERE
 4. FIX      → Address findings from audit
 ```

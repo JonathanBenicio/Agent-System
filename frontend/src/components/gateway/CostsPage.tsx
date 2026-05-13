@@ -52,7 +52,7 @@ export function CostsPage() {
             icon={DollarSign}
             label="Custo Total"
             value={`$${data.totalCost.toFixed(4)}`}
-            color="text-violet-400"
+            color="text-teal-400"
           />
           <SummaryCard
             icon={TrendingUp}
@@ -134,7 +134,7 @@ function CostRow({ name, cost, total }: { name: string; cost: number; total: num
     <div className="flex items-center gap-4 px-5 py-3">
       <span className="text-sm text-zinc-300 flex-1">{name}</span>
       <div className="w-32 bg-zinc-800 rounded-full h-1.5">
-        <div className="h-1.5 rounded-full bg-violet-500" style={{ width: `${pct}%` }} />
+        <div className="h-1.5 rounded-full bg-teal-500" style={{ width: `${pct}%` }} />
       </div>
       <span className="text-sm text-zinc-400 w-20 text-right">${cost.toFixed(4)}</span>
       <span className="text-xs text-zinc-500 w-14 text-right">{pct.toFixed(1)}%</span>

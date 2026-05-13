@@ -80,26 +80,39 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             }
         }, ct);
 
-        // 3. Executar via framework — o LLM decide qual tool/agente chamar
+        // 3. Executar via framework — Handoff Workflow (Adoção Agressiva)
         FrameworkAgentResponse frameworkResponse;
         try
         {
-            frameworkResponse = await orchestrator.RunAsync(preProcessingResult.EffectiveInput, session);
+            var activeAgents = (await serviceScope.ServiceProvider.GetRequiredService<IAgentFactory>().GetAllAgentsAsync())
+                .Where(a => a.IsActive).ToList();
+            
+            var workflow = await serviceScope.ServiceProvider.GetRequiredService<OrchestratorHostBuilder>()
+                .BuildHandoffWorkflowAsync(activeAgents, ct);
+
+            var messages = new List<ChatMessage> { new(ChatRole.User, preProcessingResult.EffectiveInput) };
+            
+            // Usar InProcessExecution para rodar o workflow de Handoff
+            await using var run = await InProcessExecution.RunAsync(workflow, messages, sessionId, ct);
+            
+            // O resultado final do workflow de handoff é capturado dos eventos ou da mensagem final
+            frameworkResponse = ExtractResponseFromWorkflowRun(run);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Framework orchestrator execution failed");
+            _logger.LogError(ex, "Framework handoff orchestration failed");
             return CoreAgentResponse.Error(
-                "Erro ao processar via orquestrador do framework.", _orchestratorMetadata.Name);
+                "Erro ao processar via orquestrador de handoff do framework.", _orchestratorMetadata.Name);
         }
 
         // 4. Extrair conteúdo textual da resposta do framework
         var content = ExtractContent(frameworkResponse);
 
-        // 5. Identificar qual especialista foi chamado (via tool calls no histórico)
+        // 5. Identificar qual especialista foi chamado (via tool calls no histórico ou eventos de handoff)
         var specialistCalls = GetSpecialistToolCalls(frameworkResponse);
-        var calledBinding = FindCalledBinding(orchestratorCtx, specialistCalls);
-        var calledAgent = calledBinding?.Agent.Name ?? specialistCalls.FirstOrDefault();
+        var handoffEvent = ExtractHandoffAgent(frameworkResponse);
+        var calledAgent = handoffEvent ?? specialistCalls.FirstOrDefault();
+        var calledBinding = FindCalledBinding(orchestratorCtx, calledAgent != null ? new[] { calledAgent } : Array.Empty<string>());
 
         sw.Stop();
 
@@ -116,6 +129,43 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             orchestrator.Id ?? string.Empty,
             sw.Elapsed,
             ct);
+    }
+
+    private static FrameworkAgentResponse ExtractResponseFromWorkflowRun(Run run)
+    {
+        var messages = new List<ChatMessage>();
+        
+        // Coletar todas as mensagens de assistant produzidas durante o run
+        foreach (var ev in run.OutgoingEvents)
+        {
+            if (ev is AgentResponseEvent responseEvent)
+            {
+                messages.AddRange(responseEvent.Response.Messages);
+            }
+            else if (ev is WorkflowOutputEvent outputEvent && outputEvent.Is<ChatMessage>(out var msg))
+            {
+                messages.Add(msg);
+            }
+        }
+
+        // Se não houver mensagens, tenta pegar do log de mensagens do run se disponível
+        return new FrameworkAgentResponse
+        {
+            Messages = messages
+        };
+    }
+
+    private static string? ExtractHandoffAgent(FrameworkAgentResponse response)
+    {
+        // Tenta encontrar eventos de handoff nas metadatas ou conteúdos especiais
+        foreach (var msg in response.Messages)
+        {
+            if (msg.Contents.OfType<HandoffContent>().Any())
+            {
+                return msg.Contents.OfType<HandoffContent>().First().TargetAgentName;
+            }
+        }
+        return null;
     }
 
     internal Task<AgentExecutionPreProcessingResult> PreProcessHostedInputAsync(

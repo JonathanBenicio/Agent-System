@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import type { ChatMessage } from '@/types/chat'
 
 const tierColors: Record<number, string> = {
-  0: 'bg-violet-600',
+  0: 'bg-teal-600',
   1: 'bg-blue-600',
   2: 'bg-emerald-600',
   3: 'bg-amber-600',
@@ -48,7 +48,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             'flex items-center justify-center w-7 h-7 rounded-lg shrink-0 mt-0.5',
             message.agentTier !== undefined
               ? tierColors[message.agentTier] ?? 'bg-zinc-600'
-              : 'bg-violet-600'
+              : 'bg-teal-600'
           )}
         >
           <Bot className="w-4 h-4 text-white" />
@@ -86,7 +86,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           className={cn(
             'rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
             isUser
-              ? 'bg-violet-600 text-white rounded-br-md'
+              ? 'bg-teal-600 text-white rounded-br-md'
               : 'bg-zinc-850 text-zinc-200 rounded-bl-md'
           )}
         >

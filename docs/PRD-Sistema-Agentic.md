@@ -110,62 +110,43 @@ Compatível com assistentes de voz (Alexa, Google Assistant):
 
 ---
 
-## Capacidades por camada de maturidade
+## Capacidades da Plataforma (Arquitetura Integrada)
 
-O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou desativada sem impactar as demais.
+O sistema evolui em capacidades nativas integradas via Microsoft Agent Framework (MAF). Cada funcionalidade é um componente modular da baseline unificada.
 
-### Camada 1 — Fundação
-
+### Core Foundation
 | Capacidade | Benefício para o usuário |
 |---|---|
-| Ciclo de vida de dados | Informações antigas perdem relevância automaticamente — respostas sempre atualizadas |
-| Orçamento de contexto | O sistema não gasta tokens desnecessários — custo controlado |
+| Memory & Chunk Lifecycle | Informações antigas perdem relevância automaticamente — respostas sempre atualizadas |
+| Context Budget | O sistema não gasta tokens desnecessários — custo controlado e performance otimizada |
 
-### Camada 2 — Inteligência
-
+### Advanced Reasoning
 | Capacidade | Benefício para o usuário |
 |---|---|
-| Planejamento de tarefas | Tarefas complexas são decompostas em passos menores |
-| Auto-reflexão | O sistema revisa a própria resposta antes de entregar |
-| Correção humana | Feedback do usuário melhora respostas futuras automaticamente |
+| Task Planning | Tarefas complexas são decompostas em passos menores (AgentWorkflowBuilder) |
+| Reflection & Trust | O sistema revisa a própria resposta e expõe o Confidence Score para transparência total |
+| Human-in-the-Loop | Permite aprovação ou correção humana em fluxos críticos |
 
-### Camada 3 — Qualidade
-
+### Memory & Context
 | Capacidade | Benefício para o usuário |
 |---|---|
-| Detecção de informação desatualizada | Avisa quando a base de conhecimento pode estar obsoleta |
-| Score de confiança | Transparência total sobre a certeza de cada resposta |
+| Semantic Compression | Histórico longo vira resumo semântico — mantendo a essência sem ruído |
+| Hybrid Memory | Busca combinada: notas estruturadas (Obsidian) + busca vetorial (pgvector) |
+| Personalization | O sistema adapta tom, formato e nível de detalhe às preferências do usuário |
 
-### Camada 4 — Eficiência
-
+### Agentic Autonomy
 | Capacidade | Benefício para o usuário |
 |---|---|
-| Compressão de sessões | Histórico longo vira resumo — sem perder os pontos-chave |
-| Otimização de buscas | Perguntas mal formuladas são refinadas antes da consulta |
+| Dynamic Agent Creation | O sistema cria novos especialistas sob demanda via linguagem natural |
+| Collaboration Workflows | Especialistas trabalham em conjunto (Planner-Executor-Reviewer) |
+| Smart Routing | O orquestrador escolhe o melhor especialista com base em intenção e performance |
 
-### Camada 5 — Personalização
-
+### Infrastructure & Protocols
 | Capacidade | Benefício para o usuário |
 |---|---|
-| Perfil do usuário | O sistema adapta tom, formato e nível de detalhe às suas preferências |
-
-### Camada 6 — Autonomia
-
-| Capacidade | Benefício para o usuário |
-|---|---|
-| Criação dinâmica de especialistas | O sistema cria novos especialistas sob demanda via linguagem natural |
-| Delegação entre especialistas | Tarefas multi-etapa podem ser tratadas por workflow colaborativo |
-| Consolidação de sessões | Conversas longas viram memória de longo prazo automaticamente |
-| Roteamento inteligente | Escolha do especialista considera histórico e performance, não só intenção |
-| Onboarding guiado | Novo usuário é guiado passo a passo na configuração |
-
-### Camada 7 — Extensões recentes
-
-| Capacidade | Benefício para o usuário |
-|---|---|
-| Persistência de sessões | Sessões sobrevivem a reinicializações — nada é perdido |
-| Superfícies abertas de protocolo | Clientes de chat e agents externos podem consumir o runtime por protocolos compatíveis |
-| Interface por voz | Acessível via Alexa, Google Assistant ou qualquer cliente de voz |
+| Session Checkpointing | Sessões são persistidas e podem ser retomadas em caso de falha |
+| Universal Protocols | Acesso via A2A, AG-UI, MCP e superfícies compatíveis com OpenAI |
+| Voice Interface | Interface otimizada para Alexa, Google Assistant e dispositivos de voz |
 
 ---
 
@@ -228,7 +209,7 @@ O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou d
 | **Agent** | Especialista virtual otimizado para um domínio |
 | **MetaAgentOrchestrator** | Fachada de entrada que gerencia sessão, streaming e encaminhamento |
 | **Tier** | Nível hierárquico do especialista (0 = coordenador, 3 = operacional) |
-| **Maturity Level (ML)** | Camada de capacidade do sistema, ativável independentemente |
+| **Platform Capability** | Camada de capacidade do sistema, ativável independentemente |
 | **RAG** | Retrieval-Augmented Generation — buscar contexto relevante antes de responder |
 | **Confidence Score** | Nota de 0 a 1 indicando o quanto o sistema confia na própria resposta |
 | **Circuit Breaker** | Mecanismo que desliga temporariamente um provedor com falhas, evitando efeito cascata |

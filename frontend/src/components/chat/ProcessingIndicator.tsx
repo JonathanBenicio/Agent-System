@@ -3,7 +3,7 @@ import { Bot } from 'lucide-react'
 export function ProcessingIndicator() {
   return (
     <div className="flex gap-3 py-4">
-      <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-violet-600 shrink-0 mt-0.5">
+      <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-teal-600 shrink-0 mt-0.5">
         <Bot className="w-4 h-4 text-white animate-pulse" />
       </div>
       <div className="flex flex-col">

@@ -25,20 +25,21 @@ Use the `project-planner` agent with this context:
 CONTEXT:
 - User Request: $ARGUMENTS
 - Mode: PLANNING ONLY (no code)
-- Output: docs/PLAN-{task-slug}.md (dynamic naming)
+- Output: docs/plan/{task-slug}.md (dynamic naming)
 
 NAMING RULES:
 1. Extract 2-3 key words from request
 2. Lowercase, hyphen-separated
 3. Max 30 characters
-4. Example: "e-commerce cart" → PLAN-ecommerce-cart.md
+4. Example: "e-commerce cart" → docs/plan/ecommerce-cart.md
 
 RULES:
 1. Follow project-planner.md Phase -1 (Context Check)
 2. Follow project-planner.md Phase 0 (Socratic Gate)
-3. Create PLAN-{slug}.md with task breakdown
-4. DO NOT write any code files
-5. REPORT the exact file name created
+3. Create {slug}.md under docs/plan/ with task breakdown
+4. Enforce Conductor Blueprint rules (Trade-offs comparing at least 2 paths, Risk Matrix with mitigations, detailed Rollback strategies, and absolute/relative file pathing details).
+5. DO NOT write any code files
+6. REPORT the exact file name created
 ```
 
 ---
@@ -47,7 +48,8 @@ RULES:
 
 | Deliverable | Location |
 |-------------|----------|
-| Project Plan | `docs/PLAN-{task-slug}.md` |
+| Project Plan | `docs/plan/{task-slug}.md` |
+| Conductor Blueprint (Trade-offs, Risks, Rollback, Paths) | Inside plan file |
 | Task Breakdown | Inside plan file |
 | Agent Assignments | Inside plan file |
 | Verification Checklist | Phase X in plan file |
@@ -58,7 +60,7 @@ RULES:
 
 Tell user:
 ```
-[OK] Plan created: docs/PLAN-{slug}.md
+[OK] Plan created: docs/plan/{slug}.md
 
 Next steps:
 - Review the plan
@@ -72,11 +74,11 @@ Next steps:
 
 | Request | Plan File |
 |---------|-----------|
-| `/plan e-commerce site with cart` | `docs/PLAN-ecommerce-cart.md` |
-| `/plan mobile app for fitness` | `docs/PLAN-fitness-app.md` |
-| `/plan add dark mode feature` | `docs/PLAN-dark-mode.md` |
-| `/plan fix authentication bug` | `docs/PLAN-auth-fix.md` |
-| `/plan SaaS dashboard` | `docs/PLAN-saas-dashboard.md` |
+| `/plan e-commerce site with cart` | `docs/plan/ecommerce-cart.md` |
+| `/plan mobile app for fitness` | `docs/plan/fitness-app.md` |
+| `/plan add dark mode feature` | `docs/plan/dark-mode.md` |
+| `/plan fix authentication bug` | `docs/plan/auth-fix.md` |
+| `/plan SaaS dashboard` | `docs/plan/saas-dashboard.md` |
 
 ---
 

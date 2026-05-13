@@ -53,7 +53,7 @@ $ARGUMENTS
 
 | Step | Agent | Action |
 |------|-------|--------|
-| 1 | `project-planner` | Create docs/PLAN.md |
+| 1 | `project-planner` | Create `docs/plan/{task-slug}.md` |
 | 2 | (optional) `explorer-agent` | Codebase discovery if needed |
 
 > 🔴 **NO OTHER AGENTS during planning!** Only project-planner and explorer-agent.
@@ -61,9 +61,9 @@ $ARGUMENTS
 ### ⏸️ CHECKPOINT: User Approval
 
 ```
-After PLAN.md is complete, ASK:
+After plan is complete, ASK:
 
-"✅ Plan created: docs/PLAN.md
+"✅ Plan created: docs/plan/{task-slug}.md
 
 Do you approve? (Y/N)
 - Y: Start implementation
@@ -86,7 +86,7 @@ Do you approve? (Y/N)
 
 | Agent | Domain | Use When |
 |-------|--------|----------|
-| `project-planner` | Planning | Task breakdown, PLAN.md |
+| `project-planner` | Planning | Task breakdown, `docs/plan/{task-slug}.md` |
 | `explorer-agent` | Discovery | Codebase mapping |
 | `frontend-specialist` | UI/UX | React, Vue, CSS, HTML |
 | `backend-specialist` | Server | API, Node.js, Python |
@@ -126,14 +126,14 @@ Identify ALL domains this task touches:
 
 | If Plan Exists | Action |
 |----------------|--------|
-| NO `docs/PLAN.md` | → Go to PHASE 1 (planning only) |
-| YES `docs/PLAN.md` + user approved | → Go to PHASE 2 (implementation) |
+| NO `docs/plan/{task-slug}.md` | → Go to PHASE 1 (planning only) |
+| YES `docs/plan/{task-slug}.md` + user approved | → Go to PHASE 2 (implementation) |
 
 ### Step 3: Execute Based on Phase
 
 **PHASE 1 (Planning):**
 ```
-Use the project-planner agent to create PLAN.md
+Use the project-planner agent to create docs/plan/{task-slug}.md
 → STOP after plan is created
 → ASK user for approval
 ```
@@ -211,7 +211,7 @@ Combine all agent outputs into unified report.
 3. **[Agent 3]**: Finding
 
 ### Deliverables
-- [ ] PLAN.md created
+- [ ] Plan created under `docs/plan/`
 - [ ] Code implemented
 - [ ] Tests passing
 - [ ] Scripts verified

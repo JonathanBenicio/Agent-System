@@ -43,7 +43,7 @@ export function SkillsPage() {
             placeholder="Buscar skills..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-violet-600"
+            className="w-full pl-10 pr-4 py-2 text-sm bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-teal-600"
           />
         </div>
 
@@ -65,7 +65,7 @@ export function SkillsPage() {
               <p className="text-xs text-zinc-400 mb-3 line-clamp-2">{skill.description}</p>
               <div className="flex gap-2">
                 {skill.domain && <Badge>{skill.domain}</Badge>}
-                {skill.agentName && <Badge variant="violet">{skill.agentName}</Badge>}
+                {skill.agentName && <Badge variant="teal">{skill.agentName}</Badge>}
               </div>
             </div>
           ))}

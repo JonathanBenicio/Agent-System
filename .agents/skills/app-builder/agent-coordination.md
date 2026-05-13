@@ -15,13 +15,13 @@
 │  • Task breakdown                                            │
 │  • Dependency graph                                          │
 │  • File structure planning                                   │
-│  • Create {task-slug}.md in project root (MANDATORY)             │
+│  • Create {task-slug}.md in docs/plan/ (MANDATORY)             │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              CHECKPOINT: PLAN VERIFICATION                   │
-│  🔴 VERIFY: Does {task-slug}.md exist in project root?       │
+│  🔴 VERIFY: Does {task-slug}.md exist in docs/plan/?       │
 │  🔴 If NO → STOP → Create plan file first                    │
 │  🔴 If YES → Proceed to specialist agents                    │
 └─────────────────────────────────────────────────────────────┘
@@ -61,7 +61,7 @@
 |-------|----------|-----------|--------------|------------|
 | 0 | Socratic Gate | ❌ | - | ✅ Ask 3 questions |
 | 1 | Project Planner | ❌ | Questions answered | ✅ **PLAN.md created** |
-| 1.5 | **PLAN VERIFICATION** | ❌ | PLAN.md exists | ✅ **File exists in root** |
+| 1.5 | **PLAN VERIFICATION** | ❌ | PLAN.md exists | ✅ **File exists in docs/plan/** |
 | 2 | Database Architect | ❌ | Plan ready | Schema defined |
 | 3 | Backend Specialist | ❌ | Schema ready | API routes created |
 | 4 | Frontend Specialist | ✅ | API ready (partial) | UI components ready |

@@ -402,31 +402,18 @@ POST /api/admin/mcp/plugins                    # Registrar plugin
 
 ## 🗺️ Roadmap
 
-### Implementado
+### Core Capabilities (Integrated)
 
-| Conceito | Status |
-|----------|--------|
-| Tier System (hierarquia 0-3) | ✅ |
-| Quality Gates (validação pré/pós) | ✅ |
-| Agent LLM Profiles (temp/model por agent) | ✅ |
-| NoWait Pattern | ✅ |
-| Memory (Obsidian + pgvector) | ✅ |
-| MCP Plugin System | ✅ |
-| MCP Server Mode (HTTP `/mcp`) | ✅ |
-| External Service Gateway | ✅ |
-| Document Ingestion Pipeline | ✅ |
-| Hybrid Chunking (structural + semantic + size) | ✅ |
-| Agentic RAG + Heuristic Re-Ranking | ✅ |
-| ML11 — Dynamic Agent Creation (agents via chat + LLM) | 🟡 Lab |
-| ML12 — Native Workflows (AgentWorkflowBuilder / Tool Bindings) | ✅ |
-| ML13 — Session Consolidation (LLM summarization + insights) | ✅ |
-| ML14 — Smart Routing (performance + user preferences) | ✅ |
-| ML15 — Setup Flow (conversational onboarding wizard) | ✅ |
-| ML16 — Session Persistence (ISessionStore + PostgreSQL) | ✅ |
-| ML17 — IChatClient Compatibility Layer | ✅ |
-| ML18 — Voice Interface (Alexa-ready endpoint) | ✅ |
-| ML19 — Multi-Tenant Foundation (ITenantStore + TenantContext) | ✅ |
-| ML20 — Tool Availability Guard (IToolAvailabilityGuard + ToolDiscoveryService) | ✅ |
+| Domínio | Capacidade | Status |
+|---------|------------|:------:|
+| **Foundation** | Memory Chunking & Context Budgeting | ✅ |
+| **Reasoning** | Adaptive Multi-step Planning | ✅ |
+| **Quality** | Autonomous Reflection & Trust Scoring | ✅ |
+| **Memory** | Semantic & Episodic Memory (Obsidian + pgvector) | ✅ |
+| **Autonomy** | Native Handoffs & Dynamic Agent Creation | ✅ |
+| **Persistence**| Unified Session Persistence (ISessionStore) | ✅ |
+| **Protocols** | A2A, AG-UI, MCP & OpenAI Compatibility | ✅ |
+| **Vision** | Multimodal Vision Processing | ✅ |
 
 ### Documentação
 
@@ -563,60 +550,26 @@ k6 run frontend/k6/gateway-load-test.js
 
 **Via Microsoft.Extensions.AI**: use `AddAgenticSystemInfrastructure(configuration)` para registrar `LLMManager`, `ContextAwareChatClient` e o `IChatClient` governado. Para compatibilidade reversa, use `ProviderBackedChatClient` explicitamente.
 
-## 🧬 Maturity Levels
+## 🧬 Framework Baseline (MAF Native)
 
-O sistema implementa 10 níveis de maturidade que elevam o agente de um "chatbot com memória" para um sistema autônomo com auto-reflexão, correção, governança e personalização:
+O sistema opera sobre uma baseline unificada baseada no **Microsoft Agent Framework**, onde as capacidades de inteligência, qualidade e autonomia são integradas nativamente, eliminando a necessidade de orquestração manual por níveis.
 
-| Level | Nome | Serviço | Responsabilidade |
-|:-----:|------|---------|------------------|
-| ML1 | Chunk Lifecycle | `IChunkLifecycleManager` | Aging, decay e promoção de chunks — gerencia o ciclo New → Active → Consolidated → Archived |
-| ML2 | Context Budget | `IContextBudgetManager` | Orçamento semântico de tokens — aloca contexto entre memória recente, domínio, episódica e histórico de decisões |
-| ML3 | Native Workflows | `AgentWorkflowBuilder` | Decomposição nativa de tarefas complexas via MAF (planner → executor → reviewer) com checkpointing |
-| ML4 | Reflection | `IReflectionEngine` | Auto-reflexão pós-resposta — analisa qualidade, identifica gaps e gera insights acionáveis |
-| ML5 | Correction Loop | `ICorrectionLoop` | Aprendizado com correções humanas — registra correções, extrai regras e aplica em respostas futuras |
-| ML6 | Knowledge Freshness | `IKnowledgeFreshnessService` | Detecção de drift — monitora freshness de chunks e gera relatórios de conhecimento desatualizado |
-| ML7 | Confidence Score | `IConfidenceScoreCalculator` | Score de confiança multi-fator — calcula confiança baseado em RAG, tools, reflexões e qualidade da resposta |
-| ML8 | Semantic Compression | `ISemanticCompressor` | Compressão semântica — consolida sessões e chunks em sumários com insights e princípios-chave |
-| ML9 | Query Compression | `IQueryCompressor` | Compressão de queries antes do search — remove redundância, extrai key terms, normaliza intent semântico |
-| ML10 | User Personalization | `IUserPreferenceEngine` | Perfis de preferência por usuário — estilo de comunicação, tolerância a risco, agentes preferidos, EMA de satisfação |
-| ML11 | Dynamic Agent Creation | `IDynamicAgentService` | Criação de agents via linguagem natural — detecção de intent, geração de spec via LLM, fallback por keywords, registro automático |
-| ML12 | Native Delegation | `Tool Bindings` (MAF) | Delegação governada pelo LLM do orquestrador via `AsAIFunction()`, substituindo roteamento imperativo manual |
-| ML13 | Session Consolidation | `ISessionConsolidator` | Sumarização de sessão via LLM — extração de fatos, decisões, preferências, action items. Memória de longo prazo |
-| ML14 | Smart Routing | `ISmartRouter` | Roteamento multi-critério — preferências do usuário, histórico de performance, EMA de latência e qualidade |
-| ML15 | Setup Flow | `ISetupFlowManager` | Onboarding conversacional — wizard step-by-step (Welcome→Identity→Workspace→Jira→Profile→Team→Projects→Complete) |
-| ML16 | Native Session | `ISessionStore` (MAF) | Persistência usando interface nativa do Microsoft Agent Framework acoplada ao banco via `SimpleSessionStoreAdapter` |
-| ML17 | IChatClient Compatibility | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` | Seleção contextual de provider/modelo e compatibilidade explícita entre `IChatClient` e `ILLMProvider` |
-| ML18 | Voice Interface | `VoiceController` | Endpoint voice-friendly `/api/voice/ask` — timeout 7s, StripMarkdown para TTS, Alexa/Google Assistant ready |
-| ML19 | Multi-Tenant | `ITenantStore` · `ITenantResolver` · `TenantContext` | Isolamento por tenant — resolução via header/token, store in-memory (default), contexto propagado por middleware |
-| ML20 | Tool Availability Guard | `IToolAvailabilityGuard` · `IToolDiscoveryService` | Validação pré-execução de tools requeridas — discovery de MCPs/plugins ausentes, penalização no ConfidenceScore, sugestões sem auto-install |
+### Principais Capacidades Integradas
 
-### Exemplo de Uso
+| Domínio | Serviço | Responsabilidade |
+|:-----:|------|------------------|
+| **Foundation** | `ContextBudget` | Controle rigoroso de tokens e ciclo de vida de memória. |
+| **Reasoning** | `Native Workflows` | Orquestração via `AgentWorkflowBuilder` com suporte a Handoffs e Checkpointing. |
+| **Quality** | `Trust & Reflection` | Score de confiança calibrado e auto-reflexão via Middleware `.Use()`. |
+| **Autonomy** | `Native Delegation` | Delegação autônoma governada pelo LLM via Tool Bindings nativos. |
+| **Ops** | `Native Hosting` | Hosting resiliente com persistência de sessão isolada (`AddAIAgent`). |
+
+### Exemplo de Uso (Nativo)
 
 ```csharp
-// ML7 — Calcular confiança de uma resposta
-var confidence = confidenceCalculator.Calculate(response, ragContext, reflections);
-// → { Score: 0.82, Level: High, RequiresConfirmation: false, Factors: [...] }
-
-// ML3 — Criar plano multi-step
-var plan = await taskPlanner.CreatePlanAsync("user1", "Deploy to prod", steps);
-await taskPlanner.AdvanceStepAsync(plan.Id, "Step 1 done");
-
-// ML5 — Registrar correção humana
-await correctionLoop.RecordCorrectionAsync(new HumanCorrection {
-    OriginalResponse = "X custa R$10",
-    CorrectedResponse = "X custa R$15",
-    Reason = "Preço atualizado"
-});
-
-// ML9 — Comprimir query antes do search
-var compressed = await queryCompressor.CompressAsync(
-    "como que eu faço para criar um novo serviço no sistema?",
-    QueryCompressionStrategy.HybridCompression);
-// → { CompressedText: "criar serviço sistema", CompressionRatio: 0.35, ... }
-
-// ML10 — Personalizar prompt para o usuário
-var adjustment = await preferenceEngine.PersonalizePromptAsync("user1", prompt);
-// → Aplica estilo, risco, idioma e preferência de code examples
+// Execução via Handoff Workflow (Adoção Agressiva)
+var workflow = await hostBuilder.BuildHandoffWorkflowAsync(activeAgents);
+await using var run = await InProcessExecution.RunAsync(workflow, messages, sessionId);
 ```
 
 Todos os serviços são registrados via DI como Singleton e cobertos por **344 testes unitários** (xUnit + FluentAssertions + NSubstitute).

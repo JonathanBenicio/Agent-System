@@ -111,7 +111,7 @@ export function SettingsPage() {
               onClick={() => setTab(t.id)}
               className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                 tab === t.id
-                  ? 'border-violet-500 text-violet-400'
+                  ? 'border-teal-500 text-teal-400'
                   : 'border-transparent text-zinc-500 hover:text-zinc-300'
               }`}
             >
@@ -573,7 +573,7 @@ function ToggleField({
         type="checkbox"
         checked={checked}
         onChange={e => onChange(e.target.checked)}
-        className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-violet-500"
+        className="h-4 w-4 rounded border-zinc-700 bg-zinc-950 text-teal-500"
       />
     </label>
   )
@@ -614,7 +614,7 @@ function SaveButton({ onClick, saving, disabled }: { onClick: () => void; saving
       <button
         onClick={onClick}
         disabled={saving || disabled}
-        className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50"
+        className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50"
       >
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         {saving ? 'Salvando...' : 'Salvar'}

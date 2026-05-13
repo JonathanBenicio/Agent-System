@@ -32,7 +32,7 @@
 22. [Over-Engineering Check & Simplificações](#22-over-engineering-check--simplificações)
 23. [Padrões Arquiteturais Utilizados](#23-padrões-arquiteturais-utilizados)
 24. [Apêndice A: Mapa Geral de Arquivos](#apêndice-a-mapa-geral-de-arquivos)
-25. [Apêndice B: Maturity Levels (ML24–ML33)](#apêndice-b-maturity-levels-ml24ml33)
+25. [Apêndice B: Platform Capabilities (Capability–Capability)](#apêndice-b-maturity-levels-ml24ml33)
 26. [Glossário](#glossário)
 
 ---
@@ -462,7 +462,7 @@ Os agentes no AgenticSystem são categorizados pelo seu ciclo de vida e escopo d
 | **Custom (Dinâmico)** | Criado por prompt do usuário via `DynamicAgentService` | Scoped ou In-Memory Pool (persiste as configurações em banco relacional) | "Agente de Direito Trabalhista" |
 | **Framework-hosted** | Registrado via `AddAIAgent()` no arquivo `Program.cs` | Scoped por requisição de chat (gerenciado pelo container de DI) | OrchestratorAgent |
 
-*   **Cleanup de Inativos**: Para evitar vazamentos de memória e sobrecarga do banco de dados, o `AgentCleanupHostedService` (ML25) executa rotinas em background limpando agentes customizados e dados temporários inativos há mais de 24 horas.
+*   **Cleanup de Inativos**: Para evitar vazamentos de memória e sobrecarga do banco de dados, o `AgentCleanupHostedService`  executa rotinas em background limpando agentes customizados e dados temporários inativos há mais de 24 horas.
 
 ---
 
@@ -725,22 +725,22 @@ Durante a revalidação da arquitetura, mapeamos pontos de complexidade acidenta
 
 ---
 
-## Apêndice B: Maturity Levels (ML24–ML33)
+## Apêndice B: Platform Capabilities
 
-| Nível | Capacidade Técnica | Serviços de Referência | Domínio de Impacto |
+| Capacidade | Descrição | Serviços de Referência | Domínio de Impacto |
 |---|---|---|---|
-| **ML24** | Quality Gates Pipeline | `IQualityGateService`, `InputValidationGate`, `ResponseQualityGate` | Qualidade & Filtros de Entrada/Saída |
-| **ML25** | Agent Cleanup Daemon | `AgentCleanupHostedService` | Ciclo de Vida & Higienização de Banco |
-| **ML26** | Vision Integration | `IVisionProvider`, `OpenAIVisionProvider` | Análise Multimodal de Imagens |
-| **ML27** | MCP Plugin Gateway | `IMCPPluginManager`, `McpToolsAIFunctionAdapter` | Extensibilidade por Protocolo MCP |
-| **ML28** | Storage Abstraction | `IStorageProvider`, `StorageFile` | Gerenciamento de Arquivos e Uploads |
-| **ML29** | Agent Execution Workflow | `IAgentExecutionWorkflow`, `AgentExecutionWorkflow` | Infraestrutura de Orquestração no Core |
-| **ML30** | End-to-End Streaming | `IAgentRuntimeCoordinator`, `ChatHub` | Comunicação Dinâmica em Real-Time |
-| **ML31** | Governed Capabilities | `IToolGovernanceService`, Approvals de ferramentas | Controle de Acesso e Governança de Tools |
-| **ML32** | Operational Artifacts | `AgentExecutionArtifact`, `AgentRuntimeMetricsSnapshot` | Armazenamento de Planos e Métricas de Traces |
-| **ML33** | Final Human Approval | `IFinalResponseApprovalService`, endpoint `final-approvals` | Mecanismo Human-in-the-Loop de Borda |
+| **Quality Gates** | Pipeline de validação | `IQualityGateService`, `InputValidationGate`, `ResponseQualityGate` | Qualidade & Filtros de Entrada/Saída |
+| **Agent Cleanup** | Daemon de higienização | `AgentCleanupHostedService` | Ciclo de Vida & Higienização de Banco |
+| **Vision** | Integração Multimodal | `IVisionProvider`, `OpenAIVisionProvider` | Análise Multimodal de Imagens |
+| **MCP Gateway** | Extensibilidade | `IMCPPluginManager`, `McpToolsAIFunctionAdapter` | Extensibilidade por Protocolo MCP |
+| **Storage** | Abstração de arquivos | `IStorageProvider`, `StorageFile` | Gerenciamento de Arquivos e Uploads |
+| **Execution Workflow** | Orquestração Nativa | `IAgentExecutionWorkflow`, `AgentExecutionWorkflow` | Infraestrutura de Orquestração no Core |
+| **Streaming Runtime** | Real-Time | `IAgentRuntimeCoordinator`, `ChatHub` | Comunicação Dinâmica em Real-Time |
+| **Governance** | Controle de Ferramentas | `IToolGovernanceService`, Approvals de ferramentas | Controle de Acesso e Governança de Tools |
+| **Ops Artifacts** | Telemetria & Traces | `AgentExecutionArtifact`, `AgentRuntimeMetricsSnapshot` | Armazenamento de Planos e Métricas de Traces |
+| **Human-in-the-Loop** | Aprovação Final | `IFinalResponseApprovalService`, endpoint `final-approvals` | Mecanismo de Borda |
 
-*Nota*: Os níveis de maturidade anteriores (ML1 a ML23) referem-se à especificação de base e estão detalhados em [USER-STORIES.md](../USER-STORIES.md).
+*Nota*: As capacidades base (Core Foundation, Memory, Autonomy) estão detalhadas no documento de especificações [USER-STORIES.md](../USER-STORIES.md).
 
 ---
 

@@ -31,7 +31,7 @@ export function AISelectorBar({
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-sm font-semibold text-zinc-100">IA ativa no chat</h2>
-              {activeProvider ? <Badge variant="violet">{activeProvider.name}</Badge> : null}
+              {activeProvider ? <Badge variant="teal">{activeProvider.name}</Badge> : null}
             </div>
             <p className="mt-0.5 text-xs text-zinc-400">
               Selecione a IA para esta conversa ou ajuste a configuração completa na área dedicada.

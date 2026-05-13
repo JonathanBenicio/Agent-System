@@ -12,13 +12,13 @@
 
 ---
 
-## Backend — Maturity Levels (ML1–ML33)
+## Backend — Platform Capabilities (Integrated Architecture)
 
-Cada Maturity Level é um capability flag independente — pode ser ativado/desativado isoladamente.
+As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo de "Maturity Levels" (ML) evoluiu para uma **Arquitetura de Capacidades Nativas**, onde cada funcionalidade é integrada via Microsoft Agent Framework (MAF).
 
-### Foundation (ML1–ML2)
+### Core Foundation
 
-#### ML1 — Chunk Lifecycle
+#### Memory & Chunk Lifecycle
 
 **Como** sistema de memória,
 **quero** gerenciar o ciclo de vida de chunks (New → Active → Consolidated → Archived),

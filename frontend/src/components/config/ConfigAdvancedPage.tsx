@@ -31,7 +31,7 @@ const categoryConfig: Record<ConfigCategory, { icon: React.ElementType; label: s
   Credentials: { icon: Shield, label: 'Credenciais', color: 'text-red-400' },
   Paths: { icon: FolderOpen, label: 'Caminhos', color: 'text-blue-400' },
   Connection: { icon: Database, label: 'Conexões', color: 'text-green-400' },
-  Provider: { icon: Cpu, label: 'Providers', color: 'text-purple-400' },
+  Provider: { icon: Cpu, label: 'Providers', color: 'text-cyan-400' },
   General: { icon: Settings, label: 'Geral', color: 'text-zinc-400' },
 }
 
@@ -110,7 +110,7 @@ export function ConfigAdvancedPage() {
           <h1 className="text-2xl font-bold text-zinc-100">Configurações Avançadas</h1>
           <p className="text-sm text-zinc-400 mt-1">Gerenciamento de credenciais, caminhos e conexões com encriptação AES-256</p>
         </div>
-        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 text-sm">
+        <button onClick={() => setShowForm(true)} className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm">
           <Plus className="w-4 h-4" /> Nova Config
         </button>
       </div>
@@ -123,7 +123,7 @@ export function ConfigAdvancedPage() {
           return (
             <button key={tab} onClick={() => setActiveTab(tab)}
               className={`flex items-center gap-2 px-4 py-2 text-sm rounded-t-lg border-b-2 transition-colors ${
-                activeTab === tab ? 'border-violet-500 text-zinc-100 bg-zinc-800/50' : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                activeTab === tab ? 'border-teal-500 text-zinc-100 bg-zinc-800/50' : 'border-transparent text-zinc-400 hover:text-zinc-200'
               }`}>
               <Icon className={`w-4 h-4 ${cfg.color}`} />
               {cfg.label}
@@ -176,7 +176,7 @@ export function ConfigAdvancedPage() {
           </div>
           <div className="flex gap-2 justify-end">
             <button type="button" onClick={resetForm} className="px-3 py-2 text-sm text-zinc-400 hover:text-zinc-200"><X className="w-4 h-4 inline mr-1" />Cancelar</button>
-            <button type="submit" className="px-4 py-2 bg-violet-600 text-white rounded-lg text-sm hover:bg-violet-700"><Check className="w-4 h-4 inline mr-1" />{editKey ? 'Atualizar' : 'Criar'}</button>
+            <button type="submit" className="px-4 py-2 bg-teal-600 text-white rounded-lg text-sm hover:bg-teal-700"><Check className="w-4 h-4 inline mr-1" />{editKey ? 'Atualizar' : 'Criar'}</button>
           </div>
         </form>
       )}

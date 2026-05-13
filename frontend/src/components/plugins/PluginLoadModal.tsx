@@ -98,7 +98,7 @@ export function PluginLoadModal({ onLoad, onClose }: Props) {
             <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-zinc-700 text-zinc-300 hover:bg-zinc-800">
               Cancelar
             </button>
-            <button type="submit" disabled={loading} className="px-4 py-2 text-sm rounded-lg bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-50">
+            <button type="submit" disabled={loading} className="px-4 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50">
               {loading ? 'Carregando...' : 'Carregar'}
             </button>
           </div>

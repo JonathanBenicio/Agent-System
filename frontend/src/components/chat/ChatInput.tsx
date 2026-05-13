@@ -53,7 +53,7 @@ export function ChatInput({ onSend, disabled, isProcessing, placeholder }: ChatI
   return (
     <div className="border-t border-zinc-800 bg-zinc-950 p-4">
       <div className="max-w-3xl mx-auto">
-        <div className="flex items-end gap-2 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2 focus-within:border-violet-600 transition-colors">
+        <div className="flex items-end gap-2 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-2 focus-within:border-teal-600 transition-colors">
           <textarea
             ref={textareaRef}
             value={text}
@@ -71,7 +71,7 @@ export function ChatInput({ onSend, disabled, isProcessing, placeholder }: ChatI
             className={cn(
               'flex items-center justify-center w-8 h-8 rounded-lg transition-colors shrink-0',
               text.trim() && !disabled
-                ? 'bg-violet-600 text-white hover:bg-violet-500'
+                ? 'bg-teal-600 text-white hover:bg-teal-500'
                 : 'text-zinc-600'
             )}
           >

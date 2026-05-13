@@ -35,7 +35,7 @@ Specialist AI personas for different domains.
 | Agent                    | Focus                      | Skills Used                                              |
 | ------------------------ | -------------------------- | -------------------------------------------------------- |
 | `orchestrator`           | Multi-agent coordination   | parallel-agents, behavioral-modes                        |
-| `project-planner`        | Discovery, task planning   | brainstorming, plan-writing, architecture                |
+| `project-planner`        | Discovery, task planning   | agentic-brainstorming, plan-writing, architecture        |
 | `frontend-specialist`    | Web UI/UX                  | frontend-design, react-best-practices, tailwind-patterns |
 | `backend-specialist`     | API, business logic        | api-patterns, nodejs-best-practices, database-design     |
 | `database-architect`     | Schema, SQL                | database-design, database-rules                          |
@@ -45,12 +45,12 @@ Specialist AI personas for different domains.
 | `security-auditor`       | Security compliance        | vulnerability-scanner, red-team-tactics                  |
 | `penetration-tester`     | Offensive security         | red-team-tactics                                         |
 | `test-engineer`          | Testing strategies         | testing-patterns, tdd-workflow, webapp-testing           |
-| `debugger`               | Root cause analysis        | systematic-debugging                                     |
+| `debugger`               | Root cause analysis        | agentic-debugging                                        |
 | `performance-optimizer`  | Speed, Web Vitals          | performance-profiling                                    |
 | `seo-specialist`         | Ranking, visibility        | seo-fundamentals, geo-fundamentals                       |
 | `documentation-writer`   | Manuals, docs              | documentation-templates                                  |
-| `product-manager`        | Requirements, user stories | plan-writing, brainstorming                              |
-| `product-owner`          | Strategy, backlog, MVP     | plan-writing, brainstorming                              |
+| `product-manager`        | Requirements, user stories | plan-writing, agentic-brainstorming                      |
+| `product-owner`          | Strategy, backlog, MVP     | plan-writing, agentic-brainstorming                      |
 | `qa-automation-engineer` | E2E testing, CI pipelines  | webapp-testing, testing-patterns                         |
 | `code-archaeologist`     | Legacy code, refactoring   | clean-code, code-review-checklist                        |
 | `explorer-agent`         | Codebase analysis          | -                                                        |
@@ -66,7 +66,7 @@ Modular knowledge domains that agents can load on-demand. based on task context.
 | Skill                   | Description                                                           |
 | ----------------------- | --------------------------------------------------------------------- |
 | `react-best-practices`  | React & Next.js performance optimization (Vercel - 57 rules)          |
-| `web-design-guidelines` | Web UI audit - 100+ rules for accessibility, UX, performance (Vercel) |
+| `agentic-web-design`    | Web UI audit - 100+ rules for accessibility, UX, performance (Vercel) |
 | `tailwind-patterns`     | Tailwind CSS v4 utilities                                             |
 | `frontend-design`       | UI/UX patterns, design systems                                        |
 | `ui-ux-pro-max`         | 50 styles, 21 palettes, 50 fonts                                      |
@@ -124,7 +124,7 @@ Modular knowledge domains that agents can load on-demand. based on task context.
 | `app-builder`   | Full-stack app scaffolding |
 | `architecture`  | System design patterns     |
 | `plan-writing`  | Task planning, breakdown   |
-| `brainstorming` | Socratic questioning       |
+| `agentic-brainstorming` | Socratic questioning       |
 
 ### Mobile
 
@@ -163,7 +163,7 @@ Modular knowledge domains that agents can load on-demand. based on task context.
 | `documentation-templates` | Doc formats               |
 | `i18n-localization`       | Internationalization      |
 | `performance-profiling`   | Web Vitals, optimization  |
-| `systematic-debugging`    | Troubleshooting           |
+| `agentic-debugging`       | Troubleshooting           |
 
 ---
 
@@ -283,5 +283,5 @@ For details, see [scripts/README.md](scripts/README.md)
 | Database | `database-architect`  | database-design        |
 | Security | `security-auditor`    | vulnerability-scanner                 |
 | Testing  | `test-engineer`       | testing-patterns, webapp-testing      |
-| Debug    | `debugger`            | systematic-debugging                  |
-| Plan     | `project-planner`     | brainstorming, plan-writing           |
+| Debug    | `debugger`            | agentic-debugging                     |
+| Plan     | `project-planner`     | agentic-brainstorming, plan-writing   |

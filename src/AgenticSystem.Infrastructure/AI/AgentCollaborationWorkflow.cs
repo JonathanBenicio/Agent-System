@@ -140,7 +140,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             "LegacyLoop");
     }
 
-    private Workflow BuildCollaborationWorkflow(CollaborationWorkflowState state)
+    private async Task<Workflow> BuildCollaborationWorkflowAsync(CollaborationWorkflowState state, CancellationToken ct)
     {
         var agents = new List<WorkflowAgent>();
 
@@ -152,18 +152,20 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
                 (_, cancellationToken) => ExecuteConcurrentContextStageAsync(state, cancellationToken)));
         }
 
-        agents.Add(CreateWorkflowStageAgent(
-            "CollaborationPlanner",
-            "Planeja os steps do workflow colaborativo.",
-            (_, cancellationToken) => ExecutePlanningStageAsync(state, cancellationToken)));
-        agents.Add(CreateWorkflowStageAgent(
-            "CollaborationExecutor",
-            "Executa os steps do workflow colaborativo.",
-            (_, cancellationToken) => ExecuteExecutionStageAsync(state, cancellationToken)));
-        agents.Add(CreateWorkflowStageAgent(
-            "CollaborationReviewer",
-            "Revisa os resultados do workflow colaborativo.",
-            (_, cancellationToken) => ExecuteReviewerStageAsync(state, cancellationToken)));
+        // 1. Resolver agentes reais via Factory (Adoção Agressiva: Agentes como First-Class Steps)
+        var plannerAgent = await _agentFactory.ResolveAgentAsync("project-planner", ct) as WorkflowAgent;
+        var executorAgent = await _agentFactory.ResolveAgentAsync("backend-specialist", ct) as WorkflowAgent;
+        var reviewerAgent = await _agentFactory.ResolveAgentAsync("test-engineer", ct) as WorkflowAgent;
+
+        // Se falhar ao resolver nativos, mantém o fallback para as lógicas internas (mas agora preferindo os nativos)
+        if (plannerAgent != null) agents.Add(plannerAgent);
+        else agents.Add(CreateWorkflowStageAgent("CollaborationPlanner", "Planeja os steps do workflow colaborativo.", (_, cancellationToken) => ExecutePlanningStageAsync(state, cancellationToken)));
+
+        if (executorAgent != null) agents.Add(executorAgent);
+        else agents.Add(CreateWorkflowStageAgent("CollaborationExecutor", "Executa os steps do workflow colaborativo.", (_, cancellationToken) => ExecuteExecutionStageAsync(state, cancellationToken)));
+
+        if (reviewerAgent != null) agents.Add(reviewerAgent);
+        else agents.Add(CreateWorkflowStageAgent("CollaborationReviewer", "Revisa os resultados do workflow colaborativo.", (_, cancellationToken) => ExecuteReviewerStageAsync(state, cancellationToken)));
 
         return AgentWorkflowBuilder.BuildSequential(
             ShouldUseConcurrentContextStage() ? "collaboration-workflow-advanced" : "collaboration-workflow",

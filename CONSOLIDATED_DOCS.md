@@ -425,22 +425,22 @@ POST /api/admin/mcp/plugins                    # Registrar plugin
 | Document Ingestion Pipeline | ✅ |
 | Hybrid Chunking (structural + semantic + size) | ✅ |
 | Agentic RAG + Heuristic Re-Ranking | ✅ |
-| ML11 — Dynamic Agent Creation (agents via chat + LLM) | ✅ |
-| ML12 — Dynamic Handoffs (SingleDelegate / FanOut / Chain) | ✅ |
-| ML13 — Session Consolidation (LLM summarization + insights) | ✅ |
-| ML14 — Smart Routing (performance + user preferences) | ✅ |
-| ML15 — Setup Flow (conversational onboarding wizard) | ✅ |
-| ML16 — Session Persistence (ISessionStore + PostgreSQL) | ✅ |
-| ML17 — IChatClient Compatibility Layer | ✅ |
-| ML18 — Voice Interface (Alexa-ready endpoint) | ✅ |
-| ML19 — Multi-Tenant Foundation (ITenantStore + TenantContext) | ✅ |
-| ML20 — Tool Availability Guard (IToolAvailabilityGuard + ToolDiscoveryService) | ✅ |
+| Dynamic Agent Creation (agents via chat + LLM) | ✅ |
+| Dynamic Handoffs (SingleDelegate / FanOut / Chain) | ✅ |
+| Session Consolidation (LLM summarization + insights) | ✅ |
+| Smart Routing (performance + user preferences) | ✅ |
+| Setup Flow (conversational onboarding wizard) | ✅ |
+| Session Persistence (ISessionStore + PostgreSQL) | ✅ |
+| IChatClient Compatibility Layer | ✅ |
+| Voice Interface (Alexa-ready endpoint) | ✅ |
+| Multi-Tenant Foundation (ITenantStore + TenantContext) | ✅ |
+| Tool Availability Guard (IToolAvailabilityGuard + ToolDiscoveryService) | ✅ |
 
 ### Documentação
 
 - [**Agentic Design Manifesto**](docs/agentic-design-manifesto.md) — Os 10 princípios que guiam o design do sistema
-- [Extension Examples](docs/extension-examples.md) — Guia para criar novos Agents, Tools, Skills e Maturity Levels
-- [Design Philosophy](docs/architecture/design-philosophy.md) — Pilares arquiteturais do sistema (8 pilares + ML1-15)
+- [Extension Examples](docs/extension-examples.md) — Guia para criar novos Agents, Tools, Skills e Platform Capabilities
+- [Design Philosophy](docs/architecture/design-philosophy.md) — Pilares arquiteturais do sistema (8 pilares + Capabilities)
 - [Obsidian Vault](docs/obsidian-vault.md) — Memória episódica: interface, implementação, configuração e limitações
 
 ## 📄 Document Ingestion + RAG Pipeline
@@ -571,60 +571,32 @@ k6 run frontend/k6/gateway-load-test.js
 
 **Via Microsoft.Extensions.AI**: use `AddAgenticSystemInfrastructure(configuration)` para registrar `LLMManager`, `ContextAwareChatClient` e o `IChatClient` governado. Para compatibilidade reversa, use `ProviderBackedChatClient` explicitamente.
 
-## 🧬 Maturity Levels
+## 🧬 Framework Baseline (MAF Native)
 
-O sistema implementa 10 níveis de maturidade que elevam o agente de um "chatbot com memória" para um sistema autônomo com auto-reflexão, correção, governança e personalização:
+O sistema opera sobre uma baseline unificada baseada no **Microsoft Agent Framework (MAF)**. O modelo anterior de Platform Capabilities foi consolidado em capacidades nativas da plataforma integradas via Antigravity Kit:
 
-| Level | Nome | Serviço | Responsabilidade |
-|:-----:|------|---------|------------------|
-| ML1 | Chunk Lifecycle | `IChunkLifecycleManager` | Aging, decay e promoção de chunks — gerencia o ciclo New → Active → Consolidated → Archived |
-| ML2 | Context Budget | `IContextBudgetManager` | Orçamento semântico de tokens — aloca contexto entre memória recente, domínio, episódica e histórico de decisões |
-| ML3 | Task Planning | `ITaskPlanManager` | Decomposição multi-step — cria planos com steps, avança/falha etapas, pausa e cancela execuções |
-| ML4 | Reflection | `IReflectionEngine` | Auto-reflexão pós-resposta — analisa qualidade, identifica gaps e gera insights acionáveis |
-| ML5 | Correction Loop | `ICorrectionLoop` | Aprendizado com correções humanas — registra correções, extrai regras e aplica em respostas futuras |
-| ML6 | Knowledge Freshness | `IKnowledgeFreshnessService` | Detecção de drift — monitora freshness de chunks e gera relatórios de conhecimento desatualizado |
-| ML7 | Confidence Score | `IConfidenceScoreCalculator` | Score de confiança multi-fator — calcula confiança baseado em RAG, tools, reflexões e qualidade da resposta |
-| ML8 | Semantic Compression | `ISemanticCompressor` | Compressão semântica — consolida sessões e chunks em sumários com insights e princípios-chave |
-| ML9 | Query Compression | `IQueryCompressor` | Compressão de queries antes do search — remove redundância, extrai key terms, normaliza intent semântico |
-| ML10 | User Personalization | `IUserPreferenceEngine` | Perfis de preferência por usuário — estilo de comunicação, tolerância a risco, agentes preferidos, EMA de satisfação |
-| ML11 | Dynamic Agent Creation | `IDynamicAgentService` | Criação de agents via linguagem natural — detecção de intent, geração de spec via LLM, fallback por keywords, registro automático |
-| ML12 | Dynamic Handoffs | `IFrameworkOrchestratorService` + `IAgentChannelService` | Delegação mid-conversation por tool bindings, canais estruturados e workflow colaborativo |
-| ML13 | Session Consolidation | `ISessionConsolidator` | Sumarização de sessão via LLM — extração de fatos, decisões, preferências, action items. Memória de longo prazo |
-| ML14 | Smart Routing | `ISmartRouter` | Roteamento multi-critério — preferências do usuário, histórico de performance, EMA de latência e qualidade |
-| ML15 | Setup Flow | `ISetupFlowManager` | Onboarding conversacional — wizard step-by-step (Welcome→Identity→Workspace→Jira→Profile→Team→Projects→Complete) |
-| ML16 | Session Persistence | `ISessionStore` | Abstração de persistência de sessões — InMemory (default) e PostgreSQL (produção). Swap transparente via DI |
-| ML17 | IChatClient Compatibility | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` | Seleção contextual de provider/modelo e compatibilidade explícita entre `IChatClient` e `ILLMProvider` |
-| ML18 | Voice Interface | `VoiceController` | Endpoint voice-friendly `/api/voice/ask` — timeout 7s, StripMarkdown para TTS, Alexa/Google Assistant ready |
-| ML19 | Multi-Tenant | `ITenantStore` · `ITenantResolver` · `TenantContext` | Isolamento por tenant — resolução via header/token, store in-memory (default), contexto propagado por middleware |
-| ML20 | Tool Availability Guard | `IToolAvailabilityGuard` · `IToolDiscoveryService` | Validação pré-execução de tools requeridas — discovery de MCPs/plugins ausentes, penalização no ConfidenceScore, sugestões sem auto-install |
+| Domínio | Capacidade | Implementação | Descrição |
+| :--- | :--- | :--- | :--- |
+| **Foundation** | Memory Chunking & Context Budget | `IChunkLifecycleManager` / `ContextBudget` | Gerenciamento de tokens e ciclo de vida de memória. |
+| **Reasoning** | Native Workflows & Handoffs | `AgentWorkflowBuilder` | Planejamento adaptativo e roteamento dinâmico entre especialistas. |
+| **Quality** | Trust & Reflection | `IQualityGateService` / `ReflectionEngine` | Score de confiança e auto-reflexão via Middleware. |
+| **Memory** | Semantic & Episodic Memory | `IVectorStore` (pgvector) / Obsidian | Memória de longo prazo e recuperação semântica. |
+| **Autonomy** | Dynamic Orchestration | `FrameworkOrchestratorService` | Orquestração autônoma com mesh topology de handoffs. |
+| **Persistence** | Native Session Management | `ISessionStore` / Checkpointing | Persistência de estado completa e resiliente isolada por agente. |
+| **Protocols** | Universal Connectivity | A2A, AG-UI, MCP, OpenAI-Compatible | Superfícies de conexão padronizadas. |
+| **Vision** | Multimodal Processing | `LlmMultimodalProcessor` | Capacidade nativa de análise de imagens. |
 
-### Exemplo de Uso
+
+### Exemplo de Uso (Nativo)
 
 ```csharp
-// ML7 — Calcular confiança de uma resposta
-var confidence = confidenceCalculator.Calculate(response, ragContext, reflections);
-// → { Score: 0.82, Level: High, RequiresConfirmation: false, Factors: [...] }
+// Execução via Handoff Workflow (Adoção Agressiva)
+var workflow = await hostBuilder.BuildHandoffWorkflowAsync(activeAgents);
+await using var run = await InProcessExecution.RunAsync(workflow, messages, sessionId);
 
-// ML3 — Criar plano multi-step
-var plan = await taskPlanner.CreatePlanAsync("user1", "Deploy to prod", steps);
-await taskPlanner.AdvanceStepAsync(plan.Id, "Step 1 done");
-
-// ML5 — Registrar correção humana
-await correctionLoop.RecordCorrectionAsync(new HumanCorrection {
-    OriginalResponse = "X custa R$10",
-    CorrectedResponse = "X custa R$15",
-    Reason = "Preço atualizado"
-});
-
-// ML9 — Comprimir query antes do search
-var compressed = await queryCompressor.CompressAsync(
-    "como que eu faço para criar um novo serviço no sistema?",
-    QueryCompressionStrategy.HybridCompression);
-// → { CompressedText: "criar serviço sistema", CompressionRatio: 0.35, ... }
-
-// ML10 — Personalizar prompt para o usuário
-var adjustment = await preferenceEngine.PersonalizePromptAsync("user1", prompt);
-// → Aplica estilo, risco, idioma e preferência de code examples
+// Trust Scoring e Reflexão via Middleware
+var confidence = await agent.CalculateConfidenceAsync(response);
+// → { Score: 0.82, Level: High, RequiresConfirmation: false }
 ```
 
 Todos os serviços são registrados via DI como Singleton e cobertos por **344 testes unitários** (xUnit + FluentAssertions + NSubstitute).
@@ -645,7 +617,7 @@ Baseado nos conceitos e arquitetura do **Labs** (Casas Bahia Tech):
 
 **"Automatizar o repetitivo para focar no criativo."** — Filosofia Labs
 
-                         IMPLEMENTADO (ML1-ML10)          IMPLEMENTADO (ML11-ML15)
+                         IMPLEMENTADO (Capability-Capability)          IMPLEMENTADO (Capability-Capability)
                     ┌──────────────────┐     ┌──────────────────────────┐
 MetaAgent           │ Análise + Route  │────▶│ ✅ Handoffs + Multi-agent│
                     │ (1 agent por vez)│     │ (SingleDelegate/FanOut)  │
@@ -1031,7 +1003,7 @@ Cada agent é registrado com os seguintes campos:
 | `notification-agent` | NotificationAgent | 3 Support | notifications | gpt-4o-mini | 0.2 | 1 | 2 |
 | `api-agent` | APIAgent | 3 Support | api-integration | gpt-4o-mini | 0.3 | 2 | 2 |
 
-### Dynamic Agents (ML11)
+### Dynamic Agents 
 
 Além dos agents fixos acima, o sistema suporta criação dinâmica de agents via linguagem natural:
 
@@ -1042,7 +1014,7 @@ Além dos agents fixos acima, o sistema suporta criação dinâmica de agents vi
 
 Agents dinâmicos herdam o mesmo contrato (`IAgent`) e são registrados em runtime no `HierarchicalAgentFactory`. Use `IDynamicAgentService.GetDynamicAgentsAsync()` para listar e `RemoveAgentAsync()` para remover.
 
-### Delegation Strategies (ML12)
+### Delegation Strategies 
 
 O orquestrador permite delegação mid-conversation entre agents por tool bindings e contexto de sessão compartilhado:
 
@@ -2504,17 +2476,17 @@ Query → Compress → Retrieve → ReRank → Budget → Inject → Agent → R
 ```
 
 Cada etapa é independente e substituível:
-- **Compress** (ML9): Remove redundância antes do retrieval
+- **Compress** : Remove redundância antes do retrieval
 - **Retrieve**: Busca vetorial por similaridade
 - **ReRank**: Heurística de relevância
-- **Budget** (ML2): Controla tokens gastos com contexto
+- **Budget** : Controla tokens gastos com contexto
 - **Inject**: Monta prompt com contexto relevante
 
 **Trade-off aceito**: Latência de ~50ms extra por query em troca de precisão significativamente maior.
 
-### 3. Maturity Levels como Evolução Incremental
+### 3. Platform Capabilities como Evolução Incremental
 
-O sistema evolui em camadas de maturidade (ML1–ML10), cada uma adicionando uma capacidade sem quebrar as anteriores.
+O sistema evolui em camadas de maturidade (Capability–Capability), cada uma adicionando uma capacidade sem quebrar as anteriores.
 
 | ML | Capacidade | Princípio |
 |----|-----------|-----------|
@@ -2537,11 +2509,11 @@ O sistema evolui em camadas de maturidade (ML1–ML10), cada uma adicionando uma
 | 17 | IChatClient Compatibility | Compatibilidade entre runtime contextual e providers legados |
 | 18 | Voice Interface | Acessibilidade é feature, não addon |
 
-**Regra**: Cada ML funciona standalone. ML18 não depende de ML17. Um deploy pode ativar qualquer subconjunto.
+**Regra**: Cada ML funciona standalone. Capability não depende de Capability. Um deploy pode ativar qualquer subconjunto.
 
 ### 4. Transparência sobre Confiança
 
-O sistema expõe um `ConfidenceScore` em cada resposta (ML7). O usuário sabe quando o agent está incerto.
+O sistema expõe um `ConfidenceScore` em cada resposta . O usuário sabe quando o agent está incerto.
 
 - `High` (>0.85): Resposta direta
 - `Medium` (0.6–0.85): Resposta com caveats
@@ -2552,7 +2524,7 @@ O sistema expõe um `ConfidenceScore` em cada resposta (ML7). O usuário sabe qu
 
 ### 5. Human-in-the-Loop por Design
 
-O `CorrectionLoop` (ML5) não é um fallback — é um mecanismo primário de evolução.
+O `CorrectionLoop`  não é um fallback — é um mecanismo primário de evolução.
 
 ```
 Human corrige → Sistema extrai regra → Regra aplica-se a futuras respostas
@@ -2562,26 +2534,26 @@ Regras são persistentes, escopadas por agent/domínio, e contáveis (TimesAppli
 
 ### 6. Personalização sem Lock-in
 
-O `UserPreferenceEngine` (ML10) personaliza respostas sem forçar o usuário a um path fixo.
+O `UserPreferenceEngine`  personaliza respostas sem forçar o usuário a um path fixo.
 
 - Preferences são sugestivas, não mandatórias
 - O usuário pode desativar a qualquer momento
 - Satisfaction scores decaem (EMA α=0.3), evitando bias de primeiras impressões
 
-### 7. Autonomia Progressiva (ML11-15)
+### 7. Autonomia Progressiva 
 
 Os maturity levels 11-15 transformam o sistema de um executor passivo em um organismo adaptativo:
 
-- **ML11 — Dynamic Agent Creation**: O sistema cria agents especializados sob demanda via linguagem natural. Em vez de prever todo domínio antecipadamente, o sistema cresce com o uso.
-- **ML12 — Dynamic Handoffs**: O runtime hospedado delega contexto entre especialistas por tool bindings, canais estruturados e workflow colaborativo. Strategies como SingleDelegate, FanOut e Chain continuam disponíveis como topologias do canal.
-- **ML13 — Session Consolidation**: Sessões longas são comprimidas em summaries com extração de tópicos, agents utilizados e insights. Esquecer com critério é lembrar melhor.
-- **ML14 — Smart Routing**: O SmartRouter combina intent, confiança, carga e especialidade do agent para tomar decisões de routing. Fallback automático se o agent primário falhar.
-- **ML15 — Setup Flow**: Fluxo guiado de onboarding com validação por step. A primeira experiência define a adoção — o sistema guia, não assume.
-- **ML16 — Session Persistence**: `ISessionStore` abstrai persistência de sessões. `InMemorySessionStore` cobre dev/local, `PostgresSessionStore` sustenta persistência durável e `SimpleSessionStoreAdapter` conecta esse armazenamento ao runtime hospedado.
-- **ML17 — IChatClient Compatibility**: `LLMManager` + `ContextAwareChatClient` resolvem provider/modelo por contexto; quando um fluxo precisa da direção inversa, `ProviderBackedChatClient` expõe compatibilidade entre contratos sem depender de um adapter automático global.
-- **ML18 — Voice Interface**: `VoiceController` expõe `/api/voice/ask` com timeout de 7s e `StripMarkdown` para output TTS-friendly. Alexa/Google Assistant ready sem middleware adicional.
+- **Dynamic Agent Creation**: O sistema cria agents especializados sob demanda via linguagem natural. Em vez de prever todo domínio antecipadamente, o sistema cresce com o uso.
+- **Dynamic Handoffs**: O runtime hospedado delega contexto entre especialistas por tool bindings, canais estruturados e workflow colaborativo. Strategies como SingleDelegate, FanOut e Chain continuam disponíveis como topologias do canal.
+- **Session Consolidation**: Sessões longas são comprimidas em summaries com extração de tópicos, agents utilizados e insights. Esquecer com critério é lembrar melhor.
+- **Smart Routing**: O SmartRouter combina intent, confiança, carga e especialidade do agent para tomar decisões de routing. Fallback automático se o agent primário falhar.
+- **Setup Flow**: Fluxo guiado de onboarding com validação por step. A primeira experiência define a adoção — o sistema guia, não assume.
+- **Session Persistence**: `ISessionStore` abstrai persistência de sessões. `InMemorySessionStore` cobre dev/local, `PostgresSessionStore` sustenta persistência durável e `SimpleSessionStoreAdapter` conecta esse armazenamento ao runtime hospedado.
+- **IChatClient Compatibility**: `LLMManager` + `ContextAwareChatClient` resolvem provider/modelo por contexto; quando um fluxo precisa da direção inversa, `ProviderBackedChatClient` expõe compatibilidade entre contratos sem depender de um adapter automático global.
+- **Voice Interface**: `VoiceController` expõe `/api/voice/ask` com timeout de 7s e `StripMarkdown` para output TTS-friendly. Alexa/Google Assistant ready sem middleware adicional.
 
-**Regra**: ML11-18 são composíveis. Um deploy pode usar handoffs sem smart routing, ou session consolidation sem agents dinâmicos.
+**Regra**: Capabilities são composíveis. Um deploy pode usar handoffs sem smart routing, ou session consolidation sem agents dinâmicos.
 
 ### 8. Tools e Skills são Distintos
 
@@ -2601,7 +2573,7 @@ Os maturity levels 11-15 transformam o sistema de um executor passivo em um orga
 Um agent que tenta processar todos os tipos de request. Use o MetaAgent para delegar.
 
 ### ❌ RAG Brute-Force
-Injetar todo o contexto disponível no prompt. Use Context Budget (ML2) para limitar.
+Injetar todo o contexto disponível no prompt. Use Context Budget  para limitar.
 
 ### ❌ Confidence Theater
 Reportar confiança alta sem base factual. Calibre o ConfidenceScore com RAG coverage real.
@@ -2632,7 +2604,7 @@ Comprimir depois do retrieval desperdiça tokens no vector search. Comprimir ant
 
 ## Roadmap Filosófico
 
-1. **Completo**: Agents + RAG + Maturity Levels (ML1-10) + Agentic Autonomy (ML11-15)
+1. **Completo**: Agents + RAG + Platform Capabilities  + Agentic Autonomy 
 2. **Próximo**: Multi-tenant profiles, persistent state, observability
 3. **Futuro**: Agent marketplace, federated learning, self-healing agents
 
@@ -2977,7 +2949,7 @@ graph TB
     style PG_SVC fill:#336791,stroke:#333,color:#fff
 ```
 
-## 7. Voice Pipeline (ML18)
+## 7. Voice Pipeline 
 
 ```mermaid
 sequenceDiagram
@@ -3002,7 +2974,7 @@ sequenceDiagram
     VC-->>Voice: VoiceResponse{text, agentUsed, timestamp}
 ```
 
-## 8. Session Store Architecture (ML16)
+## 8. Session Store Architecture 
 
 ```mermaid
 graph TB
@@ -3031,7 +3003,7 @@ graph TB
     style POSTGRES fill:#336791,stroke:#333,color:#fff
 ```
 
-## 9. IChatClient Compatibility (ML17)
+## 9. IChatClient Compatibility 
 
 ```mermaid
 graph LR
@@ -3977,7 +3949,7 @@ Funcionalidade: Backend APIs — Documents, Planner, Voice, Obsidian, Setup
   Cenário: Ingerir imagem para análise visual
     Quando faço POST /api/document/ingest com um arquivo "diagrama.png"
     Então o status de resposta é 200
-    E a imagem é processada pelo pipeline de visão (ML26)
+    E a imagem é processada pelo pipeline de visão 
 
   Cenário: Formatos suportados
     Quando faço POST /api/document/ingest com cada tipo de arquivo:
@@ -4013,7 +3985,7 @@ Funcionalidade: Backend APIs — Documents, Planner, Voice, Obsidian, Setup
     Então o response indica quais foram processados e quais falharam
 
   # ══════════════════════════════════════════════
-  # PLANNER (ML3 — Task Planning)
+  # PLANNER (Task Planning)
   # ══════════════════════════════════════════════
 
   Cenário: Criar plano de execução a partir de objetivo
@@ -4032,7 +4004,7 @@ Funcionalidade: Backend APIs — Documents, Planner, Voice, Obsidian, Setup
     Então o status de resposta é 400
 
   # ══════════════════════════════════════════════
-  # VOICE (ML18 — Voice Interface)
+  # VOICE (Voice Interface)
   # ══════════════════════════════════════════════
 
   Cenário: Enviar pergunta por voz (texto)
@@ -4077,7 +4049,7 @@ Funcionalidade: Backend APIs — Documents, Planner, Voice, Obsidian, Setup
     E mudanças no vault passam a ser detectadas automaticamente
 
   # ══════════════════════════════════════════════
-  # SETUP FLOW (ML15)
+  # SETUP FLOW 
   # ══════════════════════════════════════════════
 
   Cenário: Iniciar fluxo de setup
@@ -4379,7 +4351,7 @@ Funcionalidade: Embedding Migration
     Dado que estou autenticado como administrador
 
   # ══════════════════════════════════════════════
-  # MODELS CRUD (ML23)
+  # MODELS CRUD 
   # ══════════════════════════════════════════════
 
   Cenário: Listar modelos de embedding disponíveis
@@ -4992,7 +4964,7 @@ Todos os arquivos `.feature` usam `# language: pt` (Gherkin em português).
 |---------|-----------|-----|:--------:|
 | `llm-providers.feature` | Gerenciamento de providers, teste de conexão, mascaramento de API Key | US-15, US-16 | 9 |
 
-## Features — Settings e Configuration (US-17 a US-19 + ML22)
+## Features — Settings e Configuration (US-17 a US-19 + Capability)
 
 | Arquivo | Descrição | US | Cenários |
 |---------|-----------|-----|:--------:|
@@ -5028,9 +5000,9 @@ Todos os arquivos `.feature` usam `# language: pt` (Gherkin em português).
 
 | Arquivo | Descrição | Área | Cenários |
 |---------|-----------|------|:--------:|
-| `backend-apis.feature` | Documents/RAG, Planner, Voice, Obsidian, Setup, Health, Version | T2, ML3, ML18, T8, ML15 | 19 |
-| `scheduled-tasks.feature` | Tasks CRUD, Rules/Trigger Engine, Channels, Health | ML21 | 18 |
-| `embedding-migration.feature` | Models CRUD, Migration Jobs lifecycle, Switchover — módulo administrativo ativo | ML23 | 14 |
+| `backend-apis.feature` | Documents/RAG, Planner, Voice, Obsidian, Setup, Health, Version | T2, Capability, Capability, T8, Capability | 19 |
+| `scheduled-tasks.feature` | Tasks CRUD, Rules/Trigger Engine, Channels, Health | Capability | 18 |
+| `embedding-migration.feature` | Models CRUD, Migration Jobs lifecycle, Switchover — módulo administrativo ativo | Capability | 14 |
 
 As features `embedding-migration.feature` e `api-key-masking-embedding.feature` permanecem no escopo operacional principal do produto: o backend continua expondo `/api/admin/embedding-migration`, e o frontend mantém a rota `/embedding-migration` com wizard dedicado.
 
@@ -5045,12 +5017,12 @@ As features `embedding-migration.feature` e `api-key-masking-embedding.feature` 
 | Gateway Dashboard | 1 | 14 | US-05 a US-08 |
 | Agent Management | 1 | 20 | US-09 a US-14 |
 | LLM Providers | 1 | 9 | US-15, US-16 |
-| Settings/Config | 1 | 15 | US-17 a US-19, ML22 |
+| Settings/Config | 1 | 15 | US-17 a US-19, Capability |
 | MCP Plugins | 1 | 12 | US-20 a US-22 |
 | SignalR Real-time | 1 | 11 | US-23 a US-25 |
 | Transversal/UX | 1 | 16 | US-26 a US-30 |
 | Segurança | 3 | 22 | T4, T5 |
-| Backend APIs | 3 | 51 | T2, ML3, ML18, T8, ML15, ML21, ML23 |
+| Backend APIs | 3 | 51 | T2, Capability, Capability, T8, Capability, Capability, Capability |
 | **Total** | **20** | **~199** | **33 US + 12 MLs + 5 Ts** |
 
 ## Formato
@@ -5124,7 +5096,7 @@ Funcionalidade: Scheduled Tasks e Trigger Engine
     Dado que estou autenticado como administrador
 
   # ══════════════════════════════════════════════
-  # TASKS CRUD (ML21)
+  # TASKS CRUD 
   # ══════════════════════════════════════════════
 
   Cenário: Listar tarefas agendadas
@@ -5342,7 +5314,7 @@ Funcionalidade: Settings e Configuration
     E informações dos providers LLM são retornadas
 
   # ──────────────────────────────────────────────
-  # Config Management (Avançado — ML22)
+  # Config Management (Avançado — Capability)
   # ──────────────────────────────────────────────
 
   Cenário: Listar configurações por categoria
@@ -50640,18 +50612,18 @@ Tier 3 — Support     → Operações atômicas (notificações, APIs)
 
 ### 2. Maturidade é incremental, não monolítica
 
-O sistema evolui em **15 Maturity Levels (ML)**, cada um adicionando uma capacidade sem quebrar as anteriores. Nenhum ML depende de outro ML para funcionar.
+O sistema evolui em **15 Platform Capabilities**, cada um adicionando uma capacidade sem quebrar as anteriores. Nenhum ML depende de outro ML para funcionar.
 
 | Camada | MLs | Tema | Essência |
 |--------|-----|------|----------|
-| Foundation | ML1-2 | Dados & Custo | Chunks expiram. Contexto tem preço. |
-| Intelligence | ML3-5 | Planejamento & Correção | Decompor, refletir, aceitar correção humana. |
-| Quality | ML6-7 | Confiança & Frescor | Detectar drift. Expor incerteza. |
-| Compression | ML8-9 | Eficiência | Comprimir sem perder semântica. |
-| Personalization | ML10 | Adaptação | Cada usuário é único. |
-| Autonomy | ML11-15 | Auto-evolução | Criar agents, delegar, consolidar, rotear, guiar. |
+| Foundation | Capabilities | Dados & Custo | Chunks expiram. Contexto tem preço. |
+| Intelligence | Capabilities | Planejamento & Correção | Decompor, refletir, aceitar correção humana. |
+| Quality | Capabilities | Confiança & Frescor | Detectar drift. Expor incerteza. |
+| Compression | Capabilities | Eficiência | Comprimir sem perder semântica. |
+| Personalization | Capability | Adaptação | Cada usuário é único. |
+| Autonomy | Capabilities | Auto-evolução | Criar agents, delegar, consolidar, rotear, guiar. |
 
-**Regra de ouro**: Um deploy pode ativar qualquer subconjunto de MLs. ML15 sem ML14? Funciona. ML7 sem ML3? Funciona. Cada ML é um capability flag independente.
+**Regra de ouro**: Um deploy pode ativar qualquer subconjunto de MLs. Capability sem Capability? Funciona. Capability sem Capability? Funciona. Cada ML é um capability flag independente.
 
 ---
 
@@ -50660,7 +50632,7 @@ O sistema evolui em **15 Maturity Levels (ML)**, cada um adicionando uma capacid
 RAG não é um addon — é o pipeline central de decisão. Cada resposta é fundamentada em contexto recuperado, ranqueado e orçado.
 
 ```
-Query → Compress(ML9) → Retrieve → ReRank → Budget(ML2) → Inject → Agent → Respond
+Query → Compress → Retrieve → ReRank → Budget → Inject → Agent → Respond
 ```
 
 **Trade-off aceito**: +50ms de latência por query em troca de precisão significativamente maior. Respostas inventadas são mais caras que respostas lentas.
@@ -50669,7 +50641,7 @@ Query → Compress(ML9) → Retrieve → ReRank → Budget(ML2) → Inject → A
 
 ### 4. Transparência sobre confiança
 
-O sistema **nunca** finge saber o que não sabe. Todo output carrega um `ConfidenceScore` (ML7):
+O sistema **nunca** finge saber o que não sabe. Todo output carrega um `ConfidenceScore` :
 
 | Score | Comportamento |
 |-------|--------------|
@@ -50684,7 +50656,7 @@ O sistema **nunca** finge saber o que não sabe. Todo output carrega um `Confide
 
 ### 5. Humanos refinam, não apenas consomem
 
-O `CorrectionLoop` (ML5) é um mecanismo **primário** de evolução, não um fallback.
+O `CorrectionLoop`  é um mecanismo **primário** de evolução, não um fallback.
 
 ```
 Humano corrige → Sistema extrai regra → Regra aplica-se a futuras respostas → TimesApplied++
@@ -50696,7 +50668,7 @@ Regras são persistentes, escopadas (agent/domínio), e auto-expirantes. Se uma 
 
 ### 6. O sistema cresce com o uso
 
-Com ML11 (Dynamic Agent Creation), o sistema não precisa prever todo domínio antecipadamente. Usuários criam agents especializados via linguagem natural — e esses agents herdam o mesmo contrato, tier system e quality gates dos agents fixos.
+Com Capability (Dynamic Agent Creation), o sistema não precisa prever todo domínio antecipadamente. Usuários criam agents especializados via linguagem natural — e esses agents herdam o mesmo contrato, tier system e quality gates dos agents fixos.
 
 ```
 "Crie um agente especialista em compliance"
@@ -50712,7 +50684,7 @@ Com ML11 (Dynamic Agent Creation), o sistema não precisa prever todo domínio a
 
 ### 7. Delegação é cooperação, não falha
 
-Com ML12 (Delegação Dinâmica), agents delegam contexto entre si mid-conversation. Não é fallback — é arquitetura intencional.
+Com Capability (Delegação Dinâmica), agents delegam contexto entre si mid-conversation. Não é fallback — é arquitetura intencional.
 
 | Strategy | Quando usar |
 |----------|-------------|
@@ -50726,7 +50698,7 @@ Com ML12 (Delegação Dinâmica), agents delegam contexto entre si mid-conversat
 
 ### 8. Esquecer com critério é lembrar melhor
 
-Com ML13 (Session Consolidation), sessões longas são comprimidas em summaries estruturados — tópicos discutidos, agents utilizados, insights extraídos. O histórico bruto pode ser descartado sem perda de semântica.
+Com Capability (Session Consolidation), sessões longas são comprimidas em summaries estruturados — tópicos discutidos, agents utilizados, insights extraídos. O histórico bruto pode ser descartado sem perda de semântica.
 
 **Convicção**: Memória ilimitada não é memória útil. Curadoria ativa supera acumulação passiva.
 
@@ -50734,7 +50706,7 @@ Com ML13 (Session Consolidation), sessões longas são comprimidas em summaries 
 
 ### 9. Decisão informada sobre decisão rápida
 
-O SmartRouter (ML14) não roteia por keyword match simples. Combina:
+O SmartRouter  não roteia por keyword match simples. Combina:
 
 - **Intent analysis**: O que o usuário quer?
 - **Confidence scoring**: Quão seguro é o match?
@@ -50748,7 +50720,7 @@ O SmartRouter (ML14) não roteia por keyword match simples. Combina:
 
 ### 10. A primeira experiência define a adoção
 
-O SetupFlowManager (ML15) garante que novos usuários sejam guiados — não abandonados — na primeira interação. Fluxo com steps validados, progresso persistente e rollback por step.
+O SetupFlowManager  garante que novos usuários sejam guiados — não abandonados — na primeira interação. Fluxo com steps validados, progresso persistente e rollback por step.
 
 **Convicção**: Nenhuma arquitetura sobrevive se o onboarding é hostil. A complexidade interna do sistema é invisível para quem está começando.
 
@@ -50759,13 +50731,13 @@ O SetupFlowManager (ML15) garante que novos usuários sejam guiados — não aba
 | Anti-Pattern | Por que evitamos | Alternativa |
 |-------------|------------------|-------------|
 | **God Agent** | Um agent que processa tudo | MetaAgent delega, nunca executa |
-| **RAG Brute-Force** | Injetar todo contexto no prompt | Context Budget (ML2) controla custo |
+| **RAG Brute-Force** | Injetar todo contexto no prompt | Context Budget  controla custo |
 | **Confidence Theater** | Reportar alta confiança sem base | ConfidenceScore calibrado com RAG coverage |
 | **Preference Dictatorship** | Forçar personalização sem opt-out | Profiles são sugestivos, nunca mandatórios |
 | **Correction Overfit** | Regras de correção ultra-específicas | Scope broad primeiro, refine depois |
-| **Static Catalog** | Prever todos os agents na compilação | Dynamic Agent Creation (ML11) em runtime |
-| **Context Amnesia** | Perder contexto em delegações | Sessão estruturada + canais entre agents preservam state (ML12) |
-| **Infinite Memory** | Guardar tudo sem curadoria | Session Consolidation (ML13) comprime |
+| **Static Catalog** | Prever todos os agents na compilação | Dynamic Agent Creation  em runtime |
+| **Context Amnesia** | Perder contexto em delegações | Sessão estruturada + canais entre agents preservam state  |
+| **Infinite Memory** | Guardar tudo sem curadoria | Session Consolidation  comprime |
 
 ---
 
@@ -50807,10 +50779,10 @@ OpenAI, Gemini, Claude, Ollama — todos atrás da mesma interface `ILLMProvider
 ## Evolução Filosófica
 
 ```
-v1.0 — Foundation (ML1-10)
+v1.0 — Foundation 
        "Um sistema que responde com contexto e aprende com correções."
 
-v2.0 — Autonomy (ML11-15)
+v2.0 — Autonomy 
        "Um sistema que se adapta, delega, consolida e guia."
 
 v3.0 — [Futuro]
@@ -50822,7 +50794,7 @@ v3.0 — [Futuro]
 
 ## Assinatura
 
-Este manifesto é um documento vivo. Cada novo Maturity Level, cada decisão arquitetural, cada anti-pattern identificado deve ser registrado aqui. O manifesto evolui com o sistema — nunca atrás dele.
+Este manifesto é um documento vivo. Cada novo Platform Capability, cada decisão arquitetural, cada anti-pattern identificado deve ser registrado aqui. O manifesto evolui com o sistema — nunca atrás dele.
 
 > *"Automatizar o repetitivo para focar no criativo."*
 > — Labs, Casas Bahia Tech
@@ -50911,24 +50883,34 @@ Plataforma de orquestração multi-agent com IA generativa que analisa contexto 
 
 **Regra fundamental**: Complexidade flui para baixo. Agents de tier inferior nunca chamam tiers superiores — evita ciclos e simplifica debugging.
 
-### 3.3 Maturity Levels (ML1–ML33)
+### 3.3 Framework Baseline & Capabilities (MAF Native)
 
-Sistema evolui em camadas incrementais sem quebrar capabilities anteriores. O detalhamento funcional completo vive em [USER-STORIES.md](USER-STORIES.md); abaixo ficam os grupos mais relevantes para a arquitetura:
+O sistema Agentic evoluiu do modelo de **Platform Capabilities** incrementais para uma **Baseline de Framework Unificada** baseada no Microsoft Agent Framework (MAF). Esta transição elimina a complexidade de orquestração manual em camadas e consolida as capacidades como features nativas do runtime.
 
-| ML | Capability | Descrição |
-|----|-----------|-----------|
-| ML1 | Chunk Lifecycle | Aging/decay/promoção de chunks de memória |
-| ML2 | Context Budget | Controle de tokens por contexto (custo previsível) |
-| ML3 | Task Planning | Decomposição de tarefas complexas |
-| ML4 | Reflection | Agents aprendem com erros |
-| ML5 | Document Pipeline | Ingestão, parsing, chunking híbrido |
-| ML6 | RAG + Re-Ranking | Retrieval semântico com re-rankeamento heurístico |
-| ML7 | Multi-Provider LLM | Failover entre OpenAI/Gemini/Claude/Ollama |
-| ML8 | External Service Gateway | Circuit Breaker + Rate Limiter + Cost Tracker |
-| ML9 | Context Compression | Remove redundância antes do retrieval |
-| ML10–ML18 | Personalização, agents dinâmicos, handoffs, persistência, voice | Capabilities operacionais avançadas |
-| ML19–ML23 | Multi-tenant, scheduler, embedding migration | Plataforma e operações |
-| ML24–ML33 | Quality gates, streaming, governança, approvals | Runtime agentic moderno |
+#### Matriz de Capacidades Integradas
+
+| Domínio | Serviço Central | Responsabilidade e Status |
+| :--- | :--- | :--- |
+| **Foundation** | `ContextBudgetManager` | Controle de tokens e envelhecimento de chunks . ✅ |
+| **Reasoning** | `AgentWorkflowBuilder` | Decomposição adaptativa e **Handoffs nativos** (Capability, Capability). ✅ |
+| **Quality** | `ReflectionEngine` | Auto-reflexão e Confidence Scoring (Capability, Capability). ✅ |
+| **Memory** | `ObsidianSync` + `pgvector` | Memória episódica e semântica com compressão (Capability, Capabilities). ✅ |
+| **Autonomy** | `DynamicAgentService` | Criação dinâmica e roteamento inteligente (Capability, Capability). ✅ |
+| **Persistence**| `ISessionStore` | Persistência unificada com Checkpointing . ✅ |
+| **Ops** | `ServiceGateway` | Governança de custo, resiliência e saúde (Capability, Capability). ✅ |
+
+---
+
+### 3.4 Arquitetura de Orquestração Operacional
+
+A orquestração agora utiliza **Handoffs nativos**, permitindo que o controle da conversa seja transferido entre especialistas de forma fluida, sem o overhead de um supervisor centralizado para cada micro-decisão.
+
+```mermaid
+graph LR
+    Orchestrator -- Handoff --> Specialist
+    Specialist -- Handoff --> Reviewer
+    Reviewer -- Handoff --> Orchestrator
+```
 
 ### 3.4 Service Gateway
 
@@ -51423,9 +51405,9 @@ var skillManager = serviceProvider.GetRequiredService<ISkillManager>();
 skillManager.RegisterSkill(new DevOpsSkill());
 ```
 
-## 4. Criar um Maturity Level Service
+## 4. Criar um Platform Capability Service
 
-Maturity Levels são serviços que evoluem a inteligência do sistema.
+Platform Capabilities são serviços que evoluem a inteligência do sistema.
 
 ```csharp
 // 1. Defina os Models em src/AgenticSystem.Core/Models/MaturityModels.cs
@@ -51469,7 +51451,7 @@ services.AddSingleton<IMyFeatureService, MyFeatureService>();
 // 5. Escreva testes em tests/AgenticSystem.Tests/
 ```
 
-## 5. Substituir o Session Store (ML16)
+## 5. Substituir o Session Store 
 
 O sistema usa `ISessionStore` para persistência de sessões. Por padrão, usa `InMemorySessionStore`. Para persistência durável, o caminho suportado é PostgreSQL:
 
@@ -51492,7 +51474,7 @@ public class RedisSessionStore : ISessionStore
 services.AddSingleton<ISessionStore, RedisSessionStore>();
 ```
 
-## 6. Integrar LLM via Microsoft.Extensions.AI (ML17)
+## 6. Integrar LLM via Microsoft.Extensions.AI 
 
 O caminho suportado hoje é registrar a infraestrutura completa, deixar o `LLMManager` montar o catálogo administrativo e usar o `ContextAwareChatClient` como `IChatClient` principal do runtime:
 
@@ -52125,7 +52107,7 @@ O sistema evolui em camadas independentes. Cada capacidade pode ser ativada ou d
 | **Agent** | Especialista virtual otimizado para um domínio |
 | **MetaAgentOrchestrator** | Fachada de entrada que gerencia sessão, streaming e encaminhamento |
 | **Tier** | Nível hierárquico do especialista (0 = coordenador, 3 = operacional) |
-| **Maturity Level (ML)** | Camada de capacidade do sistema, ativável independentemente |
+| **Platform Capability** | Camada de capacidade do sistema, ativável independentemente |
 | **RAG** | Retrieval-Augmented Generation — buscar contexto relevante antes de responder |
 | **Confidence Score** | Nota de 0 a 1 indicando o quanto o sistema confia na própria resposta |
 | **Circuit Breaker** | Mecanismo que desliga temporariamente um provedor com falhas, evitando efeito cascata |
@@ -52254,7 +52236,7 @@ AgentResponse (com Confidence, SessionId, Metadata)
 ### 1.4 Approvals de Produção
 
 - Tool approvals: `IToolGovernanceService`
-- Final response approval (ML33): `IFinalResponseApprovalService`
+- Final response approval : `IFinalResponseApprovalService`
 - Endpoints em `AgentController` para listar/aprovar/rejeitar pendências
 
 ### 1.5 Dependências Principais do Workflow
@@ -53348,22 +53330,22 @@ Esse conjunto substitui a antiga camada de providers locais nomeados e funciona 
 | **Frontend** | `frontend/cypress/` | Testes E2E de API |
 | **Frontend** | `frontend/k6/` | Testes de performance |
 
-## Apêndice: Maturity Levels (ML24–ML33)
+## Apêndice: Platform Capabilities (Capability–Capability)
 
 | ML | Nome | Serviços | Categoria |
 |----|------|----------|-----------|
-| ML24 | Quality Gates Pipeline | `IQualityGateService`, `InputValidationGate`, `ResponseQualityGate` | Observability & Self-Healing |
-| ML25 | Agent Cleanup | `AgentCleanupHostedService` | Observability & Self-Healing |
-| ML26 | Vision (Image Analysis) | `IVisionProvider`, `OpenAIVisionProvider` | Vision |
-| ML27 | MCP Plugin System | `IMCPPluginManager`, `McpClientPlugin`, `McpToolsAIFunctionAdapter` | MCP & Extensibility |
-| ML28 | Storage Abstraction | `IStorageProvider`, `StorageFile` | MCP & Extensibility |
-| ML29 | Agent Execution Workflow | `IAgentExecutionWorkflow`, `AgentExecutionWorkflow` | Agent Runtime Platform (thin execution shell) |
-| ML30 | End-to-End Streaming Runtime | `IAgentRuntimeCoordinator`, `ChatHub`, `POST /api/chat/stream` | Agent Runtime Platform |
-| ML31 | Governed Capabilities | `IToolGovernanceService`, approvals de tool | Agent Runtime Platform |
-| ML32 | Operational Artifacts & Metrics | `AgentExecutionArtifact`, `AgentRuntimeMetricsSnapshot`, `RuntimeEvaluationResult` | Agent Runtime Platform |
-| ML33 | Final Human Approval | `IFinalResponseApprovalService`, endpoints `final-approvals` | Agent Runtime Platform |
+| Capability | Quality Gates Pipeline | `IQualityGateService`, `InputValidationGate`, `ResponseQualityGate` | Observability & Self-Healing |
+| Capability | Agent Cleanup | `AgentCleanupHostedService` | Observability & Self-Healing |
+| Capability | Vision (Image Analysis) | `IVisionProvider`, `OpenAIVisionProvider` | Vision |
+| Capability | MCP Plugin System | `IMCPPluginManager`, `McpClientPlugin`, `McpToolsAIFunctionAdapter` | MCP & Extensibility |
+| Capability | Storage Abstraction | `IStorageProvider`, `StorageFile` | MCP & Extensibility |
+| Capability | Agent Execution Workflow | `IAgentExecutionWorkflow`, `AgentExecutionWorkflow` | Agent Runtime Platform (thin execution shell) |
+| Capability | End-to-End Streaming Runtime | `IAgentRuntimeCoordinator`, `ChatHub`, `POST /api/chat/stream` | Agent Runtime Platform |
+| Capability | Governed Capabilities | `IToolGovernanceService`, approvals de tool | Agent Runtime Platform |
+| Capability | Operational Artifacts & Metrics | `AgentExecutionArtifact`, `AgentRuntimeMetricsSnapshot`, `RuntimeEvaluationResult` | Agent Runtime Platform |
+| Capability | Final Human Approval | `IFinalResponseApprovalService`, endpoints `final-approvals` | Agent Runtime Platform |
 
-> MLs anteriores (ML1–ML23) documentados em [USER-STORIES.md](USER-STORIES.md). Total: **33 MLs**, **53 serviços**, **549+ testes**.
+> MLs anteriores (Capability–Capability) documentados em [USER-STORIES.md](USER-STORIES.md). Total: **33 MLs**, **53 serviços**, **549+ testes**.
 
 
 
@@ -53380,18 +53362,18 @@ Esse conjunto substitui a antiga camada de providers locais nomeados e funciona 
 
 ## Índice
 
-- [Backend — Maturity Levels (ML1–ML33)](#backend--maturity-levels-ml1ml33)
+- [Backend — Platform Capabilities](#backend--maturity-levels-ml1ml33)
 - [Frontend — Épicos e User Stories (US-01–US-30)](#frontend--épicos-e-user-stories-us-01us-30)
 
 ---
 
-## Backend — Maturity Levels (ML1–ML33)
+## Backend — Platform Capabilities
 
-Cada Maturity Level é um capability flag independente — pode ser ativado/desativado isoladamente.
+Cada Platform Capability é um capability flag independente — pode ser ativado/desativado isoladamente.
 
-### Foundation (ML1–ML2)
+### Foundation (Capability–Capability)
 
-#### ML1 — Chunk Lifecycle
+#### Chunk Lifecycle
 
 **Como** sistema de memória,
 **quero** gerenciar o ciclo de vida de chunks (New → Active → Consolidated → Archived),
@@ -53412,7 +53394,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML2 — Context Budget
+#### Context Budget
 
 **Como** orquestrador de agentes,
 **quero** controlar o orçamento de tokens por contexto injetado,
@@ -53433,9 +53415,9 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-### Intelligence (ML3–ML5)
+### Intelligence (Capability–Capability)
 
-#### ML3 — Task Planning
+#### Task Planning
 
 **Como** usuário que faz solicitações complexas,
 **quero** que o sistema decomponha minha tarefa em etapas executáveis,
@@ -53456,7 +53438,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML4 — Reflection
+#### Reflection
 
 **Como** sistema de qualidade,
 **quero** auto-reflexão pós-resposta para avaliar qualidade,
@@ -53477,7 +53459,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML5 — Correction Loop
+#### Correction Loop
 
 **Como** usuário que corrige respostas incorretas,
 **quero** que o sistema aprenda com minhas correções,
@@ -53499,9 +53481,9 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-### Quality (ML6–ML7)
+### Quality (Capability–Capability)
 
-#### ML6 — Knowledge Freshness
+#### Knowledge Freshness
 
 **Como** sistema de conhecimento,
 **quero** detectar drift e conhecimento desatualizado,
@@ -53522,7 +53504,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML7 — Confidence Score
+#### Confidence Score
 
 **Como** usuário que precisa confiar nas respostas,
 **quero** um score de confiança transparente em cada resposta,
@@ -53545,9 +53527,9 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-### Compression (ML8–ML9)
+### Compression (Capability–Capability)
 
-#### ML8 — Semantic Compression
+#### Semantic Compression
 
 **Como** sistema de memória de longo prazo,
 **quero** consolidar sessões e chunks em sumários comprimidos,
@@ -53568,7 +53550,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML9 — Query Compression
+#### Query Compression
 
 **Como** pipeline de RAG,
 **quero** comprimir queries antes do vector search,
@@ -53589,9 +53571,9 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-### Personalization (ML10)
+### Personalization 
 
-#### ML10 — User Personalization
+#### User Personalization
 
 **Como** usuário recorrente,
 **quero** que o sistema adapte respostas ao meu perfil,
@@ -53613,9 +53595,9 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-### Autonomy (ML11–ML15)
+### Autonomy (Capability–Capability)
 
-#### ML11 — Dynamic Agent Creation
+#### Dynamic Agent Creation
 
 **Como** usuário avançado,
 **quero** criar agentes especializados via linguagem natural,
@@ -53637,7 +53619,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML12 — Dynamic Delegation
+#### Dynamic Delegation
 
 **Como** sistema de orquestração,
 **quero** delegação mid-conversation entre agents,
@@ -53659,7 +53641,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML13 — Session Consolidation
+#### Session Consolidation
 
 **Como** sistema de memória,
 **quero** consolidar sessões longas em summaries estruturados,
@@ -53680,7 +53662,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML14 — Smart Routing
+#### Smart Routing
 
 **Como** MetaAgent,
 **quero** routing multi-critério inteligente,
@@ -53695,7 +53677,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 **Critérios de Aceite:**
 - [x] Combina: intent analysis + confidence + capability + load + fallback
-- [x] Preferências do usuário (ML10) influenciam routing
+- [x] Preferências do usuário  influenciam routing
 - [x] Histórico de performance (EMA latência/qualidade) é considerado
 - [x] Fallback chain garante que nenhuma request fica sem resposta
 - [x] Routing decision é logado para auditoria
@@ -53709,7 +53691,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML15 — Setup Flow
+#### Setup Flow
 
 **Como** novo usuário,
 **quero** um wizard de onboarding conversacional,
@@ -53731,9 +53713,9 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-### Infrastructure (ML16–ML19)
+### Infrastructure (Capability–Capability)
 
-#### ML16 — Session Persistence
+#### Session Persistence
 
 **Como** sistema em produção,
 **quero** persistência de sessões em PostgreSQL,
@@ -53750,7 +53732,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] Abstração `ISessionStore` com CRUD completo
 - [x] InMemory para dev/test e execuções locais leves
 - [x] PostgreSQL para persistência durável do runtime
-- [x] Sessões suportam multi-tenant (ML19)
+- [x] Sessões suportam multi-tenant 
 - [x] TTL configurável para expiração automática
 - [x] `AgenticDbContext : DbContext` — contexto EF Core centralizado para todas as entidades
 - [x] Entidades persistidas: `SessionData`, `Tenant`, `VectorDocumentEntity`, `CostBudgetEntity`, `CostEntryEntity`, `AgentPerformanceMetricEntity`
@@ -53761,7 +53743,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML17 — IChatClient Compatibility Layer
+#### IChatClient Compatibility Layer
 
 **Como** integrador de LLM providers,
 **quero** bridge automático entre `IChatClient` (M.E.AI) e `ILLMProvider`,
@@ -53786,7 +53768,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML18 — Voice Interface
+#### Voice Interface
 
 **Como** usuário de assistentes de voz,
 **quero** interagir com o sistema via endpoint voice-friendly,
@@ -53807,7 +53789,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-#### ML19 — Multi-Tenant
+#### Multi-Tenant
 
 **Como** sistema multi-empresa,
 **quero** isolamento completo por tenant,
@@ -53911,7 +53893,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 - [x] MetaAgent nunca executa — apenas analisa e delega
 - [x] Cada agent tem `CanHandle()` claro (nunca aceita `*`)
 - [x] Agents são intercambiáveis via Factory pattern
-- [x] Dynamic agents (ML11) herdam o mesmo tier system
+- [x] Dynamic agents  herdam o mesmo tier system
 - [x] Agent Framework decorator aplica pipeline M.E.AI (telemetry, function invocation, logging)
 
 ---
@@ -54083,7 +54065,7 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 | Status | ✅ Implementado |
 
 **Critérios de Aceite:**
-- [x] `AddAgenticSystemCore()`: 20+ serviços Core (agents, sessions, ML1-ML23, MediatR)
+- [x] `AddAgenticSystemCore()`: 20+ serviços Core (agents, sessions, Capability-Capability, MediatR)
 - [x] `AddAgenticSystemInfrastructure()`: LLM multi-provider (OpenAI, Ollama, Gemini, Claude), Gateway, RAG, MCP, Persistence
 - [x] Microsoft.Extensions.AI pipeline: `ChatClientBuilder` com OpenTelemetry + FunctionInvocation + Logging
 - [x] M.E.AI `IEmbeddingGenerator<string, Embedding<float>>` com OpenTelemetry
@@ -54094,9 +54076,9 @@ Cada Maturity Level é um capability flag independente — pode ser ativado/desa
 
 ---
 
-### Resilience (ML20)
+### Resilience 
 
-#### ML20 — Tool Availability Guard
+#### Tool Availability Guard
 
 **Como** sistema de orquestração,
 **quero** verificar se as tools requeridas por uma solicitação estão disponíveis antes de executar,
@@ -54146,7 +54128,7 @@ ToolAvailabilityGuard.CheckAsync(requiredTools)
 
 ---
 
-#### ML21 — Scheduled Tasks & Trigger Engine
+#### Scheduled Tasks & Trigger Engine
 
 **Como** operador do sistema agêntico,
 **quero** agendar tarefas recorrentes com regras condicionais e receber notificações quando condições forem satisfeitas,
@@ -54251,9 +54233,9 @@ TriggerEngine.EvaluateAsync(rule)
 - Circuit breaker no delivery channel (`CircuitBreaker` local, sem dependência externa específica) para evitar flood em caso de falha do destino
 - Timezone-aware: regras CRON respeitam timezone configurado no tenant
 
-### Configuration & Embedding (ML22–ML23)
+### Configuration & Embedding (Capability–Capability)
 
-#### ML22 — Gerenciamento de Credenciais, Caminhos e Configurações
+#### Gerenciamento de Credenciais, Caminhos e Configurações
 
 **Como** administrador do sistema,
 **quero** gerenciar credenciais e configurações sensíveis com encriptação AES-256, audit trail e hot-reload,
@@ -54280,7 +54262,7 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-#### ML23 — Trocar Dimensionalidade de Banco e Embeddings — Re-indexação
+#### Trocar Dimensionalidade de Banco e Embeddings — Re-indexação
 
 **Como** engenheiro de ML,
 **quero** migrar embeddings de um modelo/dimensionalidade para outro com zero-downtime,
@@ -54308,9 +54290,9 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-### Observability & Self-Healing (ML24–ML25)
+### Observability & Self-Healing (Capability–Capability)
 
-#### ML24 — Quality Gates Pipeline
+#### Quality Gates Pipeline
 
 **Como** sistema de orquestração,
 **quero** um pipeline de quality gates extensível que valide entrada e saída de cada interação,
@@ -54338,9 +54320,9 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-#### ML25 — Agent Cleanup (Self-Healing)
+#### Agent Cleanup (Self-Healing)
 
-**Como** sistema com agents dinâmicos (ML11),
+**Como** sistema com agents dinâmicos ,
 **quero** limpeza automática de agents inativos via background service,
 **para que** recursos de memória e conexões sejam liberados proativamente.
 
@@ -54362,9 +54344,9 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-### Vision (ML26)
+### Vision 
 
-#### ML26 — Vision (Análise de Imagens)
+#### Vision (Análise de Imagens)
 
 **Como** usuário que precisa analisar imagens,
 **quero** enviar imagens ao sistema e receber análise via LLM multimodal,
@@ -54391,9 +54373,9 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-### MCP & Extensibility (ML27–ML28)
+### MCP & Extensibility (Capability–Capability)
 
-#### ML27 — MCP Plugin System
+#### MCP Plugin System
 
 **Como** operador do sistema,
 **quero** integrar Model Context Protocol (MCP) servers como plugins gerenciáveis,
@@ -54421,7 +54403,7 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-#### ML28 — Storage Abstraction
+#### Storage Abstraction
 
 **Como** sistema que gera e consome arquivos (documentos RAG, exports, attachments),
 **quero** uma abstração de storage desacoplada do filesystem,
@@ -54443,9 +54425,9 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-### Agent Runtime Platform (ML29–ML33)
+### Agent Runtime Platform (Capability–Capability)
 
-#### ML29 — Agent Execution Workflow
+#### Agent Execution Workflow
 
 **Como** arquitetura de execução,
 **quero** centralizar o pipeline operacional em um workflow dedicado,
@@ -54464,7 +54446,7 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-#### ML30 — End-to-End Streaming Runtime
+#### End-to-End Streaming Runtime
 
 **Como** consumidor de API em tempo real,
 **quero** streaming fim a fim por SignalR e SSE,
@@ -54483,7 +54465,7 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-#### ML31 — Governed Capabilities
+#### Governed Capabilities
 
 **Como** plataforma de agentes em produção,
 **quero** governança de capabilities por risco e escopo,
@@ -54502,7 +54484,7 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-#### ML32 — Operational Artifacts & Runtime Metrics
+#### Operational Artifacts & Runtime Metrics
 
 **Como** time de operação,
 **quero** observabilidade semântica do ciclo de execução,
@@ -54523,7 +54505,7 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-#### ML33 — Human-in-the-Loop Final Approval
+#### Human-in-the-Loop Final Approval
 
 **Como** governança de produção,
 **quero** aprovação humana antes da resposta final em cenários sensíveis,
@@ -54546,19 +54528,19 @@ TriggerEngine.EvaluateAsync(rule)
 
 | Camada | MLs | Serviços | Testes |
 |--------|:---:|:--------:|:------:|
-| Foundation | ML1–ML2 | 2 | ✅ |
-| Intelligence | ML3–ML5 | 3 | ✅ |
-| Quality | ML6–ML7 | 2 | ✅ |
-| Compression | ML8–ML9 | 2 | ✅ |
-| Personalization | ML10 | 1 | ✅ |
-| Autonomy | ML11–ML15 | 5 | ✅ |
-| Infrastructure | ML16–ML19 | 5 | ✅ |
-| Resilience | ML20–ML21 | 5 | ✅ |
-| Config & Embedding | ML22–ML23 | 4 | ✅ |
-| Observability & Self-Healing | ML24–ML25 | 3 | ✅ |
-| Vision | ML26 | 1 | ✅ |
-| MCP & Extensibility | ML27–ML28 | 3 | ✅ |
-| Agent Runtime Platform | ML29–ML33 | 5 | ✅ |
+| Foundation | Capability–Capability | 2 | ✅ |
+| Intelligence | Capability–Capability | 3 | ✅ |
+| Quality | Capability–Capability | 2 | ✅ |
+| Compression | Capability–Capability | 2 | ✅ |
+| Personalization | Capability | 1 | ✅ |
+| Autonomy | Capability–Capability | 5 | ✅ |
+| Infrastructure | Capability–Capability | 5 | ✅ |
+| Resilience | Capability–Capability | 5 | ✅ |
+| Config & Embedding | Capability–Capability | 4 | ✅ |
+| Observability & Self-Healing | Capability–Capability | 3 | ✅ |
+| Vision | Capability | 1 | ✅ |
+| MCP & Extensibility | Capability–Capability | 3 | ✅ |
+| Agent Runtime Platform | Capability–Capability | 5 | ✅ |
 | Transversal | T1–T10 | 10 | ✅ |
 | **Total** | **33 MLs + 10 Transversais** | **53 serviços** | **549+ testes** |
 
