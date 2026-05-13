@@ -9,7 +9,7 @@
     - [x] Map actual frontend components and features in `frontend/`
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Deep Research and Analysis' (Protocol in workflow.md)
 
-## Phase 2: Gap Analysis and Alignment
+## Phase 2: Gap Analysis and Alignment [checkpoint: 07dbd59]
 - [x] Task: Compare Documentation against Actual Implementation
     - [x] Identify outdated architectural descriptions
     - [x] Identify business logic described but not implemented (or vice versa)
