@@ -10,13 +10,13 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Deep Research and Analysis' (Protocol in workflow.md)
 
 ## Phase 2: Gap Analysis and Alignment
-- [ ] Task: Compare Documentation against Actual Implementation
-    - [ ] Identify outdated architectural descriptions
-    - [ ] Identify business logic described but not implemented (or vice versa)
-    - [ ] Check if standards (Naming, DI, Testing) are being followed as documented
-- [ ] Task: Identify and Audit Experimental Tracks (Laboratório)
-    - [ ] Verify if "Trilhas de Laboratório" have feature flags and fallbacks as required
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Gap Analysis and Alignment' (Protocol in workflow.md)
+- [x] Task: Compare Documentation against Actual Implementation
+    - [x] Identify outdated architectural descriptions
+    - [x] Identify business logic described but not implemented (or vice versa)
+    - [x] Check if standards (Naming, DI, Testing) are being followed as documented
+- [x] Task: Identify and Audit Experimental Tracks (Laboratório)
+    - [x] Verify if "Trilhas de Laboratório" have feature flags and fallbacks as required
+- [x] Task: Conductor - User Manual Verification 'Phase 2: Gap Analysis and Alignment' (Protocol in workflow.md)
 
 ## Phase 3: Documentation Updates and Refinement
 - [ ] Task: Update Technical and Business Documentation
