@@ -124,6 +124,14 @@ A restrição de CORS imposta pela OpenAI e pela Anthropic torna a abordagem pur
   - Ao clicar em "Salvar", enviar a lista de modelos descoberta junto com a requisição de update.
 - **VERIFY**: Renderizar a página no navegador sem erros no console, garantindo o feedback visual imediato e rico.
 
+### Task 6: Configuração Global em Arquivos de Ambiente e Containers (Docker, AppSettings, Env)
+- [x] **Agent**: `backend-specialist` | **Skill**: `server-management`, `deployment-procedures`
+- **INPUT**: Inspecionar e atualizar `appsettings.json`, `appsettings.Development.json`, `docker-compose.yml` e arquivo `.env` (se houver).
+- **OUTPUT**:
+  - Em `appsettings.json` e `appsettings.Development.json`, garantir que as seções `OpenAI`, `Gemini`, `Claude`, `OpenRouter` e `Ollama` estejam explicitamente mapeadas em `AgenticSystem`, com chaves, URLs e modelos padrão.
+  - Em `docker-compose.yml`, expor as variáveis de ambiente equivalentes (`AgenticSystem__OpenRouter__ApiKey`, `AgenticSystem__OpenRouter__Enabled`, etc.) no serviço da API.
+- **VERIFY**: Validar sintaxe JSON e YAML.
+
 ---
 
 ## 8. Rollback Strategy

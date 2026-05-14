@@ -37,6 +37,10 @@ services:
       - AgenticSystem__Claude__DefaultModel=claude-sonnet-4-20250514
       - AgenticSystem__Claude__Enabled=false
       - AgenticSystem__Claude__Priority=3
+      - AgenticSystem__OpenRouter__ApiKey=${OPENROUTER_API_KEY}
+      - AgenticSystem__OpenRouter__DefaultModel=openrouter/auto
+      - AgenticSystem__OpenRouter__Enabled=false
+      - AgenticSystem__OpenRouter__Priority=4
       - AgenticSystem__Gateway__DefaultDailyBudget=50.00
       - AgenticSystem__Gateway__DefaultFailureThreshold=5
       - AgenticSystem__CollaborationWorkflow__EnableAdvancedWorkflow=false
