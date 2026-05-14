@@ -22,10 +22,11 @@ public class LLMManager : ILLMAdministrationService
     private const string DefaultModelConfigKey = "llm.default.model";
     private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, HashSet<string>> ProviderModelCatalog = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["OpenAI"] = new(StringComparer.OrdinalIgnoreCase) { "gpt-4o", "gpt-4o-mini", "o4-mini", "o3" },
-        ["Gemini"] = new(StringComparer.OrdinalIgnoreCase) { "gemini-2.5-pro", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash" },
-        ["Claude"] = new(StringComparer.OrdinalIgnoreCase) { "claude-sonnet-4-20250514", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest" },
-        ["Ollama"] = new(StringComparer.OrdinalIgnoreCase) { "llama3", "llama3.1", "mistral", "qwen2.5" }
+        ["OpenAI"] = new(StringComparer.OrdinalIgnoreCase) { "gpt-4o", "gpt-4o-mini" },
+        ["Gemini"] = new(StringComparer.OrdinalIgnoreCase) { "gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp" },
+        ["Claude"] = new(StringComparer.OrdinalIgnoreCase) { "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest" },
+        ["Ollama"] = new(StringComparer.OrdinalIgnoreCase) { "llama3", "llama3.1", "mistral", "qwen2.5" },
+        ["OpenRouter"] = new(StringComparer.OrdinalIgnoreCase) { "openrouter/auto", "meta-llama/llama-3-8b-instruct", "google/gemini-2.5-flash", "anthropic/claude-3.5-sonnet" }
     };
 
     private readonly AgenticSystemSettings _settings;
@@ -488,6 +489,32 @@ public class LLMManager : ILLMAdministrationService
                 {
                     var errorText = await response.Content.ReadAsStringAsync(ct);
                     return new DiscoverModelsResponse { Success = false, ErrorMessage = $"Falha ao consultar Claude ({response.StatusCode}): {errorText}" };
+                }
+
+                using var doc = await System.Text.Json.JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                if (doc.RootElement.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var item in dataProp.EnumerateArray())
+                    {
+                        if (item.TryGetProperty("id", out var idProp) && idProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            var modelId = idProp.GetString();
+                            if (!string.IsNullOrWhiteSpace(modelId))
+                            {
+                                discovered.Add(modelId);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (name.Equals("OpenRouter", StringComparison.OrdinalIgnoreCase))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", request.ApiKey);
+                using var response = await httpClient.GetAsync("https://openrouter.ai/api/v1/models", ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorText = await response.Content.ReadAsStringAsync(ct);
+                    return new DiscoverModelsResponse { Success = false, ErrorMessage = $"Falha ao consultar OpenRouter ({response.StatusCode}): {errorText}" };
                 }
 
                 using var doc = await System.Text.Json.JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);

@@ -8,7 +8,7 @@
 
 Antigravity Kit is a modular system consisting of:
 
-- **20 Specialist Agents** - Role-based AI personas
+- **21 Specialist Agents** - Role-based AI personas
 - **36 Skills** - Domain-specific knowledge modules
 - **11 Workflows** - Slash command procedures
 
@@ -19,7 +19,7 @@ Antigravity Kit is a modular system consisting of:
 ```plaintext
 .agents/
 ├── ARCHITECTURE.md          # This file
-├── agents/                  # 20 Specialist Agents
+├── agents/                  # 21 Specialist Agents
 ├── skills/                  # 36 Skills
 ├── workflows/               # 11 Slash Commands
 ├── rules/                   # Global Rules
@@ -28,7 +28,7 @@ Antigravity Kit is a modular system consisting of:
 
 ---
 
-## 🤖 Agents (20)
+## 🤖 Agents (21)
 
 Specialist AI personas for different domains.
 
@@ -53,6 +53,7 @@ Specialist AI personas for different domains.
 | `product-owner`          | Strategy, backlog, MVP     | plan-writing, agentic-brainstorming                      |
 | `qa-automation-engineer` | E2E testing, CI pipelines  | webapp-testing, testing-patterns                         |
 | `code-archaeologist`     | Legacy code, refactoring   | clean-code, code-review-checklist                        |
+| `dotnet-self-learning-architect` | .NET 8+ enterprise systems | clean-code, dotnet-best-practices, architecture          |
 | `explorer-agent`         | Codebase analysis          | -                                                        |
 
 ---
@@ -265,7 +266,7 @@ For details, see [scripts/README.md](scripts/README.md)
 
 | Metric              | Value                         |
 | ------------------- | ----------------------------- |
-| **Total Agents**    | 20                            |
+| **Total Agents**    | 21                            |
 | **Total Skills**    | 36                            |
 | **Total Workflows** | 11                            |
 | **Total Scripts**   | 2 (master) + 18 (skill-level) |
@@ -285,3 +286,4 @@ For details, see [scripts/README.md](scripts/README.md)
 | Testing  | `test-engineer`       | testing-patterns, webapp-testing      |
 | Debug    | `debugger`            | agentic-debugging                     |
 | Plan     | `project-planner`     | agentic-brainstorming, plan-writing   |
+| .NET     | `dotnet-self-learning-architect` | dotnet-best-practices, architecture |

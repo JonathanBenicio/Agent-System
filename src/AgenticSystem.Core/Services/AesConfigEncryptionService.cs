@@ -20,8 +20,8 @@ public class AesConfigEncryptionService : IConfigEncryptionService
         }
         else
         {
-            // Fallback: chave derivada de machine name (dev only)
-            _key = SHA256.HashData(Encoding.UTF8.GetBytes(Environment.MachineName + "_agentic_config"));
+            // Fallback: chave estática fixa para desenvolvimento (evita quebra ao recriar container Docker)
+            _key = SHA256.HashData(Encoding.UTF8.GetBytes("AgenticSystem_Development_StaticSecretKey_Fallback"));
         }
     }
 
@@ -44,22 +44,33 @@ public class AesConfigEncryptionService : IConfigEncryptionService
 
     public string Decrypt(string cipherText)
     {
-        var fullCipher = Convert.FromBase64String(cipherText);
+        try
+        {
+            var fullCipher = Convert.FromBase64String(cipherText);
 
-        using var aes = Aes.Create();
-        aes.Key = _key;
+            using var aes = Aes.Create();
+            aes.Key = _key;
 
-        var iv = new byte[aes.BlockSize / 8];
-        var cipher = new byte[fullCipher.Length - iv.Length];
+            var iv = new byte[aes.BlockSize / 8];
+            var cipher = new byte[fullCipher.Length - iv.Length];
 
-        Buffer.BlockCopy(fullCipher, 0, iv, 0, iv.Length);
-        Buffer.BlockCopy(fullCipher, iv.Length, cipher, 0, cipher.Length);
+            Buffer.BlockCopy(fullCipher, 0, iv, 0, iv.Length);
+            Buffer.BlockCopy(fullCipher, iv.Length, cipher, 0, cipher.Length);
 
-        aes.IV = iv;
-        using var decryptor = aes.CreateDecryptor();
-        var plainBytes = decryptor.TransformFinalBlock(cipher, 0, cipher.Length);
+            aes.IV = iv;
+            using var decryptor = aes.CreateDecryptor();
+            var plainBytes = decryptor.TransformFinalBlock(cipher, 0, cipher.Length);
 
-        return Encoding.UTF8.GetString(plainBytes);
+            return Encoding.UTF8.GetString(plainBytes);
+        }
+        catch (FormatException)
+        {
+            return string.Empty;
+        }
+        catch (CryptographicException)
+        {
+            return string.Empty;
+        }
     }
 
     public string Hash(string value)

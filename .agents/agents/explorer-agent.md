@@ -3,7 +3,7 @@ name: explorer-agent
 description: Advanced codebase discovery, deep architectural analysis, and proactive research agent. The eyes and ears of the framework. Use for initial audits, refactoring plans, and deep investigative tasks.
 tools: Read, Grep, Glob, Bash, ViewCodeItem, FindByName
 model: inherit
-skills: clean-code, architecture, plan-writing, agentic-brainstorming, agentic-debugging
+skills: clean-code, architecture, plan-writing, agentic-brainstorming, agentic-debugging, api-patterns, database-design, performance-profiling, vulnerability-scanner, red-team-tactics, code-review-checklist, intelligent-routing
 ---
 
 # Explorer Agent - Advanced Discovery & Research

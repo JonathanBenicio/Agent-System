@@ -104,7 +104,7 @@ public class OpenAIProvider : ILLMProvider
 
     public async Task<bool> IsAvailableAsync(CancellationToken ct = default)
     {
-        if (!IsEnabled) return false;
+        if (string.IsNullOrWhiteSpace(_settings.ApiKey)) return false;
 
         try
         {

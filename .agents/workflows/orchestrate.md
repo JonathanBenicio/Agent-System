@@ -88,20 +88,20 @@ Do you approve? (Y/N)
 |-------|--------|----------|
 | `project-planner` | Planning | Task breakdown, `docs/plan/{task-slug}.md` |
 | `explorer-agent` | Discovery | Codebase mapping |
-| `frontend-specialist` | UI/UX | React, Vue, CSS, HTML |
-| `backend-specialist` | Server | API, Node.js, Python |
-| `database-architect` | Data | SQL, NoSQL, Schema |
-| `security-auditor` | Security | Vulnerabilities, Auth |
-| `penetration-tester` | Security | Active testing |
-| `test-engineer` | Testing | Unit, E2E, Coverage |
-| `devops-engineer` | Ops | CI/CD, Docker, Deploy |
-| `mobile-developer` | Mobile | React Native, Flutter |
-| `performance-optimizer` | Speed | Lighthouse, Profiling |
-| `seo-specialist` | SEO | Meta, Schema, Rankings |
-| `documentation-writer` | Docs | README, API docs |
-| `debugger` | Debug | Error analysis |
-| `game-developer` | Games | Unity, Godot |
-| `orchestrator` | Meta | Coordination |
+| `frontend-specialist` | UI/UX | React, Next.js, Tailwind, Web UI |
+| `backend-specialist` | Server | API, Node.js, Python, .NET Core |
+| `database-architect` | Data | SQL, Supabase, Postgres, Schema |
+| `security-auditor` | Security | Vulnerabilities, Secrets audit, Auth |
+| `devops-engineer` | Ops | CI/CD, Docker, Deploy, Containers |
+| `test-engineer` | Testing | Unit, E2E, Coverage, TDD |
+| `performance-optimizer` | Speed | Profiling, Lighthouse, Optimization |
+| `debugger` | Debug | Root cause analysis, Error resolution |
+| `documentation-writer` | Docs | README, API docs, Architecture notes |
+| `dotnet-expert` | C# / .NET | C#, ASP.NET Core, EF Core best practices |
+| `dotnet-self-learning-architect` | Architecture | Enterprise .NET systems, Durable memory |
+| `react-nextjs-expert` | Web App | React 19, Next.js 16 Server Components |
+| `ide-assistant` | IDE / Workflow | Clean code, Code review, Guidelines |
+| `orchestrator` | Meta | Coordination across multiple domains |
 
 ---
 
@@ -110,15 +110,16 @@ Do you approve? (Y/N)
 ### Step 1: Analyze Task Domains
 Identify ALL domains this task touches:
 ```
-□ Security     → security-auditor, penetration-tester
-□ Backend/API  → backend-specialist
-□ Frontend/UI  → frontend-specialist
+□ Security     → security-auditor
+□ Backend/API  → backend-specialist, dotnet-expert
+□ Frontend/UI  → frontend-specialist, react-nextjs-expert
 □ Database     → database-architect
 □ Testing      → test-engineer
 □ DevOps       → devops-engineer
-□ Mobile       → mobile-developer
 □ Performance  → performance-optimizer
-□ SEO          → seo-specialist
+□ Debugging    → debugger
+□ Architecture → dotnet-self-learning-architect
+□ Documentation→ documentation-writer
 □ Planning     → project-planner
 ```
 

@@ -1,7 +1,9 @@
 ---
 name: debugger
 description: Expert in systematic debugging, root cause analysis, and crash investigation. Use for complex bugs, production issues, performance problems, and error analysis. Triggers on bug, error, crash, not working, broken, investigate, fix.
-skills: clean-code, agentic-debugging
+tools: Read, Grep, Glob, Bash, Edit, Write
+model: inherit
+skills: clean-code, agentic-debugging, dotnet-best-practices, nextjs-react-expert, nodejs-best-practices, python-patterns, rust-pro, supabase-postgres-best-practices, performance-profiling
 ---
 
 # Debugger - Root Cause Analysis Expert

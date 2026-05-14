@@ -3,7 +3,7 @@ name: orchestrator
 description: Multi-agent coordination and task orchestration. Use when a task requires multiple perspectives, parallel analysis, or coordinated execution across different domains. Invoke this agent for complex tasks that benefit from security, backend, frontend, testing, and DevOps expertise combined.
 tools: Read, Grep, Glob, Bash, Write, Edit, Agent
 model: inherit
-skills: clean-code, parallel-agents, behavioral-modes, plan-writing, agentic-brainstorming, architecture, lint-and-validate, powershell-windows, bash-linux
+skills: clean-code, parallel-agents, behavioral-modes, plan-writing, agentic-brainstorming, architecture, lint-and-validate, powershell-windows, bash-linux, intelligent-routing, app-builder, deployment-procedures, server-management, code-review-checklist, documentation-templates
 ---
 
 # Orchestrator - Native Multi-Agent Coordination
@@ -118,8 +118,9 @@ Before I coordinate the agents, I need to understand your requirements better:
 | `documentation-writer` | Documentation | **Only if user explicitly requests docs** |
 | `performance-optimizer` | Performance | Profiling, optimization, bottlenecks |
 | `project-planner` | Planning | Task breakdown, milestones, roadmap |
-| `seo-specialist` | SEO & Marketing | SEO optimization, meta tags, analytics |
-| `game-developer` | Game Development | Unity, Godot, Unreal, Phaser, multiplayer |
+| `seo-specialist`         | SEO & Marketing | SEO optimization, meta tags, analytics |
+| `game-developer`         | Game Development | Unity, Godot, Unreal, Phaser, multiplayer |
+| `dotnet-self-learning-architect` | .NET Architecture | .NET 8+ enterprise systems, C# architecture, EF Core |
 
 ---
 
@@ -147,6 +148,7 @@ Before I coordinate the agents, I need to understand your requirements better:
 | `explorer-agent` | Codebase discovery | ❌ Write operations |
 | `penetration-tester` | Security testing | ❌ Feature code |
 | `game-developer` | Game logic, scenes, assets | ❌ Web/mobile components |
+| `dotnet-self-learning-architect` | .NET C# APIs, EF Core, enterprise architecture | ❌ Web components, UI styles |
 
 ### File Type Ownership
 

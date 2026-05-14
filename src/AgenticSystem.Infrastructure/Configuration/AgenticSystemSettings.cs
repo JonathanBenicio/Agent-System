@@ -49,7 +49,7 @@ public class ClaudeSettings
 {
     public string ApiKey { get; set; } = string.Empty;
     public string BaseUrl { get; set; } = "https://api.anthropic.com/";
-    public string DefaultModel { get; set; } = "claude-sonnet-4-20250514";
+    public string DefaultModel { get; set; } = "claude-3-5-sonnet-latest";
     public bool Enabled { get; set; } = false;
     public int Priority { get; set; } = 3;
 }

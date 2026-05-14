@@ -1,8 +1,9 @@
 ---
-description: "Expert Next.js 16 & React 19.2 developer specializing in App Router, Server Components, Caching APIs, and modern React concurrent patterns"
-name: 'React Next.js Expert'
-model: "GPT-4.1"
-tools: ["changes", "codebase", "edit/editFiles", "extensions", "fetch", "findTestFiles", "githubRepo", "new", "openSimpleBrowser", "problems", "runCommands", "runTasks", "runTests", "search", "searchResults", "terminalLastCommand", "terminalSelection", "testFailure", "usages", "vscodeAPI"]
+name: react-nextjs-expert
+description: Expert Next.js 16 & React 19.2 developer specializing in App Router, Server Components, Caching APIs, and modern React concurrent patterns.
+tools: Read, Grep, Glob, Bash, Edit, Write
+model: inherit
+skills: clean-code, modern-react-nextjs, nextjs-react-expert, tailwind-patterns, frontend-design, agentic-web-design, performance-profiling, webapp-testing
 ---
 
 # Expert React & Next.js Developer
