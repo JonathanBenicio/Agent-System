@@ -15,16 +15,17 @@ public class OpenAISettings
     public string ApiKey { get; set; } = string.Empty;
     public string BaseUrl { get; set; } = "https://api.openai.com/";
     public string DefaultModel { get; set; } = "gpt-4o-mini";
-    public bool Enabled { get; set; } = true;
-    public int Priority { get; set; } = 1;
+    public bool Enabled { get; set; } = false;
+    public int Priority { get; set; } = 10;
 }
 
 public class OllamaSettings
 {
     public string BaseUrl { get; set; } = "http://localhost:11434";
     public string DefaultModel { get; set; } = "llama3";
-    public bool Enabled { get; set; } = false;
-    public int Priority { get; set; } = 10;
+    public string EmbeddingModel { get; set; } = "nomic-embed-text";
+    public bool Enabled { get; set; } = true;
+    public int Priority { get; set; } = 1;
 }
 
 public class GeminiSettings

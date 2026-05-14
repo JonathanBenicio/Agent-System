@@ -19,10 +19,16 @@ services:
       - "8080:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
+      - AgenticSystem__AdminApiKey=minha-chave-secreta-admin-123
+      - AgenticSystem__Ollama__BaseUrl=http://ollama:11434
+      - AgenticSystem__Ollama__DefaultModel=llama3
+      - AgenticSystem__Ollama__EmbeddingModel=nomic-embed-text
+      - AgenticSystem__Ollama__Enabled=true
+      - AgenticSystem__Ollama__Priority=1
       - AgenticSystem__OpenAI__ApiKey=${OPENAI_API_KEY}
       - AgenticSystem__OpenAI__DefaultModel=gpt-4o-mini
-      - AgenticSystem__Ollama__BaseUrl=http://ollama:11434
-      - AgenticSystem__Ollama__Enabled=true
+      - AgenticSystem__OpenAI__Enabled=false
+      - AgenticSystem__OpenAI__Priority=10
       - AgenticSystem__LocalExecution__StorageMode=PostgreSQL
       - AgenticSystem__Memory__VectorStoreType=PostgreSQL
       - ConnectionStrings__SessionStore=Host=postgres;Port=5432;Database=agentic;Username=agentic;Password=${POSTGRES_PASSWORD:-agentic_dev}
@@ -68,6 +74,24 @@ services:
       interval: 30s
       timeout: 3s
       retries: 3
+    networks:
+      - agentic-net
+
+  ollama-pull:
+    image: curlimages/curl:latest
+    command: >
+      sh -c "
+        echo 'Aguardando Ollama iniciar...';
+        while ! curl -s http://ollama:11434/api/tags > /dev/null; do sleep 2; done;
+        echo 'Baixando modelo LLM primário (llama3)...';
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3\"}';
+        echo 'Baixando modelo de Embeddings (nomic-embed-text)...';
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"nomic-embed-text\"}';
+        echo 'Modelos prontos e inicializados!';
+      "
+    depends_on:
+      ollama:
+        condition: service_healthy
     networks:
       - agentic-net
 

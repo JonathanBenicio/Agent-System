@@ -44,12 +44,15 @@ public static class ServiceCollectionExtensions
         services.Configure<DynamicSkillsOptions>(configuration.GetSection("AgenticSystem:Skills"));
 
 
-        // ─── Microsoft.Extensions.AI — registry contextual de IChatClient ───
+        // ─── Microsoft.Extensions.AI — registry contextual de IChatClient e IEmbeddingGenerator ───
         var openAiSettings = configuration.GetSection("AgenticSystem:OpenAI");
         var openAiApiKey = openAiSettings["ApiKey"];
         var enableStreaming = bool.TryParse(openAiSettings["EnableStreaming"], out var streaming)
             ? streaming
             : false;
+
+        var ollamaSettings = configuration.GetSection("AgenticSystem:Ollama");
+        var ollamaEnabled = bool.TryParse(ollamaSettings["Enabled"], out var oe) ? oe : false;
 
         if (!string.IsNullOrWhiteSpace(openAiApiKey))
         {
@@ -57,6 +60,16 @@ public static class ServiceCollectionExtensions
                 new OpenAI.Embeddings.EmbeddingClient(
                     openAiSettings["EmbeddingModel"] ?? "text-embedding-3-small",
                     openAiApiKey).AsIEmbeddingGenerator())
+                .UseDistributedCache()
+                .UseOpenTelemetry(sourceName: "AgenticSystem.Embeddings");
+        }
+        else if (ollamaEnabled)
+        {
+            var ollamaBaseUrl = ollamaSettings["BaseUrl"] ?? "http://localhost:11434";
+            var ollamaModel = ollamaSettings["EmbeddingModel"] ?? "nomic-embed-text";
+
+            services.AddEmbeddingGenerator(_ =>
+                new Microsoft.Extensions.AI.OllamaEmbeddingGenerator(new Uri(ollamaBaseUrl), ollamaModel))
                 .UseDistributedCache()
                 .UseOpenTelemetry(sourceName: "AgenticSystem.Embeddings");
         }

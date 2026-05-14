@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Database, Search, FileText, Cpu, Upload, Layers, RefreshCw, Plus, Check, Play, AlertCircle, Settings2, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/shared/Badge'
 import { useRAG } from '@/hooks/useRAG'
-import type { EmbeddingModelConfig, IngestDocumentResponse } from '@/types/api'
+import type { IngestDocumentResponse } from '@/types/api'
 
 export function RAGPage() {
   const {
@@ -12,7 +12,6 @@ export function RAGPage() {
     models,
     activeModel,
     jobs,
-    memorySettings,
     rerankingSettings,
     refresh,
     ingestDocument,
@@ -21,7 +20,6 @@ export function RAGPage() {
     activateModel,
     deleteModel,
     startMigrationJob,
-    updateMemory,
     updateReranking,
   } = useRAG()
 
@@ -138,7 +136,7 @@ export function RAGPage() {
   return (
     <div className="h-full overflow-y-auto bg-zinc-950 text-zinc-100">
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        
+
         {/* Header Section */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6">
           <div>
@@ -774,11 +772,10 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-medium transition-all ${
-        active
+      className={`flex items-center gap-2 px-5 py-3 border-b-2 text-sm font-medium transition-all ${active
           ? 'border-teal-500 text-teal-400 bg-teal-500/5'
           : 'border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/40'
-      }`}
+        }`}
     >
       <Icon className="w-4 h-4" />
       {label}

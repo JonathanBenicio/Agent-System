@@ -20,6 +20,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.SignalR;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -393,6 +394,24 @@ app.MapPost("/api/chat/stream", async (ChatRequest request, IMetaAgent metaAgent
 // Seed built-in tools and skills
 app.Services.SeedAgenticDefaults();
 app.Services.SeedInfrastructureTools();
+
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetService<AgenticSystem.Infrastructure.Persistence.AgenticDbContext>();
+    if (dbContext is not null)
+    {
+        try
+        {
+            Serilog.Log.Information("Executando migrações do PostgreSQL/Supabase no startup...");
+            await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.MigrateAsync(dbContext.Database);
+            Serilog.Log.Information("Migrações concluídas com sucesso.");
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "Erro fatal ao aplicar migrações do PostgreSQL no startup.");
+        }
+    }
+}
 
 var eventBus = app.Services.GetRequiredService<AgenticSystem.Core.Interfaces.IEventBus>();
 var gatewayHub = app.Services.GetRequiredService<Microsoft.AspNetCore.SignalR.IHubContext<GatewayHub>>();

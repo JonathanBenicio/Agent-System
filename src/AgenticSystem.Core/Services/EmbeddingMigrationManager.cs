@@ -178,6 +178,13 @@ public class EmbeddingMigrationManager : IEmbeddingMigrationManager
     {
         try
         {
+            var currentJob = await _jobStore.GetAsync(job.Id);
+            if (currentJob?.Status == MigrationStatus.Cancelled)
+            {
+                _logger.LogInformation("Job {JobId} cancelled before processing started", job.Id);
+                return;
+            }
+
             job.Status = MigrationStatus.InProgress;
             job.StartedAt = DateTime.UtcNow;
             job.ProcessingLog.Add($"[{DateTime.UtcNow:O}] Migration started");
