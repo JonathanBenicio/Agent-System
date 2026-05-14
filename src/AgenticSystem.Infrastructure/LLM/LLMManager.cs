@@ -952,6 +952,14 @@ public class LLMManager : ILLMAdministrationService
                 Enabled = true,
                 Priority = existingProvider.Priority
             }),
+            "openrouter" => CreateOpenRouterProvider(new OpenRouterSettings
+            {
+                ApiKey = apiKey,
+                BaseUrl = _settings.OpenRouter.BaseUrl,
+                DefaultModel = model,
+                Enabled = true,
+                Priority = existingProvider.Priority
+            }),
             _ => existingProvider
         };
     }
@@ -971,6 +979,7 @@ public class LLMManager : ILLMAdministrationService
         }
 
         RegisterProvider(CreateClaudeProvider(settings.Claude));
+        RegisterProvider(CreateOpenRouterProvider(settings.OpenRouter));
         RegisterProvider(CreateOllamaProvider(settings.Ollama));
     }
 
@@ -1013,6 +1022,14 @@ public class LLMManager : ILLMAdministrationService
             new HttpClient(),
             Options.Create(settings),
             _loggerFactory.CreateLogger<ClaudeProvider>());
+    }
+
+    private ILLMProvider CreateOpenRouterProvider(OpenRouterSettings settings)
+    {
+        return new OpenRouterProvider(
+            new HttpClient(),
+            Options.Create(settings),
+            _loggerFactory.CreateLogger<OpenRouterProvider>());
     }
 
     private ILLMProvider CreateOllamaProvider(OllamaSettings settings)

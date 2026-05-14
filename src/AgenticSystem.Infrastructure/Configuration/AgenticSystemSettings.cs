@@ -6,6 +6,7 @@ public class AgenticSystemSettings
     public OllamaSettings Ollama { get; set; } = new();
     public GeminiSettings Gemini { get; set; } = new();
     public ClaudeSettings Claude { get; set; } = new();
+    public OpenRouterSettings OpenRouter { get; set; } = new();
     public GatewaySettings Gateway { get; set; } = new();
     public MemorySettings Memory { get; set; } = new();
     public SemanticCacheOptions SemanticCache { get; set; } = new();
@@ -25,6 +26,15 @@ public class OpenAISettings
     public string DefaultModel { get; set; } = "gpt-4o-mini";
     public bool Enabled { get; set; } = false;
     public int Priority { get; set; } = 10;
+}
+
+public class OpenRouterSettings
+{
+    public string ApiKey { get; set; } = string.Empty;
+    public string BaseUrl { get; set; } = "https://openrouter.ai/api/";
+    public string DefaultModel { get; set; } = "openrouter/auto";
+    public bool Enabled { get; set; } = false;
+    public int Priority { get; set; } = 4;
 }
 
 public class OllamaSettings
