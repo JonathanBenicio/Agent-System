@@ -34,7 +34,10 @@ export function LoginModal() {
         if (inputValue.length < 10) {
           throw new Error('Chave de API inválida.')
         }
-        loginWithApiKey(inputValue)
+        const success = await loginWithApiKey(inputValue)
+        if (!success) {
+          throw new Error('Chave de API inválida ou recusada pelo servidor.')
+        }
       }
     } catch (err: unknown) {
       if (err instanceof Error) {

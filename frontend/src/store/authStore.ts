@@ -4,8 +4,9 @@ import {
   setAuthToken,
   clearAuthToken,
   getApiKey,
-  setApiKey,
   clearApiKey,
+  loginWithApiKeyApi,
+  logoutApi,
 } from '../lib/auth'
 
 interface AuthState {
@@ -13,8 +14,8 @@ interface AuthState {
   apiKey: string | null
   isAuthenticated: boolean
   loginWithToken: (token: string) => void
-  loginWithApiKey: (apiKey: string) => void
-  logout: () => void
+  loginWithApiKey: (apiKey: string) => Promise<boolean>
+  logout: () => Promise<void>
 }
 
 export const useAuthStore = create<AuthState>((set) => {
@@ -32,15 +33,18 @@ export const useAuthStore = create<AuthState>((set) => {
       clearApiKey()
     },
 
-    loginWithApiKey: (apiKey: string) => {
-      setApiKey(apiKey)
-      set({ apiKey, token: null, isAuthenticated: true })
-      clearAuthToken()
+    loginWithApiKey: async (apiKey: string) => {
+      const success = await loginWithApiKeyApi(apiKey)
+      if (success) {
+        set({ apiKey: 'admin', token: null, isAuthenticated: true })
+        clearAuthToken()
+        return true
+      }
+      return false
     },
 
-    logout: () => {
-      clearAuthToken()
-      clearApiKey()
+    logout: async () => {
+      await logoutApi()
       set({ token: null, apiKey: null, isAuthenticated: false })
     },
   }

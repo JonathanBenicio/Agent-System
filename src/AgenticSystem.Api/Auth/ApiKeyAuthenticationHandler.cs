@@ -32,6 +32,11 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
             providedKey = apiKeyValues.FirstOrDefault()?.Trim();
         }
 
+        if (string.IsNullOrWhiteSpace(providedKey) && Request.Cookies.TryGetValue("agentic_api_key", out var cookieKey))
+        {
+            providedKey = cookieKey?.Trim();
+        }
+
         if (string.IsNullOrWhiteSpace(providedKey) && Request.Path.StartsWithSegments("/hubs"))
         {
             if (Request.Query.TryGetValue("api_key", out var queryKey) || Request.Query.TryGetValue("X-Api-Key", out queryKey))

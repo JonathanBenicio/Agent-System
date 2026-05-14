@@ -21,7 +21,7 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - AgenticSystem__AdminApiKey=minha-chave-secreta-admin-123
       - AgenticSystem__Ollama__BaseUrl=http://ollama:11434
-      - AgenticSystem__Ollama__DefaultModel=llama3
+      - AgenticSystem__Ollama__DefaultModel=phi3
       - AgenticSystem__Ollama__EmbeddingModel=nomic-embed-text
       - AgenticSystem__Ollama__Enabled=true
       - AgenticSystem__Ollama__Priority=1
@@ -102,8 +102,10 @@ services:
       sh -c "
         echo 'Aguardando Ollama iniciar...';
         while ! curl -s http://ollama:11434/api/tags > /dev/null; do sleep 2; done;
-        echo 'Baixando modelo LLM primário (llama3)...';
-        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3\"}';
+        echo 'Baixando modelo LLM primário (phi3)...';
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"phi3\"}';
+        echo 'Baixando modelo LLM secundário (qwen2.5:0.5b)...';
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"qwen2.5:0.5b\"}';
         echo 'Baixando modelo de Embeddings (nomic-embed-text)...';
         curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"nomic-embed-text\"}';
         echo 'Modelos prontos e inicializados!';
