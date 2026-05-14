@@ -69,6 +69,7 @@ CORE_CHECKS = [
     ("Test Runner", ".agents/skills/testing-patterns/scripts/test_runner.py", False),
     ("UX Audit", ".agents/skills/frontend-design/scripts/ux_audit.py", False),
     ("SEO Check", ".agents/skills/seo-fundamentals/scripts/seo_checker.py", False),
+    ("Docs Coverage Check", ".agents/skills/documentation-templates/scripts/docs_coverage_check.py", False),
 ]
 
 PERFORMANCE_CHECKS = [

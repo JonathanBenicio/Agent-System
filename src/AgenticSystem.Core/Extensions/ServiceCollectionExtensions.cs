@@ -7,6 +7,9 @@ using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
 using AgenticSystem.Core.Tools;
 using AgenticSystem.Core.Skills;
+using AgenticSystem.Core.Services.Triage;
+using AgenticSystem.Core.Services.FastPath;
+using Microsoft.Extensions.ML;
 
 namespace AgenticSystem.Core.Extensions;
 
@@ -30,6 +33,15 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISkillManager, InMemorySkillManager>();
         services.AddSingleton<IToolManager, InMemoryToolManager>();
         services.AddSingleton<IToolGovernanceService, ToolGovernanceService>();
+
+        // Triage & FastPath (ML14 Expansion)
+        services.AddSingleton<ITriageService, TriageService>();
+        services.AddSingleton<IFastPathInterceptor, ConversationalFastPathInterceptor>();
+        services.AddSingleton<IFastPathInterceptor, MlFastPathInterceptor>();
+        
+        // ML.NET Pool registration (Model file should be provided in the root or config)
+        services.AddPredictionEnginePool<FastPathModelInput, FastPathModelOutput>()
+            .FromFile("fastpath_model.zip");
 
         // Phase 1 — Enterprise Security & Runtime
         services.AddSingleton<IPolicyEngine, PolicyEngine>();

@@ -1,4 +1,5 @@
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Models.Triage;
 
 namespace AgenticSystem.Core.Interfaces;
 
@@ -8,6 +9,11 @@ namespace AgenticSystem.Core.Interfaces;
 /// </summary>
 public interface ISmartRouter
 {
+    /// <summary>
+    /// Executa a triagem em camadas (Heurística, ML local e LLM barato) para determinar o melhor tier de execução.
+    /// </summary>
+    Task<(bool IsFastPath, string? Response, QueryTriageResult? Triage)> TriageAsync(string input, UserContext context, CancellationToken ct = default);
+
     /// <summary>
     /// Resolve o melhor agent para um request, considerando performance histórica e preferências.
     /// </summary>

@@ -8,6 +8,10 @@ updated: 2026-05-13
 
 # ⚡ Plano de Implementação: Fase P3 - Extensibilidade & Automação (MCP & Jobs)
 
+> [!NOTE]
+> **ERRATA / RETIFICAÇÃO ARQUITETURAL (Maio de 2026)**
+> As referências ao **Quartz.NET** neste documento representam o desenho original da Fase P3. Durante a implementação prática, a arquitetura evoluiu para um **Motor de Agendamento Customizado e Nativo em C#** (`ScheduledTaskHostedService`, `ScheduledTaskManager`, `PostgresScheduledTaskStore`), eliminando dependências externas pesadas e suportando nativamente DAGs (Directed Acyclic Graphs), retries com backoff exponencial e persistência via Entity Framework Core.
+
 ## 🎯 Objetivo Global
 Tornar a arquitetura do **AgenticSystem** totalmente expansível por meio do carregamento dinâmico e seguro de plugins MCP (Model Context Protocol) e autônoma através de um motor robusto de agendamento de tarefas e regras de disparo condicionais baseadas em estímulos externos.
 

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Models.Triage;
 using AgenticSystem.Core.Services;
 
 namespace AgenticSystem.Tests;
@@ -15,6 +16,8 @@ public class MetaAgentOrchestratorTests
     private readonly IAgentFactory _agentFactory;
     private readonly ISessionManager _sessionManager;
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
+    private readonly IContextAnalyzer _contextAnalyzer;
+    private readonly ISmartRouter _smartRouter;
     private readonly ILogger<MetaAgentOrchestrator> _logger;
     private readonly MetaAgentOrchestrator _sut;
 
@@ -26,6 +29,8 @@ public class MetaAgentOrchestratorTests
         _agentFactory = Substitute.For<IAgentFactory>();
         _sessionManager = Substitute.For<ISessionManager>();
         _runtimeCoordinator = Substitute.For<IAgentRuntimeCoordinator>();
+        _contextAnalyzer = Substitute.For<IContextAnalyzer>();
+        _smartRouter = Substitute.For<ISmartRouter>();
         _logger = Substitute.For<ILogger<MetaAgentOrchestrator>>();
 
         _runtimeCoordinator.BeginExecutionScope(Arg.Any<string>(), Arg.Any<UserContext>())
@@ -34,7 +39,22 @@ public class MetaAgentOrchestratorTests
         _llmRuntimeContextAccessor.BeginScope(Arg.Any<UserContext>(), Arg.Any<string>())
             .Returns(Substitute.For<IDisposable>());
 
-        _sut = new MetaAgentOrchestrator(_frameworkOrchestrator, _directAgentRequestExecutor, _llmRuntimeContextAccessor, _agentFactory, _sessionManager, _runtimeCoordinator, _logger);
+        _smartRouter.TriageAsync(Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
+            .Returns((false, null, null));
+
+        _contextAnalyzer.AnalyzeAsync(Arg.Any<string>(), Arg.Any<UserContext>())
+            .Returns(new AnalysisResult { Intent = AgenticSystem.Core.Models.IntentType.Chat, Confidence = 1.0 });
+
+        _sut = new MetaAgentOrchestrator(
+            _frameworkOrchestrator, 
+            _directAgentRequestExecutor, 
+            _llmRuntimeContextAccessor, 
+            _agentFactory, 
+            _sessionManager, 
+            _runtimeCoordinator, 
+            _contextAnalyzer,
+            _smartRouter,
+            _logger);
     }
 
     [Fact]

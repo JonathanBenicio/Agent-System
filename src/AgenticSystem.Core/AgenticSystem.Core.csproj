@@ -18,6 +18,8 @@
     <PackageReference Include="Microsoft.Agents.AI" Version="1.5.0" />
     <PackageReference Include="FluentValidation" Version="11.8.0" />
     <PackageReference Include="MediatR" Version="12.2.0" />
+    <PackageReference Include="Microsoft.Extensions.ML" Version="5.0.0" />
+    <PackageReference Include="Microsoft.ML" Version="5.0.0" />
     <PackageReference Include="NJsonSchema" Version="11.6.1" />
   </ItemGroup>
 

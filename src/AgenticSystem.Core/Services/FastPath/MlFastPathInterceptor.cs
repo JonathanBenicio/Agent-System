@@ -3,6 +3,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.ML;
+using AgenticSystem.Core.Interfaces;
 
 namespace AgenticSystem.Core.Services.FastPath
 {
@@ -19,11 +20,11 @@ namespace AgenticSystem.Core.Services.FastPath
     public Task<(bool IsFastPath, string? Response)> EvaluateAsync(string input, CancellationToken cancellationToken = default)
     {
       if (string.IsNullOrWhiteSpace(input))
-        return Task.FromResult((false, (string?)null));
+        return Task.FromResult<(bool IsFastPath, string? Response)>((false, null));
 
       // Mantemos a heurística de tamanho para evitar passar textos longos desnecessários pelo modelo ML
       if (input.Length > 60)
-        return Task.FromResult((false, (string?)null));
+        return Task.FromResult<(bool IsFastPath, string? Response)>((false, null));
 
       // Executa a classificação usando o pool otimizado
       var prediction = _predictionEnginePool.Predict(new FastPathModelInput { Text = input });
@@ -32,16 +33,16 @@ namespace AgenticSystem.Core.Services.FastPath
       var maxScore = prediction.Score != null && prediction.Score.Length > 0 ? prediction.Score.Max() : 1.0f;
 
       if (maxScore < ConfidenceThreshold)
-        return Task.FromResult((false, (string?)null));
+        return Task.FromResult<(bool IsFastPath, string? Response)>((false, null));
 
       // Toma decisão instantânea baseada na intenção detectada ("PredictedLabel")
       return prediction.Intent switch
       {
-        "Greeting" => Task.FromResult((true, "Olá! Como posso ajudar você hoje?")),
-        "SmallTalk_HowAreYou" => Task.FromResult((true, "Estou operando perfeitamente! Como posso ser útil?")),
-        "SmallTalk_Thanks" => Task.FromResult((true, "Por nada! Estou sempre à disposição.")),
+        "Greeting" => Task.FromResult<(bool IsFastPath, string? Response)>((true, "Olá! Como posso ajudar você hoje?")),
+        "SmallTalk_HowAreYou" => Task.FromResult<(bool IsFastPath, string? Response)>((true, "Estou operando perfeitamente! Como posso ser útil?")),
+        "SmallTalk_Thanks" => Task.FromResult<(bool IsFastPath, string? Response)>((true, "Por nada! Estou sempre à disposição.")),
 
-        _ => Task.FromResult((false, (string?)null)) // Unknown ou intenção de negócio real vai pro LLM
+        _ => Task.FromResult<(bool IsFastPath, string? Response)>((false, null)) // Unknown ou intenção de negócio real vai pro LLM
       };
     }
   }

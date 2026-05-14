@@ -2,6 +2,7 @@ using System;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using AgenticSystem.Core.Interfaces;
 
 namespace AgenticSystem.Core.Services.FastPath
 {
@@ -16,21 +17,21 @@ namespace AgenticSystem.Core.Services.FastPath
     public Task<(bool IsFastPath, string? Response)> EvaluateAsync(string input, CancellationToken cancellationToken = default)
     {
       if (string.IsNullOrWhiteSpace(input))
-        return Task.FromResult((false, (string?)null));
+        return Task.FromResult<(bool IsFastPath, string? Response)>((false, null));
 
       var normalizedInput = input.Trim();
 
       // Heurística de segurança: se a mensagem tem mais de 40 caracteres, não é uma saudação simples e requer orquestração
       if (normalizedInput.Length > 40)
-        return Task.FromResult((false, (string?)null));
+        return Task.FromResult<(bool IsFastPath, string? Response)>((false, null));
 
       if (GreetingRegex.IsMatch(normalizedInput))
       {
         var response = GetDynamicGreeting(normalizedInput);
-        return Task.FromResult((true, response));
+        return Task.FromResult<(bool IsFastPath, string? Response)>((true, response));
       }
 
-      return Task.FromResult((false, (string?)null));
+      return Task.FromResult<(bool IsFastPath, string? Response)>((false, null));
     }
 
     private static string GetDynamicGreeting(string input)

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Models.Triage;
 
 namespace AgenticSystem.Core.Services;
 
@@ -11,16 +12,45 @@ namespace AgenticSystem.Core.Services;
 public class SmartRouter : ISmartRouter
 {
     private readonly IUserPreferenceEngine _preferenceEngine;
+    private readonly ITriageService _triageService;
+    private readonly IEnumerable<IFastPathInterceptor> _fastPathInterceptors;
     private readonly ILogger<SmartRouter> _logger;
     private readonly ConcurrentDictionary<string, object> _metricsLocks = new();
     private readonly ConcurrentDictionary<string, List<AgentPerformanceMetric>> _metrics = new();
 
     public SmartRouter(
         IUserPreferenceEngine preferenceEngine,
+        ITriageService triageService,
+        IEnumerable<IFastPathInterceptor> fastPathInterceptors,
         ILogger<SmartRouter> logger)
     {
         _preferenceEngine = preferenceEngine;
+        _triageService = triageService;
+        _fastPathInterceptors = fastPathInterceptors;
         _logger = logger;
+    }
+
+    public async Task<(bool IsFastPath, string? Response, QueryTriageResult? Triage)> TriageAsync(string input, UserContext context, CancellationToken ct = default)
+    {
+        // 1. Camada 0 & 0.5: Fast Path (Heurística e ML Local)
+        foreach (var interceptor in _fastPathInterceptors)
+        {
+            var (isFastPath, response) = await interceptor.EvaluateAsync(input, ct);
+            if (isFastPath)
+            {
+                _logger.LogInformation("🚀 Fast-path triggered via {InterceptorType}", interceptor.GetType().Name);
+                return (true, response, null);
+            }
+        }
+
+        // 2. Camada 1: LLM Triage (gpt-4o-mini)
+        _logger.LogDebug("🔍 Initiating LLM Triage for input: {Input}", input.Length > 50 ? input[..50] + "..." : input);
+        var triageResult = await _triageService.AnalyzeComplexityAsync(input, ct);
+
+        _logger.LogInformation("🎯 Triage Result: Intent={Intent}, Complexity={Complexity}, RAG={RAG}, Tools={Tools}",
+            triageResult.Intent, triageResult.Complexity, triageResult.RequiresRAG, triageResult.RequiresTools);
+
+        return (false, null, triageResult);
     }
 
     public async Task<RoutingDecision> RouteAsync(AnalysisResult analysis, UserContext context)

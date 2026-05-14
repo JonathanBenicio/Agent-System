@@ -8,6 +8,10 @@ updated: 2026-05-13
 
 # Master Roadmap: Fullstack AgenticSystem
 
+> [!NOTE]
+> **ERRATA / RETIFICAÇÃO ARQUITETURAL (Maio de 2026)**
+> As menções a **Quartz.NET** na Fase P3 refletem o planejamento inicial. A solução em produção utiliza um **Motor de Agendamento Customizado em C#** (`ScheduledTaskManager`, `ScheduledTaskHostedService`) totalmente integrado ao Entity Framework Core e livre de bibliotecas de terceiros para orquestração de *jobs*.
+
 ## 🎯 Objetivo Global
 Estabelecer um plano estruturado e progressivo para a evolução completa do monorepo **AgenticSystem** (Backend em C# .NET 10 DDD e Frontend em React 19/Vite). O foco é garantir alta coesão, segurança corporativa, suporte robusto ao Microsoft Agent Framework (MAF 1.5), observabilidade avançada de IA e uma experiência de usuário de nível premium (Glassmorphism).
 

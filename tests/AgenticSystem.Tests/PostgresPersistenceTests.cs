@@ -46,7 +46,9 @@ public class PostgresPersistenceExtensionsTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
-        services.AddSingleton(Substitute.For<IUserPreferenceEngine>());
+        services.AddSingleton<IUserPreferenceEngine>(Substitute.For<IUserPreferenceEngine>());
+        services.AddSingleton<ITriageService>(Substitute.For<ITriageService>());
+        services.AddSingleton<IFastPathInterceptor>(Substitute.For<IFastPathInterceptor>());
         services.AddSingleton<ISmartRouter, AgenticSystem.Core.Services.SmartRouter>();
 
         services.UsePostgresSmartRouter("Host=localhost;Database=test");

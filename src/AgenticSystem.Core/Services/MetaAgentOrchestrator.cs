@@ -18,6 +18,7 @@ public class MetaAgentOrchestrator : IMetaAgent
     private readonly ISessionManager _sessionManager;
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
     private readonly IContextAnalyzer _contextAnalyzer;
+    private readonly ISmartRouter _smartRouter;
     private readonly IAgentCollaborationWorkflow? _collaborationWorkflow;
     private readonly IWorkflowEngine? _workflowEngine;
     private readonly ITenantIsolationEnforcer? _isolationEnforcer;
@@ -31,6 +32,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         ISessionManager sessionManager,
         IAgentRuntimeCoordinator runtimeCoordinator,
         IContextAnalyzer contextAnalyzer,
+        ISmartRouter smartRouter,
         ILogger<MetaAgentOrchestrator>? logger = null,
         IAgentCollaborationWorkflow? collaborationWorkflow = null,
         IWorkflowEngine? workflowEngine = null,
@@ -43,6 +45,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         _sessionManager = sessionManager;
         _runtimeCoordinator = runtimeCoordinator;
         _contextAnalyzer = contextAnalyzer ?? new NullContextAnalyzer();
+        _smartRouter = smartRouter;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<MetaAgentOrchestrator>.Instance;
         _collaborationWorkflow = collaborationWorkflow;
         _workflowEngine = workflowEngine;
@@ -66,8 +69,26 @@ public class MetaAgentOrchestrator : IMetaAgent
             sessionManager,
             runtimeCoordinator,
             new NullContextAnalyzer(),
+            new NullSmartRouter(),
             logger)
     {
+    }
+
+    private class NullSmartRouter : ISmartRouter
+    {
+        public Task<(bool IsFastPath, string? Response, AgenticSystem.Core.Models.Triage.QueryTriageResult? Triage)> TriageAsync(string input, UserContext context, CancellationToken ct = default) =>
+            Task.FromResult((false, (string?)null, (AgenticSystem.Core.Models.Triage.QueryTriageResult?)null));
+
+        public Task<RoutingDecision> RouteAsync(AnalysisResult analysis, UserContext context) =>
+            Task.FromResult(new RoutingDecision());
+
+        public Task<ProviderRoutingDecision> RouteProviderAsync(string? requestedProvider, string? requestedModel) =>
+            Task.FromResult(new ProviderRoutingDecision());
+
+        public Task RecordPerformanceAsync(string agentName, AgentPerformanceMetric metric) => Task.CompletedTask;
+
+        public Task<IEnumerable<AgentRanking>> GetRankingsByDomainAsync(string domain) =>
+            Task.FromResult(Enumerable.Empty<AgentRanking>());
     }
 
     private class NullContextAnalyzer : IContextAnalyzer
@@ -141,6 +162,22 @@ public class MetaAgentOrchestrator : IMetaAgent
 
         try
         {
+            // 0. Triage Layer (Fast Path & Complexity Analysis)
+            var (isFastPath, fastPathResponse, triage) = await _smartRouter.TriageAsync(input, context, ct);
+            if (isFastPath)
+            {
+                return AgentResponse.Ok(fastPathResponse ?? string.Empty, "FastPath", AgentTier.Support);
+            }
+
+            if (triage != null)
+            {
+                context.Preferences["triage.intent"] = triage.Intent.ToString();
+                context.Preferences["triage.complexity"] = triage.Complexity.ToString();
+                context.Preferences["triage.requiresRag"] = triage.RequiresRAG.ToString();
+                context.Preferences["triage.requiresTools"] = triage.RequiresTools.ToString();
+                context.Preferences["triage.recommendedTier"] = triage.RecommendedAgentTier;
+            }
+
             _logger.LogInformation("🎯 Workflow executando request: {Input}", input[..Math.Min(50, input.Length)]);
 
             // 1. Analyze Context for Routing Decisions (Phase 2 Integration)

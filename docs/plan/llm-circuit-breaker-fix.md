@@ -1,5 +1,9 @@
 # Plano de Mitigação e Resiliência LLM (Circuit Breaker Fix)
 
+> [!NOTE]
+> **ERRATA / RETIFICAÇÃO ARQUITETURAL (Maio de 2026)**
+> Conforme refatoração implementada no `LLMManager.cs`, o sistema foi atualizado para lançar `InvalidOperationException` no lugar de `Polly.CircuitBreaker.BrokenCircuitException` quando o circuito do provedor está aberto ou isolado. Isso simplifica o acoplamento das camadas de domínio e evita dependências diretas das bibliotecas do Polly nos consumidores.
+
 ## Overview & Background
 - **Objetivo:** Resolver falhas em cascata e `BrokenCircuitException` em operações de background (`SessionConsolidator`, `ContextAnalyzer`) causadas pela exaustão de retentativas e abertura do circuito no acesso aos provedores de LLM.
 - **Contexto:** Quando requisições de background ou de usuários falham consecutivamente (por HTTP 429 ou falta de cota/chave), o Circuit Breaker entra em estado `Open`, rejeitando instantaneamente todas as chamadas subsequentes do sistema.

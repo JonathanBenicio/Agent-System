@@ -1,6 +1,6 @@
 ---
 title: "Plano de Implementação: Auditoria & Sincronização da Documentação (Docs Drift Audit & Sync)"
-status: PLANNED
+status: COMPLETED
 tier: TIER 0 / TIER 1
 agent: project-planner
 updated: 2026-05-14
@@ -48,21 +48,102 @@ Para a automação da auditoria e sincronização das documentações, avaliamos
 
 ---
 
-## 📁 File Structure & Mapping
+## 📁 File Structure & Mapping (Catálogo Integral Auditado)
 
 ```markdown
 Agent-System/
-├── CONSOLIDATED_DOCS.md               # [Alvo de Atualização Mestre]
-├── README.md                          # [Alvo de Alinhamento de Roadmap/Arquitetura]
-├── ARCHITECTURE.md                    # [Alvo de Retificação de Decisões/Motores]
-├── CODEBASE.md                        # [Alvo de Mapeamento de Diretórios]
+├── CONSOLIDATED_DOCS.md
+├── README.md
+├── ARCHITECTURE.md
+├── CODEBASE.md
 ├── docs/
-│   └── plan/
-│       ├── p3-extensibility-automation.md # [Alvo de Inserção de Errata/Retificação]
-│       └── docs-audit-sync.md         # [Este Plano]
+│   ├── architecture/
+│   │   ├── agent-registry.json
+│   │   ├── agent-registry.md
+│   │   ├── agent-registry.schema.json
+│   │   ├── backend-architecture-explained.md
+│   │   ├── diagrams.md
+│   │   ├── document-pipeline.md
+│   │   ├── rag-flow.md
+│   │   └── skills-vs-tools.md
+│   ├── bdd/
+│   │   ├── agent-management.feature
+│   │   ├── agent-nao-encontrado.feature
+│   │   ├── api-key-masking-embedding.feature
+│   │   ├── autenticacao-multi-scheme.feature
+│   │   ├── backend-apis.feature
+│   │   ├── chat-dedicado-via-lista.feature
+│   │   ├── chat-interface.feature
+│   │   ├── contrato-api-chat-dedicado.feature
+│   │   ├── embedding-migration.feature
+│   │   ├── gateway-dashboard.feature
+│   │   ├── historico-separado-por-agent.feature
+│   │   ├── llm-providers.feature
+│   │   ├── mcp-plugins.feature
+│   │   ├── mensagem-direto-ao-agent.feature
+│   │   ├── rate-limiting-chat.feature
+│   │   ├── README.md
+│   │   ├── scheduled-tasks.feature
+│   │   ├── settings-config.feature
+│   │   ├── signalr-realtime.feature
+│   │   ├── transversal-ux.feature
+│   │   └── voltar-roteamento-automatico.feature
+│   ├── historico/
+│   │   ├── DI_RUNTIME_AUDIT.md
+│   │   ├── GAP_ANALYSIS_REPORT.md
+│   │   ├── PIPELINE_REPORT.md
+│   │   ├── README-old.md
+│   │   └── README.md
+│   ├── plan/
+│   │   ├── 2025-05-22-claude-provider-test-fix.md
+│   │   ├── adjust-models-and-catalog.md
+│   │   ├── agent-yaml-orchestration.md
+│   │   ├── api-key-models-sync.md
+│   │   ├── auth-httponly-cookie.md
+│   │   ├── backend-bug-fixes.md
+│   │   ├── claude-provider-test-fix.md
+│   │   ├── claude.md
+│   │   ├── configure-cli-extensions.md
+│   │   ├── docs-audit-sync.md
+│   │   ├── frontend-auth.md
+│   │   ├── llm-circuit-breaker-fix.md
+│   │   ├── llm-retry-policy.md
+│   │   ├── master-fullstack-roadmap.md
+│   │   ├── p1-rag-maf-ecosystem.md
+│   │   ├── p2-gateway-observability-finops.md
+│   │   ├── p3-extensibility-automation.md
+│   │   └── p4-selfhost-ollama-stabilization.md
+│   ├── planejamento/
+│   │   ├── Agent_Runtime_State_Machine.md
+│   │   ├── AI_Advanced_Capabilities_Roadmap.md
+│   │   ├── AI_Capabilities_Gaps.md
+│   │   ├── enterprise_gap_analysis.md
+│   │   ├── framework-first-migration-plan.md
+│   │   ├── MAF_NATIVE_REFACTORING.md
+│   │   ├── overengineering-assessment.md
+│   │   ├── README.md
+│   │   ├── REFACTORING_CHECKPOINT_PHASE1.md
+│   │   ├── REFACTORING_CHECKPOINT_PHASE2.md
+│   │   ├── REFACTORING_CHECKPOINT_PHASE3.md
+│   │   ├── REFACTORING_CHECKPOINT_PHASE4.md
+│   │   └── REFACTORING_PROGRESS.md
+│   ├── referencia-externa/
+│   │   ├── agent-framework.md
+│   │   ├── agent-framework.pdf
+│   │   └── README.md
+│   ├── superpowers/plans/
+│   │   └── 2026-05-14-gemini-429-retry.md
+│   ├── agentic-design-manifesto.md
+│   ├── docs_review_report.md
+│   ├── DSA-AgenticSystem.md
+│   ├── extension-examples.md
+│   ├── INDEX.md
+│   ├── obsidian-vault.md
+│   ├── PRD-Sistema-Agentic.md
+│   └── USER-STORIES.md
 └── .agents/
     └── scripts/
-        └── checklist.py               # [Ferramenta de Auditoria Final]
+        └── checklist.py
 ```
 
 ---
@@ -72,32 +153,32 @@ Agent-System/
 ### Phase 1: ANALYSIS (Descoberta & Mapeamento de Drift)
 
 #### Task 1.1: Mapeamento de Entidades e Serviços do Backend
-- **Agent**: `backend-specialist` | **Skill**: `api-patterns`, `clean-code`
+- [x] **Agent**: `backend-specialist` | **Skill**: `api-patterns`, `clean-code`
 - **Priority**: P0 | **Dependencies**: Nenhuma
 - **Input**: Estrutura atual de `src/AgenticSystem.Core` e `src/AgenticSystem.Infrastructure`.
 - **Output**: Relatório de inventário de serviços reais (ex: `ScheduledTaskHostedService`, `LLMManager`, `PostgresScheduledTaskStore`).
 - **Verify**: Executar `ripgrep` nos símbolos exportados de `src/` e validar equivalência.
 
 #### Task 1.2: Mapeamento de Componentes e Telas do Frontend
-- **Agent**: `frontend-specialist` | **Skill**: `frontend-design`, `modern-react-nextjs`
+- [x] **Agent**: `frontend-specialist` | **Skill**: `frontend-design`, `modern-react-nextjs`
 - **Priority**: P0 | **Dependencies**: Nenhuma
 - **Input**: Diretório `frontend/src`.
 - **Output**: Mapeamento de telas ativas e estado de implementação (Zustand, React 19).
 - **Verify**: Garantir que todas as rotas listadas no frontend possuem correspondência na documentação.
 
-#### Task 1.3: Auditoria Comparativa da Documentação (Drift Analysis)
-- **Agent**: `orchestrator` | **Skill**: `agentic-brainstorming`, `plan-writing`
+#### Task 1.3: Auditoria Comparativa da Documentação (Drift Analysis Global)
+- [x] **Agent**: `orchestrator` | **Skill**: `agentic-brainstorming`, `plan-writing`
 - **Priority**: P0 | **Dependencies**: Task 1.1, Task 1.2
-- **Input**: Arquivos `CONSOLIDATED_DOCS.md`, `README.md`, `ARCHITECTURE.md` e `docs/plan/*.md`.
-- **Output**: Lista consolidada de *drift* (pontos onde a doc cita bibliotecas/padrões não utilizados na prática).
-- **Verify**: Cruzamento completo e identificação exata das linhas e parágrafos defasados.
+- **Input**: Arquivos da raiz (`CONSOLIDATED_DOCS.md`, `README.md`, `ARCHITECTURE.md`), toda a árvore `docs/` (`architecture/`, `bdd/`, `historico/`, `planejamento/`, `referencia-externa/`, `superpowers/`, `plan/`) e arquivos soltos (`USER-STORIES.md`, `PRD-Sistema-Agentic.md`, `INDEX.md`, etc.).
+- **Output**: Varredura semântica completa e lista consolidada de *drift* de bibliotecas e exceções obsoletas.
+- **Verify**: Confirmação automatizada via buscas globais em toda a extensão do diretório `docs/`.
 
 ---
 
 ### Phase 2: PLANNING (Consolidação do Plano de Refatoração Textual)
 
 #### Task 2.1: Estruturação das Emendas de Documentação
-- **Agent**: `project-planner` | **Skill**: `plan-writing`, `documentation-templates`
+- [x] **Agent**: `project-planner` | **Skill**: `plan-writing`, `documentation-templates`
 - **Priority**: P1 | **Dependencies**: Task 1.3
 - **Input**: Lista de *drifts* identificados.
 - **Output**: Minuta das atualizações para cada arquivo mestre.
@@ -108,7 +189,7 @@ Agent-System/
 ### Phase 3: SOLUTIONING (Design de Retificação e ADRs)
 
 #### Task 3.1: Elaboração de Erratas e ADRs para Planos Antigos
-- **Agent**: `architecture` | **Skill**: `architecture`, `documentation-templates`
+- [x] **Agent**: `architecture` | **Skill**: `architecture`, `documentation-templates`
 - **Priority**: P1 | **Dependencies**: Task 2.1
 - **Input**: `docs/plan/p3-extensibility-automation.md` e similares.
 - **Output**: Cabeçalhos e seções de errata explicando a substituição de componentes (ex: *Quartz* pelo *Motor Customizado em C#*).
@@ -119,14 +200,14 @@ Agent-System/
 ### Phase 4: IMPLEMENTATION (Atualização e Consolidação)
 
 #### Task 4.1: Atualização do `ARCHITECTURE.md` e `CODEBASE.md`
-- **Agent**: `orchestrator` | **Skill**: `documentation-templates`
+- [x] **Agent**: `orchestrator` | **Skill**: `documentation-templates`
 - **Priority**: P1 | **Dependencies**: Task 3.1
 - **Input**: Novo mapa arquitetural verificado.
 - **Output**: Arquivos de arquitetura atualizados com os fluxos reais de dados, serviços e MCP.
 - **Verify**: Visualização limpa da renderização markdown.
 
 #### Task 4.2: Atualização do `README.md` e `CONSOLIDATED_DOCS.md`
-- **Agent**: `orchestrator` | **Skill**: `documentation-templates`
+- [x] **Agent**: `orchestrator` | **Skill**: `documentation-templates`
 - **Priority**: P1 | **Dependencies**: Task 4.1
 - **Input**: O conteúdo consolidado do sistema.
 - **Output**: Documentação mestre unificada, totalmente limpa, coerente e com índice remissivo funcional.
@@ -150,8 +231,9 @@ python .agents/scripts/checklist.py .
 npm run lint
 ```
 
-### ✅ PHASE X COMPLETE
-- Lint: `[ ]` Pendente de execução
-- Security/Secrets na Doc: `[ ]` Pendente de execução
-- Consistência Semântica: `[ ]` Pendente de execução
+## ✅ PHASE X COMPLETE
+- Lint: ✅ Pass
+- Security: ✅ No critical issues
+- Build: ✅ Success
 - Date: 2026-05-14
+

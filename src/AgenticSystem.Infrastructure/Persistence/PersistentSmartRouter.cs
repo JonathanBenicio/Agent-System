@@ -1,5 +1,6 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Models.Triage;
 using AgenticSystem.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -26,6 +27,12 @@ public class PersistentSmartRouter : ISmartRouter
         _inner = inner;
         _dbContextFactory = dbContextFactory;
         _logger = logger;
+    }
+
+    public async Task<(bool IsFastPath, string? Response, QueryTriageResult? Triage)> TriageAsync(string input, UserContext context, CancellationToken ct = default)
+    {
+        // No persistence needed for triage results for now, delegate to inner
+        return await _inner.TriageAsync(input, context, ct);
     }
 
     public async Task<RoutingDecision> RouteAsync(AnalysisResult analysis, UserContext context)
