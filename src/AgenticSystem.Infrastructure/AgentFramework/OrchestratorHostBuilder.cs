@@ -57,12 +57,13 @@ public class OrchestratorHostBuilder
     /// </summary>
     public async Task<AIAgent> BuildAsync(
         IReadOnlyList<AgentInfo> activeAgents,
+        string sessionId = "default_session",
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(activeAgents);
 
         var auxiliaryTools = _auxiliaryToolService.GetTools();
-        var toolBindings = await _toolBindingService.CreateSpecialistBindingsAsync(activeAgents, "", ct);
+        var toolBindings = await _toolBindingService.CreateSpecialistBindingsAsync(activeAgents, sessionId, ct);
         var allTools = new List<AITool>(toolBindings.Select(binding => binding.Tool));
         allTools.AddRange(auxiliaryTools);
 
@@ -82,12 +83,13 @@ public class OrchestratorHostBuilder
     /// </summary>
     public async Task<Workflow> BuildHandoffWorkflowAsync(
         IReadOnlyList<AgentInfo> activeAgents,
+        string sessionId = "default_session",
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(activeAgents);
 
         // 1. Criar o orquestrador principal (triage agent)
-        var orchestratorAgent = await BuildAsync(activeAgents, ct);
+        var orchestratorAgent = await BuildAsync(activeAgents, sessionId, ct);
 
         // 2. Resolver as instâncias reais dos agentes especialistas
         var specialistAgents = new List<AIAgent>();
@@ -120,9 +122,9 @@ public class OrchestratorHostBuilder
     /// <summary>
     /// Constrói versão síncrona (necessária para DI que ainda exige Resolve síncrono).
     /// </summary>
-    public AIAgent Build(IReadOnlyList<AgentInfo> activeAgents)
+    public AIAgent Build(IReadOnlyList<AgentInfo> activeAgents, string sessionId = "default_session")
     {
-        return BuildAsync(activeAgents, CancellationToken.None)
+        return BuildAsync(activeAgents, sessionId, CancellationToken.None)
             .GetAwaiter()
             .GetResult();
     }

@@ -46,7 +46,7 @@ public class OrchestratorContextFactory
     public async Task<OrchestratorContext> ResolveAsync(CancellationToken ct = default)
     {
         var activeAgents = await GetActiveAgentsAsync();
-        var orchestratorAgent = await _hostBuilder.BuildAsync(activeAgents, ct);
+        var orchestratorAgent = await _hostBuilder.BuildAsync(activeAgents, ct: ct);
 
         _logger.LogDebug(
             "Orchestrator context resolved with {AgentCount} active specialists",

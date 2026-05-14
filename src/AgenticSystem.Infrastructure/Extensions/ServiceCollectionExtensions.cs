@@ -1,14 +1,9 @@
-using Microsoft.EntityFrameworkCore;
-using Pgvector.EntityFrameworkCore;
-using Microsoft.Agents.AI.Hosting;
-using Microsoft.Extensions.AI;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.Services;
 using AgenticSystem.Core.Tools;
-using AgenticSystem.Core.LLM.Interfaces;
+using AgenticSystem.Infrastructure.AgentFramework;
+using AgenticSystem.Infrastructure.AI;
 using AgenticSystem.Infrastructure.Chunking;
 using AgenticSystem.Infrastructure.Configuration;
 using AgenticSystem.Infrastructure.Documents;
@@ -19,9 +14,15 @@ using AgenticSystem.Infrastructure.Memory;
 using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.RAG;
 using AgenticSystem.Infrastructure.Skills;
-using AgenticSystem.Infrastructure.AgentFramework;
-using AgenticSystem.Infrastructure.AI;
 using AgenticSystem.Infrastructure.Sync;
+using Microsoft.Agents.AI.Hosting;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using Pgvector.EntityFrameworkCore;
 
 namespace AgenticSystem.Infrastructure.Extensions;
 
@@ -30,8 +31,23 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAgenticSystemInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDistributedMemoryCache();
+        services.AddHttpClient();
 
-        // Configuration
+        services
+            .AddAgenticConfiguration(configuration)
+            .AddAgenticLlmServices(configuration)
+            .AddAgenticGateway()
+            .AddAgenticQualityGates()
+            .AddAgenticMcpAndSkills()
+            .AddAgenticAgentFramework(configuration)
+            .AddAgenticRagAndMemory(configuration)
+            .AddAgenticDocumentServices();
+
+        return services;
+    }
+
+    private static IServiceCollection AddAgenticConfiguration(this IServiceCollection services, IConfiguration configuration)
+    {
         services.Configure<AgenticSystemSettings>(configuration.GetSection("AgenticSystem"));
         services.Configure<OpenAISettings>(configuration.GetSection("AgenticSystem:OpenAI"));
         services.Configure<OllamaSettings>(configuration.GetSection("AgenticSystem:Ollama"));
@@ -42,91 +58,93 @@ public static class ServiceCollectionExtensions
         services.Configure<ChatClientMiddlewareOptions>(configuration.GetSection("AgenticSystem:ChatClientMiddleware"));
         services.Configure<ReRankingOptions>(configuration.GetSection("AgenticSystem:RAG:ReRanking"));
         services.Configure<DynamicSkillsOptions>(configuration.GetSection("AgenticSystem:Skills"));
+        services.Configure<SemanticCacheOptions>(configuration.GetSection("AgenticSystem:SemanticCache"));
 
+        return services;
+    }
 
-        // ─── Microsoft.Extensions.AI — registry contextual de IChatClient e IEmbeddingGenerator ───
-        var openAiSettings = configuration.GetSection("AgenticSystem:OpenAI");
-        var openAiApiKey = openAiSettings["ApiKey"];
-        var enableStreaming = bool.TryParse(openAiSettings["EnableStreaming"], out var streaming)
-            ? streaming
-            : false;
-
-        var ollamaSettings = configuration.GetSection("AgenticSystem:Ollama");
-        var ollamaEnabled = bool.TryParse(ollamaSettings["Enabled"], out var oe) ? oe : false;
-
-        if (!string.IsNullOrWhiteSpace(openAiApiKey))
+    private static IServiceCollection AddAgenticLlmServices(this IServiceCollection services, IConfiguration configuration)
+    {
+        var ollamaSettings = configuration.GetSection("AgenticSystem:Ollama").Get<OllamaSettings>() ?? new();
+        
+        services.AddEmbeddingGenerator(sp =>
         {
-            services.AddEmbeddingGenerator(_ =>
-                new OpenAI.Embeddings.EmbeddingClient(
-                    openAiSettings["EmbeddingModel"] ?? "text-embedding-3-small",
-                    openAiApiKey).AsIEmbeddingGenerator())
-                .UseDistributedCache()
-                .UseOpenTelemetry(sourceName: "AgenticSystem.Embeddings");
-        }
-        else if (ollamaEnabled)
-        {
-            var ollamaBaseUrl = ollamaSettings["BaseUrl"] ?? "http://localhost:11434";
-            var ollamaModel = ollamaSettings["EmbeddingModel"] ?? "nomic-embed-text";
-
-            services.AddEmbeddingGenerator(_ =>
-                new Microsoft.Extensions.AI.OllamaEmbeddingGenerator(new Uri(ollamaBaseUrl), ollamaModel))
-                .UseDistributedCache()
-                .UseOpenTelemetry(sourceName: "AgenticSystem.Embeddings");
-        }
+            var settings = sp.GetRequiredService<IOptions<OllamaSettings>>().Value;
+            return new Microsoft.Extensions.AI.OllamaEmbeddingGenerator(new Uri(settings.BaseUrl), settings.EmbeddingModel);
+        })
+        .UseDistributedCache()
+        .UseOpenTelemetry(sourceName: "AgenticSystem.Embeddings");
 
         services.AddSingleton<LLMManager>();
         services.AddSingleton<ILLMAdministrationService>(sp => sp.GetRequiredService<LLMManager>());
         services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(sp.GetRequiredService<LLMManager>()));
-        services.AddSingleton<IChatClient>(sp => 
+        
+        services.AddSingleton<IChatClient>(sp =>
         {
             var governedClient = new GovernedChatClient(
                 sp.GetRequiredService<ContextAwareChatClient>(),
                 sp.GetRequiredService<IQualityGateService>(),
-                sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<ChatClientMiddlewareOptions>>(),
+                sp.GetRequiredService<IOptions<ChatClientMiddlewareOptions>>(),
                 sp.GetRequiredService<ILogger<GovernedChatClient>>());
 
             var cacheService = sp.GetService<ISemanticCacheService>();
             if (cacheService != null)
             {
-                return new SemanticCacheChatClient(
-                    governedClient,
-                    cacheService,
-                    "AgenticSystem", // default agent name
-                    0.95, // threshold
-                    sp.GetRequiredService<ILogger<SemanticCacheChatClient>>());
+                var cacheOptions = sp.GetRequiredService<IOptions<SemanticCacheOptions>>().Value;
+                if (cacheOptions.Enabled)
+                {
+                    return new SemanticCacheChatClient(
+                        governedClient,
+                        cacheService,
+                        cacheOptions.AgentName,
+                        cacheOptions.SimilarityThreshold,
+                        sp.GetRequiredService<ILogger<SemanticCacheChatClient>>());
+                }
             }
 
             return governedClient;
         });
 
-        // Gateway
+        return services;
+    }
+
+    private static IServiceCollection AddAgenticGateway(this IServiceCollection services)
+    {
         services.AddSingleton<ICostTracker, CostTracker>();
         services.AddSingleton<IServiceGateway, ServiceGateway>();
         services.AddSingleton<ITokenAuditService, AgenticSystem.Infrastructure.Observability.TokenAuditService>();
+        return services;
+    }
 
-        // Quality Gates
+    private static IServiceCollection AddAgenticQualityGates(this IServiceCollection services)
+    {
         services.AddSingleton<IQualityGate, InputValidationGate>();
         services.AddSingleton<IQualityGate, ResponseQualityGate>();
         services.AddSingleton<IQualityGateService, QualityGateService>();
+        return services;
+    }
 
-        // MCP Plugin Manager
+    private static IServiceCollection AddAgenticMcpAndSkills(this IServiceCollection services)
+    {
         services.AddSingleton<IMCPPluginManager, MCPPluginManager>();
         services.AddSingleton<McpToolsAIFunctionAdapter>();
         services.AddHostedService<DynamicSkillCatalogHostedService>();
-
-        // Unified tool schema (internas + MCP)
         services.AddSingleton<UnifiedAIToolProvider>();
+        return services;
+    }
 
-        // M.E.AI — ChatClient Planner + VectorStore Adapter
+    private static IServiceCollection AddAgenticAgentFramework(this IServiceCollection services, IConfiguration configuration)
+    {
         services.AddSingleton<ChatClientPlanner>();
         services.AddSingleton<IAgentCollaborationWorkflow, AgentCollaborationWorkflow>();
         services.AddSingleton<AgenticVectorStoreAdapter>();
         services.AddSingleton<IAgentChannelService, FrameworkAgentChannelService>();
 
-        // Microsoft Agent Framework — Factory + Session Bridge + Decorator
-        // Conditional: requires IChatClient (registered when openAiApiKey exists or externally)
-        var hasChatClient = !string.IsNullOrWhiteSpace(openAiApiKey)
-            || services.Any(d => d.ServiceType == typeof(Microsoft.Extensions.AI.IChatClient));
+        var ollamaEnabled = configuration.GetValue<bool>("AgenticSystem:Ollama:Enabled");
+        var enableStreaming = configuration.GetValue<bool>("AgenticSystem:Ollama:EnableStreaming");
+
+        var hasChatClient = ollamaEnabled || services.Any(d => d.ServiceType == typeof(IChatClient));
+        
         if (hasChatClient)
         {
             var orchestratorMetadata = OrchestratorMetadata.Default;
@@ -137,18 +155,18 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<OrchestratorAuxiliaryToolService>();
             services.AddSingleton<OrchestratorInstructionService>();
             services.AddSingleton<OrchestratorToolBindingService>();
-            
-            // [PHASE 1] Novo builder nativo
+
             services.AddSingleton<RAGContextProvider>(sp =>
             {
                 var ragService = sp.GetService<IRAGService>();
-                if (ragService is null)
-                    return null!;
-                var budgetManager = sp.GetService<IContextBudgetManager>();
-                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
-                return new RAGContextProvider(ragService, budgetManager, loggerFactory.CreateLogger<RAGContextProvider>());
+                if (ragService is null) return null!;
+
+                return new RAGContextProvider(
+                    ragService, 
+                    sp.GetService<IContextBudgetManager>(), 
+                    sp.GetRequiredService<ILogger<RAGContextProvider>>());
             });
-            
+
             services.AddSingleton<OrchestratorHostBuilder>(sp =>
                 new OrchestratorHostBuilder(
                     sp.GetRequiredService<IChatClient>(),
@@ -162,11 +180,10 @@ public static class ServiceCollectionExtensions
                     sp.GetRequiredService<ILogger<OrchestratorHostBuilder>>(),
                     sp.GetService<RAGContextProvider>(),
                     sp.GetService<IQualityGateService>()));
-            
-            // [DEPRECATED] Thin wrapper for backward compatibility
+
             services.AddSingleton<OrchestratorContextFactory>();
             services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
-            
+
             services.AddSingleton<IDirectAgentExecutionService>(sp =>
                 new AgentFrameworkDirectExecutionService(
                     sp.GetRequiredService<AgentFrameworkFactory>(),
@@ -187,10 +204,14 @@ public static class ServiceCollectionExtensions
                 ServiceLifetime.Singleton);
 
             services.AddSingleton<IFrameworkOrchestratorService, FrameworkOrchestratorService>();
-
         }
 
-        // Memory / Vector Store — conditional based on VectorStoreType config
+        return services;
+    }
+
+    private static IServiceCollection AddAgenticRagAndMemory(this IServiceCollection services, IConfiguration configuration)
+    {
+        // Memory / Vector Store
         var localExecutionStorageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
         var vectorStoreType = configuration["AgenticSystem:Memory:VectorStoreType"] ?? "InMemory";
         var memoryConnectionString = configuration["AgenticSystem:Memory:ConnectionString"];
@@ -206,44 +227,30 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<IVectorStore, InMemoryVectorStore>();
         }
 
-        // Document Parsers
-        services.AddSingleton<IDocumentParser, MarkdownParser>();
-        services.AddSingleton<IDocumentParser, PlainTextParser>();
-        services.AddSingleton<IDocumentParser, HtmlParser>();
-        services.AddSingleton<IDocumentParser, PdfDocumentParser>();
-        services.AddSingleton<IDocumentParser, DocxDocumentParser>();
-
-        // Chunking Strategy
-        services.AddSingleton<IChunkingStrategy, HybridChunkingStrategy>();
-
-        // Document Ingestion Pipeline
-        services.AddSingleton<IMultimodalProcessor, LlmMultimodalProcessor>();
-        services.AddSingleton<IDocumentIngestionPipeline, DocumentIngestionPipeline>();
-        services.AddSingleton<IDataConnector, FileSystemDataConnector>();
-        services.AddHostedService<DataSyncBackgroundService>();
-
-        // RAG
+        // RAG Services
         services.AddSingleton<IRerankingAssetStore, InMemoryRerankingAssetStore>();
         services.AddSingleton<IRerankingSettingsAccessor, RerankingSettingsAccessor>();
         services.AddSingleton<HeuristicReRanker>();
         services.AddSingleton<IDedicatedReRankerProvider, LocalOnnxCrossEncoderReRankerProvider>();
+        
         services.AddHttpClient("DedicatedReRanker");
         services.AddSingleton<IDedicatedReRankerProvider>(sp => new JinaReRankerProvider(
             sp.GetRequiredService<IHttpClientFactory>().CreateClient("DedicatedReRanker"),
             sp.GetRequiredService<IRerankingSettingsAccessor>(),
             sp.GetRequiredService<ILogger<JinaReRankerProvider>>()));
+            
         services.AddSingleton<IReRanker>(sp => new LlmReRanker(
             sp.GetRequiredService<HeuristicReRanker>(),
             sp.GetRequiredService<IChatClient>(),
             sp.GetServices<IDedicatedReRankerProvider>(),
-            sp.GetService<Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>>(),
+            sp.GetService<IEmbeddingGenerator<string, Embedding<float>>>(),
             sp.GetRequiredService<IRerankingSettingsAccessor>(),
             sp.GetRequiredService<ILogger<LlmReRanker>>()));
-            
+
         services.AddSingleton<IEmbeddingProvider>(sp => new AgenticSystem.Infrastructure.Embeddings.EmbeddingProviderAdapter(
-            sp.GetRequiredService<Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>>(),
+            sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(),
             sp.GetRequiredService<ILogger<AgenticSystem.Infrastructure.Embeddings.EmbeddingProviderAdapter>>()));
-            
+
         services.AddSingleton<IAdvancedRetrievalService, PostgresAdvancedRetrievalService>();
         services.AddSingleton<IRAGService, RAGService>();
 
@@ -251,57 +258,54 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IObsidianSync>(sp =>
         {
             var vectorStore = sp.GetRequiredService<IVectorStore>();
-            var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<FileObsidianSync>>();
+            var logger = sp.GetRequiredService<ILogger<FileObsidianSync>>();
             var vaultPath = configuration["AgenticSystem:Memory:ObsidianVaultPath"];
             return new FileObsidianSync(vectorStore, logger, vaultPath);
         });
 
-        // HttpClient for tools that need it
-        services.AddHttpClient();
+        return services;
+    }
+
+    private static IServiceCollection AddAgenticDocumentServices(this IServiceCollection services)
+    {
+        // Parsers
+        services.AddSingleton<IDocumentParser, MarkdownParser>();
+        services.AddSingleton<IDocumentParser, PlainTextParser>();
+        services.AddSingleton<IDocumentParser, HtmlParser>();
+        services.AddSingleton<IDocumentParser, PdfDocumentParser>();
+        services.AddSingleton<IDocumentParser, DocxDocumentParser>();
+
+        // Pipeline
+        services.AddSingleton<IChunkingStrategy, HybridChunkingStrategy>();
+        services.AddSingleton<IMultimodalProcessor, LlmMultimodalProcessor>();
+        services.AddSingleton<IDocumentIngestionPipeline, DocumentIngestionPipeline>();
+        services.AddSingleton<IDataConnector, FileSystemDataConnector>();
+        services.AddHostedService<DataSyncBackgroundService>();
 
         return services;
     }
 
-    /// <summary>
-    /// Substitui o InMemorySessionStore pelo PostgresSessionStore (produção).
-    /// Chamar após AddAgenticSystemCore().
-    /// </summary>
     public static IServiceCollection UsePostgresSessionStore(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<Core.Interfaces.ISessionStore, PostgresSessionStore>(services);
-
         return services;
     }
 
-    /// <summary>
-    /// Substitui o InMemoryVectorStore pelo PostgresVectorStore (produção).
-    /// Chamar após AddAgenticSystemInfrastructure().
-    /// </summary>
     public static IServiceCollection UsePostgresVectorStore(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<IVectorStore, PostgresVectorStore>(services);
-
         return services;
     }
 
-    /// <summary>
-    /// Substitui o CostTracker in-memory pelo PostgresCostTracker (produção).
-    /// Chamar após AddAgenticSystemInfrastructure().
-    /// </summary>
     public static IServiceCollection UsePostgresCostTracker(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<ICostTracker, PostgresCostTracker>(services);
-
         return services;
     }
 
-    /// <summary>
-    /// Decora o SmartRouter existente com persistência PostgreSQL (write-through + warm-up).
-    /// Chamar após AddAgenticSystemCore().
-    /// </summary>
     public static IServiceCollection UsePostgresSmartRouter(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
@@ -312,7 +316,6 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<ISmartRouter>(sp =>
         {
-            // Resolve the original SmartRouter
             ISmartRouter inner = innerDescriptor?.ImplementationType is { } implType
                 ? (ISmartRouter)ActivatorUtilities.CreateInstance(sp, implType)
                 : innerDescriptor?.ImplementationFactory is { } factory
@@ -327,10 +330,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Registra o operational store PostgreSQL para artefatos, métricas, reflexões e avaliações.
-    /// Chamar após UseEntityFramework().
-    /// </summary>
     public static IServiceCollection UsePostgresOperationalStore(this IServiceCollection services)
     {
         ReplaceSingleton<IOperationalStore, PostgresOperationalStore>(services);
@@ -338,24 +337,17 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Registra os serviços de segurança e auditoria suportados pelo PostgreSQL.
-    /// Chamar após UseEntityFramework().
-    /// </summary>
     public static IServiceCollection UsePostgresSecurityAndAudit(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<IAuditLog, PostgresAuditLog>(services);
         ReplaceSingleton<IPermissionService, PostgresPermissionService>(services);
-        services.AddHostedService<Persistence.OutboxProcessorBackgroundService>(); // Register outbox
+        services.AddHostedService<Persistence.OutboxProcessorBackgroundService>();
         services.AddSingleton<IEventBus, PostgresEventBus>();
         services.AddSingleton<IPolicyStore, PostgresPolicyStore>();
         return services;
     }
 
-    /// <summary>
-    /// Substitui InMemoryMigrationJobStore pelo PostgresMigrationJobStore.
-    /// </summary>
     public static IServiceCollection UsePostgresMigrationJobStore(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
@@ -363,9 +355,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Substitui InMemoryEmbeddingModelStore pelo PostgresEmbeddingModelStore.
-    /// </summary>
     public static IServiceCollection UsePostgresEmbeddingModelStore(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
@@ -373,9 +362,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Substitui os stores de qualidade e confiabilidade em-memória pelos baseados no PostgreSQL.
-    /// </summary>
     public static IServiceCollection UsePostgresQualityStores(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
@@ -435,9 +421,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Substitui os stores de plataforma (Data Connectors, Marketplace, Memory Lifecycle) pelo PostgreSQL.
-    /// </summary>
     public static IServiceCollection UsePostgresPlatformStores(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
@@ -447,9 +430,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Substitui os stores de inteligência avançada pelo PostgreSQL.
-    /// </summary>
     public static IServiceCollection UsePostgresAdvancedIntelligence(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
@@ -457,21 +437,14 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Substitui o Workflow Engine in-memory pelo PostgreSQL.
-    /// </summary>
     public static IServiceCollection UsePostgresWorkflowEngine(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<IWorkflowStore, PostgresWorkflowStore>(services);
-        // The core implementation is agnostic to the store
         ReplaceSingleton<IWorkflowEngine, DefaultWorkflowEngine>(services);
         return services;
     }
 
-    /// <summary>
-    /// Substitui o Knowledge Graph in-memory pelo PostgreSQL.
-    /// </summary>
     public static IServiceCollection UsePostgresKnowledgeGraph(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
@@ -480,9 +453,6 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    /// <summary>
-    /// Substitui a interface base de cache pelo PostgresSemanticCacheService.
-    /// </summary>
     public static IServiceCollection UsePostgresSemanticCache(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
@@ -538,10 +508,6 @@ public static class ServiceCollectionExtensions
         }
     }
 
-    /// <summary>
-    /// Registra HttpTool usando HttpClient do DI.
-    /// Chamar após build do ServiceProvider, junto com SeedAgenticDefaults.
-    /// </summary>
     public static IServiceProvider SeedInfrastructureTools(this IServiceProvider serviceProvider)
     {
         var toolManager = serviceProvider.GetRequiredService<IToolManager>();

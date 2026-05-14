@@ -8,6 +8,14 @@ public class AgenticSystemSettings
     public ClaudeSettings Claude { get; set; } = new();
     public GatewaySettings Gateway { get; set; } = new();
     public MemorySettings Memory { get; set; } = new();
+    public SemanticCacheOptions SemanticCache { get; set; } = new();
+}
+
+public class SemanticCacheOptions
+{
+    public bool Enabled { get; set; } = true;
+    public string AgentName { get; set; } = "AgenticSystem";
+    public double SimilarityThreshold { get; set; } = 0.95;
 }
 
 public class OpenAISettings

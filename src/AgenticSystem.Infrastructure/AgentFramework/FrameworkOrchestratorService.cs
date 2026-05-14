@@ -89,7 +89,7 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
                 .Where(a => a.IsActive).ToList();
             
             var workflow = await serviceScope.ServiceProvider.GetRequiredService<OrchestratorHostBuilder>()
-                .BuildHandoffWorkflowAsync(activeAgents, ct);
+                .BuildHandoffWorkflowAsync(activeAgents, sessionId, ct);
 
             var messages = new List<ChatMessage> { new(ChatRole.User, preProcessingResult.EffectiveInput) };
             
