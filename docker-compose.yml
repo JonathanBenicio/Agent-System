@@ -30,8 +30,8 @@ services:
       - AgenticSystem__OpenAI__Enabled=false
       - AgenticSystem__OpenAI__Priority=10
       - AgenticSystem__Gemini__ApiKey=${GEMINI_API_KEY}
-      - AgenticSystem__Gemini__DefaultModel=gemini-1.5-flash
-      - AgenticSystem__Gemini__Enabled=false
+      - AgenticSystem__Gemini__DefaultModel=gemini-3-pro-preview
+      - AgenticSystem__Gemini__Enabled=true
       - AgenticSystem__Gemini__Priority=5
       - AgenticSystem__Claude__ApiKey=${CLAUDE_API_KEY}
       - AgenticSystem__Claude__DefaultModel=claude-sonnet-4-20250514

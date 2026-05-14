@@ -52,6 +52,12 @@ public class ContextAnalyzer : IContextAnalyzer
         }
         catch (Exception ex)
         {
+            if (ex.GetType().FullName == "Polly.CircuitBreaker.BrokenCircuitException")
+            {
+                _logger.LogWarning(ex, "🚨 Context analysis fallback: LLM circuit breaker is open.");
+                return CreateFallbackAnalysis(input);
+            }
+
             _logger.LogError(ex, "Erro na análise de contexto");
             return CreateFallbackAnalysis(input);
         }
@@ -87,18 +93,25 @@ public class ContextAnalyzer : IContextAnalyzer
         };
         var options = new ChatOptions { Temperature = 0.1f, MaxOutputTokens = 500 };
         
-        var response = await _chatClient.GetResponseAsync(messages, options);
-        var content = response.Text;
-        
-        if (string.IsNullOrWhiteSpace(content))
-            return new List<ExtractedEntity>();
-        
         try
         {
+            var response = await _chatClient.GetResponseAsync(messages, options);
+            var content = response.Text;
+            
+            if (string.IsNullOrWhiteSpace(content))
+                return new List<ExtractedEntity>();
+            
             return JsonSerializer.Deserialize<List<ExtractedEntity>>(content) ?? new();
         }
-        catch
+        catch (Exception ex)
         {
+            if (ex.GetType().FullName == "Polly.CircuitBreaker.BrokenCircuitException")
+            {
+                _logger.LogWarning(ex, "🚨 Entity extraction fallback: LLM circuit breaker is open.");
+                return new List<ExtractedEntity>();
+            }
+
+            _logger.LogWarning(ex, "⚠️ Entity extraction failed, returning empty list.");
             return new List<ExtractedEntity>();
         }
     }

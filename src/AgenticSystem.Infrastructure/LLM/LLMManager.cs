@@ -190,6 +190,15 @@ public class LLMManager : ILLMAdministrationService
             candidates.AddRange(routingDecision.FallbackChain);
         }
 
+        var allEnabled = _providers.Values.Where(p => p.IsEnabled).OrderBy(p => p.Priority);
+        foreach (var p in allEnabled)
+        {
+            if (!candidates.Any(c => c.Provider.Equals(p.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                candidates.Add(new ProviderFallbackOption { Provider = p.Name, Model = p.DefaultModel });
+            }
+        }
+
         var validator = _serviceProvider.GetService<IStructuredOutputValidator>();
         var maxAttempts = request.RequiredSchema != null ? request.MaxRetries : 1;
         var sw = Stopwatch.StartNew();
@@ -197,6 +206,11 @@ public class LLMManager : ILLMAdministrationService
 
         foreach (var candidate in candidates)
         {
+            if (exceptions.Count > 0)
+            {
+                _logger.LogWarning("🔄 Fallback initiated: Switching to fallback provider {NextProvider} ({Model}) after earlier failures.", candidate.Provider, candidate.Model);
+            }
+
             var chatClient = await ResolveChatClientAsync(candidate.Provider, candidate.Model, selection.ApiKey, ct);
             var resilience = GetResiliencePolicy(candidate.Provider);
 
@@ -204,6 +218,7 @@ public class LLMManager : ILLMAdministrationService
             if (circuitState == "Open" || circuitState == "Isolated")
             {
                 _logger.LogWarning("⏭️ Skipping {Provider} (Circuit Open)", candidate.Provider);
+                exceptions.Add(new InvalidOperationException($"Circuit breaker for {candidate.Provider} is Open."));
                 continue;
             }
 
@@ -620,6 +635,46 @@ public class LLMManager : ILLMAdministrationService
         var selection = await ResolveSelectionAsync(new LLMRequest { Model = requestedModel }, ct);
         var chatClient = await ResolveChatClientAsync(selection.Provider, selection.Model, selection.ApiKey, ct);
         return (chatClient, selection.Model);
+    }
+
+    internal async Task<IReadOnlyList<(IChatClient ChatClient, string ResolvedModel, string ProviderName)>> GetFallbackChatClientsAsync(
+        string? requestedModel,
+        CancellationToken ct = default)
+    {
+        var selection = await ResolveSelectionAsync(new LLMRequest { Model = requestedModel }, ct);
+        var list = new List<(IChatClient, string, string)>();
+
+        var primaryClient = await ResolveChatClientAsync(selection.Provider, selection.Model, selection.ApiKey, ct);
+        list.Add((primaryClient, selection.Model, selection.Provider));
+
+        var smartRouter = _serviceProvider.GetService<ISmartRouter>();
+        if (smartRouter is not null)
+        {
+            var decision = await smartRouter.RouteProviderAsync(selection.Provider, selection.Model);
+            if (decision is not null && decision.FallbackChain.Count > 0)
+            {
+                foreach (var opt in decision.FallbackChain)
+                {
+                    if (!opt.Provider.Equals(selection.Provider, StringComparison.OrdinalIgnoreCase))
+                    {
+                        var fallbackClient = await ResolveChatClientAsync(opt.Provider, opt.Model, selection.ApiKey, ct);
+                        list.Add((fallbackClient, opt.Model, opt.Provider));
+                    }
+                }
+            }
+        }
+
+        var allEnabled = _providers.Values.Where(p => p.IsEnabled).OrderBy(p => p.Priority);
+        foreach (var p in allEnabled)
+        {
+            if (!list.Any(x => x.Item3.Equals(p.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                var fallbackClient = await ResolveChatClientAsync(p.Name, p.DefaultModel, selection.ApiKey, ct);
+                list.Add((fallbackClient, p.DefaultModel, p.Name));
+            }
+        }
+
+        return list;
     }
 
     private async Task EnsureRuntimeConfigLoadedAsync(CancellationToken ct)

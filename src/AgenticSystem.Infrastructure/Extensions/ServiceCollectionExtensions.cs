@@ -80,7 +80,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton<LLMManager>();
         services.AddSingleton<ILLMAdministrationService>(sp => sp.GetRequiredService<LLMManager>());
-        services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(sp.GetRequiredService<LLMManager>()));
+        services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(sp.GetRequiredService<LLMManager>(), sp.GetRequiredService<ILogger<ContextAwareChatClient>>()));
 
         services.AddSingleton<IChatClient>(sp =>
         {

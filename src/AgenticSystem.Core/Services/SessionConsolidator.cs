@@ -55,25 +55,32 @@ Return ONLY a valid JSON object:
             new(ChatRole.User, prompt)
         };
         var options = new ChatOptions { Temperature = 0.1f };
-        var response = await _chatClient.GetResponseAsync(request, options);
-        var content = response.Text;
-
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            _logger.LogWarning("LLM summarization failed for session {SessionId}, using fallback", sessionId);
-            return BuildFallbackSummary(sessionId, events);
-        }
-
         try
         {
+            var response = await _chatClient.GetResponseAsync(request, options);
+            var content = response.Text;
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                _logger.LogWarning("LLM summarization failed for session {SessionId}, using fallback", sessionId);
+                return BuildFallbackSummary(sessionId, events);
+            }
+
             var summary = ParseSummary(sessionId, content, events);
             _summaries.Add(summary);
             _logger.LogInformation("📋 Session {SessionId} summarized: {Topics}",
                 sessionId, string.Join(", ", summary.TopicsDiscussed));
             return summary;
         }
-        catch
+        catch (Exception ex)
         {
+            if (ex.GetType().FullName == "Polly.CircuitBreaker.BrokenCircuitException")
+            {
+                _logger.LogWarning(ex, "🚨 Summarization discarded for session {SessionId}: LLM Circuit Breaker is open.", sessionId);
+                return BuildFallbackSummary(sessionId, events);
+            }
+
+            _logger.LogWarning(ex, "⚠️ Summarization failed for session {SessionId}, using fallback.", sessionId);
             var fallback = BuildFallbackSummary(sessionId, events);
             _summaries.Add(fallback);
             return fallback;
@@ -115,20 +122,28 @@ RULES:
             new(ChatRole.User, prompt)
         };
         var insightOptions = new ChatOptions { Temperature = 0.1f };
-        var response = await _chatClient.GetResponseAsync(insightRequest, insightOptions);
-        var content = response.Text;
-
-        if (string.IsNullOrWhiteSpace(content))
-        {
-            return BuildFallbackInsights(sessionId, events);
-        }
 
         try
         {
+            var response = await _chatClient.GetResponseAsync(insightRequest, insightOptions);
+            var content = response.Text;
+
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return BuildFallbackInsights(sessionId, events);
+            }
+
             return ParseInsights(sessionId, content);
         }
-        catch
+        catch (Exception ex)
         {
+            if (ex.GetType().FullName == "Polly.CircuitBreaker.BrokenCircuitException")
+            {
+                _logger.LogWarning(ex, "🚨 Insight extraction discarded for session {SessionId}: LLM Circuit Breaker is open.", sessionId);
+                return BuildFallbackInsights(sessionId, events);
+            }
+
+            _logger.LogWarning(ex, "⚠️ Insight extraction failed for session {SessionId}, using fallback.", sessionId);
             return BuildFallbackInsights(sessionId, events);
         }
     }
