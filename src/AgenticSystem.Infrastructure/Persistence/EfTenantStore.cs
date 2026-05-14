@@ -107,7 +107,14 @@ public sealed class EfTenantStore : ITenantStore
             UpdatedAt = DateTime.UtcNow
         });
 
-        await db.SaveChangesAsync(ct);
-        _logger.LogInformation("Default tenant created in PostgreSQL tenant store");
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            _logger.LogInformation("Default tenant created in PostgreSQL tenant store");
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogWarning(ex, "Default tenant was already created concurrently.");
+        }
     }
 }

@@ -22,9 +22,9 @@ public class InputValidationGate : IQualityGate
             return Task.FromResult(QualityResult.Fail(Name, 0, issues.ToArray()));
         }
 
-        if (context.Input.Length < 3)
+        if (context.Input.Length < 2)
         {
-            issues.Add("Input is too short (< 3 chars)");
+            issues.Add("Input is too short (< 2 chars)");
             score -= 3;
         }
 

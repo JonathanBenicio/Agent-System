@@ -10,8 +10,9 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
-using Polly;
+using Microsoft.Extensions.Http;
 using MChatMessage = Microsoft.Extensions.AI.ChatMessage;
+using Polly;
 
 namespace AgenticSystem.Infrastructure.LLM;
 
@@ -178,8 +179,8 @@ public class LLMManager : ILLMAdministrationService
             var chatClient = await ResolveChatClientAsync(candidate.Provider, candidate.Model, selection.ApiKey, ct);
             var cb = GetCircuitBreaker(candidate.Provider);
 
-            if (cb.CircuitState == Polly.CircuitBreaker.CircuitState.Open || 
-                cb.CircuitState == Polly.CircuitBreaker.CircuitState.Isolated)
+            var circuitState = cb.CircuitState.ToString();
+            if (circuitState == "Open" || circuitState == "Isolated")
             {
                 _logger.LogWarning("⏭️ Skipping {Provider} (Circuit Open)", candidate.Provider);
                 continue;
@@ -771,7 +772,17 @@ public class LLMManager : ILLMAdministrationService
     private void RegisterProvidersFromSettings(AgenticSystemSettings settings)
     {
         RegisterProvider(CreateOpenAiProvider(settings.OpenAI));
-        RegisterProvider(CreateGeminiProvider(settings.Gemini));
+        
+        var geminiProvider = _serviceProvider.GetService<GeminiProvider>();
+        if (geminiProvider != null)
+        {
+            RegisterProvider(geminiProvider);
+        }
+        else
+        {
+            RegisterProvider(CreateGeminiProvider(settings.Gemini));
+        }
+
         RegisterProvider(CreateClaudeProvider(settings.Claude));
         RegisterProvider(CreateOllamaProvider(settings.Ollama));
     }

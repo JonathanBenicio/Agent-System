@@ -67,6 +67,9 @@ public static class ServiceCollectionExtensions
     {
         var ollamaSettings = configuration.GetSection("AgenticSystem:Ollama").Get<OllamaSettings>() ?? new();
 
+        services.AddHttpClient<GeminiProvider>()
+            .AddStandardResilienceHandler();
+
         services.AddEmbeddingGenerator(sp =>
         {
             var settings = sp.GetRequiredService<IOptions<OllamaSettings>>().Value;
