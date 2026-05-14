@@ -18,9 +18,11 @@ export function ProvidersPage() {
     updateProvider,
     updateDefaultSelection,
     testProvider,
+    discoverModels,
   } = useLLMProviders()
   const { addToast } = useToast()
   const [testing, setTesting] = useState<string | null>(null)
+  const [discovering, setDiscovering] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({ apiKey: '', defaultModel: '', isEnabled: false, priority: 0 })
   const [defaultSelection, setDefaultSelection] = useState({ providerName: '', model: '' })
@@ -49,6 +51,31 @@ export function ProvidersPage() {
       addToast(`Erro ao testar ${name}`, 'error')
     }
     setTesting(null)
+  }
+
+  const handleDiscoverModels = async (p: LLMProviderInfo) => {
+    if (!editForm.apiKey) {
+      addToast('Insira a nova API Key para buscar modelos', 'info')
+      return
+    }
+    setDiscovering(p.name)
+    try {
+      const res = await discoverModels(p.name, editForm.apiKey)
+      if (res.success && res.discoveredModels.length > 0) {
+        addToast(`${res.discoveredModels.length} modelos localizados!`, 'success')
+        await updateProvider(p.name, {
+          apiKey: editForm.apiKey,
+          discoveredModels: res.discoveredModels,
+        })
+        window.dispatchEvent(new Event('agentic:llm-config-updated'))
+      } else {
+        addToast(res.errorMessage ?? 'Nenhum modelo novo encontrado', 'info')
+      }
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Erro ao descobrir modelos', 'error')
+    } finally {
+      setDiscovering(null)
+    }
   }
 
   const handleEdit = (p: LLMProviderInfo) => {
@@ -233,16 +260,27 @@ export function ProvidersPage() {
               {/* Edit form */}
               {editing === p.name && (
                 <div className="mt-4 pt-4 border-t border-zinc-800 space-y-3">
-                  <label className="block">
-                    <span className="text-xs text-zinc-400">API Key (deixe vazio para manter)</span>
-                    <input
-                      type="password"
-                      value={editForm.apiKey}
-                      onChange={e => setEditForm(prev => ({ ...prev, apiKey: e.target.value }))}
-                      className="input mt-1"
-                      placeholder="••••••••"
-                    />
-                  </label>
+                  <div className="grid gap-4 md:grid-cols-[1fr_auto] items-end">
+                    <label className="block">
+                      <span className="text-xs text-zinc-400">API Key (deixe vazio para manter)</span>
+                      <input
+                        type="password"
+                        value={editForm.apiKey}
+                        onChange={e => setEditForm(prev => ({ ...prev, apiKey: e.target.value }))}
+                        className="input mt-1"
+                        placeholder="••••••••"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleDiscoverModels(p)}
+                      disabled={discovering === p.name || !editForm.apiKey}
+                      className="inline-flex items-center gap-2 h-10 px-4 rounded-xl bg-sky-600/20 border border-sky-500/30 text-sky-300 hover:bg-sky-600/30 transition text-xs font-medium disabled:opacity-50"
+                    >
+                      <WandSparkles className="w-3.5 h-3.5" />
+                      {discovering === p.name ? 'Buscando...' : 'Buscar Modelos'}
+                    </button>
+                  </div>
                   <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,140px)_auto]">
                     <label className="block flex-1">
                       <span className="text-xs text-zinc-400">Modelo padrão do provider</span>

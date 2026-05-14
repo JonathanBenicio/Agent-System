@@ -66,6 +66,23 @@ public class LLMController : ControllerBase
         return Ok(new { provider = name, available });
     }
 
+    [HttpPost("providers/{name}/discover-models")]
+    public async Task<IActionResult> DiscoverModels(string name, [FromBody] DiscoverModelsRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.ApiKey))
+        {
+            return BadRequest(new { error = "ApiKey is required for discovery." });
+        }
+
+        var response = await _llmAdministrationService.DiscoverModelsAsync(name, request, ct);
+        if (!response.Success)
+        {
+            return BadRequest(new { error = response.ErrorMessage });
+        }
+
+        return Ok(response);
+    }
+
     [HttpPut("default-selection")]
     public async Task<IActionResult> UpdateDefaultSelection([FromBody] UpdateDefaultLlmSelectionRequest request, CancellationToken ct)
     {

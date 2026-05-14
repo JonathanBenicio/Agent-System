@@ -181,6 +181,7 @@ export const llmApi = {
   enabled: () => get<LLMProviderSummary[]>('/api/admin/llm/providers/enabled'),
   default: () => get<LLMProviderSummary>('/api/admin/llm/providers/default'),
   test: (name: string) => post<{ provider: string; available: boolean }>(`/api/admin/llm/providers/${encodeURIComponent(name)}/test`),
+  discoverModels: (name: string, apiKey: string) => post<{ success: boolean; discoveredModels: string[]; errorMessage?: string }>(`/api/admin/llm/providers/${encodeURIComponent(name)}/discover-models`, { apiKey }),
   update: (name: string, req: UpdateProviderRequest) =>
     put<LLMProviderInfo>(`/api/admin/llm/providers/${encodeURIComponent(name)}`, req),
   updateDefaultSelection: (req: UpdateDefaultLlmSelectionRequest) =>

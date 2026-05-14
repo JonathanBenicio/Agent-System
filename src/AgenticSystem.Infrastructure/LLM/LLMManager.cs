@@ -20,12 +20,12 @@ public class LLMManager : ILLMAdministrationService
 {
     private const string DefaultProviderConfigKey = "llm.default.provider";
     private const string DefaultModelConfigKey = "llm.default.model";
-    private static readonly IReadOnlyDictionary<string, string[]> ProviderModelCatalog = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, HashSet<string>> ProviderModelCatalog = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["OpenAI"] = ["gpt-4o", "gpt-4o-mini", "o4-mini", "o3"],
-        ["Gemini"] = ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash"],
-        ["Claude"] = ["claude-sonnet-4-20250514", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest"],
-        ["Ollama"] = ["llama3", "llama3.1", "mistral", "qwen2.5"]
+        ["OpenAI"] = new(StringComparer.OrdinalIgnoreCase) { "gpt-4o", "gpt-4o-mini", "o4-mini", "o3" },
+        ["Gemini"] = new(StringComparer.OrdinalIgnoreCase) { "gemini-2.5-pro", "gemini-2.5-flash", "gemini-1.5-pro", "gemini-1.5-flash" },
+        ["Claude"] = new(StringComparer.OrdinalIgnoreCase) { "claude-sonnet-4-20250514", "claude-3-7-sonnet-latest", "claude-3-5-haiku-latest" },
+        ["Ollama"] = new(StringComparer.OrdinalIgnoreCase) { "llama3", "llama3.1", "mistral", "qwen2.5" }
     };
 
     private readonly AgenticSystemSettings _settings;
@@ -373,6 +373,16 @@ public class LLMManager : ILLMAdministrationService
         if (!_providers.TryGetValue(name, out var provider))
             return null;
 
+        if (request.DiscoveredModels is not null && request.DiscoveredModels.Count > 0)
+        {
+            var known = ProviderModelCatalog.GetOrAdd(name, _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            foreach (var m in request.DiscoveredModels)
+            {
+                if (!string.IsNullOrWhiteSpace(m))
+                    known.Add(m.Trim());
+            }
+        }
+
         provider.Configure(request.ApiKey, request.DefaultModel, request.Enabled, request.Priority);
         _chatClientRegistry[name] = BuildChatClient(provider);
         await PersistProviderConfigurationAsync(name, request, provider);
@@ -385,6 +395,135 @@ public class LLMManager : ILLMAdministrationService
             provider.DefaultModel);
 
         return await GetProviderAsync(name, ct);
+    }
+
+    public async Task<DiscoverModelsResponse> DiscoverModelsAsync(string name, DiscoverModelsRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.ApiKey))
+        {
+            return new DiscoverModelsResponse { Success = false, ErrorMessage = "A chave de API é obrigatória." };
+        }
+
+        var discovered = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+
+            if (name.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+            {
+                httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", request.ApiKey);
+                using var response = await httpClient.GetAsync("https://api.openai.com/v1/models", ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorText = await response.Content.ReadAsStringAsync(ct);
+                    return new DiscoverModelsResponse { Success = false, ErrorMessage = $"Falha ao consultar OpenAI ({response.StatusCode}): {errorText}" };
+                }
+
+                using var doc = await System.Text.Json.JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                if (doc.RootElement.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var item in dataProp.EnumerateArray())
+                    {
+                        if (item.TryGetProperty("id", out var idProp) && idProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            var modelId = idProp.GetString();
+                            if (!string.IsNullOrWhiteSpace(modelId))
+                            {
+                                discovered.Add(modelId);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (name.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+            {
+                var url = $"https://generativelanguage.googleapis.com/v1beta/models?key={request.ApiKey}";
+                using var response = await httpClient.GetAsync(url, ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorText = await response.Content.ReadAsStringAsync(ct);
+                    return new DiscoverModelsResponse { Success = false, ErrorMessage = $"Falha ao consultar Gemini ({response.StatusCode}): {errorText}" };
+                }
+
+                using var doc = await System.Text.Json.JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                if (doc.RootElement.TryGetProperty("models", out var modelsProp) && modelsProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var item in modelsProp.EnumerateArray())
+                    {
+                        bool isSupported = false;
+                        if (item.TryGetProperty("supportedGenerationMethods", out var methodsProp) && methodsProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var m in methodsProp.EnumerateArray())
+                            {
+                                if (m.ValueKind == System.Text.Json.JsonValueKind.String && m.GetString() == "generateContent")
+                                {
+                                    isSupported = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (isSupported && item.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            var modelName = nameProp.GetString();
+                            if (!string.IsNullOrWhiteSpace(modelName))
+                            {
+                                if (modelName.StartsWith("models/"))
+                                {
+                                    modelName = modelName.Substring("models/".Length);
+                                }
+                                discovered.Add(modelName);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (name.Equals("Claude", StringComparison.OrdinalIgnoreCase))
+            {
+                httpClient.DefaultRequestHeaders.Add("x-api-key", request.ApiKey);
+                httpClient.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+                using var response = await httpClient.GetAsync("https://api.anthropic.com/v1/models", ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorText = await response.Content.ReadAsStringAsync(ct);
+                    return new DiscoverModelsResponse { Success = false, ErrorMessage = $"Falha ao consultar Claude ({response.StatusCode}): {errorText}" };
+                }
+
+                using var doc = await System.Text.Json.JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                if (doc.RootElement.TryGetProperty("data", out var dataProp) && dataProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var item in dataProp.EnumerateArray())
+                    {
+                        if (item.TryGetProperty("id", out var idProp) && idProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            var modelId = idProp.GetString();
+                            if (!string.IsNullOrWhiteSpace(modelId))
+                            {
+                                discovered.Add(modelId);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Fazer o merge com os modelos do catálogo inicial para garantir que não perdemos nenhum fallback importante
+            if (ProviderModelCatalog.TryGetValue(name, out var existingCatalog))
+            {
+                foreach (var m in existingCatalog) discovered.Add(m);
+            }
+
+            return new DiscoverModelsResponse
+            {
+                Success = true,
+                DiscoveredModels = discovered.ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Erro inesperado ao descobrir modelos do provedor {Provider}.", name);
+            return new DiscoverModelsResponse { Success = false, ErrorMessage = ex.Message };
+        }
     }
 
     public async Task<LLMConfigurationInfo> UpdateDefaultSelectionAsync(UpdateDefaultLlmSelectionRequest request, CancellationToken ct = default)
@@ -461,6 +600,16 @@ public class LLMManager : ILLMAdministrationService
                 var model = await _configManager.ResolveValueAsync($"{prefix}.model");
                 var enabledRaw = await _configManager.ResolveValueAsync($"{prefix}.enabled");
                 var priorityRaw = await _configManager.ResolveValueAsync($"{prefix}.priority");
+                var modelsRaw = await _configManager.ResolveValueAsync($"{prefix}.models");
+
+                if (!string.IsNullOrWhiteSpace(modelsRaw))
+                {
+                    var known = ProviderModelCatalog.GetOrAdd(provider.Name, _ => new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                    foreach (var m in modelsRaw.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        known.Add(m.Trim());
+                    }
+                }
 
                 bool? enabled = TryParseBool(enabledRaw);
                 int? priority = TryParseInt(priorityRaw);
@@ -651,6 +800,17 @@ public class LLMManager : ILLMAdministrationService
                 ConfigCategory.Provider,
                 providerName,
                 $"Prioridade de roteamento do provider {providerName}.");
+        }
+
+        if (request.DiscoveredModels is not null && request.DiscoveredModels.Count > 0)
+        {
+            await UpsertConfigEntryAsync(
+                $"{prefix}.models",
+                string.Join(",", request.DiscoveredModels),
+                isSecret: false,
+                ConfigCategory.Provider,
+                providerName,
+                $"Modelos descobertos do provider {providerName}.");
         }
     }
 

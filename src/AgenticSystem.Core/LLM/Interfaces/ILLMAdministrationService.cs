@@ -9,4 +9,5 @@ public interface ILLMAdministrationService
     Task<bool> TestProviderAsync(string name, CancellationToken ct = default);
     Task<LLMConfigurationInfo> UpdateDefaultSelectionAsync(UpdateDefaultLlmSelectionRequest request, CancellationToken ct = default);
     Task<LLMProviderInfo?> UpdateProviderAsync(string name, UpdateProviderRequest request, CancellationToken ct = default);
+    Task<DiscoverModelsResponse> DiscoverModelsAsync(string name, DiscoverModelsRequest request, CancellationToken ct = default);
 }

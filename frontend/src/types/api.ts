@@ -260,6 +260,7 @@ export interface UpdateProviderRequest {
   defaultModel?: string
   enabled?: boolean
   priority?: number
+  discoveredModels?: string[]
 }
 
 export interface UpdateDefaultLlmSelectionRequest {

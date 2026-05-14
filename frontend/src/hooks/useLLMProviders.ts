@@ -50,6 +50,10 @@ export function useLLMProviders() {
     return llmApi.test(name)
   }, [])
 
+  const discoverModels = useCallback(async (name: string, apiKey: string) => {
+    return llmApi.discoverModels(name, apiKey)
+  }, [])
+
   return {
     providers,
     configuration,
@@ -61,5 +65,6 @@ export function useLLMProviders() {
     updateProvider,
     updateDefaultSelection,
     testProvider,
+    discoverModels,
   }
 }
