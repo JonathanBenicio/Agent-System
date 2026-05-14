@@ -29,6 +29,24 @@ services:
       - AgenticSystem__OpenAI__DefaultModel=gpt-4o-mini
       - AgenticSystem__OpenAI__Enabled=false
       - AgenticSystem__OpenAI__Priority=10
+      - AgenticSystem__Gemini__ApiKey=${GEMINI_API_KEY}
+      - AgenticSystem__Gemini__DefaultModel=gemini-1.5-flash
+      - AgenticSystem__Gemini__Enabled=false
+      - AgenticSystem__Gemini__Priority=5
+      - AgenticSystem__Claude__ApiKey=${CLAUDE_API_KEY}
+      - AgenticSystem__Claude__DefaultModel=claude-sonnet-4-20250514
+      - AgenticSystem__Claude__Enabled=false
+      - AgenticSystem__Claude__Priority=3
+      - AgenticSystem__Gateway__DefaultDailyBudget=50.00
+      - AgenticSystem__Gateway__DefaultFailureThreshold=5
+      - AgenticSystem__CollaborationWorkflow__EnableAdvancedWorkflow=false
+      - AgenticSystem__CollaborationWorkflow__EnableConcurrentContextStage=true
+      - AgenticSystem__RAG__ReRanking__Enabled=true
+      - AgenticSystem__RAG__ReRanking__UseDedicatedProvider=true
+      - AgenticSystem__RAG__ReRanking__DedicatedProvider=LocalOnnxCrossEncoder
+      - AgenticSystem__Skills__ScanAssemblySkills=true
+      - AgenticSystem__Skills__DynamicDirectory=skills
+      - AgenticSystem__Skills__WatchDynamicDirectory=true
       - AgenticSystem__LocalExecution__StorageMode=PostgreSQL
       - AgenticSystem__Memory__VectorStoreType=PostgreSQL
       - ConnectionStrings__SessionStore=Host=postgres;Port=5432;Database=agentic;Username=agentic;Password=${POSTGRES_PASSWORD:-agentic_dev}
