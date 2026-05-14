@@ -39,7 +39,7 @@ services:
       - AgenticSystem__Claude__Priority=3
       - AgenticSystem__OpenRouter__ApiKey=${OPENROUTER_API_KEY}
       - AgenticSystem__OpenRouter__DefaultModel=openrouter/auto
-      - AgenticSystem__OpenRouter__Enabled=false
+      - AgenticSystem__OpenRouter__Enabled=true
       - AgenticSystem__OpenRouter__Priority=4
       - AgenticSystem__Gateway__DefaultDailyBudget=50.00
       - AgenticSystem__Gateway__DefaultFailureThreshold=5

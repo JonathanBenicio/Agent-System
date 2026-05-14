@@ -42,8 +42,8 @@ public class LLMManager : ILLMAdministrationService
     private readonly Dictionary<string, IChatClient> _chatClientRegistry = new(StringComparer.OrdinalIgnoreCase);
     private readonly SemaphoreSlim _configSync = new(1, 1);
     
-    // Polly Circuit Breakers per provider
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Polly.CircuitBreaker.AsyncCircuitBreakerPolicy> _circuitBreakers = new();
+    // Polly Resilience Policies per provider
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (Polly.Wrap.AsyncPolicyWrap Policy, Polly.CircuitBreaker.AsyncCircuitBreakerPolicy CircuitBreaker)> _resiliencePolicies = new();
 
     private volatile bool _runtimeConfigDirty = true;
     private string? _defaultProviderOverride;
@@ -117,10 +117,11 @@ public class LLMManager : ILLMAdministrationService
             string.Join(", ", _providers.Keys));
     }
 
-    private Polly.CircuitBreaker.AsyncCircuitBreakerPolicy GetCircuitBreaker(string providerName)
+    private (Polly.Wrap.AsyncPolicyWrap Policy, Polly.CircuitBreaker.AsyncCircuitBreakerPolicy CircuitBreaker) GetResiliencePolicy(string providerName)
     {
-        return _circuitBreakers.GetOrAdd(providerName, _ =>
-            Polly.Policy
+        return _resiliencePolicies.GetOrAdd(providerName, _ =>
+        {
+            var cb = Polly.Policy
                 .Handle<Exception>(ex => 
                     ex.Message.Contains("429") || 
                     ex.Message.Contains("timeout") || 
@@ -131,7 +132,7 @@ public class LLMManager : ILLMAdministrationService
                     durationOfBreak: TimeSpan.FromSeconds(30),
                     onBreak: (ex, breakDelay) =>
                     {
-                        _logger.LogWarning(ex, "🚨 Circuit Breaker for {Provider} triped! Breaking for {Delay}s", providerName, breakDelay.TotalSeconds);
+                        _logger.LogWarning(ex, "🚨 Circuit Breaker for {Provider} tripped! Breaking for {Delay}s", providerName, breakDelay.TotalSeconds);
                     },
                     onReset: () =>
                     {
@@ -140,7 +141,26 @@ public class LLMManager : ILLMAdministrationService
                     onHalfOpen: () =>
                     {
                         _logger.LogInformation("⏳ Circuit Breaker for {Provider} is half-open (testing next request).", providerName);
-                    }));
+                    });
+
+            var retry = Polly.Policy
+                .Handle<Exception>(ex => 
+                    ex.Message.Contains("429") || 
+                    ex.Message.Contains("timeout") || 
+                    ex is HttpRequestException || 
+                    ex is TimeoutException)
+                .WaitAndRetryAsync(
+                    retryCount: 4,
+                    sleepDurationProvider: (attempt) => 
+                        TimeSpan.FromSeconds(Math.Pow(2, attempt)) + TimeSpan.FromMilliseconds(Random.Shared.Next(0, 1000)),
+                    onRetry: (ex, delay, attempt, ctx) =>
+                    {
+                        _logger.LogWarning("⏳ Retrying {Provider} due to error (Attempt {Attempt}/4). Delaying for {Delay}ms. Error: {Message}", 
+                            providerName, attempt, delay.TotalMilliseconds, ex.Message);
+                    });
+
+            return (Policy: Polly.Policy.WrapAsync(cb, retry), CircuitBreaker: cb);
+        });
     }
 
     public async Task<LLMResponse> GenerateAsync(LLMRequest request, CancellationToken ct = default)
@@ -178,9 +198,9 @@ public class LLMManager : ILLMAdministrationService
         foreach (var candidate in candidates)
         {
             var chatClient = await ResolveChatClientAsync(candidate.Provider, candidate.Model, selection.ApiKey, ct);
-            var cb = GetCircuitBreaker(candidate.Provider);
+            var resilience = GetResiliencePolicy(candidate.Provider);
 
-            var circuitState = cb.CircuitState.ToString();
+            var circuitState = resilience.CircuitBreaker.CircuitState.ToString();
             if (circuitState == "Open" || circuitState == "Isolated")
             {
                 _logger.LogWarning("⏭️ Skipping {Provider} (Circuit Open)", candidate.Provider);
@@ -208,7 +228,7 @@ public class LLMManager : ILLMAdministrationService
             {
                 try
                 {
-                    var response = await cb.ExecuteAsync(async () => 
+                    var response = await resilience.Policy.ExecuteAsync(async () => 
                         await chatClient.GetResponseAsync(messages, options, ct));
 
                     var responseText = response.Text ?? string.Empty;
@@ -989,9 +1009,10 @@ public class LLMManager : ILLMAdministrationService
         _chatClientRegistry[provider.Name] = BuildChatClient(provider);
     }
 
-    private static IChatClient BuildChatClient(ILLMProvider provider)
+    private IChatClient BuildChatClient(ILLMProvider provider)
     {
-        return new ProviderBackedChatClient(provider);
+        var resilience = GetResiliencePolicy(provider.Name);
+        return new ProviderBackedChatClient(provider, resilience.Policy);
     }
 
     private bool IsProviderConfigured(ILLMProvider provider)

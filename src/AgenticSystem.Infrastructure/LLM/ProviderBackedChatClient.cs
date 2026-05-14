@@ -1,6 +1,7 @@
 using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.LLM.Models;
 using Microsoft.Extensions.AI;
+using Polly.Wrap;
 using MChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 namespace AgenticSystem.Infrastructure.LLM;
@@ -11,11 +12,13 @@ namespace AgenticSystem.Infrastructure.LLM;
 public sealed class ProviderBackedChatClient : IChatClient
 {
     private readonly ILLMProvider _provider;
+    private readonly AsyncPolicyWrap? _resiliencePolicy;
     private bool _disposed;
 
-    public ProviderBackedChatClient(ILLMProvider provider)
+    public ProviderBackedChatClient(ILLMProvider provider, AsyncPolicyWrap? resiliencePolicy = null)
     {
         _provider = provider ?? throw new ArgumentNullException(nameof(provider));
+        _resiliencePolicy = resiliencePolicy;
     }
 
     public async Task<ChatResponse> GetResponseAsync(
@@ -26,11 +29,27 @@ public sealed class ProviderBackedChatClient : IChatClient
         ArgumentNullException.ThrowIfNull(messages);
 
         var request = MapRequest(messages, options);
-        var response = await _provider.GenerateAsync(request, cancellationToken);
-
-        if (!response.Success)
+        
+        LLMResponse response;
+        if (_resiliencePolicy != null)
         {
-            throw new InvalidOperationException(response.ErrorMessage ?? $"Provider '{_provider.Name}' failed.");
+            response = await _resiliencePolicy.ExecuteAsync(async () => 
+            {
+                var resp = await _provider.GenerateAsync(request, cancellationToken);
+                if (!resp.Success)
+                {
+                    throw new InvalidOperationException(resp.ErrorMessage ?? $"Provider '{_provider.Name}' failed.");
+                }
+                return resp;
+            });
+        }
+        else
+        {
+            response = await _provider.GenerateAsync(request, cancellationToken);
+            if (!response.Success)
+            {
+                throw new InvalidOperationException(response.ErrorMessage ?? $"Provider '{_provider.Name}' failed.");
+            }
         }
 
         var assistant = new MChatMessage(ChatRole.Assistant, response.Content);

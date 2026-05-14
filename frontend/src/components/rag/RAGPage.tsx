@@ -4,6 +4,26 @@ import { Badge } from '@/components/shared/Badge'
 import { useRAG } from '@/hooks/useRAG'
 import type { IngestDocumentResponse } from '@/types/api'
 
+const PRESET_MODELS: Record<string, { name: string; dim: number; desc: string }[]> = {
+  OpenAI: [
+    { name: 'text-embedding-3-small', dim: 1536, desc: 'Padrão rápido e eficiente' },
+    { name: 'text-embedding-3-large', dim: 3072, desc: 'Alta precisão e maior capacidade' },
+    { name: 'text-embedding-ada-002', dim: 1536, desc: 'Modelo legado v2' },
+  ],
+  Ollama: [
+    { name: 'nomic-embed-text', dim: 768, desc: 'Excelente modelo geral open-source' },
+    { name: 'mxbai-embed-large', dim: 1024, desc: 'State-of-the-art para busca semântica' },
+    { name: 'all-minilm', dim: 384, desc: 'Leve, rápido e muito popular' },
+    { name: 'bge-small', dim: 384, desc: 'Otimizado para busca e recuperação' },
+    { name: 'bge-large', dim: 1024, desc: 'Alta capacidade semântica' },
+  ],
+  ONNX: [
+    { name: 'bge-small', dim: 384, desc: 'Inferência local ultrarrápida via CPU/GPU' },
+    { name: 'all-MiniLM-L6-v2', dim: 384, desc: 'Modelo compacto in-process' },
+    { name: 'bge-reranker-small', dim: 384, desc: 'Focado em reranking e cross-encoder' },
+  ],
+}
+
 export function RAGPage() {
   const {
     loading,
@@ -41,11 +61,25 @@ export function RAGPage() {
 
   // Migration State
   const [showNewModelForm, setShowNewModelForm] = useState(false)
-  const [newModelName, setNewModelName] = useState('')
+  const [newModelName, setNewModelName] = useState('text-embedding-3-small')
   const [newModelProvider, setNewModelProvider] = useState('OpenAI')
   const [newModelDim, setNewModelDim] = useState(1536)
   const [newModelBaseUrl, setNewModelBaseUrl] = useState('')
   const [newModelApiKey, setNewModelApiKey] = useState('')
+
+  const handleProviderChange = (provider: string) => {
+    setNewModelProvider(provider)
+    const presets = PRESET_MODELS[provider]
+    if (presets && presets.length > 0) {
+      setNewModelName(presets[0].name)
+      setNewModelDim(presets[0].dim)
+    }
+  }
+
+  const handleSelectPreset = (name: string, dim: number) => {
+    setNewModelName(name)
+    setNewModelDim(dim)
+  }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -535,67 +569,118 @@ export function RAGPage() {
 
             {/* Form de Criação de Modelo */}
             {showNewModelForm && (
-              <form onSubmit={handleCreateModel} className="bg-zinc-900/80 border border-teal-500/30 backdrop-blur-md rounded-2xl p-6 space-y-4">
-                <h3 className="text-sm font-semibold text-teal-300">Novo Modelo de Embedding</h3>
+              <form onSubmit={handleCreateModel} className="bg-zinc-900/80 border border-teal-500/30 backdrop-blur-md rounded-2xl p-6 space-y-6 shadow-2xl">
+                <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                  <h3 className="text-sm font-semibold text-teal-300">Cadastrar Novo Modelo de Embedding</h3>
+                  <span className="text-xs text-zinc-500">Selecione um modelo da lista ou digite um nome customizado</span>
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1">Nome do Modelo</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="ex: text-embedding-3-small"
-                      value={newModelName}
-                      onChange={e => setNewModelName(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-200 focus:border-teal-500 focus:outline-none"
-                    />
-                  </div>
                   <div>
                     <label className="block text-xs font-medium text-zinc-400 mb-1">Provedor</label>
                     <select
                       value={newModelProvider}
-                      onChange={e => setNewModelProvider(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-200 focus:border-teal-500 focus:outline-none"
+                      onChange={e => handleProviderChange(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-200 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                     >
                       <option value="OpenAI">OpenAI</option>
                       <option value="Ollama">Ollama (Local)</option>
                       <option value="ONNX">ONNX Runtime (Local)</option>
                     </select>
                   </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-medium text-zinc-400 mb-1">Nome do Modelo (Busca / Digitação Livre)</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="ex: text-embedding-3-small"
+                      value={newModelName}
+                      onChange={e => setNewModelName(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-200 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500 font-mono"
+                    />
+                  </div>
                   <div>
                     <label className="block text-xs font-medium text-zinc-400 mb-1">Dimensões do Vetor</label>
                     <select
                       value={newModelDim}
                       onChange={e => setNewModelDim(Number(e.target.value))}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-200 focus:border-teal-500 focus:outline-none"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-200 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                     >
-                      <option value={1536}>1536 (text-embedding-3)</option>
                       <option value={384}>384 (all-MiniLM / bge-small)</option>
-                      <option value={1024}>1024 (bge-large / e5)</option>
+                      <option value={768}>768 (nomic-embed-text)</option>
+                      <option value={1024}>1024 (bge-large / mxbai)</option>
+                      <option value={1536}>1536 (text-embedding-3)</option>
+                      <option value={3072}>3072 (text-embedding-3-large)</option>
                     </select>
                   </div>
+                </div>
+
+                {/* Lista de Modelos Disponíveis / Sugestões Rápidas */}
+                <div className="space-y-3 bg-zinc-950/50 p-4 rounded-xl border border-zinc-800/80">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                    Modelos Disponíveis para {newModelProvider} (Clique para selecionar)
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                    {PRESET_MODELS[newModelProvider]?.map(preset => {
+                      const isSelected = newModelName === preset.name
+                      return (
+                        <button
+                          key={preset.name}
+                          type="button"
+                          onClick={() => handleSelectPreset(preset.name, preset.dim)}
+                          className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                            isSelected
+                              ? 'bg-teal-500/10 border-teal-500/50 text-white shadow-md shadow-teal-500/10 scale-[1.01]'
+                              : 'bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between w-full mb-1">
+                            <span className="text-xs font-bold font-mono truncate">{preset.name}</span>
+                            <Badge variant={isSelected ? 'success' : 'default'} className="text-[10px] px-1.5 py-0.5">
+                              {preset.dim}d
+                            </Badge>
+                          </div>
+                          <span className="text-[10px] text-zinc-500 line-clamp-1">{preset.desc}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-1">Base URL (Opcional)</label>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1">Base URL (Opcional - Custom Endpoint)</label>
                     <input
                       type="text"
-                      placeholder="http://localhost:11434"
+                      placeholder={newModelProvider === 'Ollama' ? 'http://localhost:11434' : 'https://api.openai.com/v1'}
                       value={newModelBaseUrl}
                       onChange={e => setNewModelBaseUrl(e.target.value)}
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-200 focus:border-teal-500 focus:outline-none"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-200 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-zinc-400 mb-1">API Key (Opcional)</label>
+                    <input
+                      type="password"
+                      placeholder="sk-..."
+                      value={newModelApiKey}
+                      onChange={e => setNewModelApiKey(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-2 text-sm text-zinc-200 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
                     />
                   </div>
                 </div>
 
-                <div className="flex justify-end gap-2 pt-2">
+                <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800/80">
                   <button
                     type="button"
                     onClick={() => setShowNewModelForm(false)}
-                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-sm"
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-sm transition-colors"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-sm font-medium"
+                    className="px-6 py-2 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white rounded-xl text-sm font-medium shadow-md shadow-teal-500/10 transition-all"
                   >
                     Salvar Modelo
                   </button>

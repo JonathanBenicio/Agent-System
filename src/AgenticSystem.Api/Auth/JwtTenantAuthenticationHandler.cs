@@ -84,7 +84,7 @@ public class JwtTenantAuthenticationHandler : AuthenticationHandler<JwtTenantAut
         {
             return Task.FromResult(AuthenticateResult.Fail("Token expired."));
         }
-        catch (SecurityTokenException ex)
+        catch (Exception ex)
         {
             return Task.FromResult(AuthenticateResult.Fail($"Token validation failed: {ex.Message}"));
         }
