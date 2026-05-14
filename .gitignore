@@ -30,3 +30,5 @@ coverage/
 
 ## Stryker mutation testing
 **/StrykerOutput/
+
+.gemini/**

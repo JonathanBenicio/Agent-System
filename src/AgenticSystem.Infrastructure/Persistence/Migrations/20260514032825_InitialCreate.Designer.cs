@@ -7,21 +7,23 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
+using Pgvector;
 
 #nullable disable
 
 namespace AgenticSystem.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AgenticDbContext))]
-    [Migration("20260509020038_AddAgentPolicies")]
-    partial class AddAgentPolicies
+    [Migration("20260514032825_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.7")
+                .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -88,6 +90,69 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_tenants_slug");
 
                     b.ToTable("tenants", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.AgentMarketplaceEntryEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Author")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("author");
+
+                    b.Property<double>("AverageRating")
+                        .HasColumnType("double precision")
+                        .HasColumnName("average_rating");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Domain")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("domain");
+
+                    b.Property<int>("InstallCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("install_count");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name");
+
+                    b.Property<DateTime>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<string>("SpecificationJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("specification");
+
+                    b.Property<string>("TagsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tags");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Author")
+                        .HasDatabaseName("ix_marketplace_author");
+
+                    b.HasIndex("Domain")
+                        .HasDatabaseName("ix_marketplace_domain");
+
+                    b.ToTable("agent_marketplace_entries", (string)null);
                 });
 
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.AgentMemoryEntity", b =>
@@ -303,6 +368,114 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("AgentPolicies");
                 });
 
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.AgentVersionEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AgentName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("agent_name");
+
+                    b.Property<string>("ChangeLog")
+                        .HasColumnType("text")
+                        .HasColumnName("change_log");
+
+                    b.Property<string>("ConfigHash")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("config_hash");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<int>("Environment")
+                        .HasColumnType("integer")
+                        .HasColumnName("environment");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("label");
+
+                    b.Property<string>("ModelId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("model_id");
+
+                    b.Property<string>("ModelProvider")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("model_provider");
+
+                    b.Property<string>("ParametersJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("parameters");
+
+                    b.Property<string>("ParentVersionId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("parent_version_id");
+
+                    b.Property<string>("PolicySnapshotJson")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("policy_snapshot");
+
+                    b.Property<DateTime?>("PromotedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("promoted_at");
+
+                    b.Property<string>("PromotedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("promoted_by");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<string>("SystemPrompt")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("system_prompt");
+
+                    b.PrimitiveCollection<List<string>>("Tools")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("tools");
+
+                    b.Property<int>("VersionNumber")
+                        .HasColumnType("integer")
+                        .HasColumnName("version_number");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentName")
+                        .HasDatabaseName("ix_agent_versions_agent_name");
+
+                    b.HasIndex("AgentName", "VersionNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ix_agent_versions_agent_version_unique");
+
+                    b.ToTable("agent_versions", (string)null);
+                });
+
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.AuditEntryEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -344,6 +517,9 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("error_message");
 
+                    b.Property<string>("IpAddress")
+                        .HasColumnType("text");
+
                     b.Property<string>("ModelUsed")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
@@ -376,6 +552,9 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
                         .HasColumnName("trace_id");
+
+                    b.Property<string>("UserAgent")
+                        .HasColumnType("text");
 
                     b.Property<string>("UserId")
                         .HasMaxLength(128)
@@ -601,6 +780,68 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("cost_entries", (string)null);
                 });
 
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.DataConnectorEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ConnectionString")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("connection_string");
+
+                    b.Property<string>("ConnectorType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("connector_type");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateTime?>("LastSyncAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_sync_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("SettingsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("settings");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("SyncScheduleJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("sync_schedule");
+
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_data_connectors_tenant_id");
+
+                    b.ToTable("data_connectors", (string)null);
+                });
+
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.EmbeddingModelEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -635,6 +876,172 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_embedding_models_name");
 
                     b.ToTable("embedding_models", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.EnhancedMemoryEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AccessCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("access_count");
+
+                    b.Property<string>("AgentName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("agent_name");
+
+                    b.Property<double>("Confidence")
+                        .HasColumnType("double precision")
+                        .HasColumnName("confidence");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("content");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<double>("DecayRate")
+                        .HasColumnType("double precision")
+                        .HasColumnName("decay_rate");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<double>("Freshness")
+                        .HasColumnType("double precision")
+                        .HasColumnName("freshness");
+
+                    b.Property<DateTime>("LastAccessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_accessed_at");
+
+                    b.Property<string>("MemoryType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("memory_type");
+
+                    b.Property<string>("Sensitivity")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sensitivity");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("TagsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("tags");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentName")
+                        .HasDatabaseName("ix_enhanced_memory_agent");
+
+                    b.HasIndex("MemoryType")
+                        .HasDatabaseName("ix_enhanced_memory_type");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("ix_enhanced_memory_session");
+
+                    b.ToTable("enhanced_memories", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.EvalSuiteResultEntity", b =>
+                {
+                    b.Property<string>("SuiteId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("suite_id");
+
+                    b.Property<double>("AccuracyScore")
+                        .HasColumnType("double precision")
+                        .HasColumnName("accuracy_score");
+
+                    b.Property<string>("AgentName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("agent_name");
+
+                    b.Property<string>("AgentVersionId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("agent_version_id");
+
+                    b.Property<DateTime>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<int>("Failed")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed");
+
+                    b.Property<double>("LatencyP50Ms")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latency_p50_ms");
+
+                    b.Property<double>("LatencyP95Ms")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latency_p95_ms");
+
+                    b.Property<double>("OverallScore")
+                        .HasColumnType("double precision")
+                        .HasColumnName("overall_score");
+
+                    b.Property<int>("Passed")
+                        .HasColumnType("integer")
+                        .HasColumnName("passed");
+
+                    b.Property<string>("RegressionsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("regressions");
+
+                    b.Property<string>("ResultsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("results");
+
+                    b.Property<double>("SafetyScore")
+                        .HasColumnType("double precision")
+                        .HasColumnName("safety_score");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<int>("TotalTests")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_tests");
+
+                    b.Property<int>("TotalTokensUsed")
+                        .HasColumnType("integer")
+                        .HasColumnName("total_tokens_used");
+
+                    b.HasKey("SuiteId");
+
+                    b.HasIndex("AgentName")
+                        .HasDatabaseName("ix_eval_suite_results_agent_name");
+
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("ix_eval_suite_results_started_at");
+
+                    b.ToTable("eval_suite_results", (string)null);
                 });
 
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.EvaluationScoreEntity", b =>
@@ -698,6 +1105,151 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("runtime_evaluations", (string)null);
                 });
 
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.KnowledgeGraphEdgeEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("PropertiesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("properties");
+
+                    b.Property<string>("RelationType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("relation_type");
+
+                    b.Property<string>("SourceDocumentId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("source_document_id");
+
+                    b.Property<string>("SourceNodeId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("source_node_id");
+
+                    b.Property<string>("TargetNodeId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("target_node_id");
+
+                    b.Property<double>("Weight")
+                        .HasColumnType("double precision")
+                        .HasColumnName("weight");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RelationType")
+                        .HasDatabaseName("ix_knowledge_graph_edges_relation_type");
+
+                    b.HasIndex("SourceNodeId")
+                        .HasDatabaseName("ix_knowledge_graph_edges_source_node");
+
+                    b.HasIndex("TargetNodeId")
+                        .HasDatabaseName("ix_knowledge_graph_edges_target_node");
+
+                    b.HasIndex("SourceNodeId", "TargetNodeId", "RelationType")
+                        .IsUnique()
+                        .HasDatabaseName("ix_knowledge_graph_edges_unique_relation");
+
+                    b.ToTable("knowledge_graph_edges", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.KnowledgeGraphNodeEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("entity_type");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("label");
+
+                    b.Property<string>("PropertiesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("properties");
+
+                    b.Property<string>("SourceDocumentId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("source_document_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EntityType")
+                        .HasDatabaseName("ix_knowledge_graph_nodes_entity_type");
+
+                    b.HasIndex("Label")
+                        .HasDatabaseName("ix_knowledge_graph_nodes_label");
+
+                    b.HasIndex("SourceDocumentId")
+                        .HasDatabaseName("ix_knowledge_graph_nodes_source_document");
+
+                    b.ToTable("knowledge_graph_nodes", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.LlmPricingRuleEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("CostPerMillionCachedTokens")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("CostPerMillionCompletionTokens")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("CostPerMillionPromptTokens")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("EffectiveDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ModelId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LlmPricingRules");
+                });
+
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.MigrationJobEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -729,6 +1281,54 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("idx_migration_jobs_status");
 
                     b.ToTable("migration_jobs", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.ModelPerformanceEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<double>("ActualCostUsd")
+                        .HasColumnType("double precision")
+                        .HasColumnName("actual_cost_usd");
+
+                    b.Property<int>("InputTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("input_tokens");
+
+                    b.Property<double>("LatencyMs")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latency_ms");
+
+                    b.Property<string>("ModelId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("model_id");
+
+                    b.Property<int>("OutputTokens")
+                        .HasColumnType("integer")
+                        .HasColumnName("output_tokens");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<bool>("Success")
+                        .HasColumnType("boolean")
+                        .HasColumnName("success");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ModelId")
+                        .HasDatabaseName("ix_model_performance_model_id");
+
+                    b.HasIndex("RecordedAt")
+                        .HasDatabaseName("ix_model_performance_recorded_at");
+
+                    b.ToTable("model_performance_records", (string)null);
                 });
 
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.OutboxMessageEntity", b =>
@@ -770,6 +1370,77 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_outbox_messages_processed_at");
 
                     b.ToTable("outbox_messages", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.PromptTemplateEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AgentName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("agent_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("CreatedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Locale")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("locale");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("TemplateBody")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("template_body");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.PrimitiveCollection<List<string>>("Variables")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("variables");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentName")
+                        .HasDatabaseName("ix_prompt_templates_agent_name");
+
+                    b.HasIndex("AgentName", "Locale", "IsActive")
+                        .HasDatabaseName("ix_prompt_templates_agent_locale_active");
+
+                    b.ToTable("prompt_templates", (string)null);
                 });
 
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.ReflectionEntity", b =>
@@ -1270,9 +1941,11 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("content");
 
-                    b.PrimitiveCollection<float[]>("Embedding")
-                        .IsRequired()
-                        .HasColumnType("real[]")
+                    b.Property<string>("ContextualSummary")
+                        .HasColumnType("text");
+
+                    b.Property<Vector>("Embedding")
+                        .HasColumnType("vector")
                         .HasColumnName("embedding");
 
                     b.Property<DateTime>("IndexedAt")
@@ -1283,6 +1956,12 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("metadata");
+
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasAnnotation("Npgsql:TsVectorConfig", "english")
+                        .HasAnnotation("Npgsql:TsVectorProperties", new[] { "Content" });
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -1298,10 +1977,177 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.HasIndex("IndexedAt")
                         .HasDatabaseName("ix_vector_documents_indexed_at");
 
+                    b.HasIndex("SearchVector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
+
                     b.HasIndex("Type")
                         .HasDatabaseName("ix_vector_documents_type");
 
                     b.ToTable("vector_documents", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.WorkflowDefinitionEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("DefinitionJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("definition");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .HasDatabaseName("ix_workflow_definitions_name");
+
+                    b.ToTable("workflow_definitions", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.WorkflowExecutionEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("InitiatedBy")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("initiated_by");
+
+                    b.Property<DateTime>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("VariablesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("variables");
+
+                    b.Property<string>("WorkflowId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("workflow_id");
+
+                    b.Property<string>("WorkflowName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("workflow_name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StartedAt")
+                        .HasDatabaseName("ix_workflow_executions_started_at");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("ix_workflow_executions_status");
+
+                    b.HasIndex("WorkflowId")
+                        .HasDatabaseName("ix_workflow_executions_workflow_id");
+
+                    b.ToTable("workflow_executions", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.WorkflowStepExecutionEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("CompensationExecuted")
+                        .HasColumnType("boolean")
+                        .HasColumnName("compensation_executed");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("ExecutionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("execution_id");
+
+                    b.Property<string>("OutputJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("output");
+
+                    b.Property<int>("RetryCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("retry_count");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StepId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("step_id");
+
+                    b.Property<string>("StepName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("step_name");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionId")
+                        .HasDatabaseName("ix_workflow_step_executions_execution_id");
+
+                    b.HasIndex("ExecutionId", "StepId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_workflow_step_executions_unique_step");
+
+                    b.ToTable("workflow_step_executions", (string)null);
                 });
 #pragma warning restore 612, 618
         }

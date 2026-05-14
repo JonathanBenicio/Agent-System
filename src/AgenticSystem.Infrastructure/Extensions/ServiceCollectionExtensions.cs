@@ -66,7 +66,7 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddAgenticLlmServices(this IServiceCollection services, IConfiguration configuration)
     {
         var ollamaSettings = configuration.GetSection("AgenticSystem:Ollama").Get<OllamaSettings>() ?? new();
-        
+
         services.AddEmbeddingGenerator(sp =>
         {
             var settings = sp.GetRequiredService<IOptions<OllamaSettings>>().Value;
@@ -78,7 +78,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LLMManager>();
         services.AddSingleton<ILLMAdministrationService>(sp => sp.GetRequiredService<LLMManager>());
         services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(sp.GetRequiredService<LLMManager>()));
-        
+
         services.AddSingleton<IChatClient>(sp =>
         {
             var governedClient = new GovernedChatClient(
@@ -144,7 +144,7 @@ public static class ServiceCollectionExtensions
         var enableStreaming = configuration.GetValue<bool>("AgenticSystem:Ollama:EnableStreaming");
 
         var hasChatClient = ollamaEnabled || services.Any(d => d.ServiceType == typeof(IChatClient));
-        
+
         if (hasChatClient)
         {
             var orchestratorMetadata = OrchestratorMetadata.Default;
@@ -162,8 +162,8 @@ public static class ServiceCollectionExtensions
                 if (ragService is null) return null!;
 
                 return new RAGContextProvider(
-                    ragService, 
-                    sp.GetService<IContextBudgetManager>(), 
+                    ragService,
+                    sp.GetService<IContextBudgetManager>(),
                     sp.GetRequiredService<ILogger<RAGContextProvider>>());
             });
 
@@ -232,13 +232,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRerankingSettingsAccessor, RerankingSettingsAccessor>();
         services.AddSingleton<HeuristicReRanker>();
         services.AddSingleton<IDedicatedReRankerProvider, LocalOnnxCrossEncoderReRankerProvider>();
-        
+
         services.AddHttpClient("DedicatedReRanker");
         services.AddSingleton<IDedicatedReRankerProvider>(sp => new JinaReRankerProvider(
             sp.GetRequiredService<IHttpClientFactory>().CreateClient("DedicatedReRanker"),
             sp.GetRequiredService<IRerankingSettingsAccessor>(),
             sp.GetRequiredService<ILogger<JinaReRankerProvider>>()));
-            
+
         services.AddSingleton<IReRanker>(sp => new LlmReRanker(
             sp.GetRequiredService<HeuristicReRanker>(),
             sp.GetRequiredService<IChatClient>(),

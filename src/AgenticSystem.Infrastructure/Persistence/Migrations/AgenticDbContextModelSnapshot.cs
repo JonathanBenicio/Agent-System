@@ -1214,6 +1214,39 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("knowledge_graph_nodes", (string)null);
                 });
 
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.LlmPricingRuleEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("CostPerMillionCachedTokens")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("CostPerMillionCompletionTokens")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("CostPerMillionPromptTokens")
+                        .HasColumnType("numeric");
+
+                    b.Property<DateTime>("EffectiveDate")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ModelId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("LlmPricingRules");
+                });
+
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.MigrationJobEntity", b =>
                 {
                     b.Property<string>("Id")
