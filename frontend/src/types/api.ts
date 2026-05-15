@@ -240,6 +240,11 @@ export interface LLMProviderInfo {
   isDefault: boolean
   isAvailable: boolean
   models: string[]
+  currentBalance?: number
+  requestsRemaining?: number
+  tokensRemaining?: number
+  quotaExceeded?: boolean
+  lastQuotaUpdate?: string
 }
 
 export interface LLMConfigurationInfo {

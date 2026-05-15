@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
-import { BrainCircuit, Cpu, TestTube, RefreshCw, Check, X, Star, WandSparkles } from 'lucide-react'
+import { BrainCircuit, Cpu, TestTube, RefreshCw, Check, X, Star, WandSparkles, CreditCard, Activity, Coins } from 'lucide-react'
 import { useLLMProviders } from '@/hooks/useLLMProviders'
 import { PageLoading, PageError } from '@/components/shared/Loading'
 import { Badge } from '@/components/shared/Badge'
@@ -196,7 +196,7 @@ export function ProvidersPage() {
 
         <div className="space-y-4">
           {providers.map(p => (
-            <div key={p.name} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-colors">
+            <div key={p.name} className={`bg-zinc-900 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-all ${p.quotaExceeded ? 'border-red-500/50 opacity-75' : ''}`}>
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-3">
                   <div className={cn(
@@ -246,6 +246,58 @@ export function ProvidersPage() {
                   </button>
                 </div>
               </div>
+
+              {/* Quota & Billing */}
+              {(p.currentBalance !== undefined || p.requestsRemaining !== undefined || p.tokensRemaining !== undefined) && (
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl bg-zinc-950/50 border border-zinc-800/50">
+                  {p.currentBalance !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                        <Coins className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Saldo</p>
+                        <p className="text-sm font-medium text-zinc-200">
+                          ${p.currentBalance.toFixed(4)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {p.requestsRemaining !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
+                        <Activity className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Requests</p>
+                        <p className="text-sm font-medium text-zinc-200">
+                          {p.requestsRemaining === -1 ? '∞' : p.requestsRemaining.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {p.tokensRemaining !== undefined && (
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                        <CreditCard className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Tokens</p>
+                        <p className="text-sm font-medium text-zinc-200">
+                          {p.tokensRemaining === -1 ? '∞' : p.tokensRemaining.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  {p.lastQuotaUpdate && (
+                    <div className="sm:col-span-3 flex justify-end">
+                      <p className="text-[10px] text-zinc-600">
+                        Sincronizado em: {new Date(p.lastQuotaUpdate).toLocaleString()}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Models */}
               {p.models && p.models.length > 0 && (

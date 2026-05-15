@@ -351,13 +351,20 @@ public class LLMManager : ILLMAdministrationService
         return best;
     }
 
-    private IEnumerable<LLMProviderInfo> GetAllProviderInfo()
+    private async Task<IReadOnlyList<LLMProviderInfo>> GetAllProviderInfoAsync(CancellationToken ct = default)
     {
         var defaultProviderName = ResolveDefaultProviderName();
+        var quotaService = _serviceProvider.GetService<IExternalQuotaSyncService>();
+        var quotas = quotaService != null 
+            ? await quotaService.GetAllQuotasAsync(null) // Global quotas
+            : new List<ExternalProviderQuota>();
 
-        return _providers.Values
-            .OrderBy(p => p.Priority)
-            .Select(p => new LLMProviderInfo
+        var result = new List<LLMProviderInfo>();
+        foreach (var p in _providers.Values.OrderBy(p => p.Priority))
+        {
+            var providerQuota = quotas.FirstOrDefault(q => q.ProviderName.Equals(p.Name, StringComparison.OrdinalIgnoreCase));
+            
+            result.Add(new LLMProviderInfo
             {
                 Name = p.Name,
                 DefaultModel = p.DefaultModel,
@@ -366,8 +373,18 @@ public class LLMManager : ILLMAdministrationService
                 HasApiKey = IsProviderConfigured(p),
                 IsDefault = p.Name.Equals(defaultProviderName, StringComparison.OrdinalIgnoreCase),
                 IsAvailable = p.IsEnabled && IsProviderConfigured(p),
-                Models = BuildModelList(p.Name, p.DefaultModel)
+                Models = BuildModelList(p.Name, p.DefaultModel),
+                
+                // New quota fields
+                CurrentBalance = providerQuota?.BalanceRemaining,
+                RequestsRemaining = providerQuota?.RemainingRequests,
+                TokensRemaining = providerQuota?.RemainingTokens,
+                QuotaExceeded = providerQuota?.IsExhausted ?? false,
+                LastQuotaUpdate = providerQuota?.LastSyncAt
             });
+        }
+        
+        return result;
     }
 
     public async Task<LLMConfigurationInfo> GetConfigurationAsync(CancellationToken ct = default)
@@ -384,7 +401,7 @@ public class LLMManager : ILLMAdministrationService
             DefaultModel = fallbackProvider is not null
                 ? ResolveDefaultModel(fallbackProvider)
                 : _defaultModelOverride ?? string.Empty,
-            Providers = GetAllProviderInfo().ToList()
+            Providers = await GetAllProviderInfoAsync(ct)
         };
     }
 

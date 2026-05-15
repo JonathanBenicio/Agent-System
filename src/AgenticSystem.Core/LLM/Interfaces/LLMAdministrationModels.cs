@@ -10,6 +10,11 @@ public class LLMProviderInfo
     public bool IsDefault { get; set; }
     public bool IsAvailable { get; set; }
     public IReadOnlyList<string> Models { get; set; } = [];
+    public double? CurrentBalance { get; set; }
+    public long? RequestsRemaining { get; set; }
+    public long? TokensRemaining { get; set; }
+    public bool QuotaExceeded { get; set; }
+    public DateTime? LastQuotaUpdate { get; set; }
 }
 
 public class LLMConfigurationInfo

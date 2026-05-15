@@ -201,6 +201,16 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
         return quotas.Any(q => q.RemainingRequests > 0 || (q.RemainingTokens > 0 || q.RemainingTokens == -1) || q.BalanceRemaining > 0);
     }
 
+    public async Task<IReadOnlyList<ExternalProviderQuota>> GetAllQuotasAsync(string? tenantId = null)
+    {
+        using var context = await _dbContextFactory.CreateDbContextAsync();
+        var entities = await context.ExternalProviderQuotas
+            .Where(q => q.TenantId == tenantId)
+            .ToListAsync();
+
+        return entities.Select(MapToModel).ToList();
+    }
+
     private static ExternalProviderQuota MapToModel(ExternalProviderQuotaEntity entity)
     {
         return new ExternalProviderQuota

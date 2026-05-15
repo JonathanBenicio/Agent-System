@@ -31,4 +31,9 @@ public interface IExternalQuotaSyncService
     /// Simplified check: returns true if the provider has ANY available key (Global or Tenant).
     /// </summary>
     Task<bool> IsProviderAvailableAsync(string providerName, string? tenantId = null);
+
+    /// <summary>
+    /// Gets all current quotas for a tenant (or global).
+    /// </summary>
+    Task<IReadOnlyList<ExternalProviderQuota>> GetAllQuotasAsync(string? tenantId = null);
 }
