@@ -99,7 +99,7 @@ public class OutboxProcessorBackgroundService : BackgroundService
                 }
                 else
                 {
-                    await publisher.Publish(new DomainEventNotification(domainEvent), stoppingToken);
+                    await publisher.Publish(new Core.Models.DomainEventNotification(domainEvent), stoppingToken);
                 }
 
                 message.ProcessedAt = DateTime.UtcNow;
@@ -114,5 +114,3 @@ public class OutboxProcessorBackgroundService : BackgroundService
         await dbContext.SaveChangesAsync(stoppingToken);
     }
 }
-
-public record DomainEventNotification(object DomainEvent) : INotification;

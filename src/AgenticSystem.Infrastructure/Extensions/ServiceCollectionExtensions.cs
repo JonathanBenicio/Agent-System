@@ -358,13 +358,23 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    public static IServiceCollection UsePostgresSecurityAndAudit(this IServiceCollection services, string connectionString)
+    public static IServiceCollection UsePostgresSecurityAndAudit(this IServiceCollection services, string connectionString, bool useInMemoryEventBus = false)
     {
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<IAuditLog, PostgresAuditLog>(services);
         ReplaceSingleton<IPermissionService, PostgresPermissionService>(services);
-        services.AddHostedService<Persistence.OutboxProcessorBackgroundService>();
-        services.AddSingleton<IEventBus, PostgresEventBus>();
+        
+        if (useInMemoryEventBus)
+        {
+            ReplaceSingleton<IEventBus, InMemoryEventBus>(services);
+            // No outbox processor needed for in-memory event bus
+        }
+        else
+        {
+            services.AddHostedService<Persistence.OutboxProcessorBackgroundService>();
+            ReplaceSingleton<IEventBus, PostgresEventBus>(services);
+        }
+        
         services.AddSingleton<IPolicyStore, PostgresPolicyStore>();
         return services;
     }
@@ -424,13 +434,15 @@ public static class ServiceCollectionExtensions
         ReplaceSingleton<IConfigStore, PostgresConfigStore>(services);
         ReplaceSingleton<IRerankingAssetStore, PostgresRerankingAssetStore>(services);
 
+        var useInMemoryEventBus = configuration.GetValue<bool>("AgenticSystem:EventBus:UseInMemory");
+
         services.UsePostgresSessionStore(connectionString);
         services.UsePostgresVectorStore(connectionString);
         services.UsePostgresCostTracker(connectionString);
         services.UsePostgresSmartRouter(connectionString);
         services.UsePostgresSemanticCache(connectionString);
         services.UsePostgresOperationalStore();
-        services.UsePostgresSecurityAndAudit(connectionString);
+        services.UsePostgresSecurityAndAudit(connectionString, useInMemoryEventBus);
         services.UsePostgresMigrationJobStore(connectionString);
         services.UsePostgresEmbeddingModelStore(connectionString);
         services.UsePostgresQualityStores(connectionString);

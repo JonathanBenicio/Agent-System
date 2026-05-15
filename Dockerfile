@@ -28,6 +28,8 @@ COPY fastpath_model.onnx .
 # COPY embeddings_model.onnx . (Descomentar quando o arquivo existir)
 # COPY reranker_model.onnx . (Descomentar quando o arquivo existir)
 
+RUN mkdir -p models/rerank models/embeddings
+
 USER app
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

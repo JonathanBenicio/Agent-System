@@ -46,7 +46,13 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         }
 
         if (string.IsNullOrWhiteSpace(providedKey))
+        {
+            if (Context.Request.Path.StartsWithSegments("/health"))
+            {
+                return Task.FromResult(AuthenticateResult.NoResult());
+            }
             return Task.FromResult(AuthenticateResult.Fail("Missing X-Api-Key header or query parameter."));
+        }
         var configuredKey = _configuration["AgenticSystem:AdminApiKey"];
 
         if (string.IsNullOrWhiteSpace(configuredKey))

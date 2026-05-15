@@ -89,6 +89,21 @@ public sealed class LocalOnnxCrossEncoderReRankerProvider : IDedicatedReRankerPr
 
     private LoadedArtifacts? EnsureInitialized(string signature, ReRankingOptions options)
     {
+        // Pre-check file existence to avoid creating Lazy entries for missing files
+        if (string.IsNullOrWhiteSpace(options.LocalOnnxModelPath) || string.IsNullOrWhiteSpace(options.LocalOnnxVocabularyPath))
+        {
+            return null;
+        }
+
+        var modelPath = ResolvePath(options.LocalOnnxModelPath);
+        var vocabularyPath = ResolvePath(options.LocalOnnxVocabularyPath);
+
+        if (!File.Exists(modelPath) || !File.Exists(vocabularyPath))
+        {
+            _logger.LogWarning("Local ONNX reranker assets not found. Path={ModelPath}. Reranking will fallback to other providers.", modelPath);
+            return null;
+        }
+
         var lazy = _loadedArtifacts.GetOrAdd(signature, _ =>
             new Lazy<LoadedArtifacts>(() => CreateLoadedArtifacts(options), LazyThreadSafetyMode.ExecutionAndPublication));
 
@@ -99,7 +114,7 @@ public sealed class LocalOnnxCrossEncoderReRankerProvider : IDedicatedReRankerPr
         catch (Exception ex)
         {
             _loadedArtifacts.TryRemove(signature, out _);
-            _logger.LogWarning(ex, "Failed to initialize local ONNX reranker provider");
+            _logger.LogError(ex, "Failed to initialize local ONNX reranker provider for signature {Signature}", signature);
             return null;
         }
     }

@@ -36,6 +36,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISkillManager, InMemorySkillManager>();
         services.AddSingleton<IToolManager, InMemoryToolManager>();
         services.AddSingleton<IToolGovernanceService, ToolGovernanceService>();
+        services.AddSingleton<IEventBus, InMemoryEventBus>();
+        services.AddSingleton<IAuditLog, InMemoryAuditLog>();
+        services.AddSingleton<IPermissionService, InMemoryPermissionService>();
+        services.AddSingleton<IPolicyStore, InMemoryPolicyStore>();
 
         // Triage & FastPath (ML14 Expansion)
         services.AddSingleton<ITriageService, TriageService>();
