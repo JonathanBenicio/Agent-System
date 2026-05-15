@@ -26,6 +26,16 @@ public class OpenRouterProvider : ILLMProvider
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_settings.ApiKey}");
         _httpClient.DefaultRequestHeaders.Add("HTTP-Referer", "https://github.com/JonathanBenicio/Agent-System");
         _httpClient.DefaultRequestHeaders.Add("X-Title", "AgenticSystem");
+        UpdateInternalHeaders();
+    }
+
+    private void UpdateInternalHeaders()
+    {
+        _httpClient.DefaultRequestHeaders.Remove("X-Agentic-ProviderName");
+        _httpClient.DefaultRequestHeaders.Remove("X-Agentic-ApiKeyId");
+        
+        _httpClient.DefaultRequestHeaders.Add("X-Agentic-ProviderName", Name);
+        _httpClient.DefaultRequestHeaders.Add("X-Agentic-ApiKeyId", "infrastructure-global");
     }
 
     public string Name => "OpenRouter";
@@ -40,6 +50,7 @@ public class OpenRouterProvider : ILLMProvider
             _settings.ApiKey = apiKey;
             _httpClient.DefaultRequestHeaders.Remove("Authorization");
             _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_settings.ApiKey}");
+            UpdateInternalHeaders();
         }
 
         if (defaultModel is not null) _settings.DefaultModel = defaultModel;

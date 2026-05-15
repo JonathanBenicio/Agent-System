@@ -73,7 +73,10 @@ public static class ServiceCollectionExtensions
     {
         var ollamaSettings = configuration.GetSection("AgenticSystem:Ollama").Get<OllamaSettings>() ?? new();
 
+        services.AddTransient<AgenticSystem.Infrastructure.LLM.Handlers.ExternalQuotaHeaderHandler>();
+
         services.AddHttpClient<GeminiProvider>()
+            .AddHttpMessageHandler<AgenticSystem.Infrastructure.LLM.Handlers.ExternalQuotaHeaderHandler>()
             .AddStandardResilienceHandler();
 
         services.AddHttpClient<OllamaProvider>(client =>
@@ -83,12 +86,15 @@ public static class ServiceCollectionExtensions
         .AddStandardResilienceHandler();
 
         services.AddHttpClient<OpenAIProvider>()
+            .AddHttpMessageHandler<AgenticSystem.Infrastructure.LLM.Handlers.ExternalQuotaHeaderHandler>()
             .AddStandardResilienceHandler();
 
         services.AddHttpClient<ClaudeProvider>()
+            .AddHttpMessageHandler<AgenticSystem.Infrastructure.LLM.Handlers.ExternalQuotaHeaderHandler>()
             .AddStandardResilienceHandler();
 
         services.AddHttpClient<OpenRouterProvider>()
+            .AddHttpMessageHandler<AgenticSystem.Infrastructure.LLM.Handlers.ExternalQuotaHeaderHandler>()
             .AddStandardResilienceHandler();
 
         services.AddEmbeddingGenerator(sp =>

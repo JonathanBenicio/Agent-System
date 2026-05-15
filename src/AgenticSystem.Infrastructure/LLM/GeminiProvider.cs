@@ -25,6 +25,16 @@ public class GeminiProvider : ILLMProvider
         _logger = logger;
 
         _httpClient.BaseAddress = new Uri(_settings.BaseUrl);
+        UpdateInternalHeaders();
+    }
+
+    private void UpdateInternalHeaders()
+    {
+        _httpClient.DefaultRequestHeaders.Remove("X-Agentic-ProviderName");
+        _httpClient.DefaultRequestHeaders.Remove("X-Agentic-ApiKeyId");
+        
+        _httpClient.DefaultRequestHeaders.Add("X-Agentic-ProviderName", Name);
+        _httpClient.DefaultRequestHeaders.Add("X-Agentic-ApiKeyId", "infrastructure-global");
     }
 
     public string Name => "Gemini";
@@ -34,7 +44,11 @@ public class GeminiProvider : ILLMProvider
 
     public void Configure(string? apiKey, string? defaultModel, bool? enabled, int? priority)
     {
-        if (apiKey is not null) _settings.ApiKey = apiKey;
+        if (apiKey is not null)
+        {
+            _settings.ApiKey = apiKey;
+            UpdateInternalHeaders();
+        }
         if (defaultModel is not null) _settings.DefaultModel = defaultModel;
         if (enabled.HasValue) _settings.Enabled = enabled.Value;
         if (priority.HasValue) _settings.Priority = priority.Value;

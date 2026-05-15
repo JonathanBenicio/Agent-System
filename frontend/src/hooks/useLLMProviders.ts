@@ -54,6 +54,11 @@ export function useLLMProviders() {
     return llmApi.discoverModels(name, apiKey)
   }, [])
 
+  const syncQuotas = useCallback(async () => {
+    await llmApi.syncQuotas()
+    await refresh()
+  }, [refresh])
+
   return {
     providers,
     configuration,
@@ -66,5 +71,6 @@ export function useLLMProviders() {
     updateDefaultSelection,
     testProvider,
     discoverModels,
+    syncQuotas,
   }
 }

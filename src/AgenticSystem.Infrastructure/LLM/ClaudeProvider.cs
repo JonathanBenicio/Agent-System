@@ -27,6 +27,16 @@ public class ClaudeProvider : ILLMProvider
         _httpClient.BaseAddress = new Uri(_settings.BaseUrl);
         _httpClient.DefaultRequestHeaders.Add("x-api-key", _settings.ApiKey);
         _httpClient.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+        UpdateInternalHeaders();
+    }
+
+    private void UpdateInternalHeaders()
+    {
+        _httpClient.DefaultRequestHeaders.Remove("X-Agentic-ProviderName");
+        _httpClient.DefaultRequestHeaders.Remove("X-Agentic-ApiKeyId");
+        
+        _httpClient.DefaultRequestHeaders.Add("X-Agentic-ProviderName", Name);
+        _httpClient.DefaultRequestHeaders.Add("X-Agentic-ApiKeyId", "infrastructure-global");
     }
 
     public string Name => "Claude";
@@ -41,6 +51,7 @@ public class ClaudeProvider : ILLMProvider
             _settings.ApiKey = apiKey;
             _httpClient.DefaultRequestHeaders.Remove("x-api-key");
             _httpClient.DefaultRequestHeaders.Add("x-api-key", _settings.ApiKey);
+            UpdateInternalHeaders();
         }
 
         if (defaultModel is not null) _settings.DefaultModel = defaultModel;

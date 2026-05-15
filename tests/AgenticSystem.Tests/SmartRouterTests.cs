@@ -13,6 +13,7 @@ public class SmartRouterTests
     private readonly IUserPreferenceEngine _preferenceEngine;
     private readonly ITriageService _triageService;
     private readonly IEnumerable<IFastPathInterceptor> _fastPathInterceptors;
+    private readonly IExternalQuotaSyncService _quotaSyncService;
     private readonly SmartRouter _sut;
 
     public SmartRouterTests()
@@ -20,8 +21,9 @@ public class SmartRouterTests
         _preferenceEngine = Substitute.For<IUserPreferenceEngine>();
         _triageService = Substitute.For<ITriageService>();
         _fastPathInterceptors = Enumerable.Empty<IFastPathInterceptor>();
+        _quotaSyncService = Substitute.For<IExternalQuotaSyncService>();
         var logger = Substitute.For<ILogger<SmartRouter>>();
-        _sut = new SmartRouter(_preferenceEngine, _triageService, _fastPathInterceptors, logger);
+        _sut = new SmartRouter(_preferenceEngine, _triageService, _fastPathInterceptors, _quotaSyncService, logger);
     }
 
     [Fact]

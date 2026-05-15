@@ -186,6 +186,7 @@ export const llmApi = {
     put<LLMProviderInfo>(`/api/admin/llm/providers/${encodeURIComponent(name)}`, req),
   updateDefaultSelection: (req: UpdateDefaultLlmSelectionRequest) =>
     put<LLMConfigurationInfo>('/api/admin/llm/default-selection', req),
+  syncQuotas: () => post<{ message: string }>('/api/admin/llm/providers/sync-quotas'),
 }
 
 // ══════════════════════════════════════

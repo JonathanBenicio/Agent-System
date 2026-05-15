@@ -214,6 +214,15 @@ public class LLMManager : ILLMAdministrationService
             var chatClient = await ResolveChatClientAsync(candidate.Provider, candidate.Model, selection.ApiKey, ct);
             var resilience = GetResiliencePolicy(candidate.Provider);
 
+            // Verificação proativa de cotas antes do disparo
+            var quotaService = _serviceProvider.GetService<IExternalQuotaSyncService>();
+            if (quotaService != null && !await quotaService.IsProviderAvailableAsync(candidate.Provider))
+            {
+                _logger.LogWarning("⏭️ Skipping {Provider} (Quota Exceeded - Proactive check)", candidate.Provider);
+                exceptions.Add(new InvalidOperationException($"Quota exceeded for {candidate.Provider}."));
+                continue;
+            }
+
             var circuitState = resilience.CircuitBreaker.CircuitState.ToString();
             if (circuitState == "Open" || circuitState == "Isolated")
             {
@@ -602,6 +611,29 @@ public class LLMManager : ILLMAdministrationService
         {
             _logger.LogError(ex, "❌ Erro inesperado ao descobrir modelos do provedor {Provider}.", name);
             return new DiscoverModelsResponse { Success = false, ErrorMessage = ex.Message };
+        }
+    }
+
+    public async Task SyncQuotasAsync(CancellationToken ct = default)
+    {
+        await EnsureRuntimeConfigLoadedAsync(ct);
+        var quotaService = _serviceProvider.GetService<IExternalQuotaSyncService>();
+        if (quotaService == null) return;
+
+        foreach (var p in _providers.Values)
+        {
+            if (!p.IsEnabled) continue;
+            
+            // For config-based keys (infrastructure-global)
+            var prefix = GetProviderConfigPrefix(p.Name);
+            var apiKey = _configManager != null 
+                ? await _configManager.ResolveValueAsync($"{prefix}.apiKey")
+                : null;
+            
+            if (string.IsNullOrWhiteSpace(apiKey)) continue;
+
+            // Trigger sync
+            await quotaService.SyncBillingAsync(p.Name, null, "infrastructure-global", apiKey);
         }
     }
 

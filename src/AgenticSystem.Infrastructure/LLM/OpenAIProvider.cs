@@ -24,6 +24,21 @@ public class OpenAIProvider : ILLMProvider
 
         _httpClient.BaseAddress = new Uri(_settings.BaseUrl);
         _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_settings.ApiKey}");
+        
+        // Add internal tracking headers for ExternalQuotaHeaderHandler
+        UpdateInternalHeaders();
+    }
+
+    private void UpdateInternalHeaders()
+    {
+        _httpClient.DefaultRequestHeaders.Remove("X-Agentic-ProviderName");
+        _httpClient.DefaultRequestHeaders.Remove("X-Agentic-ApiKeyId");
+        
+        _httpClient.DefaultRequestHeaders.Add("X-Agentic-ProviderName", Name);
+        
+        // Generate a stable ID for the API key (infrastructure-global for config-based keys)
+        var apiKeyId = "infrastructure-global";
+        _httpClient.DefaultRequestHeaders.Add("X-Agentic-ApiKeyId", apiKeyId);
     }
 
     public string Name => "OpenAI";
@@ -38,6 +53,7 @@ public class OpenAIProvider : ILLMProvider
             _settings.ApiKey = apiKey;
             _httpClient.DefaultRequestHeaders.Remove("Authorization");
             _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_settings.ApiKey}");
+            UpdateInternalHeaders();
         }
 
         if (defaultModel is not null) _settings.DefaultModel = defaultModel;

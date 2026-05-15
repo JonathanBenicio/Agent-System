@@ -102,4 +102,11 @@ public class LLMController : ControllerBase
 
         return Ok(info);
     }
+
+    [HttpPost("providers/sync-quotas")]
+    public async Task<IActionResult> SyncQuotas(CancellationToken ct)
+    {
+        await _llmAdministrationService.SyncQuotasAsync(ct);
+        return Ok(new { message = "Quota synchronization triggered." });
+    }
 }
