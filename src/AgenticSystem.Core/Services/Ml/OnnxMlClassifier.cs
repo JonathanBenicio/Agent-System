@@ -52,13 +52,13 @@ public class OnnxMlClassifier : IMlClassifier, IDisposable
                     {
                         // Some ML.NET ONNX exports accidentally keep the Label input as required.
                         // We provide an empty string/default value to satisfy the graph.
-                        var labelTensor = new DenseTensor<string>(new[] { "" }, new[] { 1, 1 });
+                        var labelTensor = new DenseTensor<string>(new[] { "" }, new[] { 1 });
                         container.Add(NamedOnnxValue.CreateFromTensor(inputName, labelTensor));
                     }
                     else if (container.Count == 0 || inputName.Contains("Text", StringComparison.OrdinalIgnoreCase))
                     {
                         // Primary input (usually "Text" or the first key)
-                        var tensor = new DenseTensor<string>(new[] { input }, new[] { 1, 1 });
+                        var tensor = new DenseTensor<string>(new[] { input }, new[] { 1 });
                         container.Add(NamedOnnxValue.CreateFromTensor(inputName, tensor));
                     }
                 }
@@ -66,7 +66,7 @@ public class OnnxMlClassifier : IMlClassifier, IDisposable
                 if (container.Count == 0 && inputMeta.Keys.Any())
                 {
                     var firstKey = inputMeta.Keys.First();
-                    var tensor = new DenseTensor<string>(new[] { input }, new[] { 1, 1 });
+                    var tensor = new DenseTensor<string>(new[] { input }, new[] { 1 });
                     container.Add(NamedOnnxValue.CreateFromTensor(firstKey, tensor));
                 }
 

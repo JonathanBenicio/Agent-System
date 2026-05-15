@@ -84,7 +84,8 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido seguindo este esquema:
 
             try 
             {
-                var result = JsonSerializer.Deserialize<QueryTriageResult>(responseText, new JsonSerializerOptions
+                var cleanedText = ExtractJson(responseText);
+                var result = JsonSerializer.Deserialize<QueryTriageResult>(cleanedText, new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true,
                     Converters = { new JsonStringEnumConverter() }
@@ -94,15 +95,50 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido seguindo este esquema:
             }
             catch (JsonException jex)
             {
-                _logger.LogWarning(jex, "Resposta da triagem não é um JSON válido. Resposta: {ResponseText}", responseText);
+                _logger.LogWarning(jex, "Resposta da triagem não é um JSON válido. Resposta: {ResponseText}", responseText);    
                 return FallbackResult();
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Falha na triagem da query: {Input}", input);
+            _logger.LogError(ex, "❌ Triage layer failed for input: {Input}", input);
             return FallbackResult();
         }
+    }
+
+    private static string ExtractJson(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "{}";
+
+        // Handle Markdown code blocks ```json ... ``` or ``` ... ```
+        if (text.Contains("```"))
+        {
+            var parts = text.Split("```");
+            foreach (var part in parts)
+            {
+                var trimmedPart = part.Trim();
+                if (trimmedPart.StartsWith("json", StringComparison.OrdinalIgnoreCase))
+                {
+                    trimmedPart = trimmedPart[4..].Trim();
+                }
+
+                if (trimmedPart.StartsWith('{') && trimmedPart.EndsWith('}'))
+                {
+                    return trimmedPart;
+                }
+            }
+        }
+
+        // Fallback: find the first { and last }
+        var start = text.IndexOf('{');
+        var end = text.LastIndexOf('}');
+
+        if (start != -1 && end != -1 && end > start)
+        {
+            return text.Substring(start, end - start + 1);
+        }
+
+        return text.Trim();
     }
 
     private static QueryTriageResult FallbackResult() => new()
