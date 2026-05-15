@@ -44,6 +44,7 @@ public class AgenticDbContext : DbContext
     public DbSet<AgentMarketplaceEntryEntity> AgentMarketplaceEntries => Set<AgentMarketplaceEntryEntity>();
     public DbSet<EnhancedMemoryEntity> EnhancedMemories => Set<EnhancedMemoryEntity>();
     public DbSet<LlmPricingRuleEntity> LlmPricingRules => Set<LlmPricingRuleEntity>();
+    public DbSet<ExternalProviderQuotaEntity> ExternalProviderQuotas => Set<ExternalProviderQuotaEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

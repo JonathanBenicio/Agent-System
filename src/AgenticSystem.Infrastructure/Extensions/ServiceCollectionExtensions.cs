@@ -16,6 +16,8 @@ using AgenticSystem.Infrastructure.RAG;
 using AgenticSystem.Infrastructure.Skills;
 using AgenticSystem.Infrastructure.Sync;
 using AgenticSystem.Infrastructure.BackgroundServices;
+using AgenticSystem.Infrastructure.LLM.BackgroundServices;
+using AgenticSystem.Infrastructure.LLM.Services;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -98,6 +100,7 @@ public static class ServiceCollectionExtensions
         .UseOpenTelemetry(sourceName: "AgenticSystem.Embeddings");
 
         services.AddSingleton<LLMManager>();
+        services.AddSingleton<IExternalQuotaSyncService, ExternalQuotaSyncService>();
         services.AddSingleton<ILLMAdministrationService>(sp => sp.GetRequiredService<LLMManager>());
         services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(sp.GetRequiredService<LLMManager>(), sp.GetRequiredService<ILogger<ContextAwareChatClient>>()));
 
@@ -318,6 +321,7 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddAgenticBackgroundServices(this IServiceCollection services)
     {
         services.AddHostedService<SelfImprovementBackgroundJob>();
+        services.AddHostedService<ExternalQuotaSyncHostedService>();
         return services;
     }
 

@@ -15,6 +15,7 @@ public class SmartRouter : ISmartRouter
     private readonly ITriageService _triageService;
     private readonly IEnumerable<IFastPathInterceptor> _fastPathInterceptors;
     private readonly ILogger<SmartRouter> _logger;
+    private readonly IExternalQuotaSyncService _quotaService;
     private readonly ConcurrentDictionary<string, object> _metricsLocks = new();
     private readonly ConcurrentDictionary<string, List<AgentPerformanceMetric>> _metrics = new();
 
@@ -22,11 +23,13 @@ public class SmartRouter : ISmartRouter
         IUserPreferenceEngine preferenceEngine,
         ITriageService triageService,
         IEnumerable<IFastPathInterceptor> fastPathInterceptors,
+        IExternalQuotaSyncService quotaService,
         ILogger<SmartRouter> logger)
     {
         _preferenceEngine = preferenceEngine;
         _triageService = triageService;
         _fastPathInterceptors = fastPathInterceptors;
+        _quotaService = quotaService;
         _logger = logger;
     }
 
@@ -179,33 +182,71 @@ public class SmartRouter : ISmartRouter
             .ToList();
     }
 
-    public Task<ProviderRoutingDecision> RouteProviderAsync(string? requestedProvider, string? requestedModel)
+    public async Task<ProviderRoutingDecision> RouteProviderAsync(string? requestedProvider, string? requestedModel)
+    {
+        var primaryProvider = string.IsNullOrWhiteSpace(requestedProvider) ? "OpenAI" : requestedProvider;
+        var primaryModel = string.IsNullOrWhiteSpace(requestedModel) ? "gpt-4o-mini" : requestedModel;
+
+        // Check if primary is available
+        var isPrimaryAvailable = await _quotaService.IsProviderAvailableAsync(primaryProvider);
+
+        if (isPrimaryAvailable)
+        {
+            return BuildDecision(primaryProvider, primaryModel);
+        }
+
+        _logger.LogWarning("⚠️ Primary provider {Provider} is exhausted. Initiating auto-fallback...", primaryProvider);
+
+        // Try Fallbacks
+        var fallbacks = GetFallbackOptions(primaryProvider);
+        foreach (var fallback in fallbacks)
+        {
+            if (await _quotaService.IsProviderAvailableAsync(fallback.Provider))
+            {
+                _logger.LogInformation("✅ Auto-fallback successful: switching to {Provider} ({Model})", fallback.Provider, fallback.Model);
+                return BuildDecision(fallback.Provider, fallback.Model, fallbacks);
+            }
+        }
+
+        _logger.LogCritical("🚨 ALL PROVIDERS EXHAUSTED! Falling back to primary anyway.");
+        return BuildDecision(primaryProvider, primaryModel);
+    }
+
+    private ProviderRoutingDecision BuildDecision(string provider, string model, List<ProviderFallbackOption>? existingFallbacks = null)
     {
         var decision = new ProviderRoutingDecision
         {
-            PrimaryProvider = string.IsNullOrWhiteSpace(requestedProvider) ? "OpenAI" : requestedProvider,
-            PrimaryModel = string.IsNullOrWhiteSpace(requestedModel) ? "gpt-4o-mini" : requestedModel,
-            FallbackChain = []
+            PrimaryProvider = provider,
+            PrimaryModel = model,
+            FallbackChain = existingFallbacks ?? GetFallbackOptions(provider)
         };
+        return decision;
+    }
 
-        // Fallback chain definition
-        if (decision.PrimaryProvider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
+    private List<ProviderFallbackOption> GetFallbackOptions(string provider)
+    {
+        if (provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
         {
-            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "Gemini", Model = "gemini-1.5-flash" });
-            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "Claude", Model = "claude-3-haiku-20240307" });
+            return new List<ProviderFallbackOption>
+            {
+                new() { Provider = "Gemini", Model = "gemini-1.5-flash" },
+                new() { Provider = "Claude", Model = "claude-3-haiku-20240307" }
+            };
         }
-        else if (decision.PrimaryProvider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
+        
+        if (provider.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
         {
-            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "OpenAI", Model = "gpt-4o-mini" });
-            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "Claude", Model = "claude-3-haiku-20240307" });
-        }
-        else
-        {
-            // Default fallback for any other
-            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "OpenAI", Model = "gpt-4o-mini" });
-            decision.FallbackChain.Add(new ProviderFallbackOption { Provider = "Gemini", Model = "gemini-1.5-flash" });
+            return new List<ProviderFallbackOption>
+            {
+                new() { Provider = "OpenAI", Model = "gpt-4o-mini" },
+                new() { Provider = "Claude", Model = "claude-3-haiku-20240307" }
+            };
         }
 
-        return Task.FromResult(decision);
+        return new List<ProviderFallbackOption>
+        {
+            new() { Provider = "OpenAI", Model = "gpt-4o-mini" },
+            new() { Provider = "Gemini", Model = "gemini-1.5-flash" }
+        };
     }
 }

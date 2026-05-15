@@ -451,3 +451,25 @@ public class LlmPricingRuleEntity
     public bool IsActive { get; set; } = true;
 }
 
+/// <summary>
+/// Entidade para rastreamento de cotas e limites de provedores externos (OpenAI, Claude, etc).
+/// </summary>
+public class ExternalProviderQuotaEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string ProviderName { get; set; } = string.Empty;
+    public string? TenantId { get; set; }
+    public string ApiKeyId { get; set; } = string.Empty;
+    
+    // Rate Limits
+    public long RemainingRequests { get; set; }
+    public long RemainingTokens { get; set; }
+    public DateTime? ResetAt { get; set; }
+    
+    // Billing
+    public double BalanceRemaining { get; set; }
+    public string Currency { get; set; } = "USD";
+    
+    public DateTime LastSyncAt { get; set; } = DateTime.UtcNow;
+}
+

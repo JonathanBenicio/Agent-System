@@ -63,3 +63,38 @@ public class QuotaUsage
     public bool IsOverLimit { get; set; }
     public string? ActiveAlertMessage { get; set; }
 }
+
+/// <summary>
+/// Real-time quota and balance tracking for external LLM providers.
+/// </summary>
+public class ExternalProviderQuota
+{
+    public string Id { get; init; } = Guid.NewGuid().ToString();
+    
+    /// <summary>
+    /// The provider name (OpenAI, Claude, Gemini, OpenRouter, etc.)
+    /// </summary>
+    public string ProviderName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Optional Tenant link (BYOK). If null, it's a global infrastructure key.
+    /// </summary>
+    public string? TenantId { get; init; }
+
+    /// <summary>
+    /// The actual API Key ID or Hash for identification.
+    /// </summary>
+    public string ApiKeyId { get; init; } = string.Empty;
+
+    // Rate Limits (Reactive/Headers)
+    public long RemainingRequests { get; set; }
+    public long RemainingTokens { get; set; }
+    public DateTime? ResetAt { get; set; }
+
+    // Billing (Proactive/Sync)
+    public double BalanceRemaining { get; set; }
+    public string Currency { get; set; } = "USD";
+    public DateTime LastSyncAt { get; set; } = DateTime.UtcNow;
+
+    public bool IsExhausted => RemainingRequests <= 0 || (RemainingTokens <= 0 && RemainingTokens != -1) || BalanceRemaining <= 0;
+}
