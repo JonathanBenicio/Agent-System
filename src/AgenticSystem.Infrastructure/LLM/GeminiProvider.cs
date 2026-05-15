@@ -95,6 +95,18 @@ public class GeminiProvider : ILLMProvider
             _logger.LogError(ex, "❌ Gemini request failed: {Message}", ex.Message);
             return LLMResponse.Fail($"Gemini API error: {ex.Message}", Name);
         }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "❌ Gemini request timed out.");
+            return LLMResponse.Fail("Gemini request timed out.", Name);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "❌ Unexpected error in GeminiProvider: {Message}", ex.Message);
+            return LLMResponse.Fail($"Unexpected error: {ex.Message}", Name);
+        }
     }
 
     public async Task<bool> IsAvailableAsync(CancellationToken ct = default)

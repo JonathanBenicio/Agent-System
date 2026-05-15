@@ -116,7 +116,17 @@ public class MetaAgentOrchestrator : IMetaAgent
         var sessionId = await _sessionManager.StartSessionAsync(context);
         context.Preferences["sessionId"] = sessionId;
         using var scope = _runtimeCoordinator.BeginExecutionScope(sessionId, context);
-        return await ProcessRequestCoreAsync(sessionId, input, context, CancellationToken.None);
+        try
+        {
+            var response = await ProcessRequestCoreAsync(sessionId, input, context, CancellationToken.None);
+            await _sessionManager.EndSessionAsync(sessionId);
+            return response;
+        }
+        catch (Exception)
+        {
+            // Session ending on exception is already handled in ProcessRequestCoreAsync
+            throw;
+        }
     }
 
     public async IAsyncEnumerable<AgentStreamEvent> ProcessRequestStreamAsync(
@@ -127,13 +137,20 @@ public class MetaAgentOrchestrator : IMetaAgent
         var sessionId = await _sessionManager.StartSessionAsync(context);
         context.Preferences["sessionId"] = sessionId;
 
-        await foreach (var streamEvent in _runtimeCoordinator.StreamAsync(
-            sessionId,
-            context,
-            token => ProcessRequestCoreAsync(sessionId, input, context, token),
-            ct))
+        try
         {
-            yield return streamEvent;
+            await foreach (var streamEvent in _runtimeCoordinator.StreamAsync(
+                sessionId,
+                context,
+                token => ProcessRequestCoreAsync(sessionId, input, context, token),
+                ct))
+            {
+                yield return streamEvent;
+            }
+        }
+        finally
+        {
+            await _sessionManager.EndSessionAsync(sessionId);
         }
     }
 
@@ -146,13 +163,20 @@ public class MetaAgentOrchestrator : IMetaAgent
         var sessionId = await _sessionManager.StartSessionAsync(context);
         context.Preferences["sessionId"] = sessionId;
 
-        await foreach (var streamEvent in _runtimeCoordinator.StreamAsync(
-            sessionId,
-            context,
-            token => ProcessDirectRequestCoreAsync(sessionId, input, context, targetAgent, token),
-            ct))
+        try
         {
-            yield return streamEvent;
+            await foreach (var streamEvent in _runtimeCoordinator.StreamAsync(
+                sessionId,
+                context,
+                token => ProcessDirectRequestCoreAsync(sessionId, input, context, targetAgent, token),
+                ct))
+            {
+                yield return streamEvent;
+            }
+        }
+        finally
+        {
+            await _sessionManager.EndSessionAsync(sessionId);
         }
     }
 
@@ -268,7 +292,18 @@ public class MetaAgentOrchestrator : IMetaAgent
         var sessionId = await _sessionManager.StartSessionAsync(context);
         context.Preferences["sessionId"] = sessionId;
         using var scope = _runtimeCoordinator.BeginExecutionScope(sessionId, context);
-        return await ProcessDirectRequestCoreAsync(sessionId, input, context, targetAgent, CancellationToken.None);
+        try
+        {
+            var response = await ProcessDirectRequestCoreAsync(sessionId, input, context, targetAgent, CancellationToken.None);
+            await _sessionManager.EndSessionAsync(sessionId);
+            return response;
+        }
+        catch (Exception)
+        {
+            // In a real scenario, we might want to end session here too if not handled in core
+            await _sessionManager.EndSessionAsync(sessionId);
+            throw;
+        }
     }
 
     private async Task<AgentResponse> ProcessDirectRequestCoreAsync(string sessionId, string input, UserContext context, string targetAgent, CancellationToken ct)

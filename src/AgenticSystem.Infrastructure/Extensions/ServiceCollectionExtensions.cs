@@ -74,6 +74,21 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<GeminiProvider>()
             .AddStandardResilienceHandler();
 
+        services.AddHttpClient<OllamaProvider>(client =>
+        {
+            client.Timeout = TimeSpan.FromMinutes(5); // Ollama can be slow for complex models
+        })
+        .AddStandardResilienceHandler();
+
+        services.AddHttpClient<OpenAIProvider>()
+            .AddStandardResilienceHandler();
+
+        services.AddHttpClient<ClaudeProvider>()
+            .AddStandardResilienceHandler();
+
+        services.AddHttpClient<OpenRouterProvider>()
+            .AddStandardResilienceHandler();
+
         services.AddEmbeddingGenerator(sp =>
         {
             var settings = sp.GetRequiredService<IOptions<OllamaSettings>>().Value;

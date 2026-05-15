@@ -64,7 +64,12 @@ public class OllamaProvider : ILLMProvider
             var response = await _httpClient.PostAsJsonAsync("api/chat", payload, ct);
             response.EnsureSuccessStatusCode();
 
-            var result = await response.Content.ReadFromJsonAsync<OllamaChatResponse>(cancellationToken: ct);
+            // Robust JSON decoding to handle potential encoding issues (DecoderFallbackException)
+            var responseBytes = await response.Content.ReadAsByteArrayAsync(ct);
+            var utf8NoBOM = new System.Text.UTF8Encoding(false, false); // No throw on invalid bytes
+            var responseJson = utf8NoBOM.GetString(responseBytes);
+            
+            var result = System.Text.Json.JsonSerializer.Deserialize<OllamaChatResponse>(responseJson);
             sw.Stop();
 
             if (result is null || string.IsNullOrWhiteSpace(result.Message?.Content))
@@ -94,6 +99,18 @@ public class OllamaProvider : ILLMProvider
             sw.Stop();
             _logger.LogError(ex, "❌ Ollama request failed: {Message}", ex.Message);
             return LLMResponse.Fail($"Ollama API error: {ex.Message}", Name);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "❌ Ollama request timed out.");
+            return LLMResponse.Fail("Ollama request timed out.", Name);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _logger.LogError(ex, "❌ Unexpected error in OllamaProvider: {Message}", ex.Message);
+            return LLMResponse.Fail($"Unexpected error: {ex.Message}", Name);
         }
     }
 

@@ -1041,21 +1041,20 @@ public class LLMManager : ILLMAdministrationService
 
     private void RegisterProvidersFromSettings(AgenticSystemSettings settings)
     {
-        RegisterProvider(CreateOpenAiProvider(settings.OpenAI));
+        var openAiProvider = _serviceProvider.GetService<OpenAIProvider>();
+        RegisterProvider(openAiProvider ?? CreateOpenAiProvider(settings.OpenAI));
         
         var geminiProvider = _serviceProvider.GetService<GeminiProvider>();
-        if (geminiProvider != null)
-        {
-            RegisterProvider(geminiProvider);
-        }
-        else
-        {
-            RegisterProvider(CreateGeminiProvider(settings.Gemini));
-        }
+        RegisterProvider(geminiProvider ?? CreateGeminiProvider(settings.Gemini));
 
-        RegisterProvider(CreateClaudeProvider(settings.Claude));
-        RegisterProvider(CreateOpenRouterProvider(settings.OpenRouter));
-        RegisterProvider(CreateOllamaProvider(settings.Ollama));
+        var claudeProvider = _serviceProvider.GetService<ClaudeProvider>();
+        RegisterProvider(claudeProvider ?? CreateClaudeProvider(settings.Claude));
+
+        var openRouterProvider = _serviceProvider.GetService<OpenRouterProvider>();
+        RegisterProvider(openRouterProvider ?? CreateOpenRouterProvider(settings.OpenRouter));
+        
+        var ollamaProvider = _serviceProvider.GetService<OllamaProvider>();
+        RegisterProvider(ollamaProvider ?? CreateOllamaProvider(settings.Ollama));
     }
 
     private void RegisterProvider(ILLMProvider provider)
@@ -1078,40 +1077,45 @@ public class LLMManager : ILLMAdministrationService
 
     private ILLMProvider CreateOpenAiProvider(OpenAISettings settings)
     {
+        var httpClient = _serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(typeof(OpenAIProvider).FullName!);
         return new OpenAIProvider(
-            new HttpClient(),
+            httpClient,
             Options.Create(settings),
             _loggerFactory.CreateLogger<OpenAIProvider>());
     }
 
     private ILLMProvider CreateGeminiProvider(GeminiSettings settings)
     {
+        var httpClient = _serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(typeof(GeminiProvider).FullName!);
         return new GeminiProvider(
-            new HttpClient(),
+            httpClient,
             Options.Create(settings),
             _loggerFactory.CreateLogger<GeminiProvider>());
     }
 
     private ILLMProvider CreateClaudeProvider(ClaudeSettings settings)
     {
+        var httpClient = _serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(typeof(ClaudeProvider).FullName!);
         return new ClaudeProvider(
-            new HttpClient(),
+            httpClient,
             Options.Create(settings),
             _loggerFactory.CreateLogger<ClaudeProvider>());
     }
 
     private ILLMProvider CreateOpenRouterProvider(OpenRouterSettings settings)
     {
+        var httpClient = _serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(typeof(OpenRouterProvider).FullName!);
         return new OpenRouterProvider(
-            new HttpClient(),
+            httpClient,
             Options.Create(settings),
             _loggerFactory.CreateLogger<OpenRouterProvider>());
     }
 
     private ILLMProvider CreateOllamaProvider(OllamaSettings settings)
     {
+        var httpClient = _serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(typeof(OllamaProvider).FullName!);
         return new OllamaProvider(
-            new HttpClient(),
+            httpClient,
             Options.Create(settings),
             _loggerFactory.CreateLogger<OllamaProvider>());
     }
