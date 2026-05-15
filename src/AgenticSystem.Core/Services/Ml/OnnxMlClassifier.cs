@@ -3,6 +3,7 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using Microsoft.Extensions.Logging;
+using System.Linq;
 
 namespace AgenticSystem.Core.Services.Ml;
 
@@ -43,11 +44,31 @@ public class OnnxMlClassifier : IMlClassifier, IDisposable
                 // O nome do input geralmente é o nome da coluna de entrada ("Text").
                 
                 var inputMeta = _session.InputMetadata;
-                var inputName = inputMeta.Keys.First(); // Geralmente "Text"
-                
                 var container = new List<NamedOnnxValue>();
-                var tensor = new DenseTensor<string>(new[] { input }, new[] { 1, 1 });
-                container.Add(NamedOnnxValue.CreateFromTensor(inputName, tensor));
+
+                foreach (var inputName in inputMeta.Keys)
+                {
+                    if (string.Equals(inputName, "Label", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Some ML.NET ONNX exports accidentally keep the Label input as required.
+                        // We provide an empty string/default value to satisfy the graph.
+                        var labelTensor = new DenseTensor<string>(new[] { "" }, new[] { 1, 1 });
+                        container.Add(NamedOnnxValue.CreateFromTensor(inputName, labelTensor));
+                    }
+                    else if (container.Count == 0 || inputName.Contains("Text", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Primary input (usually "Text" or the first key)
+                        var tensor = new DenseTensor<string>(new[] { input }, new[] { 1, 1 });
+                        container.Add(NamedOnnxValue.CreateFromTensor(inputName, tensor));
+                    }
+                }
+
+                if (container.Count == 0 && inputMeta.Keys.Any())
+                {
+                    var firstKey = inputMeta.Keys.First();
+                    var tensor = new DenseTensor<string>(new[] { input }, new[] { 1, 1 });
+                    container.Add(NamedOnnxValue.CreateFromTensor(firstKey, tensor));
+                }
 
                 using var results = _session.Run(container);
                 

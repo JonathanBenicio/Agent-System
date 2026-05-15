@@ -82,13 +82,21 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido seguindo este esquema:
             var response = await _chatClient.GetResponseAsync(messages, options, ct);
             var responseText = response.Text ?? string.Empty;
 
-            var result = JsonSerializer.Deserialize<QueryTriageResult>(responseText, new JsonSerializerOptions
+            try 
             {
-                PropertyNameCaseInsensitive = true,
-                Converters = { new JsonStringEnumConverter() }
-            });
+                var result = JsonSerializer.Deserialize<QueryTriageResult>(responseText, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true,
+                    Converters = { new JsonStringEnumConverter() }
+                });
 
-            return result ?? FallbackResult();
+                return result ?? FallbackResult();
+            }
+            catch (JsonException jex)
+            {
+                _logger.LogWarning(jex, "Resposta da triagem não é um JSON válido. Resposta: {ResponseText}", responseText);
+                return FallbackResult();
+            }
         }
         catch (Exception ex)
         {

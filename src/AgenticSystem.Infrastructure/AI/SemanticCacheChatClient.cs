@@ -108,8 +108,17 @@ public class SemanticCacheChatClient : DelegatingChatClient
 
     private static string ExtractPrompt(IEnumerable<ChatMessage> chatMessages)
     {
-        // Just extract the last User message as the primary semantic intent
-        var lastUserMsg = chatMessages.LastOrDefault(m => m.Role == ChatRole.User);
-        return lastUserMsg?.Text ?? string.Empty;
+        var sb = new StringBuilder();
+        foreach (var msg in chatMessages)
+        {
+            if (msg.Role == ChatRole.System || msg.Role == ChatRole.User)
+            {
+                sb.Append(msg.Role.Value);
+                sb.Append(": ");
+                sb.Append(msg.Text);
+                sb.Append("\n");
+            }
+        }
+        return sb.ToString().Trim();
     }
 }

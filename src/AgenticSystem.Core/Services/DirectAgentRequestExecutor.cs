@@ -44,17 +44,35 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
     {
         try
         {
+            IEnumerable<AgentInfo> agents;
+            try
+            {
+                agents = await _agentFactory.GetAllAgentsAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to retrieve agents from factory.");
+                throw;
+            }
+
+            var agentInfo = agents.FirstOrDefault(a => a.Name.Equals(targetAgent, StringComparison.OrdinalIgnoreCase));
+
+            if (agentInfo == null)
+            {
+                return AgentResponse.Error($"Agent '{targetAgent}' não encontrado ou inativo.", nameof(DirectAgentRequestExecutor));
+            }
+
             var analysis = new AnalysisResult
             {
-                EstimatedAgent = targetAgent,
+                EstimatedAgent = agentInfo.Name,
                 Intent = IntentType.Chat,
-                Confidence = 1.0
+                Confidence = 1.0,
+                PrimaryDomain = agentInfo.Domain,
+                RecommendedTier = agentInfo.Tier,
+                RequiredTools = new List<string>(agentInfo.AvailableTools)
             };
 
-            var selectedAgent = await _agentFactory.ResolveAgentAsync(analysis);
-            analysis.PrimaryDomain = selectedAgent.Domain;
-            analysis.RecommendedTier = selectedAgent.Tier;
-            analysis.RequiredTools = new List<string>(selectedAgent.AvailableTools);
+            var selectedAgent = await _agentFactory.ResolveAgentAsync(agentInfo);
 
             var preProcessingResult = await _preProcessingPipeline.ProcessAsync(new AgentExecutionPreProcessingContext
             {
