@@ -10,7 +10,7 @@ public interface IExternalQuotaSyncService
     /// <summary>
     /// Updates the quota based on headers captured reactively.
     /// </summary>
-    Task UpdateFromHeadersAsync(string providerName, string? tenantId, string apiKeyId, long remainingRequests, long remainingTokens, DateTime? resetAt);
+    Task UpdateFromHeadersAsync(string providerName, string? tenantId, string apiKeyId, long limitRequests, long remainingRequests, long limitTokens, long remainingTokens, DateTime? resetAt);
 
     /// <summary>
     /// Proactively syncs billing/balance for a specific provider.

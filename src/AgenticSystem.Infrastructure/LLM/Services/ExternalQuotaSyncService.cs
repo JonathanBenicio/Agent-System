@@ -14,15 +14,18 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IEventBus _eventBus;
     private readonly ILogger<ExternalQuotaSyncService> _logger;
 
     public ExternalQuotaSyncService(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
         IHttpClientFactory httpClientFactory,
+        IEventBus eventBus,
         ILogger<ExternalQuotaSyncService> logger)
     {
         _dbContextFactory = dbContextFactory;
         _httpClientFactory = httpClientFactory;
+        _eventBus = eventBus;
         _logger = logger;
     }
 
@@ -30,7 +33,9 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
         string providerName, 
         string? tenantId, 
         string apiKeyId, 
+        long limitRequests,
         long remainingRequests, 
+        long limitTokens, 
         long remainingTokens, 
         DateTime? resetAt)
     {
@@ -52,10 +57,15 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
                 context.ExternalProviderQuotas.Add(entity);
             }
 
+            entity.LimitRequests = limitRequests;
             entity.RemainingRequests = remainingRequests;
+            entity.LimitTokens = limitTokens;
             entity.RemainingTokens = remainingTokens;
             entity.ResetAt = resetAt;
             entity.LastSyncAt = DateTime.UtcNow;
+
+            // Check for critical balance alerts (< 10%)
+            await CheckCriticalThresholdsAsync(entity, context);
 
             await context.SaveChangesAsync();
         }
@@ -122,6 +132,10 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
 
             entity.BalanceRemaining = limit > 0 ? limit - usage : 0;
             entity.LastSyncAt = DateTime.UtcNow;
+
+            // Check for critical balance alerts (< 10%)
+            await CheckCriticalThresholdsAsync(entity, context);
+
             await context.SaveChangesAsync();
         }
     }
@@ -218,12 +232,154 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
             ProviderName = entity.ProviderName,
             TenantId = entity.TenantId,
             ApiKeyId = entity.ApiKeyId,
+            LimitRequests = entity.LimitRequests,
             RemainingRequests = entity.RemainingRequests,
+            LimitTokens = entity.LimitTokens,
             RemainingTokens = entity.RemainingTokens,
             ResetAt = entity.ResetAt,
+            TotalBalance = entity.TotalBalance,
             BalanceRemaining = entity.BalanceRemaining,
             Currency = entity.Currency,
             LastSyncAt = entity.LastSyncAt
         };
+    }
+
+    private async Task CheckCriticalThresholdsAsync(ExternalProviderQuotaEntity entity, AgenticDbContext context)
+    {
+        var oneHourAgo = DateTime.UtcNow.AddHours(-1);
+
+        // 10% Threshold check
+        if (entity.LimitRequests > 0 && (double)entity.RemainingRequests / entity.LimitRequests < 0.1)
+        {
+            var percentage = (double)entity.RemainingRequests / entity.LimitRequests * 100;
+            _logger.LogCritical("🚨 CRITICAL QUOTA ALERT: Provider {Provider} (Key: {ApiKeyId}) is below 10% requests remaining ({Remaining}/{Limit})", 
+                entity.ProviderName, entity.ApiKeyId, entity.RemainingRequests, entity.LimitRequests);
+
+            await _eventBus.PublishAsync(new SystemBusEvent
+            {
+                EventType = "FinOps.QuotaThresholdReached",
+                Source = "QuotaSyncService",
+                TenantId = entity.TenantId,
+                Payload = new Dictionary<string, object>
+                {
+                    ["ProviderName"] = entity.ProviderName,
+                    ["ApiKeyId"] = entity.ApiKeyId,
+                    ["Type"] = "Requests",
+                    ["Remaining"] = entity.RemainingRequests,
+                    ["Limit"] = entity.LimitRequests,
+                    ["Percentage"] = percentage
+                }
+            }).ConfigureAwait(false);
+
+            // Save to DB if not spammed
+            var exists = await context.SystemAlerts.AnyAsync(a => 
+                a.ProviderName == entity.ProviderName && 
+                a.Type == "Requests" && 
+                a.CreatedAt > oneHourAgo);
+
+            if (!exists)
+            {
+                context.SystemAlerts.Add(new SystemAlertEntity
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Type = "Requests",
+                    Severity = "Critical",
+                    Message = $"Provider {entity.ProviderName} is below 10% requests remaining.",
+                    ProviderName = entity.ProviderName,
+                    Percentage = percentage,
+                    CreatedAt = DateTime.UtcNow,
+                    IsRead = false
+                });
+            }
+        }
+
+        if (entity.LimitTokens > 0 && (double)entity.RemainingTokens / entity.LimitTokens < 0.1)
+        {
+            var percentage = (double)entity.RemainingTokens / entity.LimitTokens * 100;
+            _logger.LogCritical("🚨 CRITICAL QUOTA ALERT: Provider {Provider} (Key: {ApiKeyId}) is below 10% tokens remaining ({Remaining}/{Limit})", 
+                entity.ProviderName, entity.ApiKeyId, entity.RemainingTokens, entity.LimitTokens);
+
+            await _eventBus.PublishAsync(new SystemBusEvent
+            {
+                EventType = "FinOps.QuotaThresholdReached",
+                Source = "QuotaSyncService",
+                TenantId = entity.TenantId,
+                Payload = new Dictionary<string, object>
+                {
+                    ["ProviderName"] = entity.ProviderName,
+                    ["ApiKeyId"] = entity.ApiKeyId,
+                    ["Type"] = "Tokens",
+                    ["Remaining"] = entity.RemainingTokens,
+                    ["Limit"] = entity.LimitTokens,
+                    ["Percentage"] = percentage
+                }
+            }).ConfigureAwait(false);
+
+            // Save to DB if not spammed
+            var exists = await context.SystemAlerts.AnyAsync(a => 
+                a.ProviderName == entity.ProviderName && 
+                a.Type == "Tokens" && 
+                a.CreatedAt > oneHourAgo);
+
+            if (!exists)
+            {
+                context.SystemAlerts.Add(new SystemAlertEntity
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Type = "Tokens",
+                    Severity = "Critical",
+                    Message = $"Provider {entity.ProviderName} is below 10% tokens remaining.",
+                    ProviderName = entity.ProviderName,
+                    Percentage = percentage,
+                    CreatedAt = DateTime.UtcNow,
+                    IsRead = false
+                });
+            }
+        }
+
+        if (entity.TotalBalance > 0 && entity.BalanceRemaining / entity.TotalBalance < 0.1)
+        {
+            var percentage = entity.BalanceRemaining / entity.TotalBalance * 100;
+            _logger.LogCritical("🚨 CRITICAL BILLING ALERT: Provider {Provider} (Key: {ApiKeyId}) is below 10% balance remaining ({Remaining:F2}/{Total:F2} {Currency})", 
+                entity.ProviderName, entity.ApiKeyId, entity.BalanceRemaining, entity.TotalBalance, entity.Currency);
+
+            await _eventBus.PublishAsync(new SystemBusEvent
+            {
+                EventType = "FinOps.QuotaThresholdReached",
+                Source = "QuotaSyncService",
+                TenantId = entity.TenantId,
+                Payload = new Dictionary<string, object>
+                {
+                    ["ProviderName"] = entity.ProviderName,
+                    ["ApiKeyId"] = entity.ApiKeyId,
+                    ["Type"] = "Balance",
+                    ["Remaining"] = entity.BalanceRemaining,
+                    ["Limit"] = entity.TotalBalance,
+                    ["Currency"] = entity.Currency,
+                    ["Percentage"] = percentage
+                }
+            }).ConfigureAwait(false);
+
+            // Save to DB if not spammed
+            var exists = await context.SystemAlerts.AnyAsync(a => 
+                a.ProviderName == entity.ProviderName && 
+                a.Type == "Balance" && 
+                a.CreatedAt > oneHourAgo);
+
+            if (!exists)
+            {
+                context.SystemAlerts.Add(new SystemAlertEntity
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Type = "Balance",
+                    Severity = "Critical",
+                    Message = $"Provider {entity.ProviderName} is below 10% balance remaining.",
+                    ProviderName = entity.ProviderName,
+                    Percentage = percentage,
+                    CreatedAt = DateTime.UtcNow,
+                    IsRead = false
+                });
+            }
+        }
     }
 }

@@ -423,6 +423,11 @@ await eventBus.SubscribeAsync("FinOps.TurnCostUpdated", "GatewayHubPublisher", a
     }
 });
 
+await eventBus.SubscribeAsync("FinOps.QuotaThresholdReached", "GatewayHubPublisher", async busEvent =>
+{
+    await gatewayHub.Clients.All.SendAsync("QuotaThresholdReached", busEvent.Payload);
+});
+
 Log.Information("Agentic System starting up...");
 app.Run();
 

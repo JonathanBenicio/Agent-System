@@ -87,11 +87,14 @@ public class ExternalProviderQuota
     public string ApiKeyId { get; init; } = string.Empty;
 
     // Rate Limits (Reactive/Headers)
+    public long LimitRequests { get; set; }
     public long RemainingRequests { get; set; }
+    public long LimitTokens { get; set; }
     public long RemainingTokens { get; set; }
     public DateTime? ResetAt { get; set; }
 
     // Billing (Proactive/Sync)
+    public double TotalBalance { get; set; }
     public double BalanceRemaining { get; set; }
     public string Currency { get; set; } = "USD";
     public DateTime LastSyncAt { get; set; } = DateTime.UtcNow;

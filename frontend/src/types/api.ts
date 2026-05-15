@@ -647,3 +647,13 @@ export interface MigrationJob {
   completedAt?: string
 }
 
+export interface SystemAlert {
+  id: string
+  type: string
+  severity: string
+  message: string
+  providerName: string
+  percentage: number
+  createdAt: string
+  isRead: boolean
+}

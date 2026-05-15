@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   MessageSquare,
+  Bell,
   LayoutDashboard,
   Bot,
   Wrench,
@@ -41,6 +42,7 @@ const navItems: NavItem[] = [
   { icon: Cable, label: 'Gateway', path: '/gateway' },
   { icon: HeartPulse, label: 'Saúde', path: '/gateway/health' },
   { icon: DollarSign, label: 'Custos', path: '/costs' },
+  { icon: Bell, label: 'Alertas', path: '/alerts' },
   { icon: Cpu, label: 'IAs', path: '/ai' },
   { icon: Plug, label: 'Plugins', path: '/plugins' },
   { icon: Clock, label: 'Scheduled Tasks', path: '/scheduled-tasks' },

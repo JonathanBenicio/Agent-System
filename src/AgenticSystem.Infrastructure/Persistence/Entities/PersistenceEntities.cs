@@ -462,14 +462,33 @@ public class ExternalProviderQuotaEntity
     public string ApiKeyId { get; set; } = string.Empty;
     
     // Rate Limits
+    public long LimitRequests { get; set; }
     public long RemainingRequests { get; set; }
+    public long LimitTokens { get; set; }
     public long RemainingTokens { get; set; }
     public DateTime? ResetAt { get; set; }
     
     // Billing
+    public double TotalBalance { get; set; }
     public double BalanceRemaining { get; set; }
     public string Currency { get; set; } = "USD";
     
     public DateTime LastSyncAt { get; set; } = DateTime.UtcNow;
 }
+
+/// <summary>
+/// Histórico de alertas do sistema (ex: cotas, falhas).
+/// </summary>
+public class SystemAlertEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty; // ex: "Quota"
+    public string Severity { get; set; } = "Info"; // "Info", "Warning", "Critical"
+    public string Message { get; set; } = string.Empty;
+    public string? ProviderName { get; set; }
+    public double? Percentage { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsRead { get; set; } = false;
+}
+
 

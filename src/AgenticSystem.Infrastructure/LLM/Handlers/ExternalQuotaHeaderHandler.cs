@@ -57,23 +57,30 @@ public class ExternalQuotaHeaderHandler : DelegatingHandler
         request.Headers.Remove("X-Agentic-ApiKeyId");
         request.Headers.Remove("X-Agentic-TenantId");
 
+        long limitRequests = -1;
         long remainingRequests = -1;
+        long limitTokens = -1;
         long remainingTokens = -1;
         DateTime? resetAt = null;
 
         if (providerName.Equals("OpenAI", StringComparison.OrdinalIgnoreCase) || 
             providerName.Equals("OpenRouter", StringComparison.OrdinalIgnoreCase))
         {
+            limitRequests = GetHeaderValue(response.Headers, "x-ratelimit-limit-requests");
             remainingRequests = GetHeaderValue(response.Headers, "x-ratelimit-remaining-requests");
+            limitTokens = GetHeaderValue(response.Headers, "x-ratelimit-limit-tokens");
             remainingTokens = GetHeaderValue(response.Headers, "x-ratelimit-remaining-tokens");
         }
         else if (providerName.Equals("Claude", StringComparison.OrdinalIgnoreCase))
         {
+            limitRequests = GetHeaderValue(response.Headers, "anthropic-ratelimit-requests-limit");
             remainingRequests = GetHeaderValue(response.Headers, "anthropic-ratelimit-requests-remaining");
+            limitTokens = GetHeaderValue(response.Headers, "anthropic-ratelimit-tokens-limit");
             remainingTokens = GetHeaderValue(response.Headers, "anthropic-ratelimit-tokens-remaining");
         }
         else if (providerName.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
         {
+            limitRequests = GetHeaderValue(response.Headers, "x-ratelimit-limit-requests");
             remainingRequests = GetHeaderValue(response.Headers, "x-ratelimit-remaining-requests");
         }
 
@@ -83,7 +90,9 @@ public class ExternalQuotaHeaderHandler : DelegatingHandler
                 providerName,
                 tenantId,
                 apiKeyId,
+                limitRequests,
                 remainingRequests,
+                limitTokens,
                 remainingTokens,
                 resetAt);
         }

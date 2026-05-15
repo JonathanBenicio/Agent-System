@@ -28,6 +28,7 @@ const HealthPage = lazy(() => import('@/components/gateway/HealthPage').then(mod
 const ProvidersPage = lazy(() => import('@/components/llm/ProvidersPage').then(module => ({ default: module.ProvidersPage })))
 const PluginsPage = lazy(() => import('@/components/plugins/PluginsPage').then(module => ({ default: module.PluginsPage })))
 const SettingsPage = lazy(() => import('@/components/settings/SettingsPage').then(module => ({ default: module.SettingsPage })))
+const AlertsPage = lazy(() => import('@/components/alerts/AlertsPage'))
 const RAGPage = lazy(() => import('@/components/rag/RAGPage').then(module => ({ default: module.RAGPage })))
 const ScheduledTasksPage = lazy(() => import('@/components/scheduled-tasks/ScheduledTasksPage').then(module => ({ default: module.ScheduledTasksPage })))
 const ConfigAdvancedPage = lazy(() => import('@/components/config/ConfigAdvancedPage').then(module => ({ default: module.ConfigAdvancedPage })))
@@ -93,6 +94,7 @@ function AppRoutes() {
           <Route path="/gateway" element={<RouteBoundary><ServicesPage /></RouteBoundary>} />
           <Route path="/gateway/health" element={<RouteBoundary><HealthPage /></RouteBoundary>} />
           <Route path="/costs" element={<RouteBoundary><CostsPage /></RouteBoundary>} />
+          <Route path="/alerts" element={<RouteBoundary><AlertsPage /></RouteBoundary>} />
           <Route path="/ai" element={<RouteBoundary><ProvidersPage /></RouteBoundary>} />
           <Route path="/providers" element={<Navigate to="/ai" replace />} />
           <Route path="/plugins" element={<RouteBoundary><PluginsPage /></RouteBoundary>} />

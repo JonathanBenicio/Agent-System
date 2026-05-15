@@ -1,4 +1,5 @@
 import { getAuthHeaders } from '@/lib/auth'
+import type { SystemAlert } from '@/types/api'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
 
@@ -170,7 +171,10 @@ export const gatewayApi = {
   disable: (name: string) => post(`/api/admin/gateway/services/${encodeURIComponent(name)}/disable`),
 }
 
-// ══════════════════════════════════════
+export const alertsApi = {
+  getAlerts: (limit?: number) => get<SystemAlert[]>(`/api/v1/alerts${limit ? `?limit=${limit}` : ''}`),
+  markAsRead: (id: string) => post(`/api/v1/alerts/${encodeURIComponent(id)}/read`),
+}// ══════════════════════════════════════
 // LLM API
 // ══════════════════════════════════════
 

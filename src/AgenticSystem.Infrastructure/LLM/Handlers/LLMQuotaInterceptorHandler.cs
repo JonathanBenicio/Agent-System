@@ -41,31 +41,41 @@ public class LLMQuotaInterceptorHandler : DelegatingHandler
 
     private async Task ProcessHeadersAsync(HttpResponseHeaders headers)
     {
+        long limitRequests = -1;
         long remainingRequests = -1;
+        long limitTokens = -1;
         long remainingTokens = -1;
         DateTime? resetAt = null;
 
         if (_providerName.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
         {
+            limitRequests = GetHeaderValue(headers, "x-ratelimit-limit-requests");
             remainingRequests = GetHeaderValue(headers, "x-ratelimit-remaining-requests");
+            limitTokens = GetHeaderValue(headers, "x-ratelimit-limit-tokens");
             remainingTokens = GetHeaderValue(headers, "x-ratelimit-remaining-tokens");
             resetAt = ParseResetTime(headers, "x-ratelimit-reset-requests");
         }
         else if (_providerName.Equals("Claude", StringComparison.OrdinalIgnoreCase) || _providerName.Equals("Anthropic", StringComparison.OrdinalIgnoreCase))
         {
+            limitRequests = GetHeaderValue(headers, "anthropic-ratelimit-requests-limit");
             remainingRequests = GetHeaderValue(headers, "anthropic-ratelimit-requests-remaining");
+            limitTokens = GetHeaderValue(headers, "anthropic-ratelimit-tokens-limit");
             remainingTokens = GetHeaderValue(headers, "anthropic-ratelimit-tokens-remaining");
             resetAt = ParseResetTime(headers, "anthropic-ratelimit-requests-reset");
         }
         else if (_providerName.Equals("Gemini", StringComparison.OrdinalIgnoreCase) || _providerName.Equals("Google", StringComparison.OrdinalIgnoreCase))
         {
+            limitRequests = GetHeaderValue(headers, "x-ratelimit-limit-requests");
             remainingRequests = GetHeaderValue(headers, "x-ratelimit-remaining-requests");
+            limitTokens = GetHeaderValue(headers, "x-ratelimit-limit-tokens");
             remainingTokens = GetHeaderValue(headers, "x-ratelimit-remaining-tokens");
             resetAt = ParseResetTime(headers, "x-ratelimit-reset-requests");
         }
         else if (_providerName.Equals("OpenRouter", StringComparison.OrdinalIgnoreCase))
         {
+            limitRequests = GetHeaderValue(headers, "x-ratelimit-limit-requests");
             remainingRequests = GetHeaderValue(headers, "x-ratelimit-remaining-requests");
+            limitTokens = GetHeaderValue(headers, "x-ratelimit-limit-tokens");
             remainingTokens = GetHeaderValue(headers, "x-ratelimit-remaining-tokens");
             resetAt = ParseResetTime(headers, "x-ratelimit-reset-requests");
         }
@@ -77,7 +87,7 @@ public class LLMQuotaInterceptorHandler : DelegatingHandler
             // For this implementation, we'll use "default_key" or similar if we can't find it.
             string apiKeyId = ExtractApiKeyHash(headers) ?? "default_key";
 
-            await _quotaService.UpdateFromHeadersAsync(_providerName, null, apiKeyId, remainingRequests, remainingTokens, resetAt);
+            await _quotaService.UpdateFromHeadersAsync(_providerName, null, apiKeyId, limitRequests, remainingRequests, limitTokens, remainingTokens, resetAt);
         }
     }
 
