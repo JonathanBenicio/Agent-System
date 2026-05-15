@@ -1198,6 +1198,44 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
+#### ML38 — RAG Avançado (Reranker)
+
+**Como** orquestrador que precisa de alta precisão na recuperação de documentos,
+**quero** utilizar um Cross-Encoder ReRanker local (ONNX) após a busca vetorial,
+**para que** os documentos mais relevantes sejam priorizados no contexto enviado ao LLM, reduzindo alucinações.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `LocalOnnxCrossEncoderReRankerProvider` |
+| Responsabilidade | Re-ranqueamento de chunks recuperados via modelo ONNX local |
+| Status | ⏳ Planejado |
+
+**Critérios de Aceite:**
+- [ ] Carregamento do modelo ONNX e vocabulário na inicialização.
+- [ ] Processamento de pares (query, chunk) para atribuição de score de relevância.
+- [ ] Filtragem e reordenação dos Top-K resultados antes de passar para o gerador.
+
+---
+
+#### ML39 — FinOps & Auto-Melhoria
+
+**Como** administrador do sistema,
+**quero** cotas proativas de uso de LLM e processamento em batch para auto-melhoria,
+**para que** os custos sejam controlados e o sistema aprenda sem impactar a latência das respostas em tempo real.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `ProactiveQuotaManager` · `SelfImprovementService` |
+| Responsabilidade | Controle de custos e limites de tokens; execução assíncrona de rotinas de auto-melhoria |
+| Status | ⏳ Planejado |
+
+**Critérios de Aceite:**
+- [ ] Bloqueio de requisições que excedam a quota diária de tokens/custo.
+- [ ] Processamento diário de reflexões em background (Hosted Service).
+- [ ] Aplicação automática de melhorias com confiança acima do threshold.
+
+---
+
 #### ML40 — Smart Triage & Fast Path
 
 **Como** orquestrador de alta performance,
@@ -1237,8 +1275,9 @@ TriggerEngine.EvaluateAsync(rule)
 | Vision | ML26 | 1 | ✅ |
 | MCP & Extensibility | ML27–ML28 | 3 | ✅ |
 | Agent Runtime Platform | ML29–ML34 | 6 | ✅ |
+| Advanced Capabilities | ML35–ML40 | 6 | ⏳ |
 | Transversal | T1–T10 | 10 | ✅ |
-| **Total** | **34 MLs + 10 Transversais** | **54 serviços** | **549+ testes** |
+| **Total** | **40 MLs + 10 Transversais** | **60 serviços** | **549+ testes** |
 
 ---
 
