@@ -22,9 +22,9 @@ Documento canônico de arquitetura atual:
 | Documento | Descrição |
 |-----------|-----------|
 | [architecture/backend-architecture-explained.md](architecture/backend-architecture-explained.md) | Arquitetura canônica do backend atual, framework-first/hosted |
+| [architecture/concepts.md](architecture/concepts.md) | Conceitos aplicados e justificativas (.NET/IA/MAF) |
 | [architecture/diagrams.md](architecture/diagrams.md) | Diagramas Mermaid alinhados ao runtime atual |
 | [DSA-AgenticSystem.md](DSA-AgenticSystem.md) | Visão macro de solução, segurança, observabilidade e deploy |
-| [architecture/design-philosophy.md](architecture/design-philosophy.md) | Filosofia de design e decisões arquiteturais |
 | [architecture/agent-registry.md](architecture/agent-registry.md) | Referência funcional do catálogo de agents |
 | [architecture/document-pipeline.md](architecture/document-pipeline.md) | Pipeline de processamento e ingestão de documentos |
 | [architecture/rag-flow.md](architecture/rag-flow.md) | Fluxo RAG: retrieval, rerank, budget e contexto |
@@ -32,6 +32,20 @@ Documento canônico de arquitetura atual:
 | [architecture/smart-routing-triage.md](architecture/smart-routing-triage.md) | Arquitetura de Smart Triage (3 camadas) e Fast Path |
 | [obsidian-vault.md](obsidian-vault.md) | Subsistema de memória com Obsidian Vault |
 | [extension-examples.md](extension-examples.md) | Exemplos de extensão do sistema com agents, tools e skills |
+
+### Decisões Arquiteturais (ADRs)
+
+| Documento | Descrição |
+|-----------|-----------|
+| [architecture/adr/001-retrospective-dotnet10-ddd.md](architecture/adr/001-retrospective-dotnet10-ddd.md) | ADR 001: Retrospectiva sobre .NET 10 e DDD |
+| [architecture/adr/002-smart-triage-fast-path.md](architecture/adr/002-smart-triage-fast-path.md) | ADR 002: Implementação de Smart Triage e Fast Path |
+
+### Glossários
+
+| Documento | Descrição |
+|-----------|-----------|
+| [glossary/technical.md](glossary/technical.md) | Glossário Técnico: Termos e acrônimos de engenharia |
+| [glossary/business.md](glossary/business.md) | Glossário de Domínio: Termos de negócio e agentes |
 
 ### Artefatos Estruturados
 
@@ -78,13 +92,14 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 
 Artefatos mantidos para rastreabilidade. Não devem ser usados como referência principal do estado atual do sistema.
 
-Guia da categoria: [historico/README.md](historico/README.md).
-
 | Documento | Descrição |
 |-----------|-----------|
-| [historico/README-old.md](historico/README-old.md) | README anterior do projeto |
-| [historico/PIPELINE_REPORT.md](historico/PIPELINE_REPORT.md) | Relatório histórico spec→code; próximos passos internos não são backlog vigente |
-| [historico/GAP_ANALYSIS_REPORT.md](historico/GAP_ANALYSIS_REPORT.md) | Análise histórica de gaps do fluxo principal anterior; supersedida por AI_Capabilities_Gaps |
+| [old/README-old.md](old/README-old.md) | README anterior do projeto |
+| [old/PIPELINE_REPORT.md](old/PIPELINE_REPORT.md) | Relatório histórico spec→code |
+| [old/GAP_ANALYSIS_REPORT.md](old/GAP_ANALYSIS_REPORT.md) | Análise histórica de gaps do fluxo principal anterior |
+| [old/DI_RUNTIME_AUDIT.md](old/DI_RUNTIME_AUDIT.md) | Auditoria de runtime DI (Histórico) |
+| [old/REFACTORING_CHECKPOINT_PHASE1.md](old/REFACTORING_CHECKPOINT_PHASE1.md) | Checkpoint de Refatoração - Fase 1 |
+| [old/REFACTORING_CHECKPOINT_PHASE2.md](old/REFACTORING_CHECKPOINT_PHASE2.md) | Checkpoint de Refatoração - Fase 2 |
 
 ---
 
