@@ -33,6 +33,7 @@ public class SmartRouter : ISmartRouter
     public async Task<(bool IsFastPath, string? Response, QueryTriageResult? Triage)> TriageAsync(string input, UserContext context, CancellationToken ct = default)
     {
         // 1. Camada 0 & 0.5: Fast Path (Heurística e ML Local)
+
         foreach (var interceptor in _fastPathInterceptors)
         {
             var (isFastPath, response) = await interceptor.EvaluateAsync(input, ct);

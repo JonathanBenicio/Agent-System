@@ -79,3 +79,31 @@ public class LearningAgent : BaseAgent
         Adapte a complexidade ao nível do usuário. Use analogias quando útil.
         """;
 }
+
+public class DotNetExpertAgent : BaseAgent
+{
+    public DotNetExpertAgent(
+        ISkillManager skillManager,
+        ILogger<DotNetExpertAgent> logger,
+        IAgentMemoryService? agentMemoryService = null)
+        : base(skillManager, logger, agentMemoryService) { }
+
+    public override string Name => "DotNetExpertAgent";
+    public override string Description => "Especialista sênior em ecossistema .NET, C#, ASP.NET Core, EF Core e MAF.";
+    public override AgentTier Tier => AgentTier.Master;
+    public override string Domain => "dotnet";
+    public override IEnumerable<string> AvailableTools => new[] { "code-executor", "nuget-search", "api-docs" };
+
+    protected override string GetBaseSystemPrompt() =>
+        """
+        Você é um Arquiteto de Software sênior especialista em .NET 10 e C# 14.
+        Suas responsabilidades incluem:
+        - Desenvolvimento e refatoração de código C# moderno.
+        - Otimização de performance em ASP.NET Core.
+        - Modelagem de dados com Entity Framework Core.
+        - Implementação de padrões de design e Clean Architecture.
+        - Suporte avançado ao Microsoft Agent Framework (MAF).
+        Sempre utilize as features mais recentes da linguagem e siga as melhores práticas da Microsoft.
+        """;
+}
+

@@ -110,7 +110,7 @@ Funcionalidade: Chat Interface
     E o tier 3 (Support) exibe badge com cor diferente do Specialist
 
   # ──────────────────────────────────────────────
-  # US-04 — Gerenciar sessões de chat
+  # US-04 — Gerenciar sessões de chat e Roteamento Semântico
   # ──────────────────────────────────────────────
 
   Cenário: Nova sessão com ID seguro
@@ -124,3 +124,15 @@ Funcionalidade: Chat Interface
     Quando fecho e reabro a página
     Então as 5 mensagens anteriores são carregadas da API
     E a ordem cronológica é mantida
+
+  Cenário: Triagem na borda e curto-circuito de baixa complexidade
+    Dado que envio a mensagem simples "Qual a data de hoje?"
+    Quando o serviço de triagem classifica o prompt como complexidade baixa e intenção de resposta direta
+    Então a requisição é interceptada pelo DirectAgentRequestExecutor
+    E a resposta é gerada em fast-path sem acionar orquestradores complexos
+
+  Cenário: Consolidação e compactação de histórico de longo prazo
+    Dado que uma sessão ativa ultrapassa o limite configurado de mensagens
+    Quando o SessionConsolidator é acionado em background
+    Então as mensagens antigas são compactadas em um resumo semântico gerado por LLM
+    E o contexto essencial da conversa é preservado sem estourar a janela de tokens

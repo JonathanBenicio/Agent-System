@@ -1,69 +1,55 @@
-# GEMINI.md - Frontend Context
+# GEMINI.md - Frontend Context & Governance
 
-Este arquivo define as regras e padrões específicos para o desenvolvimento do Frontend neste projeto.
+Este arquivo define as regras canônicas, arquitetura e padrões específicos para o desenvolvimento do Frontend neste monorepo, subordinado à governança mestre do diretório `conductor/`.
 
 ---
 
-## 🚀 Stack Tecnológica (Conductor Aligned)
-- **Framework / Build Tool**: Vite 8.x
+## 🚀 Stack Tecnológica Deliberada (`conductor/tech-stack.md`)
+- **Build Tool / Bundler**: Vite 8.x (SPA)
 - **Library**: React 19.x
-- **Language**: TypeScript 6.x (Strict Mode)
-- **Styling**: Tailwind CSS 4.x
+- **Language**: TypeScript 6.x (Strict Mode, zero `any`)
+- **Styling**: Tailwind CSS 4.x (Design Token Architecture)
 - **Icons**: Lucide React
-- **Real-time**: SignalR Client (Streaming & SSE)
-- **State Management**: Zustand / Context API
-- **Data Fetching**: TanStack Query
+- **Real-time Engine**: SignalR Client (Streaming & SSE via `@microsoft/signalr`)
+- **State Management**: Zustand (Stores atômicos e imutáveis)
+- **Data Fetching**: TanStack Query / Fetch API nativa
+
+> [!IMPORTANT]
+> **PROIBIÇÃO EXPRESSA**: O uso de Next.js, App Router ou Server Components é terminantemente vedado neste ecossistema frontend. A aplicação é estritamente uma Single Page Application (SPA) empacotada pelo Vite 8.
+
+---
+
+## 🏗️ Arquitetura e Estrutura de Diretórios (SPA)
+
+```markdown
+src/
+├── components/          # Componentes visuais atômicos e acessíveis (PascalCase.tsx)
+├── hooks/               # Custom hooks de encapsulamento lógico e reatividade (useFeature.ts)
+├── lib/                 # Utilitários, cn() (clsx + twMerge), singletons SignalR/SSE
+├── store/               # Zustand stores isolados por domínio funcional
+└── types/               # Definições globais de TypeScript 6
+```
+
+### 🔌 Diretrizes de Real-time e Estado Global
+1. **SignalR Singletons**: As conexões aos hubs (`/hubs/chat`, `/hubs/gateway`) devem operar como singletons em `lib/signalr.ts` com auto-reconnect configurado e tratamento robusto de queda de conexão.
+2. **Zustand Immutability**: Atualizações de estado global devem ser imutáveis, granulares e sem sobreposição de re-renderizações desnecessárias.
 
 ---
 
 ## 🎨 Design System & UI Patterns
-- **Paleta**: Definida via variáveis de CSS e classes do Tailwind v4.
-- **Dark Mode**: Priorizado e suportado nativamente conforme as diretrizes do produto.
-- **Componentes Reutilizáveis**:
-  - Priorize o uso de componentes atômicos, acessíveis e modulares.
-  - Siga a estrutura de componentes em `src/components/`.
-
----
-
-## 🏗️ Arquitetura do Frontend (SPA)
-
-### Estrutura de Diretórios
-- `src/components/`: Componentes React reutilizáveis e modulares (ex: `agents/`, `common/`).
-- `src/hooks/`: Custom hooks para encapsulamento de estado e chamadas real-time.
-- `src/lib/`: Lógica de cliente, clientes SignalR/SSE, utilitários.
-- `src/store/`: Gerenciamento de estado global.
-- `src/types/`: Definições globais de TypeScript.
-
-### API & Real-time (SignalR / SSE)
-- O frontend interage com o Runtime de Agentes via endpoints REST e conexões SignalR/SSE para streaming de execução.
-- Trate desconexões, reconexões e estados de carregamento de forma robusta e reativa.
+- **Paleta**: Definida via variáveis HSL no `index.css` e classes utilitárias do Tailwind v4.
+- **Dark Mode**: Padrão nativo do produto (`zinc-850`, `zinc-925`).
+- **Composição de Classes**: Utilize o utilitário `cn()` para mesclar condicionalmente classes Tailwind sem conflitos.
 
 ---
 
 ## 📏 Convenções de Código
-
-### Naming
 - **Components**: PascalCase (ex: `AgentFormModal.tsx`).
 - **Hooks/Stores**: camelCase com prefixo `use` (ex: `useAgentStore.ts`).
 - **Types/Interfaces**: PascalCase.
-- **Files**: kebab-case ou PascalCase para componentes.
-
-### Import Organization
-1. React core e hooks.
-2. Bibliotecas de terceiros (Lucide, Zustand).
-3. Imports internos de componentes, hooks e tipos.
 
 ---
 
-## ✅ Qualidade & Testes
-- **Linting**: O código deve passar em todas as verificações de lint configuradas no Vite/ESLint.
-- **Typing**: Zero tolerância para `any`. Use tipos explícitos de TypeScript 6.
-- **Testing**: Testes unitários limpos focados no comportamento dos componentes.
-
----
-
-## 🤖 Instruções para o Agente
-Ao trabalhar no diretório de frontend:
-1. Sempre consulte este arquivo e siga estritamente a stack de **React 19 + Vite 8** (Não utilize Next.js ou App Router).
-2. Siga os padrões de design e componentes atômicos já existentes no projeto.
-3. Valide as alterações garantindo que o build do Vite e a verificação de tipos passem sem erros.
+## ✅ Qualidade & Testes (AAA Pattern)
+- **Linting & Typing**: Zero tolerância para erros no `tsc --noEmit` e avisos do ESLint.
+- **Testing**: Cobertura via Cypress (E2E) e testes de componentes.

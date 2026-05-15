@@ -29,7 +29,9 @@ Em vez de um chatbot genérico que tenta responder tudo com a mesma abordagem, o
 ```
 Usuário faz uma pergunta
         ↓
-  API abre sessão + streaming
+  Smart Triage (Regex → ML.NET → LLM)
+        ↓
+  Fast Path Acionado? (Sim → Resposta Imediata)
         ↓
   MetaAgentOrchestrator encaminha ao workflow
         ↓
@@ -57,6 +59,7 @@ O usuário não precisa saber qual especialista existe — o sistema roteia auto
 | **Criatividade** | Brainstorming, escrita, ideação | "5 nomes para nossa nova linha de produtos" |
 | **Análise** | Dados, insights, relatórios | "Qual a tendência de vendas dos últimos 3 meses?" |
 | **Notificações** | Alertas e lembretes proativos | Avisos automáticos baseados em regras |
+| **DotNet Expert** | Especialista em C#, .NET e arquitetura do sistema | "Explique como funciona o MetaAgentOrchestrator" |
 | **Protocolos & automação** | Conexão com superfícies externas | Orquestra MCP, A2A, AG-UI e compatibilidade OpenAI |
 
 ---
@@ -84,6 +87,15 @@ Quando o usuário corrige uma resposta, o sistema:
 3. Aplica a regra em respostas futuras
 
 Quanto mais usado, mais preciso fica — **sem retreinamento manual**.
+
+### 3. Eficiência via Fast Path (Smart Triage)
+
+O sistema utiliza uma pipeline de 3 camadas para processar solicitações com o menor custo e latência possíveis:
+1. **Regex Layer**: Respostas instantâneas para comandos fixos.
+2. **ML.NET Layer**: Modelo local que identifica intenções comuns (saudações, status, small talk) sem usar a nuvem.
+3. **LLM Layer**: Somente solicitações complexas chegam aos modelos caros de IA.
+
+Isso garante respostas em milissegundos para tarefas rotineiras.
 
 ### 3. Memória inteligente
 
@@ -173,16 +185,15 @@ O sistema evolui em capacidades nativas integradas via Microsoft Agent Framework
 
 ## Métricas de acompanhamento
 
-| Métrica | O que mede |
-|---|---|
-| **Taxa de orquestração correta** | % de vezes que o runtime escolheu o fluxo e o especialista adequados |
-| **Score médio de confiança** | Qualidade geral das respostas |
-| **Custo por sessão** | Gasto com provedores de IA por interação |
-| **Tempo de resposta (P50/P95)** | Velocidade de atendimento |
-| **Taxa de fallback** | Frequência de troca automática de provedor |
-| **Correções humanas/dia** | Volume de ajustes manuais (quanto menor, melhor) |
-| **Regras ativas** | Quantidade de aprendizados extraídos de correções |
-| **Cobertura de testes** | Saúde da suíte automatizada que protege fluxos centrais do backend |
+| Métrica | O que mede | Meta (SLO) |
+|---|---|---|
+| **Taxa de orquestração correta** | % de vezes que o runtime escolheu o fluxo adequado | > 95% |
+| **Tempo de resposta (Fast Path)** | Latência nas camadas Regex e ML.NET | < 50ms (P95) |
+| **Tempo de resposta (Triage LLM)** | Latência da classificação semântica inicial | < 800ms (P95) |
+| **Custo por sessão** | Gasto com provedores de IA por interação | < $0.01 (Média) |
+| **Taxa de fallback** | Frequência de troca automática de provedor | < 1% |
+| **Cobertura de testes** | Saúde da suíte automatizada do backend | > 80% |
+| **Economia de Tokens (Fast Path)** | % de requisições resolvidas sem LLM | > 20% |
 
 ---
 

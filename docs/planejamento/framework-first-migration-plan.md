@@ -10,7 +10,7 @@
 > **Criado:** 2026-05-05  
 > **Status:** Fase 1 ✅ completa | Fase 2 ✅ completa | Fase 3 🟡 núcleo concluído, com bloqueio real do framework em reflection/quality gates nativos | Fase 4 ✅ núcleo concluído, com pendências locais documentadas  
 > **Escopo:** Inverter controle de orquestração do `AgentExecutionWorkflow` para o Microsoft Agent Framework  
-> **Referências:** [../TECHNICAL_ARCHITECTURE_GUIDE.md](../TECHNICAL_ARCHITECTURE_GUIDE.md), [AI_Capabilities_Gaps.md](AI_Capabilities_Gaps.md), [../architecture/design-philosophy.md](../architecture/design-philosophy.md)
+> **Referências:** [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md), [AI_Capabilities_Gaps.md](AI_Capabilities_Gaps.md), [../architecture/design-philosophy.md](../architecture/design-philosophy.md)
 
 ---
 

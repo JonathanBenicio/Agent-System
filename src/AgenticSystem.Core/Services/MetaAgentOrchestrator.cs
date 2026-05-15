@@ -176,6 +176,16 @@ public class MetaAgentOrchestrator : IMetaAgent
                 context.Preferences["triage.requiresRag"] = triage.RequiresRAG.ToString();
                 context.Preferences["triage.requiresTools"] = triage.RequiresTools.ToString();
                 context.Preferences["triage.recommendedTier"] = triage.RecommendedAgentTier;
+
+                // Tiered Execution (Camada 2): Switch based on ComplexityLevel
+                if (triage.Complexity == AgenticSystem.Core.Models.Triage.ComplexityLevel.Low && 
+                    triage.Intent == AgenticSystem.Core.Models.Triage.IntentType.DirectAnswer)
+                {
+                    _logger.LogInformation("⚡ Executing Tier 1 logic (Low Complexity Direct Execution) for input: {Input}", input[..Math.Min(50, input.Length)]);
+                    var target = !string.IsNullOrWhiteSpace(triage.EstimatedAgent) ? triage.EstimatedAgent : "GeneralAgent";
+                    return await _directAgentRequestExecutor.ExecuteAsync(sessionId, input, context, target, ct);
+                }
+
             }
 
             _logger.LogInformation("🎯 Workflow executando request: {Input}", input[..Math.Min(50, input.Length)]);

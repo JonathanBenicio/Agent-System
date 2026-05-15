@@ -50,7 +50,9 @@ Quick-start scaffolding for new projects. **Read the matching template only!**
 |-------|------|
 | `project-planner` | Task breakdown, dependency graph |
 | `react-nextjs-expert` | UI components, pages, Next.js features |
-| `backend-specialist` | API, business logic |
+| `backend-specialist` | API, business logic (Node/Python) |
+| `dotnet-expert` | API, business logic (C#/.NET) |
+| `dotnet-self-learning-architect` | Enterprise architecture (.NET) |
 | `database-architect` | Schema, migrations |
 | `devops-engineer` | Deployment, preview |
 

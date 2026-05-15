@@ -110,6 +110,8 @@ Agents: security-auditor → penetration-tester → synthesis
 | `project-planner` | Planning | "plan", "roadmap", "milestones" |
 | `seo-specialist` | SEO | "SEO", "meta tags", "search ranking" |
 | `game-developer` | Game Development | "game", "Unity", "Godot", "Phaser" |
+| `dotnet-expert` | Backend C#/.NET | "C#", ".NET", "ASP.NET", "EF Core" |
+| `dotnet-self-learning-architect` | .NET Architecture | "enterprise", "architecture", ".NET 8+" |
 
 ---
 

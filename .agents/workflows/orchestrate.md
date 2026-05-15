@@ -28,9 +28,12 @@ $ARGUMENTS
 |-----------|---------------------------|
 | **Web App** | frontend-specialist, backend-specialist, test-engineer |
 | **API** | backend-specialist, security-auditor, test-engineer |
+| **.NET API**| dotnet-expert, security-auditor, test-engineer |
+| **.NET Enterprise**| dotnet-self-learning-architect, dotnet-expert, database-architect |
 | **UI/Design** | frontend-specialist, seo-specialist, performance-optimizer |
 | **Database** | database-architect, backend-specialist, security-auditor |
 | **Full Stack** | project-planner, frontend-specialist, backend-specialist, devops-engineer |
+| **.NET Full Stack**| project-planner, frontend-specialist, dotnet-expert, devops-engineer |
 | **Debug** | debugger, explorer-agent, test-engineer |
 | **Security** | security-auditor, penetration-tester, devops-engineer |
 

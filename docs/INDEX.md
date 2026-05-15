@@ -29,6 +29,7 @@ Documento canônico de arquitetura atual:
 | [architecture/document-pipeline.md](architecture/document-pipeline.md) | Pipeline de processamento e ingestão de documentos |
 | [architecture/rag-flow.md](architecture/rag-flow.md) | Fluxo RAG: retrieval, rerank, budget e contexto |
 | [architecture/skills-vs-tools.md](architecture/skills-vs-tools.md) | Contrato de separação entre skills e tools |
+| [architecture/smart-routing-triage.md](architecture/smart-routing-triage.md) | Arquitetura de Smart Triage (3 camadas) e Fast Path |
 | [obsidian-vault.md](obsidian-vault.md) | Subsistema de memória com Obsidian Vault |
 | [extension-examples.md](extension-examples.md) | Exemplos de extensão do sistema com agents, tools e skills |
 

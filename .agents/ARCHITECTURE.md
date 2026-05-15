@@ -53,6 +53,7 @@ Specialist AI personas for different domains.
 | `product-owner`          | Strategy, backlog, MVP     | plan-writing, agentic-brainstorming                      |
 | `qa-automation-engineer` | E2E testing, CI pipelines  | webapp-testing, testing-patterns                         |
 | `code-archaeologist`     | Legacy code, refactoring   | clean-code, code-review-checklist                        |
+| `dotnet-expert`          | C# & .NET Core             | clean-code, dotnet-best-practices, testing-patterns      |
 | `dotnet-self-learning-architect` | .NET 8+ enterprise systems | clean-code, dotnet-best-practices, architecture          |
 | `explorer-agent`         | Codebase analysis          | -                                                        |
 
@@ -286,4 +287,4 @@ For details, see [scripts/README.md](scripts/README.md)
 | Testing  | `test-engineer`       | testing-patterns, webapp-testing      |
 | Debug    | `debugger`            | agentic-debugging                     |
 | Plan     | `project-planner`     | agentic-brainstorming, plan-writing   |
-| .NET     | `dotnet-self-learning-architect` | dotnet-best-practices, architecture |
+| .NET     | `dotnet-expert`, `dotnet-self-learning-architect` | dotnet-best-practices, architecture |

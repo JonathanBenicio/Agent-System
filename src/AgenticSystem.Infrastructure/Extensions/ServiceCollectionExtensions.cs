@@ -15,6 +15,7 @@ using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.RAG;
 using AgenticSystem.Infrastructure.Skills;
 using AgenticSystem.Infrastructure.Sync;
+using AgenticSystem.Infrastructure.BackgroundServices;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -23,6 +24,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Pgvector.EntityFrameworkCore;
+using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Infrastructure.Extensions;
 
@@ -41,7 +43,8 @@ public static class ServiceCollectionExtensions
             .AddAgenticMcpAndSkills()
             .AddAgenticAgentFramework(configuration)
             .AddAgenticRagAndMemory(configuration)
-            .AddAgenticDocumentServices();
+            .AddAgenticDocumentServices()
+            .AddAgenticBackgroundServices();
 
         return services;
     }
@@ -59,6 +62,7 @@ public static class ServiceCollectionExtensions
         services.Configure<ReRankingOptions>(configuration.GetSection("AgenticSystem:RAG:ReRanking"));
         services.Configure<DynamicSkillsOptions>(configuration.GetSection("AgenticSystem:Skills"));
         services.Configure<SemanticCacheOptions>(configuration.GetSection("AgenticSystem:SemanticCache"));
+        services.Configure<SelfImprovementSettings>(configuration.GetSection("AgenticSystem:SelfImprovement"));
 
         return services;
     }
@@ -254,7 +258,15 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(),
             sp.GetRequiredService<ILogger<AgenticSystem.Infrastructure.Embeddings.EmbeddingProviderAdapter>>()));
 
-        services.AddSingleton<IAdvancedRetrievalService, PostgresAdvancedRetrievalService>();
+        var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
+        if (string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddSingleton<IAdvancedRetrievalService, PostgresAdvancedRetrievalService>();
+        }
+        else
+        {
+            services.AddSingleton<IAdvancedRetrievalService, InMemoryAdvancedRetrievalService>();
+        }
         services.AddSingleton<IRAGService, RAGService>();
 
         // Obsidian Sync
@@ -285,6 +297,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDataConnector, FileSystemDataConnector>();
         services.AddHostedService<DataSyncBackgroundService>();
 
+        return services;
+    }
+
+    private static IServiceCollection AddAgenticBackgroundServices(this IServiceCollection services)
+    {
+        services.AddHostedService<SelfImprovementBackgroundJob>();
         return services;
     }
 

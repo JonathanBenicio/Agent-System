@@ -1,14 +1,7 @@
-# Project Context
+# Conductor Governance — Redirecionamento Canônico
 
-## Definition
-- [Product Definition](./product.md)
-- [Product Guidelines](./product-guidelines.md)
-- [Tech Stack](./tech-stack.md)
+> [!IMPORTANT]
+> A governança mestre da extensão Conductor foi desduplicada e unificada no diretório raiz do repositório:
+> 👉 `c:\Users\Jonathan\Documents\Developer\GitHub\Agent-System\conductor\`
 
-## Workflow
-- [Workflow](./workflow.md)
-- [Code Style Guides](./code_styleguides/)
-
-## Management
-- [Tracks Registry](./tracks.md)
-- [Tracks Directory](./tracks/)
+Por favor, utilize exclusivamente o diretório `conductor/` na raiz do projeto para consultar a Single Source of Truth, Tech Stack, Product Guidelines e Workflows.

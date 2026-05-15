@@ -76,7 +76,7 @@ You are the master orchestrator agent. You coordinate multiple specialized agent
 |--------------|---------------|---------------|
 | **MOBILE** | `mobile-developer` | ❌ frontend-specialist, backend-specialist |
 | **WEB** | `frontend-specialist` | ❌ mobile-developer |
-| **BACKEND** | `backend-specialist` | - |
+| **BACKEND** | `backend-specialist` (Node/Python) / `dotnet-expert` (.NET) | - |
 
 ---
 
@@ -120,6 +120,7 @@ Before I coordinate the agents, I need to understand your requirements better:
 | `project-planner` | Planning | Task breakdown, milestones, roadmap |
 | `seo-specialist`         | SEO & Marketing | SEO optimization, meta tags, analytics |
 | `game-developer`         | Game Development | Unity, Godot, Unreal, Phaser, multiplayer |
+| `dotnet-expert`          | C# & .NET Core   | C#, ASP.NET Core, EF Core best practices |
 | `dotnet-self-learning-architect` | .NET Architecture | .NET 8+ enterprise systems, C# architecture, EF Core |
 
 ---
@@ -148,6 +149,7 @@ Before I coordinate the agents, I need to understand your requirements better:
 | `explorer-agent` | Codebase discovery | ❌ Write operations |
 | `penetration-tester` | Security testing | ❌ Feature code |
 | `game-developer` | Game logic, scenes, assets | ❌ Web/mobile components |
+| `dotnet-expert` | C# APIs, EF Core, LINQ, Dapper | ❌ Web components, UI styles |
 | `dotnet-self-learning-architect` | .NET C# APIs, EF Core, enterprise architecture | ❌ Web components, UI styles |
 
 ### File Type Ownership
@@ -158,6 +160,7 @@ Before I coordinate the agents, I need to understand your requirements better:
 | `**/__tests__/**` | `test-engineer` | ❌ All others |
 | `**/components/**` | `frontend-specialist` | ❌ backend, test |
 | `**/api/**`, `**/server/**` | `backend-specialist` | ❌ frontend |
+| `**/*.cs`, `**/*.csproj` | `dotnet-expert`, `dotnet-self-learning-architect` | ❌ frontend |
 | `**/prisma/**`, `**/drizzle/**` | `database-architect` | ❌ frontend |
 
 ### Enforcement Protocol

@@ -200,6 +200,28 @@ public class PostgresOperationalStore : IOperationalStore
         return entities.Select(MapToReflection).ToList();
     }
 
+    public async Task<IReadOnlyList<Reflection>> GetReflectionsSinceAsync(string? lastReflectionId, int limit = 100, CancellationToken ct = default)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var query = db.Reflections.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrEmpty(lastReflectionId))
+        {
+            var last = await db.Reflections.AsNoTracking().FirstOrDefaultAsync(r => r.Id == lastReflectionId, ct);
+            if (last != null)
+            {
+                query = query.Where(r => r.CreatedAt > last.CreatedAt);
+            }
+        }
+
+        var entities = await query
+            .OrderBy(r => r.CreatedAt)
+            .Take(limit)
+            .ToListAsync(ct);
+
+        return entities.Select(MapToReflection).ToList();
+    }
+
     // ── Evaluation Scores ─────────────────────────────────
 
     public async Task SaveEvaluationAsync(RuntimeEvaluationResult evaluation, CancellationToken ct = default)
@@ -261,6 +283,20 @@ public class PostgresOperationalStore : IOperationalStore
 
         var entity = await query.OrderByDescending(e => e.CreatedAt).FirstOrDefaultAsync(ct);
         return entity is null ? null : MapToEvaluation(entity);
+    }
+
+    // ── System State ──────────────────────────────────────
+
+    public Task<SystemState?> GetSystemStateAsync(string id, CancellationToken ct = default)
+    {
+        // TODO: Implementar persistência de SystemState no Postgres
+        return Task.FromResult<SystemState?>(null);
+    }
+
+    public Task SaveSystemStateAsync(SystemState state, CancellationToken ct = default)
+    {
+        // TODO: Implementar persistência de SystemState no Postgres
+        return Task.CompletedTask;
     }
 
     // ── Mapping helpers ───────────────────────────────────

@@ -91,4 +91,18 @@ public class HierarchicalAgentFactoryTests
         agent.Name.Should().Be("CustomTest");
         agent.Tier.Should().Be(AgentTier.Specialist);
     }
+    [Fact]
+    public async Task ResolveAgentAsync_WithDotNetDomain_ReturnsDotNetExpertAgent()
+    {
+        var analysis = new AnalysisResult
+        {
+            PrimaryDomain = "dotnet",
+            RecommendedTier = AgentTier.Specialist
+        };
+
+        var agent = await _sut.ResolveAgentAsync(analysis);
+
+        agent.Should().NotBeNull();
+        agent.Name.Should().Be("DotNetExpertAgent");
+    }
 }

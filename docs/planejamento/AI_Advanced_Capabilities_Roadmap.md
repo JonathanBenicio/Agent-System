@@ -26,7 +26,7 @@ Consolidar um plano de execucao para a proxima onda de capacidades do AgenticSys
 ## Referencias de Arquitetura
 
 - Diagnostico atual: [AI_Capabilities_Gaps.md](AI_Capabilities_Gaps.md)
-- Arquitetura tecnica: [../TECHNICAL_ARCHITECTURE_GUIDE.md](../TECHNICAL_ARCHITECTURE_GUIDE.md)
+- Arquitetura tecnica: [../architecture/backend-architecture-explained.md](../architecture/backend-architecture-explained.md)
 - Fluxos e backlog funcional: [../USER-STORIES.md](../USER-STORIES.md)
 
 ## Principios de Implantacao

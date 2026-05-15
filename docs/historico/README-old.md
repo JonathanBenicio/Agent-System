@@ -700,7 +700,7 @@ gantt
     Smart Routing      :2026-05-08, 7d
     Session Memory     :2026-05-08, 7d
     section Prioridade Média  
-    Dynamic Handoffs   :2026-05-15, 14d
+    Dynamic Handoffs   :2026-05-14, 14d
     Setup Flow         :2026-05-22, 7d
     Conventional Commits :2026-05-22, 5d
     section Prioridade Baixa

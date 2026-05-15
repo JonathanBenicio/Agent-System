@@ -141,7 +141,7 @@ File:         docs/plan/dashboard-analytics.md
 | Priority | Phase | Agents | When to Use |
 |----------|-------|--------|-------------|
 | **P0** | Foundation | `database-architect` → `security-auditor` | If project needs DB |
-| **P1** | Core | `backend-specialist` | If project has backend |
+| **P1** | Core | `backend-specialist` (Node/Python) OR `dotnet-expert` (.NET) | If project has backend |
 | **P2** | UI/UX | `frontend-specialist` OR `mobile-developer` | Web OR Mobile (not both!) |
 | **P3** | Polish | `test-engineer`, `performance-optimizer`, `seo-specialist` | Based on needs |
 
@@ -192,7 +192,7 @@ Before assigning agents, determine project type:
 |---------|--------------|---------------|------------|
 | "mobile app", "iOS", "Android", "React Native", "Flutter", "Expo" | **MOBILE** | `mobile-developer` | ❌ frontend-specialist, backend-specialist |
 | "website", "web app", "Next.js", "React" (web) | **WEB** | `frontend-specialist` | ❌ mobile-developer |
-| "API", "backend", "server", "database" (standalone) | **BACKEND** | `backend-specialist | - |
+| "API", "backend", "server", "database" (standalone) | **BACKEND** | `backend-specialist` (Node/Python) OR `dotnet-expert` (.NET) | - |
 
 > 🔴 **CRITICAL:** Mobile project + frontend-specialist = WRONG. Mobile project = mobile-developer ONLY.
 
@@ -203,7 +203,7 @@ Before assigning agents, determine project type:
 | Component | WEB Agent | MOBILE Agent |
 |-----------|-----------|---------------|
 | Database/Schema | `database-architect` | `mobile-developer` |
-| API/Backend | `backend-specialist` | `mobile-developer` |
+| API/Backend | `backend-specialist` / `dotnet-expert` | `mobile-developer` |
 | Auth | `security-auditor` | `mobile-developer` |
 | UI/Styling | `frontend-specialist` | `mobile-developer` |
 | Tests | `test-engineer` | `mobile-developer` |

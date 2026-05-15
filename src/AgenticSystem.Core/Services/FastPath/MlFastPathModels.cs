@@ -7,7 +7,11 @@ namespace AgenticSystem.Core.Services.FastPath
   {
     [LoadColumn(0)]
     public string Text { get; set; } = string.Empty;
+
+    [LoadColumn(1)]
+    public string Label { get; set; } = string.Empty;
   }
+
 
   public class FastPathModelOutput
   {

@@ -9,6 +9,7 @@ using AgenticSystem.Core.Tools;
 using AgenticSystem.Core.Skills;
 using AgenticSystem.Core.Services.Triage;
 using AgenticSystem.Core.Services.FastPath;
+using AgenticSystem.Core.Services.Ml;
 using Microsoft.Extensions.ML;
 
 namespace AgenticSystem.Core.Extensions;
@@ -30,6 +31,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAgentExecutionPreProcessingPipeline, AgentExecutionPreProcessingPipeline>();
         services.AddSingleton<IAgentExecutionPostProcessingPipeline, AgentExecutionPostProcessingPipeline>();
         services.AddSingleton<IDirectAgentRequestExecutor, DirectAgentRequestExecutor>();
+        services.AddSingleton<IQualityGateService, QualityGateService>();
+        services.AddSingleton<ISessionConsolidator, SessionConsolidator>();
         services.AddSingleton<ISkillManager, InMemorySkillManager>();
         services.AddSingleton<IToolManager, InMemoryToolManager>();
         services.AddSingleton<IToolGovernanceService, ToolGovernanceService>();
@@ -38,12 +41,16 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITriageService, TriageService>();
         services.AddSingleton<IFastPathInterceptor, ConversationalFastPathInterceptor>();
         services.AddSingleton<IFastPathInterceptor, MlFastPathInterceptor>();
-        
+
         // ML.NET Pool registration (Model file should be provided in the root or config)
-        services.AddPredictionEnginePool<FastPathModelInput, FastPathModelOutput>()
-            .FromFile("fastpath_model.zip");
+        if (System.IO.File.Exists("fastpath_model.zip"))
+        {
+            services.AddPredictionEnginePool<FastPathModelInput, FastPathModelOutput>()
+                .FromFile("fastpath_model.zip");
+        }
 
         // Phase 1 — Enterprise Security & Runtime
+        services.AddSingleton<IPolicyStore, InMemoryPolicyStore>();
         services.AddSingleton<IPolicyEngine, PolicyEngine>();
         services.AddSingleton<IPermissionService, InMemoryPermissionService>();
         services.AddSingleton<IAuditLog, InMemoryAuditLog>();
@@ -108,8 +115,33 @@ public static class ServiceCollectionExtensions
         // ML23 — Embedding Migration (Re-indexação)
         services.AddSingleton<IEmbeddingModelStore, InMemoryEmbeddingModelStore>();
         services.AddSingleton<IMigrationJobStore, InMemoryMigrationJobStore>();
-        services.AddSingleton<IEmbeddingGenerator, HttpEmbeddingGenerator>();
         services.AddSingleton<IEmbeddingMigrationManager, EmbeddingMigrationManager>();
+
+        // ONNX Runtime Integration (Task 1.2 & 3.3)
+        if (System.IO.File.Exists("fastpath_model.onnx"))
+        {
+            services.AddSingleton<IMlClassifier>(sp => 
+                new OnnxMlClassifier("fastpath_model.onnx", sp.GetRequiredService<ILogger<OnnxMlClassifier>>()));
+        }
+
+        if (System.IO.File.Exists("reranker_model.onnx"))
+        {
+            services.AddSingleton<IReRanker>(sp => 
+                new OnnxReRanker("reranker_model.onnx", sp.GetRequiredService<ILogger<OnnxReRanker>>()));
+        }
+
+        // Embedding Generator Strategy
+        if (System.IO.File.Exists("embeddings_model.onnx"))
+        {
+            services.AddSingleton<OnnxEmbeddingGenerator>(sp => 
+                new OnnxEmbeddingGenerator("embeddings_model.onnx", sp.GetRequiredService<ILogger<OnnxEmbeddingGenerator>>()));
+            
+            services.AddSingleton<IEmbeddingGenerator>(sp => sp.GetRequiredService<OnnxEmbeddingGenerator>());
+        }
+        else
+        {
+            services.AddSingleton<IEmbeddingGenerator, HttpEmbeddingGenerator>();
+        }
 
         // Runtime Evaluator — InMemory fallback (overridden by UsePostgresOperationalStore when Postgres is configured)
         services.AddSingleton<IRuntimeEvaluator, InMemoryRuntimeEvaluator>();

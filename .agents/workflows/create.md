@@ -28,7 +28,7 @@ This command starts a new application creation process.
    - Orchestrate with `app-builder` skill
    - Coordinate expert agents:
      - `database-architect` → Schema
-     - `backend-specialist` → API
+     - `backend-specialist` (Node/Python) OR `dotnet-expert` (.NET) → API
      - `frontend-specialist` → UI
 
 4. **Preview**

@@ -17,7 +17,7 @@
    16   - `IntentType` enum (`SmallTalk`, `DirectAnswer`, `ComplexReasoning`).
    17   - `ComplexityLevel` enum (`Low`, `Medium`, `High`).
    18   - Booleans for `RequiresRAG` and `RequiresTools`.
-   19   - String for `RecommendedAgentTier`.
+   19   - String for `RecommendedAgentTier` (incluindo suporte nativo a `dotnet-expert` e `dotnet-self-learning-architect`).
    20
    21 ## Step 2: Implement the Triage Service
    22 - Create `ITriageService` and its implementation `TriageService`.
@@ -49,3 +49,10 @@
    42 - **Manual Verification**: Run queries of varying complexity to ensure logs reflect accurate tier selection (Low,   
       Medium, High) and significant latency drops for simple greetings.
 
+# Status
+- **Step 1: Define the Triage Models (Camada 1)** - `[COMPLETED]`
+- **Step 2: Implement the Triage Service** - `[COMPLETED]`
+- **Step 3: Refactor SmartRouter for Multi-Tier Execution** - `[COMPLETED]`
+- **Step 4: Pipeline Integration** - `[COMPLETED]`
+
+## ✅ PHASE 1 COMPLETE

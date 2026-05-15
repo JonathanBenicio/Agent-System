@@ -41,6 +41,8 @@ graph TD
 | **UI Component**    | "button", "card", "layout", "style"        | `frontend-specialist`                       | ✅ YES       |
 | **Mobile UI**       | "screen", "navigation", "touch", "gesture" | `mobile-developer`                          | ✅ YES       |
 | **API Endpoint**    | "endpoint", "route", "API", "POST", "GET"  | `backend-specialist`                        | ✅ YES       |
+| **.NET Backend**    | "dotnet", ".net", "c#", "csharp", "efcore" | `dotnet-expert`                             | ✅ YES       |
+| **.NET Architecture**| "enterprise", "architecture", "aspnet"   | `dotnet-self-learning-architect`            | ✅ YES       |
 | **Database**        | "schema", "migration", "query", "table"    | `database-architect` + `backend-specialist` | ✅ YES       |
 | **Bug Fix**         | "error", "bug", "not working", "broken"    | `debugger`                                  | ✅ YES       |
 | **Test**            | "test", "coverage", "unit", "e2e"          | `test-engineer`                             | ✅ YES       |
@@ -105,6 +107,8 @@ function analyzeRequest(userMessage) {
 | **Security**    | auth, login, jwt, password, hash, token    | `security-auditor`      |
 | **Frontend**    | component, react, vue, css, html, tailwind | `frontend-specialist`   |
 | **Backend**     | api, server, express, fastapi, node        | `backend-specialist`    |
+| **.NET Backend**| dotnet, .net, c#, csharp, aspnet, efcore   | `dotnet-expert`         |
+| **Architecture**| architecture, enterprise, linq, cqrs, ddd  | `dotnet-self-learning-architect` |
 | **Mobile**      | react native, flutter, ios, android, expo  | `mobile-developer`      |
 | **Database**    | prisma, sql, mongodb, schema, migration    | `database-architect`    |
 | **Testing**     | test, jest, vitest, playwright, cypress    | `test-engineer`         |

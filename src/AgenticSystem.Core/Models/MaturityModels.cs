@@ -415,7 +415,8 @@ public enum ConditionType
     JsonPath,
     Threshold,
     Contains,
-    Regex
+    Regex,
+    MlClassification
 }
 
 /// <summary>
@@ -680,6 +681,7 @@ public enum EmbeddingProvider
     Google,
     Ollama,
     Cohere,
+    Onnx,
     Custom
 }
 

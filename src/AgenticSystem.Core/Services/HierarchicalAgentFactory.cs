@@ -163,6 +163,7 @@ public class HierarchicalAgentFactory : IAgentFactory
             "analysis" => "AnalysisAgent",
             "notification" => "NotificationAgent",
             "api" => "APIAgent",
+            "dotnet" or "dotnet-expert" or "dotnet-self-learning-architect" => "DotNetExpertAgent",
             _ => "GeneralAgent"
         };
     }
@@ -179,6 +180,7 @@ public class HierarchicalAgentFactory : IAgentFactory
             "AnalysisAgent" or "analysis" => new AnalysisAgent(_skillManager, _loggerFactory.CreateLogger<AnalysisAgent>(), _agentMemoryService),
             "NotificationAgent" or "notification" => new NotificationAgent(_skillManager, _loggerFactory.CreateLogger<NotificationAgent>(), _agentMemoryService),
             "APIAgent" or "api" => new APIAgent(_skillManager, _loggerFactory.CreateLogger<APIAgent>(), _agentMemoryService),
+            "DotNetExpertAgent" or "dotnet" => new DotNetExpertAgent(_skillManager, _loggerFactory.CreateLogger<DotNetExpertAgent>(), _agentMemoryService),
             _ => new GeneralAgent(_skillManager, _loggerFactory.CreateLogger<GeneralAgent>(), _agentMemoryService)
         };
     }

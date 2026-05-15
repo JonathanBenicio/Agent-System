@@ -1,3 +1,5 @@
+using AgenticSystem.Core.Models;
+
 namespace AgenticSystem.Infrastructure.Configuration;
 
 public class AgenticSystemSettings
@@ -10,6 +12,7 @@ public class AgenticSystemSettings
     public GatewaySettings Gateway { get; set; } = new();
     public MemorySettings Memory { get; set; } = new();
     public SemanticCacheOptions SemanticCache { get; set; } = new();
+    public SelfImprovementSettings SelfImprovement { get; set; } = new();
 }
 
 public class SemanticCacheOptions

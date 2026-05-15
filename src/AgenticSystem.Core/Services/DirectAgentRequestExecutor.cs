@@ -44,24 +44,18 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
     {
         try
         {
-            var agents = await _agentFactory.GetAllAgentsAsync();
-            var requestedAgent = agents.FirstOrDefault(agent => agent.Name.Equals(targetAgent, StringComparison.OrdinalIgnoreCase));
-            if (requestedAgent is null)
-            {
-                return AgentResponse.Error($"Agent '{targetAgent}' não encontrado.", nameof(DirectAgentRequestExecutor));
-            }
-
             var analysis = new AnalysisResult
             {
-                PrimaryDomain = requestedAgent.Domain,
+                EstimatedAgent = targetAgent,
                 Intent = IntentType.Chat,
-                RecommendedTier = requestedAgent.Tier,
-                EstimatedAgent = requestedAgent.Name,
-                RequiredTools = new List<string>(requestedAgent.AvailableTools),
-                Confidence = 1
+                Confidence = 1.0
             };
 
-            var selectedAgent = await _agentFactory.ResolveAgentAsync(requestedAgent);
+            var selectedAgent = await _agentFactory.ResolveAgentAsync(analysis);
+            analysis.PrimaryDomain = selectedAgent.Domain;
+            analysis.RecommendedTier = selectedAgent.Tier;
+            analysis.RequiredTools = new List<string>(selectedAgent.AvailableTools);
+
             var preProcessingResult = await _preProcessingPipeline.ProcessAsync(new AgentExecutionPreProcessingContext
             {
                 SessionId = sessionId,

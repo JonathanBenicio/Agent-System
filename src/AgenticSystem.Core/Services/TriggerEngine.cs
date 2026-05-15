@@ -16,17 +16,20 @@ public class TriggerEngine : ITriggerEngine
     private readonly IScheduledTaskStore _store;
     private readonly IEnumerable<IDeliveryChannel> _channels;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IMlClassifier? _mlClassifier;
     private readonly ILogger<TriggerEngine> _logger;
 
     public TriggerEngine(
         IScheduledTaskStore store,
         IEnumerable<IDeliveryChannel> channels,
         IHttpClientFactory httpClientFactory,
-        ILogger<TriggerEngine> logger)
+        ILogger<TriggerEngine> logger,
+        IMlClassifier? mlClassifier = null)
     {
         _store = store;
         _channels = channels;
         _httpClientFactory = httpClientFactory;
+        _mlClassifier = mlClassifier;
         _logger = logger;
     }
 
@@ -90,7 +93,7 @@ public class TriggerEngine : ITriggerEngine
 
             // 2. Evaluate condition
             result.ActualValue = sourceResponse;
-            result.ConditionMet = EvaluateCondition(rule.Condition, sourceResponse);
+            result.ConditionMet = await EvaluateConditionAsync(rule.Condition, sourceResponse, ct);
             result.EvaluatedAt = DateTime.UtcNow;
 
             // 3. If condition met → deliver notifications
@@ -172,7 +175,7 @@ public class TriggerEngine : ITriggerEngine
         return await response.Content.ReadAsStringAsync(ct);
     }
 
-    private static bool EvaluateCondition(TriggerCondition condition, string sourceResponse)
+    private async Task<bool> EvaluateConditionAsync(TriggerCondition condition, string sourceResponse, CancellationToken ct)
     {
         return condition.Type switch
         {
@@ -181,8 +184,23 @@ public class TriggerEngine : ITriggerEngine
             ConditionType.Regex => Regex.IsMatch(sourceResponse, condition.Expression),
             ConditionType.Threshold => EvaluateThreshold(condition, sourceResponse),
             ConditionType.JsonPath => EvaluateJsonPath(condition, sourceResponse),
+            ConditionType.MlClassification => await EvaluateMlClassificationAsync(condition, sourceResponse, ct),
             _ => false
         };
+    }
+
+    private async Task<bool> EvaluateMlClassificationAsync(TriggerCondition condition, string sourceResponse, CancellationToken ct)
+    {
+        if (_mlClassifier == null) return false;
+
+        var result = await _mlClassifier.ClassifyAsync(sourceResponse, ct: ct);
+        
+        // Expression can be "LabelName" or "LabelName:0.9" for threshold
+        var parts = condition.Expression.Split(':');
+        var expectedLabel = parts[0].Trim();
+        var threshold = parts.Length > 1 && float.TryParse(parts[1], out var t) ? t : 0.8f;
+
+        return result.Label.Equals(expectedLabel, StringComparison.OrdinalIgnoreCase) && result.Confidence >= threshold;
     }
 
     private static bool EvaluateThreshold(TriggerCondition condition, string sourceResponse)

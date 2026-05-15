@@ -2,7 +2,7 @@
 
 > **Documento canônico de arquitetura de software (SST - Single Source of Truth)**. Este arquivo consolida todas as decisões arquiteturais, topologias, fluxos de execução do backend e frontend, substituindo e unificando o antigo `TECHNICAL_ARCHITECTURE_GUIDE.md`.
 >
-> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.5.0** como runtime principal de agentes, com suporte a fluxos colaborativos e múltiplos canais de interface.
+> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.5.0** como runtime nativo consolidado (transição 100% concluída), com suporte a fluxos colaborativos e múltiplos canais de interface.
 
 ---
 
@@ -32,8 +32,9 @@
 22. [Over-Engineering Check & Simplificações](#22-over-engineering-check--simplificações)
 23. [Padrões Arquiteturais Utilizados](#23-padrões-arquiteturais-utilizados)
 24. [Apêndice A: Mapa Geral de Arquivos](#apêndice-a-mapa-geral-de-arquivos)
-25. [Apêndice B: Platform Capabilities (Capability–Capability)](#apêndice-b-maturity-levels-ml24ml33)
-26. [Glossário](#glossário)
+25. [Apêndice B: Platform Capabilities](#apêndice-b-platform-capabilities)
+26. [Smart Routing & Triage — N-Tier Pipeline](smart-routing-triage.md)
+27. [Glossário](#glossário)
 
 ---
 
@@ -139,14 +140,14 @@ Camada externa que gerencia a entrada de requests, canais de comunicação e inf
 ### 4.2 `AgenticSystem.Core` — Domínio e Regras de Negócio
 Independente de frameworks externos de orquestração. **Não referencia o MAF diretamente**, trabalhando sobre interfaces:
 *   **Domain Agents**: Agentes base (`BaseAgent`) e as especializações (Work, Personal, Learning, etc.).
-*   **Business Workflows**: `MetaAgentOrchestrator` (fachada de sessão) e `AgentExecutionWorkflow` (pipeline de orquestração conceitual).
-*   **Services**: `ConfidenceScoreCalculator`, `SessionManager`, `ScheduledTaskManager` (Scheduler), e `ReflectionEngine`.
+*   **Business Workflows**: `MetaAgentOrchestrator` (fachada central), `SmartRouter` (roteamento semântico), `TriageService` (classificação de urgência e intenção) e `AgentExecutionWorkflow`. Detalhes em [Smart Routing & Triage](smart-routing-triage.md).
+*   **Services**: `ConfidenceScoreCalculator`, `SessionManager`, `SessionConsolidator` (compactação e sumarização de histórico), `DirectAgentRequestExecutor` (fast-path de execução direta), `ScheduledTaskManager` (Scheduler), e `ReflectionEngine`.
 
 ### 4.3 `AgenticSystem.Infrastructure` — Implementações e Conectores
 Camada que implementa as interfaces do Core usando tecnologias e frameworks específicos:
 *   **AgentFramework**: Integração real com o Microsoft Agent Framework. Contém `FrameworkOrchestratorService`, `PostgresSessionStore`, `OrchestratorContextFactory` e `FrameworkAgentChannelService`.
 *   **LLM Pipeline**: Abstrações baseadas em `Microsoft.Extensions.AI`, contendo decorators como `GovernedChatClient`, `ContextAwareChatClient` e `SemanticCacheChatClient`.
-*   **RAG / VectorStore**: Mecanismo de busca semântica, contendo o `RAGService`, `LlmReRanker`, ONNX CrossEncoder local e gerenciadores de arquivo.
+*   **RAG / VectorStore**: Mecanismo de busca semântica, contendo o `RAGService`, `LlmReRanker`, ONNX CrossEncoder local, gerenciadores de arquivo e o `FileObsidianSync` para alimentação reativa de conhecimento.
 *   **Gateway**: Controle operacional de dependências via `ServiceGateway`, agregando Circuit Breaker, Rate Limiter e contadores de custos.
 
 ---
@@ -323,6 +324,7 @@ Para maximizar a precisão contextual sem estourar a janela de contexto dos mode
 | **RAGContextProvider** | Provider nativo do MAF (`MessageAIContextProvider`) | Executado deterministicamente antes de qualquer `RunAsync` do orquestrador | Garante que dados básicos sobre a pergunta do usuário estejam no prompt inicial |
 | **`retrieve_context`** | Ferramenta explícita do orquestrador (`AIFunction`) | Executado sob demanda, apenas se o LLM do orquestrador decidir chamá-lo | Permite realizar buscas adicionais ou aprofundadas com queries modificadas |
 | **Contextual Retrieval** | Enriquecimento por IA no Ingestion Pipeline | Executado no momento do parse e chunking de documentos (`DocumentIngestionPipeline`) | Gera um resumo via LLM prefixado ao chunk antes do embedding no pgvector para preservar escopo semântico |
+| **Obsidian Sync** | Alimentação Reativa de Conhecimento | `FileObsidianSync` monitorando diretório local em background | Sincroniza bidirecionalmente as notas markdown do usuário com o vector store em tempo real |
 
 ### 8.1 O Pipeline Semântico de Busca
 ```

@@ -30,4 +30,6 @@ public class QueryTriageResult
     public bool RequiresRAG { get; set; }
     public bool RequiresTools { get; set; }
     public string RecommendedAgentTier { get; set; } = string.Empty;
+    public string EstimatedAgent { get; set; } = string.Empty;
 }
+

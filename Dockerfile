@@ -22,6 +22,12 @@ RUN apt-get update && apt-get install -y wget libgssapi-krb5-2 && rm -rf /var/li
 
 COPY --from=build /app/publish .
 
+# Copiar modelos ML/ONNX para o runtime
+COPY fastpath_model.zip .
+COPY fastpath_model.onnx .
+# COPY embeddings_model.onnx . (Descomentar quando o arquivo existir)
+# COPY reranker_model.onnx . (Descomentar quando o arquivo existir)
+
 USER app
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

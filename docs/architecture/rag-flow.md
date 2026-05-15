@@ -11,6 +11,7 @@ User Query
     → [Semantic Caching Layer (Bypass se houver tools)]
     → (Cache Miss) → IQueryCompressor.CompressAsync()
     → VectorStore.SearchAsync/SearchWithFiltersAsync() (pgvector com Contextual Retrieval)
+    → [Reactive Knowledge Feed (Obsidian Sync)]
     → HyDE condicional (se recall inicial vier fraco)
     → IReRanker.ReRankAsync() via LlmReRanker
     → IKnowledgeFreshnessService
@@ -35,6 +36,16 @@ if (cacheResult.IsHit) {
 **Mecanismo de Ação**:
 1. **Limiar de Similaridade**: Usa distância de cosseno (Cosine Distance) no pgvector (`semantic_cache`) com threshold configurado em **95%**.
 2. **Tool Bypass Dinâmico**: O cache é automaticamente contornado se a requisição de chat exigir o uso de ferramentas (`options?.Tools != null`), garantindo que chamadas funcionais dinâmicas sempre executem.
+
+## Sincronização de Conhecimento Bidirecional (Obsidian)
+
+O sistema mantém um elo vivo com o repositório local de notas (Obsidian) por meio do `FileObsidianSync`.
+
+**Fluxo de Sincronização**:
+1. **Monitoramento**: O `FileObsidianSync` observa alterações em arquivos `.md` na pasta configurada.
+2. **Ingestão Reativa**: Ao detectar mudança, o arquivo é re-processado pelo `DocumentIngestionPipeline`.
+3. **Contextual Retrieval**: Chunks são gerados com resumos contextuais e persistidos no `pgvector`.
+4. **Alinhamento**: Garante que o "Segundo Cérebro" do usuário esteja sempre disponível para o orquestrador em sub-segundos após a edição.
 
 ## Superfícies de Uso
 

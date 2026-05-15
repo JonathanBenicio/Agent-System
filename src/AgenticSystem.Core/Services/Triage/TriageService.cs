@@ -53,6 +53,7 @@ Avalie os seguintes campos:
 3) RequiresRAG: true se precisar buscar informações na base de conhecimento ou memória do usuário.
 4) RequiresTools: true se precisar executar ferramentas externas (ex: calculadora, busca web, execução de código).
 5) RecommendedAgentTier: Tier sugerido (Chief, Master, Specialist, Support).
+6) EstimatedAgent: Nome do agent sugerido. Quando a requisição envolver C#, .NET, ASP.NET Core ou EF Core, sugira 'dotnet-expert'. Para outras, sugira 'GeneralAgent' ou um nome descritivo.
 
 Retorne EXCLUSIVAMENTE um objeto JSON válido seguindo este esquema:
 {
@@ -60,7 +61,8 @@ Retorne EXCLUSIVAMENTE um objeto JSON válido seguindo este esquema:
   ""Complexity"": ""Low | Medium | High"",
   ""RequiresRAG"": true|false,
   ""RequiresTools"": true|false,
-  ""RecommendedAgentTier"": ""string""
+  ""RecommendedAgentTier"": ""string"",
+  ""EstimatedAgent"": ""string""
 }";
 
         var messages = new List<ChatMessage>

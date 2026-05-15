@@ -51,6 +51,20 @@ public enum RiskCategory
     PrivilegedOperation
 }
 
+public class SystemState
+{
+    public string Id { get; set; } = string.Empty; // Chave única (ex: "SelfImprovement_LastReflectionId")
+    public string Value { get; set; } = string.Empty;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class SelfImprovementSettings
+{
+    public bool Enabled { get; set; } = true;
+    public int RunIntervalHours { get; set; } = 24;
+    public double AutoApplyThreshold { get; set; } = 0.8;
+}
+
 public class RiskFactor
 {
     public string Name { get; init; } = string.Empty;
@@ -115,6 +129,8 @@ public class SelfImprovementRecord
     public string ImprovedBehavior { get; init; } = string.Empty;
     public string Trigger { get; init; } = string.Empty; // What caused the improvement
     public double ConfidenceGain { get; init; }
+    public double ConfidenceLevel { get; set; } // 0.0 to 1.0
+    public bool IsAutoApplied { get; set; }
     public DateTime LearnedAt { get; init; } = DateTime.UtcNow;
     public bool Applied { get; set; }
     public string Status { get; set; } = "Proposed";
@@ -132,3 +148,5 @@ public enum ImprovementType
     DomainKnowledge,
     UserPreference
 }
+
+

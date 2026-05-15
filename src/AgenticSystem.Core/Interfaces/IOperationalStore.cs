@@ -32,6 +32,7 @@ public interface IOperationalStore
     Task SaveReflectionAsync(Reflection reflection, CancellationToken ct = default);
     Task<IReadOnlyList<Reflection>> GetReflectionsAsync(string sessionId, CancellationToken ct = default);
     Task<IReadOnlyList<Reflection>> GetRecentLearningsAsync(int count = 10, CancellationToken ct = default);
+    Task<IReadOnlyList<Reflection>> GetReflectionsSinceAsync(string? lastReflectionId, int limit = 100, CancellationToken ct = default);
 
     // ── Evaluation Scores ─────────────────────────────────
     Task SaveEvaluationAsync(RuntimeEvaluationResult evaluation, CancellationToken ct = default);
@@ -43,6 +44,10 @@ public interface IOperationalStore
         int limit = 50,
         CancellationToken ct = default);
     Task<RuntimeEvaluationResult?> GetLatestEvaluationAsync(string? agentName = null, CancellationToken ct = default);
+
+    // ── System State ──────────────────────────────────────
+    Task<SystemState?> GetSystemStateAsync(string id, CancellationToken ct = default);
+    Task SaveSystemStateAsync(SystemState state, CancellationToken ct = default);
 }
 
 /// <summary>

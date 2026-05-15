@@ -80,8 +80,8 @@ export function CostsPage() {
   if (error || !data) return <PageError message={error ?? 'Sem dados'} onRetry={refresh} />
 
   const pct = data.usagePercent * 100
-  const sortedServices = Object.entries(data.costByService).sort(([, a], [, b]) => b - a)
-  const sortedModels = Object.entries(data.costByModel).sort(([, a], [, b]) => b - a)
+  const sortedServices = Object.entries(data.costByService || {}).sort(([, a], [, b]) => b - a)
+  const sortedModels = Object.entries(data.costByModel || {}).sort(([, a], [, b]) => b - a)
 
   return (
     <div className="h-full overflow-y-auto">
