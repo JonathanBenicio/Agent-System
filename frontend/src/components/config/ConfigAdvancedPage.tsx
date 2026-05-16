@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Shield, FolderOpen, Database, Cpu, Settings, History, Plus, Trash2, Edit, Check, X, RefreshCw } from 'lucide-react'
+import { Shield, FolderOpen, Database, Cpu, Settings, History, Plus, Trash2, Edit, Check, X, RefreshCw, Zap } from 'lucide-react'
+import { HotSwapPanel } from '@/components/config/HotSwapPanel'
 
 interface ConfigEntry {
   id: string
@@ -40,7 +41,7 @@ const API_BASE = '/api/admin/config'
 export function ConfigAdvancedPage() {
   const [entries, setEntries] = useState<ConfigEntry[]>([])
   const [auditLog, setAuditLog] = useState<ConfigChangeLog[]>([])
-  const [activeTab, setActiveTab] = useState<ConfigCategory | 'audit'>('Credentials')
+  const [activeTab, setActiveTab] = useState<ConfigCategory | 'audit' | 'hotswap'>('Credentials')
   const [showForm, setShowForm] = useState(false)
   const [editKey, setEditKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -101,7 +102,7 @@ export function ConfigAdvancedPage() {
     setShowForm(false)
   }
 
-  const tabs = [...Object.keys(categoryConfig) as ConfigCategory[], 'audit' as const]
+  const tabs = [...Object.keys(categoryConfig) as ConfigCategory[], 'hotswap' as const, 'audit' as const]
 
   return (
     <div className="p-6 space-y-6">
@@ -116,9 +117,12 @@ export function ConfigAdvancedPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-zinc-800 pb-0">
+      <div className="flex gap-1 border-b border-zinc-800 pb-0 flex-wrap">
         {tabs.map((tab) => {
-          const cfg = tab === 'audit' ? { icon: History, label: 'Audit Log', color: 'text-yellow-400' } : categoryConfig[tab]
+          const cfg =
+            tab === 'audit' ? { icon: History, label: 'Audit Log', color: 'text-yellow-400' }
+            : tab === 'hotswap' ? { icon: Zap, label: 'Hot-Swap', color: 'text-teal-400' }
+            : categoryConfig[tab]
           const Icon = cfg.icon
           return (
             <button key={tab} onClick={() => setActiveTab(tab)}
@@ -182,7 +186,11 @@ export function ConfigAdvancedPage() {
       )}
 
       {/* Content */}
-      {loading ? (
+      {activeTab === 'hotswap' ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+          <HotSwapPanel />
+        </div>
+      ) : loading ? (
         <div className="flex items-center justify-center py-12 text-zinc-400"><RefreshCw className="w-5 h-5 animate-spin mr-2" />Carregando...</div>
       ) : activeTab === 'audit' ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">

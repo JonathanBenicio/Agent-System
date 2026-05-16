@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  k6:
+    image: grafana/k6:latest
+    volumes:
+      - .:/scripts
+    environment:
+      - API_BASE_URL=http://host.docker.internal:5000
+    command: run /scripts/rag-load-test.js
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

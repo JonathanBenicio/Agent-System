@@ -100,7 +100,7 @@ public class ConfigManager : IConfigManager
             NewValueHash = _encryption.Hash(request.Value)
         });
 
-        _reloadNotifier.NotifyChange(entry.Key);
+        await _store.NotifyChangeAsync(entry.Key);
         _logger.LogInformation("Configuration '{Key}' created (category: {Category})", entry.Key, entry.Category);
 
         return entry;
@@ -134,7 +134,7 @@ public class ConfigManager : IConfigManager
             NewValueHash = _encryption.Hash(request.Value)
         });
 
-        _reloadNotifier.NotifyChange(key);
+        await _store.NotifyChangeAsync(key);
         _logger.LogInformation("Configuration '{Key}' updated", key);
 
         return existing;
@@ -153,7 +153,7 @@ public class ConfigManager : IConfigManager
             Action = "Deleted"
         });
 
-        _reloadNotifier.NotifyChange(key);
+        await _store.NotifyChangeAsync(key);
         _logger.LogInformation("Configuration '{Key}' deleted", key);
     }
 
@@ -240,7 +240,7 @@ public class ConfigManager : IConfigManager
             NewValueHash = _encryption.Hash(newValue)
         });
 
-        _reloadNotifier.NotifyChange(key);
+        await _store.NotifyChangeAsync(key);
         _logger.LogInformation("Secret '{Key}' rotated successfully", key);
 
         return new ConfigEntry

@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.MCP;
+using AgenticSystem.Infrastructure.Persistence;
+using AgenticSystem.Infrastructure.Persistence.Entities;
 
 namespace AgenticSystem.Api.Controllers;
 
@@ -12,31 +15,43 @@ namespace AgenticSystem.Api.Controllers;
 public class MCPPluginController : ControllerBase
 {
     private readonly IMCPPluginManager _pluginManager;
+    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<MCPPluginController> _logger;
 
-    public MCPPluginController(IMCPPluginManager pluginManager, ILogger<MCPPluginController> logger)
+    public MCPPluginController(
+        IMCPPluginManager pluginManager, 
+        IDbContextFactory<AgenticDbContext> dbContextFactory,
+        ILogger<MCPPluginController> logger)
     {
         _pluginManager = pluginManager;
+        _dbContextFactory = dbContextFactory;
         _logger = logger;
     }
 
     [HttpGet]
-    public IActionResult GetPlugins()
+    public async Task<IActionResult> GetPlugins()
     {
-        var plugins = _pluginManager.GetLoadedPlugins()
-            .Select(p => new
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var dbPlugins = await db.McpPlugins.ToListAsync();
+        
+        var loaded = _pluginManager.GetLoadedPlugins().ToDictionary(p => p.Id);
+
+        var result = dbPlugins.Select(p => {
+            loaded.TryGetValue(p.Id, out var plugin);
+            return new
             {
                 p.Id,
                 p.Name,
-                p.Description,
-                p.Version,
-                p.IsEnabled,
-                ToolCount = p.ProvidedTools.Count,
-                ResourceCount = p.ProvidedResources.Count,
-                Status = p is McpClientPlugin mcp ? mcp.Status.ToString() : (p.IsEnabled ? "Running" : "Stopped")
-            });
+                Description = p.Description ?? (plugin?.Description),
+                Version = plugin?.Version ?? "1.0.0",
+                IsEnabled = plugin?.IsEnabled ?? false,
+                ToolCount = plugin?.ProvidedTools.Count ?? 0,
+                ResourceCount = plugin?.ProvidedResources.Count ?? 0,
+                Status = plugin is McpClientPlugin mcp ? mcp.Status.ToString() : (plugin?.IsEnabled == true ? "Running" : "Stopped")
+            };
+        });
 
-        return Ok(plugins);
+        return Ok(result);
     }
 
     [HttpGet("{pluginId}")]
@@ -70,7 +85,29 @@ public class MCPPluginController : ControllerBase
             if (_pluginManager is MCPPluginManager manager)
             {
                 var plugin = await manager.LoadPluginFromConfigAsync(config, ct);
-                _logger.LogInformation("Plugin loaded: {PluginName} ({PluginId})", plugin.Name, plugin.Id);
+                
+                // Persist to DB
+                await using var db = await _dbContextFactory.CreateDbContextAsync();
+                var entity = await db.McpPlugins.FindAsync(plugin.Id);
+                if (entity == null)
+                {
+                    db.McpPlugins.Add(new McpPluginEntity
+                    {
+                        Id = plugin.Id,
+                        Name = plugin.Name,
+                        Description = plugin.Description,
+                        ConfigJson = System.Text.Json.JsonSerializer.Serialize(config),
+                        AutoStart = true
+                    });
+                }
+                else
+                {
+                    entity.ConfigJson = System.Text.Json.JsonSerializer.Serialize(config);
+                    entity.Name = plugin.Name;
+                }
+                await db.SaveChangesAsync();
+
+                _logger.LogInformation("Plugin loaded and persisted: {PluginName} ({PluginId})", plugin.Name, plugin.Id);
 
                 return CreatedAtAction(nameof(GetPlugin), new { pluginId = plugin.Id }, new
                 {

@@ -1,0 +1,21 @@
+version: '3.7'
+
+services:
+  k6:
+    image: grafana/k6:latest
+    container_name: k6_load_test
+    volumes:
+      - ./scripts:/scripts
+    # O comando roda o script e envia os resultados para o console
+    # Podemos adicionar saída para InfluxDB ou cloud se necessário no futuro
+    command: run /scripts/load-test.js
+    environment:
+      - K6_OUT=json=/scripts/results.json # Salva os resultados em JSON
+    networks:
+      - rag-net
+
+networks:
+  rag-net:
+    external: true # Assume que a API está rodando em uma rede externa (ex: a rede do docker da aplicação)
+    # Se a API estiver rodando no HOST (localhost), podemos usar:
+    # network_mode: "host" (apenas Linux) ou acessar via host.docker.internal

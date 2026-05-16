@@ -532,9 +532,9 @@ public class SecretsVaultTests
 {
     private static ConfigManager CreateManager()
     {
-        var store = new InMemoryConfigStore();
-        var encryption = new AesConfigEncryptionService(null);
         var notifier = new ConfigReloadNotifier();
+        var store = new InMemoryConfigStore(notifier);
+        var encryption = new AesConfigEncryptionService(null);
         return new ConfigManager(store, encryption, notifier, NullLogger<ConfigManager>.Instance);
     }
 

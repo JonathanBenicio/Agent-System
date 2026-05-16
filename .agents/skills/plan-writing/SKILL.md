@@ -144,6 +144,15 @@ One sentence: What are we building/fixing?
 
 ---
 
+## Plan Lifecycle & Archiving
+
+1. **Active**: Plans live in `docs/plan/` while being executed.
+2. **Completion**: Mark all tasks as `[x]` or set `status: COMPLETED` in frontmatter.
+3. **Archiving**: Move completed plans to `docs/plan/completed/` to keep the workspace clean.
+4. **Command**: Use `/archive-plan <filename>` to automate this process.
+
+---
+
 ## When to Use
 
 - New project from scratch

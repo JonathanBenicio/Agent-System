@@ -130,3 +130,10 @@ O tool `retrieve_context` continua disponível para buscas ad-hoc fora da injeç
 - Use `retrieve_context` para a tool auxiliar de retrieval sob demanda.
 - Use `LlmReRanker` para o pipeline real de rerank; `HeuristicReRanker` continua como shortlist local dentro dele, não como estágio final isolado.
 - Use `IContextBudgetManager` e `ISemanticCompressor` para descrever trimming e compressão do contexto.
+
+---
+
+## 🛠️ Desenvolvimento e Testes
+
+### RagTestController
+O projeto da API contém um `RagTestController.cs` (`/api/ragtest`). Este é um endpoint de teste **não-produtivo**, utilizado exclusivamente para desenvolvimento e validação manual do fluxo de RAG e conexões com o banco vetorial. Ele não deve ser exposto ou utilizado em ambientes de produção.

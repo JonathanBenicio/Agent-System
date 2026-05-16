@@ -56,7 +56,15 @@ public class DocumentController : ControllerBase
         _logger.LogInformation("📄 Ingestão iniciada: {FileName} ({Size} bytes, type: {Type})",
             file.FileName, file.Length, documentType);
 
-        var result = await _ingestionPipeline.IngestAsync(rawDocument, config: null, ct);
+        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+
+        var config = new ChunkingConfig 
+        { 
+            TenantId = tenantId,
+            Collection = source 
+        };
+
+        var result = await _ingestionPipeline.IngestAsync(rawDocument, config: config, ct);
 
         if (!result.Success)
         {
@@ -123,7 +131,15 @@ public class DocumentController : ControllerBase
 
         _logger.LogInformation("📄 Batch ingestão: {Count} documentos", rawDocuments.Count);
 
-        var results = await _ingestionPipeline.IngestBatchAsync(rawDocuments, config: null, ct);
+        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+
+        var config = new ChunkingConfig 
+        { 
+            TenantId = tenantId,
+            Collection = source 
+        };
+
+        var results = await _ingestionPipeline.IngestBatchAsync(rawDocuments, config: config, ct);
 
         return Ok(new
         {

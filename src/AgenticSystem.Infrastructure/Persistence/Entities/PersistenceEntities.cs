@@ -1,15 +1,19 @@
+using AgenticSystem.Core.Interfaces;
+
 namespace AgenticSystem.Infrastructure.Persistence.Entities;
 
 /// <summary>
 /// Entidade de documento vetorial para persistência PostgreSQL + pgvector.
 /// </summary>
-public class VectorDocumentEntity
+public class VectorDocumentEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string Content { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
     public string Collection { get; set; } = string.Empty;
     public Pgvector.Vector? Embedding { get; set; }
+    public byte[]? EmbeddingData { get; set; }
     public string MetadataJson { get; set; } = "{}";
     public DateTime IndexedAt { get; set; } = DateTime.UtcNow;
 
@@ -29,7 +33,7 @@ public class VectorDocumentEntity
 /// <summary>
 /// Entidade de entrada de custo para persistência PostgreSQL.
 /// </summary>
-public class CostEntryEntity
+public class CostEntryEntity : ITenantEntity
 {
     public long Id { get; set; }
     public string ServiceName { get; set; } = string.Empty;
@@ -42,7 +46,7 @@ public class CostEntryEntity
 /// <summary>
 /// Entidade de orçamento diário por serviço/tenant.
 /// </summary>
-public class CostBudgetEntity
+public class CostBudgetEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
     public string ServiceName { get; set; } = string.Empty;
@@ -54,9 +58,10 @@ public class CostBudgetEntity
 /// <summary>
 /// Entidade de métrica de performance de agente para persistência PostgreSQL.
 /// </summary>
-public class AgentPerformanceMetricEntity
+public class AgentPerformanceMetricEntity : ITenantEntity
 {
     public long Id { get; set; }
+    public string TenantId { get; set; } = "default";
     public string AgentName { get; set; } = string.Empty;
     public string Domain { get; set; } = string.Empty;
     public double LatencyMs { get; set; }
@@ -72,9 +77,10 @@ public class AgentPerformanceMetricEntity
 /// <summary>
 /// Artefato de execução persistido.
 /// </summary>
-public class RuntimeArtifactEntity
+public class RuntimeArtifactEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string SessionId { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
@@ -89,9 +95,10 @@ public class RuntimeArtifactEntity
 /// <summary>
 /// Snapshot periódico de métricas do runtime.
 /// </summary>
-public class RuntimeMetricsSnapshotEntity
+public class RuntimeMetricsSnapshotEntity : ITenantEntity
 {
     public long Id { get; set; }
+    public string TenantId { get; set; } = "default";
     public string? SessionId { get; set; }
     public long StreamCount { get; set; }
     public long AgentExecutions { get; set; }
@@ -114,9 +121,10 @@ public class RuntimeMetricsSnapshotEntity
 /// <summary>
 /// Reflexão pós-ação persistida.
 /// </summary>
-public class ReflectionEntity
+public class ReflectionEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string SessionId { get; set; } = string.Empty;
     public string AgentName { get; set; } = string.Empty;
     public string ActionTaken { get; set; } = string.Empty;
@@ -132,9 +140,10 @@ public class ReflectionEntity
 /// <summary>
 /// Resultado de avaliação contínua do runtime evaluator.
 /// </summary>
-public class EvaluationScoreEntity
+public class EvaluationScoreEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string? SessionId { get; set; }
     public string? AgentName { get; set; }
     public double OverallScore { get; set; }
@@ -149,9 +158,10 @@ public class EvaluationScoreEntity
 /// <summary>
 /// Memória persistente por agente para reutilização entre sessões.
 /// </summary>
-public class AgentMemoryEntity
+public class AgentMemoryEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string UserId { get; set; } = string.Empty;
     public string AgentName { get; set; } = string.Empty;
     public string? SessionId { get; set; }
@@ -167,7 +177,7 @@ public class AgentMemoryEntity
     public bool IsActive { get; set; } = true;
 }
 
-public class SessionRecordEntity
+public class SessionRecordEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
     public string UserId { get; set; } = string.Empty;
@@ -178,9 +188,10 @@ public class SessionRecordEntity
     public bool IsConsolidated { get; set; }
 }
 
-public class ConfigEntryEntity
+public class ConfigEntryEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string Key { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
     public string? EncryptedValue { get; set; }
@@ -195,9 +206,10 @@ public class ConfigEntryEntity
     public string MetadataJson { get; set; } = "{}";
 }
 
-public class ConfigChangeLogEntity
+public class ConfigChangeLogEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string ConfigKey { get; set; } = string.Empty;
     public string Action { get; set; } = string.Empty;
     public string? ChangedBy { get; set; }
@@ -206,9 +218,10 @@ public class ConfigChangeLogEntity
     public string? NewValueHash { get; set; }
 }
 
-public class ScheduledTaskEntity
+public class ScheduledTaskEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string Name { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public DateTime? NextRunAt { get; set; }
@@ -216,18 +229,20 @@ public class ScheduledTaskEntity
     public DateTime UpdatedAt { get; set; }
 }
 
-public class TriggerRuleEntity
+public class TriggerRuleEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string Name { get; set; } = string.Empty;
     public bool Enabled { get; set; }
     public string PayloadJson { get; set; } = "{}";
     public DateTime UpdatedAt { get; set; }
 }
 
-public class ScheduledTaskExecutionEntity
+public class ScheduledTaskExecutionEntity : ITenantEntity
 {
     public string ExecutionId { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string TaskId { get; set; } = string.Empty;
     public DateTime StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
@@ -235,24 +250,26 @@ public class ScheduledTaskExecutionEntity
     public string PayloadJson { get; set; } = "{}";
 }
 
-public class EmbeddingModelEntity
+public class EmbeddingModelEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string Name { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public string DataJson { get; set; } = "{}";
     public DateTime CreatedAt { get; set; }
 }
 
-public class MigrationJobEntity
+public class MigrationJobEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string Status { get; set; } = string.Empty;
     public string DataJson { get; set; } = "{}";
     public DateTime CreatedAt { get; set; }
 }
 
-public class RerankingAssetEntity
+public class RerankingAssetEntity : ITenantEntity
 {
     public string TenantId { get; set; } = string.Empty;
     public string AssetType { get; set; } = string.Empty;
@@ -267,14 +284,14 @@ public class RerankingAssetEntity
 // Phase 2 Enterprise Entities (Audit, RBAC, Outbox)
 // ═══════════════════════════════════════════════════════════
 
-public class AuditEntryEntity
+public class AuditEntryEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     public string Category { get; set; } = string.Empty; // Core.Models.AuditCategory
     public string Action { get; set; } = string.Empty;
     public string? UserId { get; set; }
-    public string? TenantId { get; set; }
+    public string TenantId { get; set; } = "default";
     public string? SessionId { get; set; }
     public string? AgentName { get; set; }
     public string? ToolName { get; set; }
@@ -289,19 +306,20 @@ public class AuditEntryEntity
     public string DetailsJson { get; set; } = "{}";
 }
 
-public class RoleAssignmentEntity
+public class RoleAssignmentEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
     public string UserId { get; set; } = string.Empty;
     public string RoleId { get; set; } = string.Empty;
-    public string? TenantId { get; set; }
+    public string TenantId { get; set; } = "default";
     public string? GrantedBy { get; set; }
     public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
 }
 
-public class OutboxMessageEntity
+public class OutboxMessageEntity : ITenantEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public string TenantId { get; set; } = "default";
     public string EventType { get; set; } = string.Empty;
     public string PayloadJson { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -313,9 +331,10 @@ public class OutboxMessageEntity
 // Phase 3.2: Graph RAG Entities
 // ═══════════════════════════════════════════════════════════
 
-public class KnowledgeGraphNodeEntity
+public class KnowledgeGraphNodeEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string Label { get; set; } = string.Empty;
     public string EntityType { get; set; } = string.Empty;
     public string? Description { get; set; }
@@ -324,9 +343,10 @@ public class KnowledgeGraphNodeEntity
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
-public class KnowledgeGraphEdgeEntity
+public class KnowledgeGraphEdgeEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string SourceNodeId { get; set; } = string.Empty;
     public string TargetNodeId { get; set; } = string.Empty;
     public string RelationType { get; set; } = string.Empty;
@@ -340,18 +360,20 @@ public class KnowledgeGraphEdgeEntity
 // Phase 3.5: Workflow Engine Entities
 // ═══════════════════════════════════════════════════════════
 
-public class WorkflowDefinitionEntity
+public class WorkflowDefinitionEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string Name { get; set; } = string.Empty;
     public int Version { get; set; }
     public string DefinitionJson { get; set; } = "{}";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
-public class WorkflowExecutionEntity
+public class WorkflowExecutionEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string WorkflowId { get; set; } = string.Empty;
     public string WorkflowName { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty; // Core.Models.WorkflowExecutionStatus
@@ -362,9 +384,10 @@ public class WorkflowExecutionEntity
     public DateTime? CompletedAt { get; set; }
 }
 
-public class WorkflowStepExecutionEntity
+public class WorkflowStepExecutionEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string ExecutionId { get; set; } = string.Empty;
     public string StepId { get; set; } = string.Empty;
     public string StepName { get; set; } = string.Empty;
@@ -377,9 +400,10 @@ public class WorkflowStepExecutionEntity
     public DateTime? CompletedAt { get; set; }
 }
 
-public class ModelPerformanceEntity
+public class ModelPerformanceEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string ModelId { get; set; } = string.Empty;
     public double LatencyMs { get; set; }
     public bool Success { get; set; }
@@ -389,14 +413,14 @@ public class ModelPerformanceEntity
     public DateTime RecordedAt { get; set; } = DateTime.UtcNow;
 }
 
-public class DataConnectorEntity
+public class DataConnectorEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string ConnectorType { get; set; } = string.Empty; // Core.Models.DataConnectorType
     public string ConnectionString { get; set; } = string.Empty;
     public string SettingsJson { get; set; } = "{}";
-    public string? TenantId { get; set; }
+    public string TenantId { get; set; } = "default";
     public string SyncScheduleJson { get; set; } = "{}";
     public bool IsActive { get; set; } = true;
     public DateTime? LastSyncAt { get; set; }
@@ -417,9 +441,10 @@ public class AgentMarketplaceEntryEntity
     public DateTime PublishedAt { get; set; } = DateTime.UtcNow;
 }
 
-public class EnhancedMemoryEntity
+public class EnhancedMemoryEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
     public string AgentName { get; set; } = string.Empty;
     public string SessionId { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
@@ -454,11 +479,11 @@ public class LlmPricingRuleEntity
 /// <summary>
 /// Entidade para rastreamento de cotas e limites de provedores externos (OpenAI, Claude, etc).
 /// </summary>
-public class ExternalProviderQuotaEntity
+public class ExternalProviderQuotaEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
     public string ProviderName { get; set; } = string.Empty;
-    public string? TenantId { get; set; }
+    public string TenantId { get; set; } = "default";
     public string ApiKeyId { get; set; } = string.Empty;
     
     // Rate Limits
@@ -491,4 +516,26 @@ public class SystemAlertEntity
     public bool IsRead { get; set; } = false;
 }
 
+public class InboundWebhookEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string Name { get; set; } = string.Empty;
+    public string Secret { get; set; } = string.Empty;
+    public string? TargetWorkflowId { get; set; }
+    public string? TargetAgentName { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? LastTriggeredAt { get; set; }
+}
 
+public class McpPluginEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string ConfigJson { get; set; } = "{}";
+    public bool AutoStart { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}

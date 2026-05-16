@@ -80,4 +80,21 @@ public class MemorySettings
     public string ObsidianVaultPath { get; set; } = string.Empty;
     public string VectorStoreType { get; set; } = "InMemory";
     public string? ConnectionString { get; set; }
+    public QdrantSettings Qdrant { get; set; } = new();
+    public PineconeSettings Pinecone { get; set; } = new();
+}
+
+public class QdrantSettings
+{
+    public string Url { get; set; } = string.Empty;
+    public string ApiKey { get; set; } = string.Empty;
+}
+
+public class PineconeSettings
+{
+    public string ApiKey { get; set; } = string.Empty;
+    public string Environment { get; set; } = string.Empty;
+    public string Host { get; set; } = string.Empty;
+    public string IndexName { get; set; } = "default";
+    public string Namespace { get; set; } = string.Empty;
 }

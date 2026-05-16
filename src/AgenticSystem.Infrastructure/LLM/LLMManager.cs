@@ -88,13 +88,13 @@ public class LLMManager : ILLMAdministrationService
         IConfigManager? configManager = null,
         IConfigReloadNotifier? configReloadNotifier = null)
     {
-        _settings = settingsOptions.Value;
+        _settings = settingsOptions?.Value ?? new AgenticSystemSettings();
         _logger = logger;
         _loggerFactory = loggerFactory;
         _llmRuntimeContextAccessor = llmRuntimeContextAccessor;
         _tenantStore = tenantStore;
         _sessionStore = sessionStore;
-        _serviceProvider = serviceProvider;
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _configManager = configManager;
         _configReloadNotifier = configReloadNotifier;
 
@@ -1090,20 +1090,18 @@ public class LLMManager : ILLMAdministrationService
 
     private void RegisterProvidersFromSettings(AgenticSystemSettings settings)
     {
-        var openAiProvider = _serviceProvider.GetService<OpenAIProvider>();
-        RegisterProvider(openAiProvider ?? CreateOpenAiProvider(settings.OpenAI));
-        
-        var geminiProvider = _serviceProvider.GetService<GeminiProvider>();
-        RegisterProvider(geminiProvider ?? CreateGeminiProvider(settings.Gemini));
+        if (settings is null) return;
 
-        var claudeProvider = _serviceProvider.GetService<ClaudeProvider>();
-        RegisterProvider(claudeProvider ?? CreateClaudeProvider(settings.Claude));
+        if (_serviceProvider is null)
+        {
+            throw new InvalidOperationException("_serviceProvider is null in RegisterProvidersFromSettings");
+        }
 
-        var openRouterProvider = _serviceProvider.GetService<OpenRouterProvider>();
-        RegisterProvider(openRouterProvider ?? CreateOpenRouterProvider(settings.OpenRouter));
-        
-        var ollamaProvider = _serviceProvider.GetService<OllamaProvider>();
-        RegisterProvider(ollamaProvider ?? CreateOllamaProvider(settings.Ollama));
+        RegisterProvider(CreateOpenAiProvider(settings.OpenAI));
+        RegisterProvider(CreateGeminiProvider(settings.Gemini));
+        RegisterProvider(CreateClaudeProvider(settings.Claude));
+        RegisterProvider(CreateOpenRouterProvider(settings.OpenRouter));
+        RegisterProvider(CreateOllamaProvider(settings.Ollama));
     }
 
     private void RegisterProvider(ILLMProvider provider)

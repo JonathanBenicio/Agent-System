@@ -11,6 +11,12 @@ public class InMemoryConfigStore : IConfigStore
 {
     private readonly ConcurrentDictionary<string, ConfigEntry> _entries = new();
     private readonly ConcurrentBag<ConfigChangeLog> _changeLogs = new();
+    private readonly IConfigReloadNotifier _reloadNotifier;
+
+    public InMemoryConfigStore(IConfigReloadNotifier reloadNotifier)
+    {
+        _reloadNotifier = reloadNotifier;
+    }
 
     public Task<ConfigEntry?> GetByKeyAsync(string key)
     {
@@ -49,6 +55,13 @@ public class InMemoryConfigStore : IConfigStore
     public Task SaveChangeLogAsync(ConfigChangeLog log)
     {
         _changeLogs.Add(log);
+        return Task.CompletedTask;
+    }
+
+    public Task NotifyChangeAsync(string key)
+    {
+        // For in-memory, we just notify locally as there are no other nodes
+        _reloadNotifier.NotifyChange(key);
         return Task.CompletedTask;
     }
 }

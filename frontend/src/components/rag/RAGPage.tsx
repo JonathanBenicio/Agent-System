@@ -1,8 +1,9 @@
 import React, { useState } from 'react'
-import { Database, Search, FileText, Cpu, Upload, Layers, RefreshCw, Plus, Check, Play, AlertCircle, Settings2, Trash2 } from 'lucide-react'
+import { Database, Search, FileText, Cpu, Upload, Layers, RefreshCw, Plus, Check, Play, AlertCircle, Settings2, Trash2, Box } from 'lucide-react'
 import { Badge } from '@/components/shared/Badge'
 import { useRAG } from '@/hooks/useRAG'
 import type { IngestDocumentResponse } from '@/types/api'
+import { KnowledgeRooms } from './KnowledgeRooms'
 
 const PRESET_MODELS: Record<string, { name: string; dim: number; desc: string }[]> = {
   OpenAI: [
@@ -43,7 +44,7 @@ export function RAGPage() {
     updateReranking,
   } = useRAG()
 
-  const [activeTab, setActiveTab] = useState<'ingestion' | 'config' | 'migration'>('ingestion')
+  const [activeTab, setActiveTab] = useState<'rooms' | 'ingestion' | 'config' | 'migration'>('rooms')
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
 
   // Ingestion State
@@ -242,24 +243,32 @@ export function RAGPage() {
         {/* Navigation Tabs */}
         <div className="flex border-b border-zinc-800 gap-2">
           <TabButton
+            active={activeTab === 'rooms'}
+            onClick={() => setActiveTab('rooms')}
+            icon={Box}
+            label="1. Salas de Conhecimento"
+          />
+          <TabButton
             active={activeTab === 'ingestion'}
             onClick={() => setActiveTab('ingestion')}
             icon={Upload}
-            label="1. Ingestão de Chunks"
+            label="2. Ingestão Direta"
           />
           <TabButton
             active={activeTab === 'config'}
             onClick={() => setActiveTab('config')}
             icon={Settings2}
-            label="2. Configuração & ONNX"
+            label="3. Configuração da Engine"
           />
           <TabButton
             active={activeTab === 'migration'}
             onClick={() => setActiveTab('migration')}
-            icon={Layers}
-            label="3. Modelos & Migração Vetorial"
+            icon={RefreshCw}
+            label="4. Migração e ONNX"
           />
         </div>
+
+        {activeTab === 'rooms' && <KnowledgeRooms />}
 
         {/* TAB 1: INGESTÃO DE CHUNKS E DOCUMENTOS */}
         {activeTab === 'ingestion' && (

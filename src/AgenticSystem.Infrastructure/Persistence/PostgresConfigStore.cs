@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Data;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Persistence.Entities;
@@ -11,11 +12,16 @@ public sealed class PostgresConfigStore : IConfigStore
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresConfigStore> _logger;
+    private readonly IEventBus _eventBus;
 
-    public PostgresConfigStore(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresConfigStore> logger)
+    public PostgresConfigStore(
+        IDbContextFactory<AgenticDbContext> dbContextFactory,
+        ILogger<PostgresConfigStore> logger,
+        IEventBus eventBus)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;
+        _eventBus = eventBus;
     }
 
     public async Task<ConfigEntry?> GetByKeyAsync(string key)
@@ -117,6 +123,36 @@ public sealed class PostgresConfigStore : IConfigStore
         });
 
         await db.SaveChangesAsync();
+    }
+
+    public async Task NotifyChangeAsync(string key)
+    {
+        // 1. Outbox-based publish for durable event processing
+        var busEvent = new SystemBusEvent
+        {
+            EventType = "config_changed",
+            Source = "PostgresConfigStore",
+            Payload = new Dictionary<string, object>
+            {
+                ["ConfigKey"] = key
+            }
+        };
+
+        await _eventBus.PublishAsync(busEvent);
+
+        // 2. Fire raw PostgreSQL NOTIFY for real-time propagation to all nodes
+        //    This is what RealTimeConfigReloadBackgroundService listens for via LISTEN/NOTIFY.
+        try
+        {
+            await using var db = await _dbContextFactory.CreateDbContextAsync();
+            await db.Database.ExecuteSqlRawAsync(
+                "SELECT pg_notify('config_changed', {0})", key);
+            _logger.LogInformation("📢 PG NOTIFY + EventBus sent for config key: {Key}", key);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ Failed to send raw PG NOTIFY for key: {Key}. EventBus publish succeeded.", key);
+        }
     }
 
     private ConfigEntry MapEntry(ConfigEntryEntity entity)

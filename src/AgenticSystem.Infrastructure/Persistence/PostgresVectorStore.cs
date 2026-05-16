@@ -90,7 +90,7 @@ public class PostgresVectorStore : IVectorStore
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Falha ao gerar embedding para query: {Query}. Utilizando fallback textual/ONNX.", query);
+                _logger.LogWarning(ex, "Failed to generate embedding for query: {Query}. Using FTS-only fallback.", query);
             }
         }
 
@@ -100,59 +100,168 @@ public class PostgresVectorStore : IVectorStore
             candidatesQuery = candidatesQuery.Where(item => item.Collection == collection);
         }
 
+        // Use hybrid search when embedding is available, otherwise FTS-only
         if (queryEmbedding != null)
         {
-            var vector = new Pgvector.Vector(queryEmbedding);
-            var candidates = await candidatesQuery
-                .Where(item => item.Embedding != null)
-                .OrderBy(item => item.Embedding!.CosineDistance(vector))
-                .Take(maxResults)
-                .ToListAsync();
-
-            var matches = candidates
-                .Select(item => MapToSearchMatch(item, 1d - (item.Embedding != null ? CalculateCosineDistanceLocal(item.Embedding.ToArray(), queryEmbedding) : 0d)))
-                .OrderByDescending(item => item.Score)
-                .ToList();
-
-            sw.Stop();
-            return new SearchResult
-            {
-                Query = query,
-                Scope = scope,
-                Matches = matches,
-                TotalFound = matches.Count,
-                ExecutionTime = sw.Elapsed
-            };
+            return await HybridSearchAsync(db, candidatesQuery, query, queryEmbedding, maxResults, scope, sw);
         }
-        else
+
+        // FTS-only fallback
+        return await FtsOnlySearchAsync(db, candidatesQuery, query, maxResults, scope, sw);
+    }
+
+    /// <summary>
+    /// Hybrid Search: combines pgvector cosine similarity with PostgreSQL Full-Text Search (ts_rank).
+    /// Uses Reciprocal Rank Fusion (RRF) to merge rankings from both signals.
+    /// Part of "Enterprise Scale" (Phase 4).
+    /// </summary>
+    private async Task<SearchResult> HybridSearchAsync(
+        AgenticDbContext db,
+        IQueryable<VectorDocumentEntity> baseQuery,
+        string query,
+        float[] queryEmbedding,
+        int maxResults,
+        SearchScope scope,
+        System.Diagnostics.Stopwatch sw)
+    {
+        const int candidatePool = 50;
+        const double rrf_k = 60.0; // RRF constant — standard value from the original paper
+
+        var vector = new Pgvector.Vector(queryEmbedding);
+
+        // 1. Vector search — top candidates by cosine distance
+        var vectorCandidates = await baseQuery
+            .Where(item => item.Embedding != null)
+            .OrderBy(item => item.Embedding!.CosineDistance(vector))
+            .Take(candidatePool)
+            .ToListAsync();
+
+        // 2. FTS search — top candidates by ts_rank (raw SQL for to_tsvector/plainto_tsquery)
+        var ftsCandidates = await baseQuery
+            .Where(item => EF.Functions.ToTsVector("english", item.Content)
+                .Matches(EF.Functions.PlainToTsQuery("english", query)))
+            .OrderByDescending(item => EF.Functions.ToTsVector("english", item.Content)
+                .Rank(EF.Functions.PlainToTsQuery("english", query)))
+            .Take(candidatePool)
+            .ToListAsync();
+
+        // 3. Reciprocal Rank Fusion (RRF) — merge both rankings
+        var vectorRanks = vectorCandidates
+            .Select((item, rank) => (item.Id, Rank: rank + 1))
+            .ToDictionary(x => x.Id, x => x.Rank);
+
+        var ftsRanks = ftsCandidates
+            .Select((item, rank) => (item.Id, Rank: rank + 1))
+            .ToDictionary(x => x.Id, x => x.Rank);
+
+        var allIds = vectorRanks.Keys.Union(ftsRanks.Keys).ToHashSet();
+        var allEntities = vectorCandidates
+            .Concat(ftsCandidates)
+            .DistinctBy(x => x.Id)
+            .ToDictionary(x => x.Id);
+
+        var fusedResults = allIds.Select(id =>
         {
-            if (!string.IsNullOrWhiteSpace(query))
+            var vectorScore = vectorRanks.TryGetValue(id, out var vr) ? 1.0 / (rrf_k + vr) : 0.0;
+            var ftsScore = ftsRanks.TryGetValue(id, out var fr) ? 1.0 / (rrf_k + fr) : 0.0;
+            var rrfScore = vectorScore + ftsScore;
+            return (Id: id, RrfScore: rrfScore, Entity: allEntities[id]);
+        })
+        .OrderByDescending(x => x.RrfScore)
+        .Take(maxResults)
+        .ToList();
+
+        var matches = fusedResults
+            .Select(x => MapToSearchMatch(x.Entity, x.RrfScore))
+            .ToList();
+
+        sw.Stop();
+        _logger.LogDebug("🔍 Hybrid Search: {VectorCount} vector + {FtsCount} FTS → {MergedCount} fused results in {Elapsed}ms",
+            vectorCandidates.Count, ftsCandidates.Count, matches.Count, sw.ElapsedMilliseconds);
+
+        return new SearchResult
+        {
+            Query = query,
+            Scope = scope,
+            Matches = matches,
+            TotalFound = matches.Count,
+            ExecutionTime = sw.Elapsed
+        };
+    }
+
+    /// <summary>
+    /// Full-Text Search only fallback when embedding generation is unavailable.
+    /// </summary>
+    private async Task<SearchResult> FtsOnlySearchAsync(
+        AgenticDbContext db,
+        IQueryable<VectorDocumentEntity> baseQuery,
+        string query,
+        int maxResults,
+        SearchScope scope,
+        System.Diagnostics.Stopwatch sw)
+    {
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            // Try FTS first, fall back to ILIKE if query doesn't parse well
+            try
             {
-                candidatesQuery = candidatesQuery.Where(item => EF.Functions.ILike(item.Content, $"%{query}%"));
+                var ftsQuery = baseQuery
+                    .Where(item => EF.Functions.ToTsVector("english", item.Content)
+                        .Matches(EF.Functions.PlainToTsQuery("english", query)));
+
+                var candidates = await ftsQuery
+                    .OrderByDescending(item => EF.Functions.ToTsVector("english", item.Content)
+                        .Rank(EF.Functions.PlainToTsQuery("english", query)))
+                    .Take(maxResults)
+                    .ToListAsync();
+
+                if (candidates.Count > 0)
+                {
+                    var matches = candidates
+                        .Select((item, idx) => MapToSearchMatch(item, 1.0 / (60.0 + idx + 1)))
+                        .ToList();
+
+                    sw.Stop();
+                    return new SearchResult
+                    {
+                        Query = query,
+                        Scope = scope,
+                        Matches = matches,
+                        TotalFound = matches.Count,
+                        ExecutionTime = sw.Elapsed
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "FTS query failed, falling back to ILIKE for: {Query}", query);
             }
 
-            var candidates = await candidatesQuery
-                .OrderByDescending(item => item.IndexedAt)
-                .Take(Math.Max(maxResults * 5, maxResults))
-                .ToListAsync();
-
-            var matches = candidates
-                .Select(item => MapToSearchMatch(item, ScoreContent(item.Content, query)))
-                .OrderByDescending(item => item.Score)
-                .Take(maxResults)
-                .ToList();
-
-            sw.Stop();
-
-            return new SearchResult
-            {
-                Query = query,
-                Scope = scope,
-                Matches = matches.Take(maxResults).ToList(),
-                TotalFound = matches.Count,
-                ExecutionTime = sw.Elapsed
-            };
+            // ILIKE fallback
+            baseQuery = baseQuery.Where(item => EF.Functions.ILike(item.Content, $"%{query}%"));
         }
+
+        var fallbackCandidates = await baseQuery
+            .OrderByDescending(item => item.IndexedAt)
+            .Take(Math.Max(maxResults * 5, maxResults))
+            .ToListAsync();
+
+        var fallbackMatches = fallbackCandidates
+            .Select(item => MapToSearchMatch(item, ScoreContent(item.Content, query)))
+            .OrderByDescending(item => item.Score)
+            .Take(maxResults)
+            .ToList();
+
+        sw.Stop();
+
+        return new SearchResult
+        {
+            Query = query,
+            Scope = scope,
+            Matches = fallbackMatches,
+            TotalFound = fallbackMatches.Count,
+            ExecutionTime = sw.Elapsed
+        };
     }
 
     public async Task<SearchResult> SearchWithFiltersAsync(string query, Dictionary<string, string> filters)
@@ -277,6 +386,25 @@ public class PostgresVectorStore : IVectorStore
 
         _logger.LogInformation("Cleaned up {Count} old documents from PostgreSQL (older than {Days} days)",
             deleted, olderThan.TotalDays);
+    }
+
+    public async Task<VectorStoreStats> GetStatsAsync(string tenantId, CancellationToken ct = default)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var stats = await db.VectorDocuments
+            .AsNoTracking()
+            .Where(x => x.TenantId == tenantId)
+            .GroupBy(x => x.TenantId)
+            .Select(g => new VectorStoreStats
+            {
+                TenantId = g.Key,
+                DocumentCount = g.Count(),
+                // Simplification for Postgres: length of text and embeddings roughly calculated
+                TotalBytes = g.Sum(x => x.Content.Length * 2 + (x.EmbeddingData != null ? x.EmbeddingData.Length : 0))
+            })
+            .FirstOrDefaultAsync(ct);
+
+        return stats ?? new VectorStoreStats { TenantId = tenantId, DocumentCount = 0, TotalBytes = 0 };
     }
 
     private static EmbeddingDocument MapToModel(VectorDocumentEntity entity)

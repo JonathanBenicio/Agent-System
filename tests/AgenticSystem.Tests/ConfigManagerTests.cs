@@ -16,9 +16,9 @@ public class ConfigManagerTests
 
     public ConfigManagerTests()
     {
-        _store = new InMemoryConfigStore();
-        _encryption = new AesConfigEncryptionService("test-key-for-unit-tests-32ch!");
         _notifier = new ConfigReloadNotifier();
+        _store = new InMemoryConfigStore(_notifier);
+        _encryption = new AesConfigEncryptionService("test-key-for-unit-tests-32ch!");
         var logger = Substitute.For<ILogger<ConfigManager>>();
         _sut = new ConfigManager(_store, _encryption, _notifier, logger);
     }
