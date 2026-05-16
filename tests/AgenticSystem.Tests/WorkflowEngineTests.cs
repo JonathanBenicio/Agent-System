@@ -1,7 +1,6 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
-using AgenticSystem.Infrastructure.Persistence;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
@@ -15,6 +14,7 @@ public class WorkflowEngineTests
     private readonly IDirectAgentRequestExecutor _agentExecutor;
     private readonly IToolManager _toolManager;
     private readonly DefaultWorkflowEngine _engine;
+    private const string TenantId = "default";
 
     public WorkflowEngineTests()
     {
@@ -46,7 +46,7 @@ public class WorkflowEngineTests
         _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>())
             .Returns(new AgentResponse { Success = true, Content = "Done" });
 
-        await _store.SaveDefinitionAsync(definition);
+        await _store.SaveDefinitionAsync(TenantId, definition);
 
         // Act
         var execution = await _engine.StartAsync(definition, initiatedBy: "user-1");
@@ -95,7 +95,7 @@ public class WorkflowEngineTests
                 return new AgentResponse { Success = true, Content = "Parallel Done" };
             });
 
-        await _store.SaveDefinitionAsync(definition);
+        await _store.SaveDefinitionAsync(TenantId, definition);
 
         // Act
         var execution = await _engine.StartAsync(definition);
@@ -135,7 +135,7 @@ public class WorkflowEngineTests
         _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), "Cleaner")
             .Returns(new AgentResponse { Success = true, Content = "Cleaned" });
 
-        await _store.SaveDefinitionAsync(definition);
+        await _store.SaveDefinitionAsync(TenantId, definition);
 
         // Act
         var execution = await _engine.StartAsync(definition);

@@ -21,19 +21,23 @@ public class WorkflowController : ControllerBase
         _logger = logger;
     }
 
+    private string GetTenantId() => Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+
     // ─── Definitions ───
 
     [HttpGet("definitions")]
     public async Task<IActionResult> ListDefinitions([FromQuery] int limit = 50, CancellationToken ct = default)
     {
-        var definitions = await _store.ListDefinitionsAsync(limit, ct);
+        var tenantId = GetTenantId();
+        var definitions = await _store.ListDefinitionsAsync(tenantId, limit, ct);
         return Ok(definitions);
     }
 
     [HttpGet("definitions/{id}")]
     public async Task<IActionResult> GetDefinition(string id, CancellationToken ct = default)
     {
-        var definition = await _store.GetDefinitionAsync(id, ct);
+        var tenantId = GetTenantId();
+        var definition = await _store.GetDefinitionAsync(tenantId, id, ct);
         if (definition == null) return NotFound();
         return Ok(definition);
     }
@@ -41,14 +45,16 @@ public class WorkflowController : ControllerBase
     [HttpPost("definitions")]
     public async Task<IActionResult> SaveDefinition([FromBody] WorkflowDefinition definition, CancellationToken ct = default)
     {
-        await _store.SaveDefinitionAsync(definition, ct);
+        var tenantId = GetTenantId();
+        await _store.SaveDefinitionAsync(tenantId, definition, ct);
         return Ok(definition);
     }
 
     [HttpDelete("definitions/{id}")]
     public async Task<IActionResult> DeleteDefinition(string id, CancellationToken ct = default)
     {
-        await _store.DeleteDefinitionAsync(id, ct);
+        var tenantId = GetTenantId();
+        await _store.DeleteDefinitionAsync(tenantId, id, ct);
         return NoContent();
     }
 
@@ -57,7 +63,8 @@ public class WorkflowController : ControllerBase
     [HttpPost("executions/start/{definitionId}")]
     public async Task<IActionResult> StartWorkflow(string definitionId, [FromBody] Dictionary<string, object>? variables, CancellationToken ct = default)
     {
-        var definition = await _store.GetDefinitionAsync(definitionId, ct);
+        var tenantId = GetTenantId();
+        var definition = await _store.GetDefinitionAsync(tenantId, definitionId, ct);
         if (definition == null) return NotFound("Workflow definition not found");
 
         var userId = User.Identity?.Name ?? "anonymous";
@@ -69,7 +76,8 @@ public class WorkflowController : ControllerBase
     [HttpGet("executions/{id}")]
     public async Task<IActionResult> GetExecution(string id, CancellationToken ct = default)
     {
-        var execution = await _engine.GetExecutionAsync(id, ct);
+        var tenantId = GetTenantId();
+        var execution = await _store.GetExecutionAsync(tenantId, id, ct);
         if (execution == null) return NotFound();
         return Ok(execution);
     }
@@ -77,13 +85,15 @@ public class WorkflowController : ControllerBase
     [HttpGet("executions")]
     public async Task<IActionResult> ListExecutions([FromQuery] WorkflowExecutionStatus? status, [FromQuery] int limit = 50, CancellationToken ct = default)
     {
-        var executions = await _engine.ListExecutionsAsync(status, limit, ct);
+        var tenantId = GetTenantId();
+        var executions = await _store.ListExecutionsAsync(tenantId, status, limit, ct);
         return Ok(executions);
     }
 
     [HttpPost("executions/{id}/cancel")]
     public async Task<IActionResult> CancelExecution(string id, [FromQuery] string? reason, CancellationToken ct = default)
     {
+        var tenantId = GetTenantId();
         var execution = await _engine.CancelAsync(id, reason, ct);
         return Ok(execution);
     }
