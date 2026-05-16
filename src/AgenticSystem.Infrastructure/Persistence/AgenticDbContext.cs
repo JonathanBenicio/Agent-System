@@ -57,6 +57,7 @@ public class AgenticDbContext : DbContext
     public DbSet<ExternalProviderQuotaEntity> ExternalProviderQuotas => Set<ExternalProviderQuotaEntity>();
     public DbSet<SystemAlertEntity> SystemAlerts => Set<SystemAlertEntity>();
     public DbSet<InboundWebhookEntity> InboundWebhooks => Set<InboundWebhookEntity>();
+    public DbSet<KnowledgeRoomEntity> KnowledgeRooms => Set<KnowledgeRoomEntity>();
     public DbSet<McpPluginEntity> McpPlugins => Set<McpPluginEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

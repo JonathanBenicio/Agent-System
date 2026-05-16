@@ -529,6 +529,20 @@ public class InboundWebhookEntity : ITenantEntity
     public DateTime? LastTriggeredAt { get; set; }
 }
 
+public class KnowledgeRoomEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Color { get; set; } = string.Empty;
+    public string Icon { get; set; } = string.Empty;
+    public int DocumentCount { get; set; }
+    public string[] Tags { get; set; } = Array.Empty<string>();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class McpPluginEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;

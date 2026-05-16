@@ -280,10 +280,12 @@ public static class ServiceCollectionExtensions
         if (string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
         {
             services.AddSingleton<IAdvancedRetrievalService, PostgresAdvancedRetrievalService>();
+            services.AddScoped<IKnowledgeRoomService, PostgresKnowledgeRoomStore>();
         }
         else
         {
             services.AddSingleton<IAdvancedRetrievalService, InMemoryAdvancedRetrievalService>();
+            services.AddSingleton<IKnowledgeRoomService, InMemoryKnowledgeRoomStore>();
         }
         services.AddSingleton<IRAGService, RAGService>();
 

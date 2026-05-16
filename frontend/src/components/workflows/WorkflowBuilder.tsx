@@ -1,4 +1,4 @@
-// import React from 'react';
+import React, { useState } from 'react';
 import { 
   ReactFlow, 
   Background, 
@@ -7,21 +7,25 @@ import {
   useReactFlow,
   ReactFlowProvider
 } from '@xyflow/react';
-import type { Node } from '@xyflow/react';
+import type { Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { 
   Play, 
   Save, 
-  // Plus, 
+  Plus, 
   Bot, 
   Wrench, 
-  // Split, 
+  Trash2, 
   Zap, 
-  // Trash2,
-  ChevronLeft
+  FolderOpen,
+  ChevronLeft,
+  Clock,
+  GitBranch
 } from 'lucide-react';
 import { useWorkflowStore, WorkflowStepType } from '@/store/useWorkflowStore';
 import { useNavigate } from 'react-router-dom';
+import { useWorkflows } from '@/hooks/useWorkflows';
+import { useToast } from '@/components/shared/Toast';
 
 // Simple Custom Node Components (Internal for now)
 const AgentNode = ({ data }: any) => (
@@ -46,72 +50,150 @@ const ToolNode = ({ data }: any) => (
   </div>
 );
 
+const DecisionNode = ({ data }: any) => (
+  <div className="px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 border-amber-500/50 min-w-[150px]">
+    <div className="flex items-center gap-2 mb-1">
+      <Zap className="w-4 h-4 text-amber-400" />
+      <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Decision</span>
+    </div>
+    <div className="text-sm font-semibold text-white">{data.label}</div>
+    <div className="text-[10px] text-zinc-500 mt-1 font-mono">{data.condition || 'No condition'}</div>
+  </div>
+);
+
+const WaitNode = ({ data }: any) => (
+  <div className="px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 border-purple-500/50 min-w-[150px]">
+    <div className="flex items-center gap-2 mb-1">
+      <Clock className="w-4 h-4 text-purple-400" />
+      <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Wait</span>
+    </div>
+    <div className="text-sm font-semibold text-white">{data.label}</div>
+    <div className="text-[10px] text-zinc-500 mt-1 font-mono">{data.timeout || 'No timeout'}</div>
+  </div>
+);
+
 const nodeTypes = {
   agent: AgentNode,
   tool: ToolNode,
+  decision: DecisionNode,
+  wait: WaitNode,
 };
 
 export function WorkflowBuilderPage() {
   const navigate = useNavigate();
+  const { workflows, saveWorkflow, deleteWorkflow, getWorkflow, executeWorkflow } = useWorkflows();
+  const { addToast } = useToast();
+  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
   const { 
     nodes, 
     edges, 
     onNodesChange, 
     onEdgesChange, 
     onConnect, 
-    addNode, 
+    addNode,
+    setNodes,
+    setEdges,
     toWorkflowDefinition 
   } = useWorkflowStore();
   
   const { screenToFlowPosition } = useReactFlow();
 
+  const handleSave = async () => {
+    try {
+      const definition = toWorkflowDefinition("Visual Workflow " + new Date().toLocaleDateString());
+      if (activeWorkflowId) {
+        definition.id = activeWorkflowId;
+        const w = workflows.find(x => x.id === activeWorkflowId);
+        if (w) {
+          definition.name = w.name;
+          definition.version = w.version;
+        }
+      }
+      const saved = await saveWorkflow(definition);
+      setActiveWorkflowId(saved.id);
+      addToast('Workflow salvo com sucesso', 'success');
+    } catch (err) {
+      addToast('Erro ao salvar workflow', 'error');
+    }
+  };
+
   const onAddAgent = () => {
     const id = `node_${Date.now()}`;
-    // Adiciona no centro da tela com um pequeno offset aleatório para não sobrepor
     const position = screenToFlowPosition({
       x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
       y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
     });
+    addNode({ id, type: 'agent', position, data: { label: 'New Agent Task', agentName: 'orchestrator', stepType: WorkflowStepType.Action } });
+  };
 
-    const newNode: Node = {
-      id,
-      type: 'agent',
-      position,
-      data: { 
-        label: 'New Agent Task', 
-        agentName: 'orchestrator',
-        stepType: WorkflowStepType.Action 
-      },
-    };
-    addNode(newNode);
+  const loadWorkflow = async (id: string) => {
+    try {
+      const def = await getWorkflow(id);
+      setActiveWorkflowId(def.id);
+      
+      const newNodes: Node[] = def.steps.map(s => ({
+        id: s.id,
+        type: s.agentName ? 'agent' : s.toolName ? 'tool' : 'agent',
+        position: { x: Math.random() * 400 + 100, y: Math.random() * 400 + 100 },
+        data: {
+          label: s.name,
+          agentName: s.agentName,
+          toolName: s.toolName,
+          description: s.actionDescription,
+          input: s.input,
+          condition: s.conditionExpression,
+          stepType: s.stepType
+        }
+      }));
+
+      const newEdges: Edge[] = [];
+      def.steps.forEach(s => {
+        if (s.dependsOn) {
+          s.dependsOn.forEach(dep => {
+            newEdges.push({
+              id: `e-${dep}-${s.id}`,
+              source: dep,
+              target: s.id
+            });
+          });
+        }
+      });
+
+      setNodes(newNodes);
+      setEdges(newEdges);
+      addToast('Workflow carregado', 'success');
+    } catch {
+      addToast('Erro ao carregar workflow', 'error');
+    }
   };
 
   const onAddTool = () => {
     const id = `node_${Date.now()}`;
-    // Adiciona no centro da tela com um pequeno offset aleatório para não sobrepor
     const position = screenToFlowPosition({
       x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
       y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
     });
-
-    const newNode: Node = {
-      id,
-      type: 'tool',
-      position,
-      data: { 
-        label: 'New Tool Task', 
-        toolName: 'http_tool',
-        stepType: WorkflowStepType.Action 
-      },
-    };
-    addNode(newNode);
+    addNode({ id, type: 'tool', position, data: { label: 'New Tool Task', toolName: 'http_tool', stepType: WorkflowStepType.Action } });
   };
 
-  const handleSave = () => {
-    const definition = toWorkflowDefinition("Visual Workflow " + new Date().toLocaleDateString());
-    console.log("Saving Workflow Definition:", definition);
-    // TODO: Send to API
-    alert("Workflow Definition generated (check console). API integration coming next.");
+  const onAddDecision = () => {
+    const id = `node_${Date.now()}`;
+    const position = screenToFlowPosition({
+      x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
+      y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
+    });
+    addNode({ id, type: 'decision', position, data: { label: 'New Decision', condition: '{{previous.result}} == true', stepType: WorkflowStepType.Decision } });
+  };
+
+  const onAddWait = () => {
+    const id = `node_${Date.now()}`;
+    const position = screenToFlowPosition({
+      x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
+      y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
+    });
+    addNode({ id, type: 'wait', position, data: { label: 'Wait Event', timeout: '00:05:00', stepType: WorkflowStepType.Wait } });
   };
 
   return (
@@ -146,6 +228,20 @@ export function WorkflowBuilderPage() {
             <Wrench className="w-3.5 h-3.5 text-blue-400" />
             Add Tool
           </button>
+          <button 
+            onClick={onAddDecision}
+            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-lg text-xs font-medium transition-all"
+          >
+            <GitBranch className="w-3.5 h-3.5 text-amber-400" />
+            Decision
+          </button>
+          <button 
+            onClick={onAddWait}
+            className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-lg text-xs font-medium transition-all"
+          >
+            <Clock className="w-3.5 h-3.5 text-purple-400" />
+            Wait
+          </button>
           <div className="w-px h-6 bg-zinc-800 mx-1" />
           <button 
             onClick={handleSave}
@@ -154,51 +250,201 @@ export function WorkflowBuilderPage() {
             <Save className="w-4 h-4" />
             Save Workflow
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-white text-zinc-900 rounded-lg text-sm font-bold transition-all">
+          <button 
+            onClick={async () => {
+              if (!activeWorkflowId) {
+                addToast('Salve o workflow antes de executar', 'warning');
+                return;
+              }
+              try {
+                await useWorkflows().executeWorkflow(activeWorkflowId); // Need to use the hook correctly
+                addToast('Execução iniciada!', 'success');
+              } catch {
+                addToast('Erro ao iniciar execução', 'error');
+              }
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-zinc-100 hover:bg-white text-zinc-900 rounded-lg text-sm font-bold transition-all">
             <Play className="w-4 h-4 fill-current" />
             Run
           </button>
         </div>
       </div>
 
-      {/* Canvas */}
-      <div className="flex-1 relative">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          nodeTypes={nodeTypes}
-          colorMode="dark"
-          fitView
-        >
-          <Background color="#27272a" gap={20} />
-          <Controls className="bg-zinc-900 border-zinc-800 fill-zinc-400" />
-          
-          <Panel position="top-right" className="bg-zinc-900/80 backdrop-blur-md p-4 border border-zinc-800 rounded-2xl m-4 w-64 shadow-2xl">
-            <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
-              <Zap className="w-4 h-4 text-amber-400" />
-              Engine Status
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-zinc-500">Nodes Active</span>
-                <span className="text-zinc-200 font-mono">{nodes.length}</span>
+      <div className="flex-1 relative flex">
+        {/* Sidebar */}
+        <div className="w-64 bg-zinc-925 border-r border-zinc-800 flex flex-col">
+          <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-zinc-200">Workflows</h3>
+            <button 
+              onClick={() => {
+                setActiveWorkflowId(null);
+                setNodes([]);
+                setEdges([]);
+              }}
+              className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-100"
+              title="Novo Workflow"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {workflows.map(w => (
+              <div 
+                key={w.id}
+                onClick={() => loadWorkflow(w.id)}
+                className={`flex items-center justify-between p-2 rounded-lg cursor-pointer group ${
+                  activeWorkflowId === w.id ? 'bg-zinc-800 text-teal-400' : 'text-zinc-400 hover:bg-zinc-800/50 hover:text-zinc-200'
+                }`}
+              >
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <FolderOpen className="w-4 h-4 shrink-0" />
+                  <span className="text-sm truncate">{w.name}</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if(confirm('Deletar workflow?')) deleteWorkflow(w.id);
+                  }}
+                  className="opacity-0 group-hover:opacity-100 p-1 hover:bg-zinc-700 rounded text-red-400"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-zinc-500">Connections</span>
-                <span className="text-zinc-200 font-mono">{edges.length}</span>
-              </div>
-              <div className="pt-2 border-t border-zinc-800">
-                <div className="flex items-center gap-2 text-[10px] text-teal-500">
-                  <div className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
-                  Ready to Orchestrate
+            ))}
+            {workflows.length === 0 && (
+              <p className="text-xs text-zinc-500 text-center py-4">Nenhum workflow salvo.</p>
+            )}
+          </div>
+        </div>
+
+        {/* Canvas */}
+        <div className="flex-1 relative">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={(e, node) => setSelectedNodeId(node.id)}
+            onPaneClick={() => setSelectedNodeId(null)}
+            nodeTypes={nodeTypes}
+            colorMode="dark"
+            fitView
+          >
+            <Background color="#27272a" gap={20} />
+            <Controls className="bg-zinc-900 border-zinc-800 fill-zinc-400" />
+            
+            <Panel position="top-right" className="bg-zinc-900/80 backdrop-blur-md p-4 border border-zinc-800 rounded-2xl m-4 w-64 shadow-2xl">
+              <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-400" />
+                Engine Status
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-500">Nodes Active</span>
+                  <span className="text-zinc-200 font-mono">{nodes.length}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-500">Connections</span>
+                  <span className="text-zinc-200 font-mono">{edges.length}</span>
+                </div>
+                <div className="pt-2 border-t border-zinc-800">
+                  <div className="flex items-center gap-2 text-[10px] text-teal-500">
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
+                    Ready to Orchestrate
+                  </div>
                 </div>
               </div>
+            </Panel>
+          </ReactFlow>
+        </div>
+
+        {/* Properties Panel */}
+        {selectedNodeId && (
+          <div className="w-80 bg-zinc-925 border-l border-zinc-800 flex flex-col">
+            <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-zinc-200">Node Properties</h3>
+              <button onClick={() => setSelectedNodeId(null)} className="text-zinc-500 hover:text-zinc-300">
+                <ChevronLeft className="w-4 h-4 rotate-180" />
+              </button>
             </div>
-          </Panel>
-        </ReactFlow>
+            <div className="flex-1 p-4 overflow-y-auto">
+              {nodes.filter(n => n.id === selectedNodeId).map(node => (
+                <div key={node.id} className="space-y-4">
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Label</label>
+                    <input 
+                      value={node.data.label as string || ''}
+                      onChange={(e) => {
+                        setNodes(nodes.map(n => n.id === node.id ? { ...n, data: { ...n.data, label: e.target.value } } : n));
+                      }}
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200"
+                    />
+                  </div>
+                  {node.type === 'agent' && (
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">Agent Name</label>
+                      <input 
+                        value={node.data.agentName as string || ''}
+                        onChange={(e) => {
+                          setNodes(nodes.map(n => n.id === node.id ? { ...n, data: { ...n.data, agentName: e.target.value } } : n));
+                        }}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200"
+                      />
+                    </div>
+                  )}
+                  {node.type === 'tool' && (
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">Tool Name</label>
+                      <input 
+                        value={node.data.toolName as string || ''}
+                        onChange={(e) => {
+                          setNodes(nodes.map(n => n.id === node.id ? { ...n, data: { ...n.data, toolName: e.target.value } } : n));
+                        }}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200"
+                      />
+                    </div>
+                  )}
+                  {node.type === 'decision' && (
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">Condition Expression</label>
+                      <input 
+                        value={node.data.condition as string || ''}
+                        onChange={(e) => {
+                          setNodes(nodes.map(n => n.id === node.id ? { ...n, data: { ...n.data, condition: e.target.value } } : n));
+                        }}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200 font-mono"
+                      />
+                    </div>
+                  )}
+                  {node.type === 'wait' && (
+                    <div>
+                      <label className="block text-xs text-zinc-400 mb-1">Timeout Duration</label>
+                      <input 
+                        value={node.data.timeout as string || ''}
+                        onChange={(e) => {
+                          setNodes(nodes.map(n => n.id === node.id ? { ...n, data: { ...n.data, timeout: e.target.value } } : n));
+                        }}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200 font-mono"
+                        placeholder="HH:mm:ss"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1">Description</label>
+                    <textarea 
+                      value={node.data.description as string || ''}
+                      onChange={(e) => {
+                        setNodes(nodes.map(n => n.id === node.id ? { ...n, data: { ...n.data, description: e.target.value } } : n));
+                      }}
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200 resize-none h-20"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

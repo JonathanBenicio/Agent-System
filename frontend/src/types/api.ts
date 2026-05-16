@@ -601,8 +601,72 @@ export interface YamlValidationResult {
 }
 
 // ══════════════════════════════════════
+// Workflow Engine Models
+// ══════════════════════════════════════
+
+export interface WorkflowDefinitionSummary {
+  id: string;
+  name: string;
+  version: number;
+  createdAt: string;
+}
+
+export interface WorkflowDefinition {
+  id: string;
+  name: string;
+  description?: string;
+  version: number;
+  steps: WorkflowStep[];
+  variables: Record<string, unknown>;
+  triggerType: number;
+  cronExpression?: string;
+  createdAt: string;
+}
+
+export interface WorkflowStep {
+  id: string;
+  name: string;
+  stepType: number;
+  agentName?: string;
+  toolName?: string;
+  actionDescription?: string;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  dependsOn: string[];
+  conditionExpression?: string;
+  parallelSteps: WorkflowStep[];
+  compensationStep?: WorkflowStep;
+  maxRetries: number;
+  timeout?: string;
+  errorStrategy: number;
+}
+
+// ══════════════════════════════════════
 // RAG & Embedding Migration Models
 // ══════════════════════════════════════
+
+export interface KnowledgeRoom {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  icon: string;
+  documentCount: number;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RagStats {
+  totalChunks: number;
+  searchCount24h: number;
+  onnxStatus: {
+    loaded: boolean;
+    modelName: string;
+    hardware: string;
+    avgLatencyMs: number;
+  };
+}
 
 export interface IngestDocumentResponse {
   documentId: string

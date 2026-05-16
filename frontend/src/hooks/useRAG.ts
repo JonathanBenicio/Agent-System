@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ragApi, embeddingMigrationApi, settingsApi } from '@/lib/api'
 import type {
+  RagStats,
   EmbeddingModelConfig,
   StartMigrationRequest,
   MigrationJob,
@@ -13,6 +14,7 @@ export function useRAG() {
   const [ingesting, setIngesting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
+  const [stats, setStats] = useState<RagStats | null>(null)
   const [models, setModels] = useState<EmbeddingModelConfig[]>([])
   const [activeModel, setActiveModel] = useState<EmbeddingModelConfig | null>(null)
   const [jobs, setJobs] = useState<MigrationJob[]>([])
@@ -25,7 +27,8 @@ export function useRAG() {
       setLoading(true)
       setError(null)
       
-      const [modelsData, activeModelData, jobsData, memData, rerankData] = await Promise.all([
+      const [statsData, modelsData, activeModelData, jobsData, memData, rerankData] = await Promise.all([
+        ragApi.stats().catch(() => null),
         embeddingMigrationApi.models().catch(() => []),
         embeddingMigrationApi.activeModel().catch(() => null),
         embeddingMigrationApi.jobs().catch(() => []),
@@ -33,6 +36,7 @@ export function useRAG() {
         settingsApi.getReranking().catch(() => null),
       ])
 
+      setStats(statsData)
       setModels(modelsData)
       setActiveModel(activeModelData)
       setJobs(jobsData)
@@ -162,6 +166,7 @@ export function useRAG() {
     loading,
     ingesting,
     error,
+    stats,
     models,
     activeModel,
     jobs,

@@ -122,6 +122,8 @@ import type {
   DeliveryResult,
   AgentVersion,
   YamlValidationResult,
+  WorkflowDefinitionSummary,
+  WorkflowDefinition,
 } from '@/types/api'
 
 export const agentApi = {
@@ -285,13 +287,45 @@ export const scheduledTasksApi = {
 // ══════════════════════════════════════
 
 import type {
+  KnowledgeRoom,
+  RagStats,
   IngestDocumentResponse,
   EmbeddingModelConfig,
   StartMigrationRequest,
   MigrationJob,
 } from '@/types/api'
 
+export const workflowApi = {
+  // Definitions
+  listDefinitions: (limit?: number) => get<WorkflowDefinitionSummary[]>(`/api/workflow/definitions${limit ? `?limit=${limit}` : ''}`),
+  getDefinition: (id: string) => get<WorkflowDefinition>(`/api/workflow/definitions/${encodeURIComponent(id)}`),
+  saveDefinition: (def: WorkflowDefinition) => post<WorkflowDefinition>('/api/workflow/definitions', def),
+  deleteDefinition: (id: string) => del(`/api/workflow/definitions/${encodeURIComponent(id)}`),
+
+  // Executions
+  startWorkflow: (definitionId: string, variables?: Record<string, unknown>) => 
+    post<WorkflowExecution>(`/api/workflow/executions/start/${encodeURIComponent(definitionId)}`, variables),
+  getExecution: (id: string) => get<WorkflowExecution>(`/api/workflow/executions/${encodeURIComponent(id)}`),
+  listExecutions: (status?: number, limit?: number) => {
+    const params = new URLSearchParams()
+    if (status !== undefined) params.set('status', status.toString())
+    if (limit) params.set('limit', limit.toString())
+    const qs = params.toString()
+    return get<WorkflowExecution[]>(`/api/workflow/executions${qs ? `?${qs}` : ''}`)
+  },
+  cancelExecution: (id: string, reason?: string) => 
+    post<WorkflowExecution>(`/api/workflow/executions/${encodeURIComponent(id)}/cancel${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`),
+}
+
+export const knowledgeRoomApi = {
+  list: () => get<KnowledgeRoom[]>('/api/knowledge/rooms'),
+  create: (data: Partial<KnowledgeRoom>) => post<KnowledgeRoom>('/api/knowledge/rooms', data),
+  update: (id: string, data: Partial<KnowledgeRoom>) => put<KnowledgeRoom>(`/api/knowledge/rooms/${encodeURIComponent(id)}`, data),
+  delete: (id: string) => del(`/api/knowledge/rooms/${encodeURIComponent(id)}`),
+}
+
 export const ragApi = {
+  stats: () => get<RagStats>('/api/document/stats'),
   ingest: (file: File, source?: string) => {
     const formData = new FormData()
     formData.append('file', file)

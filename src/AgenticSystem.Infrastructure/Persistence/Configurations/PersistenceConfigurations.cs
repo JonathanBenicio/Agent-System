@@ -748,3 +748,25 @@ public class EnhancedMemoryConfiguration : IEntityTypeConfiguration<EnhancedMemo
         builder.HasIndex(e => e.MemoryType).HasDatabaseName("ix_enhanced_memory_type");
     }
 }
+
+public class KnowledgeRoomConfiguration : IEntityTypeConfiguration<KnowledgeRoomEntity>
+{
+    public void Configure(EntityTypeBuilder<KnowledgeRoomEntity> builder)
+    {
+        builder.ToTable("knowledge_rooms");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(e => e.Description).HasColumnName("description").HasMaxLength(1024);
+        builder.Property(e => e.Color).HasColumnName("color").HasMaxLength(32);
+        builder.Property(e => e.Icon).HasColumnName("icon").HasMaxLength(32);
+        builder.Property(e => e.DocumentCount).HasColumnName("document_count");
+        builder.Property(e => e.Tags).HasColumnName("tags").HasColumnType("text[]");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_knowledge_rooms_tenant_id");
+    }
+}
