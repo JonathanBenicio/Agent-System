@@ -25,13 +25,21 @@ import {
 } from 'lucide-react';
 import { useWorkflowStore } from '@/store/useWorkflowStore';
 import { useNavigate } from 'react-router-dom';
-import { useWorkflows } from '@/hooks/useWorkflows';
+import { useWorkflows, useWorkflowExecution } from '@/hooks/useWorkflows';
 import { useToast } from '@/components/shared/Toast';
 import { ExecutionHistoryPanel } from './ExecutionHistoryPanel';
 
+// Helper to determine node border color based on status
+const getBorderClass = (status?: number) => {
+  if (status === 1) return 'border-teal-500 shadow-[0_0_15px_rgba(20,184,166,0.3)]'; // Success
+  if (status === 2) return 'border-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.3)]';  // Error
+  if (status === 0) return 'border-blue-500 animate-pulse shadow-[0_0_15px_rgba(59,130,246,0.3)]'; // Running
+  return 'border-zinc-800'; // Default
+};
+
 // Simple Custom Node Components
 const AgentNode = ({ data }: any) => (
-  <div className="px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 border-teal-500/50 min-w-[150px]">
+  <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-teal-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
       <Bot className="w-4 h-4 text-teal-400" />
       <span className="text-xs font-bold text-teal-400 uppercase tracking-wider">Agent</span>
@@ -42,7 +50,7 @@ const AgentNode = ({ data }: any) => (
 );
 
 const ToolNode = ({ data }: any) => (
-  <div className="px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 border-blue-500/50 min-w-[150px]">
+  <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-blue-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
       <Wrench className="w-4 h-4 text-blue-400" />
       <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Tool</span>
@@ -53,7 +61,7 @@ const ToolNode = ({ data }: any) => (
 );
 
 const DecisionNode = ({ data }: any) => (
-  <div className="px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 border-amber-500/50 min-w-[150px]">
+  <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-amber-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
       <Zap className="w-4 h-4 text-amber-400" />
       <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Decision</span>
@@ -64,7 +72,7 @@ const DecisionNode = ({ data }: any) => (
 );
 
 const WaitNode = ({ data }: any) => (
-  <div className="px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 border-purple-500/50 min-w-[150px]">
+  <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-purple-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
       <Clock className="w-4 h-4 text-purple-400" />
       <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Wait</span>
@@ -89,9 +97,10 @@ export function WorkflowBuilderPage() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
 
+  const { data: executionDetails } = useWorkflowExecution(selectedExecutionId);
+
   const { 
     nodes, 
-
     edges, 
     activeWorkflowId,
     workflowName,
@@ -107,8 +116,35 @@ export function WorkflowBuilderPage() {
     fromWorkflowDefinition,
     clear
   } = useWorkflowStore();
-  
+
   const { screenToFlowPosition } = useReactFlow();
+
+  // Sync execution status to nodes visually
+  import { useEffect } from 'react';
+  useEffect(() => {
+    if (!selectedExecutionId) {
+      // Clear execution status from all nodes
+      setNodes(nodes.map(n => ({
+        ...n,
+        data: { ...n.data, executionStatus: undefined }
+      })));
+      return;
+    }
+
+    if (executionDetails?.stepExecutions) {
+      setNodes(nodes.map(n => {
+        // Match step execution by node Id (stepName is the nodeId in this architecture, or we need to find how they match)
+        // Wait, in DefaultWorkflowEngine, stepName is saved. Let's assume stepName == node.id or node.data.label.
+        // Actually, looking at the store `toWorkflowDefinition`, the node.id is the Key of the step. So stepName = node.id
+        const step = executionDetails.stepExecutions.find((s: any) => s.stepName === n.id);
+        return {
+          ...n,
+          data: { ...n.data, executionStatus: step?.status }
+        };
+      }));
+    }
+  }, [executionDetails, selectedExecutionId]); // Omit nodes to avoid infinite loop when updating
+
 
   const handleSave = async () => {
     try {
