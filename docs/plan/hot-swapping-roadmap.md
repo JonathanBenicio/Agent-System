@@ -34,7 +34,7 @@ O objetivo deste *roadmap* é evoluir o Agentic System para uma plataforma modul
 *   **Agents:** `frontend-specialist`, `dotnet-expert`, `database-architect`
 *   **Status:** ✅ CONCLUÍDO — Frontend integrado com Drag and Drop e isolamento de tenants (X-Tenant-Id).
 
-### Phase 2: Visual Workflows & Triggers
+### Phase 2: Visual Workflows & Triggers (Issue #20)
 *   **Tasks:**
     - [x] Integrar o React Flow no frontend para a construção visual de *workflows* (Store + UI implementados).
     - [x] Desenvolver um motor universal de *webhooks* dinâmicos (`/api/webhooks/{id}`) reativo em tempo real (`WebhooksController` + `WebhooksPage`).
