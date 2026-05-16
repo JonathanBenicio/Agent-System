@@ -149,6 +149,7 @@ public static class ServiceCollectionExtensions
 
         // Runtime Evaluator — InMemory fallback (overridden by UsePostgresOperationalStore when Postgres is configured)
         services.AddSingleton<IRuntimeEvaluator, InMemoryRuntimeEvaluator>();
+        services.AddSingleton<IOperationalStore, InMemoryOperationalStore>();
 
         // Agent Versioning
         services.AddSingleton<IAgentVersionStore, InMemoryAgentVersionStore>();

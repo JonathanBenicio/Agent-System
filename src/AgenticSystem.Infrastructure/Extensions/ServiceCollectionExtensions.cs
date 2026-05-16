@@ -39,6 +39,7 @@ public static class ServiceCollectionExtensions
 
         services
             .AddAgenticConfiguration(configuration)
+            .AddAgenticMultiTenancy()
             .AddAgenticLlmServices(configuration)
             .AddAgenticGateway()
             .AddAgenticQualityGates()
@@ -46,7 +47,7 @@ public static class ServiceCollectionExtensions
             .AddAgenticAgentFramework(configuration)
             .AddAgenticRagAndMemory(configuration)
             .AddAgenticDocumentServices()
-            .AddAgenticBackgroundServices();
+            .AddAgenticBackgroundServices(configuration);
 
         return services;
     }
@@ -104,6 +105,9 @@ public static class ServiceCollectionExtensions
         })
         .UseDistributedCache()
         .UseOpenTelemetry(sourceName: "AgenticSystem.Embeddings");
+
+        services.AddSingleton<ILLMProviderFactory, LLMProviderFactory>();
+        services.AddSingleton<ILLMProvider, HotSwappableLLMProvider>();
 
         services.AddSingleton<LLMManager>();
         services.AddSingleton<IExternalQuotaSyncService, ExternalQuotaSyncService>();
@@ -242,21 +246,11 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAgenticRagAndMemory(this IServiceCollection services, IConfiguration configuration)
     {
-        // Memory / Vector Store
-        var localExecutionStorageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
-        var vectorStoreType = configuration["AgenticSystem:Memory:VectorStoreType"] ?? "InMemory";
-        var memoryConnectionString = configuration["AgenticSystem:Memory:ConnectionString"];
-
-        if (!string.Equals(localExecutionStorageMode, "InMemory", StringComparison.OrdinalIgnoreCase)
-            && vectorStoreType.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase)
-            && !string.IsNullOrWhiteSpace(memoryConnectionString))
-        {
-            services.UsePostgresVectorStore(memoryConnectionString);
-        }
-        else
-        {
-            services.AddSingleton<IVectorStore, InMemoryVectorStore>();
-        }
+        // Memory / Vector Store — Refactored for Hot-Swapping (Phase 0)
+        services.Configure<MemorySettings>(configuration.GetSection("AgenticSystem:Memory"));
+        
+        services.AddSingleton<IVectorStoreFactory, VectorStoreFactory>();
+        services.AddSingleton<IVectorStore, HotSwappableVectorStore>();
 
         // RAG Services
         services.AddSingleton<IRerankingAssetStore, InMemoryRerankingAssetStore>();
@@ -278,9 +272,9 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IRerankingSettingsAccessor>(),
             sp.GetRequiredService<ILogger<LlmReRanker>>()));
 
-        services.AddSingleton<IEmbeddingProvider>(sp => new AgenticSystem.Infrastructure.Embeddings.EmbeddingProviderAdapter(
-            sp.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>(),
-            sp.GetRequiredService<ILogger<AgenticSystem.Infrastructure.Embeddings.EmbeddingProviderAdapter>>()));
+        // Embedding Provider — Refactored for Hot-Swapping (Phase 0)
+        services.AddSingleton<IEmbeddingProviderFactory, AgenticSystem.Infrastructure.Embeddings.EmbeddingProviderFactory>();
+        services.AddSingleton<IEmbeddingProvider, AgenticSystem.Infrastructure.Embeddings.HotSwappableEmbeddingProvider>();
 
         var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
         if (string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
@@ -324,10 +318,27 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddAgenticBackgroundServices(this IServiceCollection services)
+    private static IServiceCollection AddAgenticBackgroundServices(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddHostedService<SelfImprovementBackgroundJob>();
         services.AddHostedService<ExternalQuotaSyncHostedService>();
+        
+        var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
+        if (!string.Equals(storageMode, "SQLite", StringComparison.OrdinalIgnoreCase) && 
+            !string.Equals(storageMode, "InMemory", StringComparison.OrdinalIgnoreCase))
+        {
+            services.AddHostedService<RealTimeConfigReloadBackgroundService>();
+        }
+        
+        return services;
+    }
+
+    private static IServiceCollection AddAgenticMultiTenancy(this IServiceCollection services)
+    {
+        services.AddScoped<TenantContext>();
+        services.AddSingleton<ITenantContextAccessor, TenantContextAccessor>();
+        services.AddScoped<ITenantResolver, TenantResolver>();
+        // ITenantStore implementation should be registered by the storage mode
         return services;
     }
 
@@ -438,12 +449,31 @@ public static class ServiceCollectionExtensions
         if (string.Equals(storageMode, "InMemory", StringComparison.OrdinalIgnoreCase))
         {
             ReplaceSingleton<IVectorStore, InMemoryVectorStore>(services);
+            ReplaceSingleton<IExternalQuotaSyncService, InMemoryExternalQuotaSyncService>(services);
+            return services;
+        }
+
+        if (string.Equals(storageMode, "SQLite", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException("ConnectionStrings:SessionStore must be configured when AgenticSystem:LocalExecution:StorageMode is SQLite.");
+            }
+
+            EnsureDbContextRegistrations(services, connectionString);
+
+            ReplaceSingleton<IVectorStore, SqliteVectorStore>(services);
+            ReplaceSingleton<IExternalQuotaSyncService, InMemoryExternalQuotaSyncService>(services);
+            
+            // Register MockEmbeddingGenerator for load testing
+            services.AddSingleton<Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>>(new AgenticSystem.Infrastructure.Memory.MockEmbeddingGenerator());
+            
             return services;
         }
 
         if (!string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException($"Unsupported local execution storage mode '{storageMode}'. Use InMemory or PostgreSQL.");
+            throw new InvalidOperationException($"Unsupported local execution storage mode '{storageMode}'. Use InMemory, SQLite or PostgreSQL.");
         }
 
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -545,25 +575,44 @@ public static class ServiceCollectionExtensions
 
     private static void EnsureDbContextRegistrations(IServiceCollection services, string connectionString)
     {
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(DbContextOptions<AgenticDbContext>)))
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(DbContextOptions<AgenticDbContext>)))
         {
-            services.AddDbContext<AgenticDbContext>(options =>
-                options.UseNpgsql(connectionString, npgsql =>
-                {
-                    npgsql.MigrationsHistoryTable("__ef_migrations_history");
-                    npgsql.UseVector();
-                }), contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
+            return;
         }
 
-        if (!services.Any(descriptor => descriptor.ServiceType == typeof(IDbContextFactory<AgenticDbContext>)))
+        var isSqlite = connectionString.Contains(".db") || connectionString.StartsWith("Data Source=", StringComparison.OrdinalIgnoreCase);
+
+        services.AddDbContext<AgenticDbContext>(options =>
         {
-            services.AddDbContextFactory<AgenticDbContext>(options =>
+            if (isSqlite)
+            {
+                options.UseSqlite(connectionString);
+            }
+            else
+            {
                 options.UseNpgsql(connectionString, npgsql =>
                 {
                     npgsql.MigrationsHistoryTable("__ef_migrations_history");
                     npgsql.UseVector();
-                }));
-        }
+                });
+            }
+        }, contextLifetime: ServiceLifetime.Scoped, optionsLifetime: ServiceLifetime.Singleton);
+
+        services.AddDbContextFactory<AgenticDbContext>(options =>
+        {
+            if (isSqlite)
+            {
+                options.UseSqlite(connectionString);
+            }
+            else
+            {
+                options.UseNpgsql(connectionString, npgsql =>
+                {
+                    npgsql.MigrationsHistoryTable("__ef_migrations_history");
+                    npgsql.UseVector();
+                });
+            }
+        });
     }
 
     public static IServiceProvider SeedInfrastructureTools(this IServiceProvider serviceProvider)

@@ -270,6 +270,7 @@ app.MapControllers();
 // app.MapMcp("/mcp").RequireAuthorization();
 app.MapHub<ChatHub>("/hubs/chat").RequireAuthorization();
 app.MapHub<GatewayHub>("/hubs/gateway").RequireAuthorization();
+app.MapHub<ExternalAgentHub>("/hubs/external-agent").RequireAuthorization();
 
 app.MapMethods("/health", new[] { "GET", "HEAD" }, () => new { Status = "Healthy", Timestamp = DateTime.UtcNow }).AllowAnonymous();
 app.MapGet("/version", () => new { Version = "1.0.0", Build = DateTime.UtcNow.ToString("yyyyMMdd-HHmm") });
