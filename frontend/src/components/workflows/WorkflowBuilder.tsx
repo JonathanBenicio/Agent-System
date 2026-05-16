@@ -1,24 +1,23 @@
-import React, { useCallback, useRef } from 'react';
+// import React from 'react';
 import { 
   ReactFlow, 
   Background, 
   Controls, 
   Panel,
   useReactFlow,
-  ReactFlowProvider,
-  Node,
-  Edge
+  ReactFlowProvider
 } from '@xyflow/react';
+import type { Node } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { 
   Play, 
   Save, 
-  Plus, 
+  // Plus, 
   Bot, 
   Wrench, 
-  Split, 
+  // Split, 
   Zap, 
-  Trash2,
+  // Trash2,
   ChevronLeft
 } from 'lucide-react';
 import { useWorkflowStore, WorkflowStepType } from '@/store/useWorkflowStore';
@@ -68,10 +67,16 @@ export function WorkflowBuilderPage() {
 
   const onAddAgent = () => {
     const id = `node_${Date.now()}`;
+    // Adiciona no centro da tela com um pequeno offset aleatório para não sobrepor
+    const position = screenToFlowPosition({
+      x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
+      y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
+    });
+
     const newNode: Node = {
       id,
       type: 'agent',
-      position: { x: Math.random() * 400, y: Math.random() * 400 },
+      position,
       data: { 
         label: 'New Agent Task', 
         agentName: 'orchestrator',
@@ -83,10 +88,16 @@ export function WorkflowBuilderPage() {
 
   const onAddTool = () => {
     const id = `node_${Date.now()}`;
+    // Adiciona no centro da tela com um pequeno offset aleatório para não sobrepor
+    const position = screenToFlowPosition({
+      x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
+      y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
+    });
+
     const newNode: Node = {
       id,
       type: 'tool',
-      position: { x: Math.random() * 400, y: Math.random() * 400 },
+      position,
       data: { 
         label: 'New Tool Task', 
         toolName: 'http_tool',

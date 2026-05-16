@@ -254,6 +254,7 @@ public class ConfigEntryConfiguration : IEntityTypeConfiguration<ConfigEntryEnti
 
         builder.HasKey(entry => entry.Id);
         builder.Property(entry => entry.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(entry => entry.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
         builder.Property(entry => entry.Key).HasColumnName("key").HasMaxLength(256).IsRequired();
         builder.Property(entry => entry.Value).HasColumnName("value").IsRequired();
         builder.Property(entry => entry.EncryptedValue).HasColumnName("encrypted_value");
@@ -267,7 +268,8 @@ public class ConfigEntryConfiguration : IEntityTypeConfiguration<ConfigEntryEnti
         builder.Property(entry => entry.ExpiresAt).HasColumnName("expires_at");
         builder.Property(entry => entry.MetadataJson).HasColumnName("metadata").HasColumnType("jsonb").IsRequired();
 
-        builder.HasIndex(entry => entry.Key).IsUnique();
+        // Make the Key unique per Tenant
+        builder.HasIndex(entry => new { entry.TenantId, entry.Key }).IsUnique().HasDatabaseName("ix_config_entries_tenant_key");
         builder.HasIndex(entry => entry.Category).HasDatabaseName("ix_config_entries_category");
     }
 }

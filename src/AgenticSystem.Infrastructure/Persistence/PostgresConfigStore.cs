@@ -46,27 +46,38 @@ public sealed class PostgresConfigStore : IConfigStore
 
     public async Task SaveAsync(ConfigEntry entry)
     {
-        await using var db = await _dbContextFactory.CreateDbContextAsync();
-        var entity = await db.ConfigEntries.FirstOrDefaultAsync(item => item.Key == entry.Key);
-        if (entity is null)
+        for (int attempt = 0; attempt < 2; attempt++)
         {
-            db.ConfigEntries.Add(MapEntity(entry));
-        }
-        else
-        {
-            entity.Value = entry.Value;
-            entity.EncryptedValue = entry.EncryptedValue;
-            entity.IsSecret = entry.IsSecret;
-            entity.Category = entry.Category.ToString();
-            entity.Status = entry.Status.ToString();
-            entity.Description = entry.Description;
-            entity.Provider = entry.Provider;
-            entity.UpdatedAt = entry.UpdatedAt;
-            entity.ExpiresAt = entry.ExpiresAt;
-            entity.MetadataJson = JsonSerializer.Serialize(entry.Metadata);
-        }
+            try
+            {
+                await using var db = await _dbContextFactory.CreateDbContextAsync();
+                var entity = await db.ConfigEntries.FirstOrDefaultAsync(item => item.Key == entry.Key);
+                if (entity is null)
+                {
+                    db.ConfigEntries.Add(MapEntity(entry));
+                }
+                else
+                {
+                    entity.Value = entry.Value;
+                    entity.EncryptedValue = entry.EncryptedValue;
+                    entity.IsSecret = entry.IsSecret;
+                    entity.Category = entry.Category.ToString();
+                    entity.Status = entry.Status.ToString();
+                    entity.Description = entry.Description;
+                    entity.Provider = entry.Provider;
+                    entity.UpdatedAt = entry.UpdatedAt;
+                    entity.ExpiresAt = entry.ExpiresAt;
+                    entity.MetadataJson = JsonSerializer.Serialize(entry.Metadata);
+                }
 
-        await db.SaveChangesAsync();
+                await db.SaveChangesAsync();
+                return; // Success
+            }
+            catch (DbUpdateException ex) when (attempt == 0 && ex.InnerException != null && ex.InnerException.Message.Contains("IX_config_entries_key"))
+            {
+                _logger.LogWarning(ex, "Concurrency conflict detected while saving ConfigEntry '{Key}'. Retrying...", entry.Key);
+            }
+        }
     }
 
     public async Task DeleteAsync(string key)

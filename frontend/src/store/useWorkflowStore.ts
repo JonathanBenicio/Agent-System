@@ -1,13 +1,15 @@
 import { create } from 'zustand';
-import { 
+
+console.log('Zustand create (workflow):', create);
+import type { 
   Connection, 
   Edge, 
   EdgeChange, 
   Node, 
-  NodeChange, 
+  NodeChange 
+} from '@xyflow/react';
+import { 
   addEdge, 
-  onNodesChange, 
-  onEdgesChange,
   applyNodeChanges,
   applyEdgeChanges
 } from '@xyflow/react';
@@ -18,12 +20,14 @@ export interface WorkflowDefinition {
   steps: WorkflowStep[];
 }
 
-export enum WorkflowStepType {
-  Action = 0,
-  Decision = 1,
-  Parallel = 2,
-  Event = 3
-}
+export const WorkflowStepType = {
+  Action: 0,
+  Decision: 1,
+  Parallel: 2,
+  Event: 3
+} as const;
+
+export type WorkflowStepType = typeof WorkflowStepType[keyof typeof WorkflowStepType];
 
 export interface WorkflowStep {
   id: string;
@@ -33,7 +37,7 @@ export interface WorkflowStep {
   agentName?: string;
   toolName?: string;
   actionDescription?: string;
-  input: Record<string, any>;
+  input: Record<string, unknown>;
   conditionExpression?: string;
 }
 
@@ -51,7 +55,7 @@ interface WorkflowState {
   toWorkflowDefinition: (name: string) => WorkflowDefinition;
 }
 
-export const useWorkflowStore = create<WorkflowState>((set, get) => ({
+export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
   nodes: [],
   edges: [],
 
@@ -97,7 +101,7 @@ export const useWorkflowStore = create<WorkflowState>((set, get) => ({
         agentName: node.data.agentName as string,
         toolName: node.data.toolName as string,
         actionDescription: node.data.description as string,
-        input: (node.data.input as Record<string, any>) || {},
+        input: (node.data.input as Record<string, unknown>) || {},
         conditionExpression: node.data.condition as string,
       };
     });

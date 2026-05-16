@@ -11,6 +11,21 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    minify: false,
+    commonjsOptions: {
+      include: [/zustand/, /node_modules/],
+    },
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('zustand')) {
+            return 'zustand';
+          }
+        },
+      },
+    },
+  },
   server: {
     proxy: {
       '/api': 'https://localhost:5001',

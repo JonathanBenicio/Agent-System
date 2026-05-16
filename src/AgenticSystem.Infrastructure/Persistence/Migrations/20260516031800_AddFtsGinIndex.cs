@@ -18,14 +18,14 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_vector_documents_fts
                 ON vector_documents
                 USING GIN (to_tsvector('english', content));
-                """);
+                """, suppressTransaction: true);
 
             // Optional: a partial index for non-null content to avoid indexing empty rows.
             migrationBuilder.Sql("""
                 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_vector_documents_fts_type
                 ON vector_documents
                 USING GIN (to_tsvector('english', coalesce(content, '') || ' ' || coalesce(type, '')));
-                """);
+                """, suppressTransaction: true);
         }
 
         /// <inheritdoc />

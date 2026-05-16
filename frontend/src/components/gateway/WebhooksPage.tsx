@@ -9,8 +9,6 @@ import {
   Clock, 
   Shield, 
   RefreshCw,
-  Search,
-  ExternalLink,
   Bot,
   Workflow as WorkflowIcon
 } from 'lucide-react';

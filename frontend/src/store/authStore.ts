@@ -1,4 +1,4 @@
-import { create } from 'zustand'
+import { create } from 'zustand';
 import {
   getAuthToken,
   setAuthToken,
@@ -18,7 +18,7 @@ interface AuthState {
   logout: () => Promise<void>
 }
 
-export const useAuthStore = create<AuthState>((set) => {
+export const useAuthStore = create<AuthState>()((set) => {
   const initialToken = getAuthToken()
   const initialApiKey = getApiKey()
 

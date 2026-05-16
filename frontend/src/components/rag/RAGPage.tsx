@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Database, Search, FileText, Cpu, Upload, Layers, RefreshCw, Plus, Check, Play, AlertCircle, Settings2, Trash2, Box } from 'lucide-react'
+import { Database, Search, FileText, Cpu, Upload, /* Layers, */ RefreshCw, Plus, Check, Play, AlertCircle, Settings2, Trash2, Box } from 'lucide-react'
 import { Badge } from '@/components/shared/Badge'
 import { useRAG } from '@/hooks/useRAG'
 import type { IngestDocumentResponse } from '@/types/api'

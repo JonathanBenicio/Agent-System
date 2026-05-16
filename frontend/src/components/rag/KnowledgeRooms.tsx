@@ -5,18 +5,19 @@ import {
   MoreVertical, 
   Clock, 
   Database, 
-  Tag, 
+  // Tag, 
   Search, 
   Upload, 
   FileText, 
   Trash2, 
-  ExternalLink,
+  // ExternalLink,
   Users,
-  Lock,
+  // Lock,
   Settings2,
   Loader2
 } from 'lucide-react';
-import { useKnowledgeStore, KnowledgeRoom } from '@/store/useKnowledgeStore';
+import { useKnowledgeStore } from '@/store/useKnowledgeStore';
+import type { KnowledgeRoom } from '@/store/useKnowledgeStore';
 import { Badge } from '@/components/shared/Badge';
 import { cn } from '@/lib/utils';
 import { ragApi } from '@/lib/api';
