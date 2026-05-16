@@ -747,3 +747,51 @@ export interface SystemAlert {
   createdAt: string
   isRead: boolean
 }
+
+// ══════════════════════════════════════
+// Session Models
+// ══════════════════════════════════════
+
+export interface SessionListItem {
+  id: string
+  title: string
+  lastActivity: string
+  messageCount: number
+  summary?: string
+}
+
+export interface SessionDetail {
+  id: string
+  title: string
+  startedAt: string
+  endedAt?: string
+  messages: ChatMessageDto[]
+  summary?: SessionSummaryDto
+  insights?: SessionInsightsDto
+}
+
+export interface ChatMessageDto {
+  id: string
+  role: string
+  content: string
+  agentName?: string
+  agentTier?: number
+  actions?: string[]
+  tools?: string[]
+  success?: boolean
+  timestamp: string
+}
+
+export interface SessionSummaryDto {
+  summary: string
+  topicsDiscussed: string[]
+  agentsUsed: string[]
+  eventCount: number
+}
+
+export interface SessionInsightsDto {
+  facts: string[]
+  decisions: string[]
+  preferences: string[]
+  actionItems: string[]
+}
