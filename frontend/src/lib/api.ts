@@ -125,6 +125,9 @@ import type {
   WorkflowDefinitionSummary,
   WorkflowDefinition,
   WorkflowExecution,
+  SessionListItem,
+  SessionDetail,
+  ChatMessageDto,
 } from '@/types/api'
 
 export const agentApi = {
@@ -164,6 +167,13 @@ export const skillApi = {
 }
 
 export const sessionApi = {
+  list: (limit?: number) =>
+    get<SessionListItem[]>(`/api/session${limit ? `?limit=${limit}` : ''}`),
+  get: (id: string) => get<SessionDetail>(`/api/session/${encodeURIComponent(id)}`),
+  messages: (id: string) => get<ChatMessageDto[]>(`/api/session/${encodeURIComponent(id)}/messages`),
+  delete: (id: string) => del(`/api/session/${encodeURIComponent(id)}`),
+  updateTitle: (id: string, title: string) =>
+    put<{ id: string; title: string }>(`/api/session/${encodeURIComponent(id)}/title`, { title }),
   getEvents: (sessionId: string, count?: number) =>
     get<AgentEvent[]>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/events${count ? `?count=${count}` : ''}`),
   cleanup: () => post<{ message: string; timestamp: string }>('/api/agent/maintenance/cleanup'),

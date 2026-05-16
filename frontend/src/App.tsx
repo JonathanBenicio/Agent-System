@@ -83,6 +83,7 @@ function AppRoutes() {
                   onProviderChange={setSelectedProvider}
                   onModelChange={setSelectedModel}
                   onSend={sendMessage}
+                  onClearMessages={clearMessages}
                 />
               </RouteBoundary>
             }
