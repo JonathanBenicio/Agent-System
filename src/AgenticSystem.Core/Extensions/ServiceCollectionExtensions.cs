@@ -83,6 +83,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISessionConsolidator, SessionConsolidator>();
         services.AddSingleton<ISmartRouter, SmartRouter>();
         services.AddSingleton<ISetupFlowManager, SetupFlowManager>();
+        services.AddSingleton<IMemoryInjectionService, MemoryInjectionService>();
 
         // ML20 — Tool Availability Guard + Discovery
         services.AddSingleton<IToolDiscoveryService, ToolDiscoveryService>();
@@ -100,6 +101,9 @@ public static class ServiceCollectionExtensions
 
         // GAP-13 — Agent Cleanup Background Service
         services.AddHostedService<AgentCleanupHostedService>();
+
+        // ML15 — Session Auto-Consolidation Background Service
+        services.AddHostedService<SessionAutoConsolidator>();
 
         // ML22 — Config Management (Credentials, Paths, Settings)
         services.AddSingleton<IConfigStore, InMemoryConfigStore>();

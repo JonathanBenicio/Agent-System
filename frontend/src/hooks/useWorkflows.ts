@@ -55,6 +55,14 @@ export function useWorkflows() {
     }
   }
 
+  const listExecutions = async () => {
+    return await workflowApi.listExecutions()
+  }
+
+  const getExecution = async (id: string) => {
+    return await workflowApi.getExecution(id)
+  }
+
   return {
     workflows,
     loading,
@@ -64,5 +72,7 @@ export function useWorkflows() {
     saveWorkflow,
     deleteWorkflow,
     executeWorkflow,
+    listExecutions,
+    getExecution,
   }
 }

@@ -20,12 +20,14 @@ import {
   FolderOpen,
   ChevronLeft,
   Clock,
-  GitBranch
+  GitBranch,
+  Activity
 } from 'lucide-react';
 import { useWorkflowStore } from '@/store/useWorkflowStore';
 import { useNavigate } from 'react-router-dom';
 import { useWorkflows } from '@/hooks/useWorkflows';
 import { useToast } from '@/components/shared/Toast';
+import { ExecutionHistoryPanel } from './ExecutionHistoryPanel';
 
 // Simple Custom Node Components
 const AgentNode = ({ data }: any) => (
@@ -84,9 +86,12 @@ export function WorkflowBuilderPage() {
   const { workflows, saveWorkflow, deleteWorkflow, getWorkflow, executeWorkflow } = useWorkflows();
   const { addToast } = useToast();
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
 
   const { 
     nodes, 
+
     edges, 
     activeWorkflowId,
     workflowName,
@@ -222,14 +227,24 @@ export function WorkflowBuilderPage() {
             Save Workflow
           </button>
           <button 
+            onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${isHistoryOpen ? 'bg-zinc-800 text-teal-400' : 'bg-transparent text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}`}
+          >
+            <Activity className="w-4 h-4" />
+            History
+          </button>
+          <div className="w-px h-6 bg-zinc-800 mx-1" />
+          <button 
             onClick={async () => {
               if (!activeWorkflowId) {
                 addToast('Salve o workflow antes de executar', 'warning');
                 return;
               }
               try {
-                await executeWorkflow(activeWorkflowId);
+                const execution = await executeWorkflow(activeWorkflowId);
                 addToast('Execução iniciada!', 'success');
+                setIsHistoryOpen(true);
+                setSelectedExecutionId(execution.id);
               } catch {
                 addToast('Erro ao iniciar execução', 'error');
               }
@@ -241,9 +256,9 @@ export function WorkflowBuilderPage() {
         </div>
       </div>
 
-      <div className="flex-1 relative flex">
+      <div className="flex-1 relative flex overflow-hidden">
         {/* Sidebar */}
-        <div className="w-64 bg-zinc-925 border-r border-zinc-800 flex flex-col">
+        <div className="w-64 bg-zinc-925 border-r border-zinc-800 flex flex-col shrink-0">
           <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-zinc-200">Workflows</h3>
             <button 
@@ -328,7 +343,7 @@ export function WorkflowBuilderPage() {
 
         {/* Properties Panel */}
         {selectedNodeId && (
-          <div className="w-80 bg-zinc-925 border-l border-zinc-800 flex flex-col">
+          <div className="w-80 bg-zinc-925 border-l border-zinc-800 flex flex-col shrink-0">
             <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-zinc-200">Node Properties</h3>
               <button onClick={() => setSelectedNodeId(null)} className="text-zinc-500 hover:text-zinc-300">
@@ -412,6 +427,13 @@ export function WorkflowBuilderPage() {
             </div>
           </div>
         )}
+
+        <ExecutionHistoryPanel 
+          workflowId={activeWorkflowId}
+          isOpen={isHistoryOpen}
+          onClose={() => setIsHistoryOpen(false)}
+          onSelectExecution={setSelectedExecutionId}
+        />
       </div>
     </div>
   );
