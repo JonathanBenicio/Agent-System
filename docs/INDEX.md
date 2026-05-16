@@ -39,6 +39,22 @@ Documento canônico de arquitetura atual:
 |-----------|-----------|
 | [architecture/adr/001-retrospective-dotnet10-ddd.md](architecture/adr/001-retrospective-dotnet10-ddd.md) | ADR 001: Retrospectiva sobre .NET 10 e DDD |
 | [architecture/adr/002-smart-triage-fast-path.md](architecture/adr/002-smart-triage-fast-path.md) | ADR 002: Implementação de Smart Triage e Fast Path |
+| [architecture/adr/003-hierarchical-agent-framework.md](architecture/adr/003-hierarchical-agent-framework.md) | ADR 003: Framework de Agentes Hierárquicos |
+| [architecture/adr/004-transactional-outbox.md](architecture/adr/004-transactional-outbox.md) | ADR 004: Padrão Transactional Outbox |
+| [architecture/adr/005-pgvector-graph-rag.md](architecture/adr/005-pgvector-graph-rag.md) | ADR 005: Graph RAG com pgvector |
+| [architecture/adr/006-ollama-self-hosting.md](architecture/adr/006-ollama-self-hosting.md) | ADR 006: Self-Hosting com Ollama |
+| [architecture/adr/007-microsoft-agent-framework.md](architecture/adr/007-microsoft-agent-framework.md) | ADR 007: Microsoft Agent Framework |
+| [architecture/adr/008-quota-monitoring-finops.md](architecture/adr/008-quota-monitoring-finops.md) | ADR 008: Monitoramento de Quotas e FinOps |
+| [architecture/adr/009-dual-auth-security.md](architecture/adr/009-dual-auth-security.md) | ADR 009: Segurança com Autenticação Dupla |
+| [architecture/adr/010-onnx-runtime-in-process.md](architecture/adr/010-onnx-runtime-in-process.md) | ADR 010: ONNX Runtime In-Process |
+| [architecture/adr/011-exponential-backoff-resilience.md](architecture/adr/011-exponential-backoff-resilience.md) | ADR 011: Resiliência com Exponential Backoff |
+| [architecture/adr/012-multi-tenant-agent-memory-schema.md](architecture/adr/012-multi-tenant-agent-memory-schema.md) | ADR 012: Schema de Memória Multi-Tenant |
+| [architecture/adr/013-nginx-websocket-proxy.md](architecture/adr/013-nginx-websocket-proxy.md) | ADR 013: Proxy WebSocket com Nginx |
+| [architecture/adr/014-multi-llm-provider-architecture.md](architecture/adr/014-multi-llm-provider-architecture.md) | ADR 014: Arquitetura Multi-LLM |
+| [architecture/adr/015-model-context-protocol-mcp.md](architecture/adr/015-model-context-protocol-mcp.md) | ADR 015: Model Context Protocol (MCP) |
+| [architecture/adr/016-unified-agent-structure.md](architecture/adr/016-unified-agent-structure.md) | ADR 016: Estrutura Unificada de Agentes |
+| [architecture/adr/017-design-system-teal-palette.md](architecture/adr/017-design-system-teal-palette.md) | ADR 017: Design System com Paleta Teal |
+| [architecture/adr/018-hot-swapping-architecture.md](architecture/adr/018-hot-swapping-architecture.md) | ADR 018: Arquitetura de Hot-Swapping para Provedores de IA e Vector Stores |
 
 ### Glossários
 
