@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 
@@ -29,85 +30,89 @@ public class MemoryInjectionService : IMemoryInjectionService
 
     public async Task<VectorizeInsightsResult> VectorizeInsightsAsync(SessionInsights insights, string userId, string tenantId, string sessionId, CancellationToken ct = default)
     {
-        var documents = new List<VectorDocument>();
+        var documents = new List<EmbeddingDocument>();
         var types = new List<string>();
 
         foreach (var fact in insights.Facts)
         {
-            documents.Add(new VectorDocument
+            documents.Add(new EmbeddingDocument
             {
                 Id = $"memory_{sessionId}_fact_{Guid.NewGuid():N}",
+                TenantId = tenantId,
                 Content = fact,
                 Type = "memory",
                 Collection = "domain",
-                MetadataJson = JsonSerializer.Serialize(new Dictionary<string, object>
+                Metadata = new Dictionary<string, string>
                 {
                     ["memoryType"] = "fact",
                     ["userId"] = userId,
                     ["tenantId"] = tenantId,
                     ["sessionId"] = sessionId,
-                    ["createdAt"] = DateTime.UtcNow,
-                }),
+                    ["createdAt"] = DateTime.UtcNow.ToString("O"),
+                },
             });
             types.Add("fact");
         }
 
         foreach (var decision in insights.Decisions)
         {
-            documents.Add(new VectorDocument
+            documents.Add(new EmbeddingDocument
             {
                 Id = $"memory_{sessionId}_decision_{Guid.NewGuid():N}",
+                TenantId = tenantId,
                 Content = decision,
                 Type = "memory",
                 Collection = "decisions",
-                MetadataJson = JsonSerializer.Serialize(new Dictionary<string, object>
+                Metadata = new Dictionary<string, string>
                 {
                     ["memoryType"] = "decision",
                     ["userId"] = userId,
                     ["tenantId"] = tenantId,
                     ["sessionId"] = sessionId,
-                    ["createdAt"] = DateTime.UtcNow,
-                }),
+                    ["createdAt"] = DateTime.UtcNow.ToString("O"),
+                },
             });
             types.Add("decision");
         }
 
         foreach (var preference in insights.Preferences)
         {
-            documents.Add(new VectorDocument
+            documents.Add(new EmbeddingDocument
             {
                 Id = $"memory_{sessionId}_preference_{Guid.NewGuid():N}",
+                TenantId = tenantId,
                 Content = preference,
                 Type = "memory",
                 Collection = "domain",
-                MetadataJson = JsonSerializer.Serialize(new Dictionary<string, object>
+                Metadata = new Dictionary<string, string>
                 {
                     ["memoryType"] = "preference",
                     ["userId"] = userId,
                     ["tenantId"] = tenantId,
                     ["sessionId"] = sessionId,
-                    ["createdAt"] = DateTime.UtcNow,
-                }),
+                    ["createdAt"] = DateTime.UtcNow.ToString("O"),
+                },
             });
             types.Add("preference");
         }
 
         foreach (var actionItem in insights.ActionItems)
         {
-            documents.Add(new VectorDocument
+            documents.Add(new EmbeddingDocument
             {
                 Id = $"memory_{sessionId}_action_{Guid.NewGuid():N}",
+                TenantId = tenantId,
                 Content = actionItem,
                 Type = "memory",
                 Collection = "domain",
-                MetadataJson = JsonSerializer.Serialize(new Dictionary<string, object>
+                Metadata = new Dictionary<string, string>
                 {
                     ["memoryType"] = "actionItem",
                     ["userId"] = userId,
                     ["tenantId"] = tenantId,
                     ["sessionId"] = sessionId,
-                    ["createdAt"] = DateTime.UtcNow,
-                }),
+                    ["createdAt"] = DateTime.UtcNow.ToString("O"),
+                },
             });
             types.Add("actionItem");
         }
@@ -120,7 +125,7 @@ public class MemoryInjectionService : IMemoryInjectionService
         var upserted = 0;
         foreach (var doc in documents)
         {
-            await _vectorStore.UpsertAsync(doc, ct);
+            await _vectorStore.UpsertAsync(doc);
             upserted++;
         }
 
@@ -133,19 +138,16 @@ public class MemoryInjectionService : IMemoryInjectionService
     {
         try
         {
-            var results = await _vectorStore.SearchWithFiltersAsync(
-                query: userQuery,
-                topK: maxMemories,
-                collection: null,
-                filters: new Dictionary<string, object>
-                {
-                    ["type"] = "memory",
-                    ["userId"] = userId,
-                    ["tenantId"] = tenantId,
-                },
-                ct);
+            var filters = new Dictionary<string, string>
+            {
+                ["type"] = "memory",
+                ["userId"] = userId,
+                ["tenantId"] = tenantId,
+            };
 
-            if (results.Count == 0)
+            var result = await _vectorStore.SearchWithFiltersAsync(userQuery, filters);
+
+            if (result.Matches.Count == 0)
             {
                 return string.Empty;
             }
@@ -155,18 +157,16 @@ public class MemoryInjectionService : IMemoryInjectionService
             var preferences = new List<string>();
             var actionItems = new List<string>();
 
-            foreach (var result in results)
+            foreach (var match in result.Matches.Take(maxMemories))
             {
-                using var doc = JsonDocument.Parse(result.MetadataJson);
-                var root = doc.RootElement;
-                var memoryType = root.TryGetProperty("memoryType", out var mt) ? mt.GetString() : "unknown";
+                var memoryType = match.Metadata.TryGetValue("memoryType", out var mt) ? mt : "unknown";
 
                 switch (memoryType)
                 {
-                    case "fact": facts.Add(result.Content); break;
-                    case "decision": decisions.Add(result.Content); break;
-                    case "preference": preferences.Add(result.Content); break;
-                    case "actionItem": actionItems.Add(result.Content); break;
+                    case "fact": facts.Add(match.Content); break;
+                    case "decision": decisions.Add(match.Content); break;
+                    case "preference": preferences.Add(match.Content); break;
+                    case "actionItem": actionItems.Add(match.Content); break;
                 }
             }
 

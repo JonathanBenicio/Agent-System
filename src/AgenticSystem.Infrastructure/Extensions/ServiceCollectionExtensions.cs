@@ -351,6 +351,13 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection UsePostgresSessionSummaryStore(this IServiceCollection services, string connectionString)
+    {
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<Core.Interfaces.ISessionSummaryStore, PostgresSessionSummaryStore>(services);
+        return services;
+    }
+
     public static IServiceCollection UsePostgresVectorStore(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
@@ -494,6 +501,7 @@ public static class ServiceCollectionExtensions
         var useInMemoryEventBus = configuration.GetValue<bool>("AgenticSystem:EventBus:UseInMemory");
 
         services.UsePostgresSessionStore(connectionString);
+        services.UsePostgresSessionSummaryStore(connectionString);
         services.UsePostgresVectorStore(connectionString);
         services.UsePostgresCostTracker(connectionString);
         services.UsePostgresSmartRouter(connectionString);
