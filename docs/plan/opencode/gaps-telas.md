@@ -10,7 +10,7 @@
 
 ---
 
-## Tarefa 1: RAG — Métricas Reais (Baixa Complexidade)
+## Tarefa 1: RAG — Métricas Reais (Baixa Complexidade) - ✅ CONCLUÍDO
 
 **Problema:** `RAGPage.tsx` usa valores hardcoded para `totalIndexedChunks`, `searchCount24h` e status do ONNX.
 
@@ -32,7 +32,7 @@
 
 ---
 
-## Tarefa 2: Knowledge Rooms — Persistência (Média Complexidade)
+## Tarefa 2: Knowledge Rooms — Persistência (Média Complexidade) - ✅ CONCLUÍDO
 
 **Problema:** `useKnowledgeStore.ts` usa Zustand com `persist` (localStorage). Dados não são compartilhados entre usuários/sessões. Sem API backend.
 
@@ -72,11 +72,11 @@
 
 ---
 
-## Tarefa 3: Workflow Builder — Persistência + Execução (Alta Complexidade)
+## Tarefa 3: Workflow Builder — Persistência + Execução (Alta Complexidade) - ✅ CONCLUÍDO
 
 **Problema:** `WorkflowBuilder.tsx` é puramente visual. Sem listagem de workflows, sem persistência, sem edição de nós, botão "Run" sem ação.
 
-### Fase 3A: Persistência de Workflows (Média)
+### Fase 3A: Persistência de Workflows (Média) - ✅ CONCLUÍDO
 
 1. **Backend** — Criar controller `WorkflowController`:
    - `GET /api/workflows` — lista definições por tenant
@@ -93,7 +93,7 @@
    - Conectar `handleSave` à API `POST /api/workflows`
    - Adicionar `workflowApi` ao `api.ts` e hook `useWorkflows.ts`
 
-### Fase 3B: Edição de Nós (Média)
+### Fase 3B: Edição de Nós (Média) - ✅ CONCLUÍDO
 
 1. **Frontend** — Adicionar painel de propriedades do nó:
    - Ao clicar em um nó, abrir painel lateral com campos editáveis
@@ -106,7 +106,7 @@
    - `Wait` (timer/evento)
    - Mapear para `WorkflowStepType` do backend
 
-### Fase 3C: Execução (Alta)
+### Fase 3C: Execução (Alta) - ✅ CONCLUÍDO
 
 1. **Backend** — Implementar `WorkflowExecutionService`:
    - Parser do `DefinitionJson` → `WorkflowDefinition`
