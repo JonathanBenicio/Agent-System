@@ -42,12 +42,14 @@ public class PostgresAgentVersionStoreTests
             .UseInMemoryDatabase($"agent-version-tests-{Guid.NewGuid():N}")
             .Options;
 
-        var context = new AgenticDbContext(options);
+        var tenantAccessor = Substitute.For<ITenantContextAccessor>();
+        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        var context = new AgenticDbContext(options, tenantAccessor);
         context.Database.EnsureCreated();
 
         var factory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
         factory.CreateDbContextAsync(Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromResult(new AgenticDbContext(options)));
+            .Returns(_ => Task.FromResult(new AgenticDbContext(options, tenantAccessor)));
 
         _dbContextFactory = factory;
         _sut = new PostgresAgentVersionStore(_dbContextFactory, NullLogger<PostgresAgentVersionStore>.Instance);
@@ -186,12 +188,14 @@ public class PostgresPromptTemplateStoreTests
             .UseInMemoryDatabase($"prompt-template-tests-{Guid.NewGuid():N}")
             .Options;
 
-        var context = new AgenticDbContext(options);
+        var tenantAccessor = Substitute.For<ITenantContextAccessor>();
+        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        var context = new AgenticDbContext(options, tenantAccessor);
         context.Database.EnsureCreated();
 
         var factory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
         factory.CreateDbContextAsync(Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromResult(new AgenticDbContext(options)));
+            .Returns(_ => Task.FromResult(new AgenticDbContext(options, tenantAccessor)));
 
         _dbContextFactory = factory;
         _sut = new PostgresPromptTemplateStore(_dbContextFactory, NullLogger<PostgresPromptTemplateStore>.Instance);
@@ -267,12 +271,14 @@ public class PostgresEvalResultStoreTests
             .UseInMemoryDatabase($"eval-result-tests-{Guid.NewGuid():N}")
             .Options;
 
-        var context = new AgenticDbContext(options);
+        var tenantAccessor = Substitute.For<ITenantContextAccessor>();
+        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        var context = new AgenticDbContext(options, tenantAccessor);
         context.Database.EnsureCreated();
 
         var factory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
         factory.CreateDbContextAsync(Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromResult(new AgenticDbContext(options)));
+            .Returns(_ => Task.FromResult(new AgenticDbContext(options, tenantAccessor)));
 
         _dbContextFactory = factory;
         _sut = new PostgresEvalResultStore(_dbContextFactory, NullLogger<PostgresEvalResultStore>.Instance);

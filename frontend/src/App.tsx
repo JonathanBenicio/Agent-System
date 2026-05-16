@@ -32,6 +32,8 @@ const AlertsPage = lazy(() => import('@/components/alerts/AlertsPage'))
 const RAGPage = lazy(() => import('@/components/rag/RAGPage').then(module => ({ default: module.RAGPage })))
 const ScheduledTasksPage = lazy(() => import('@/components/scheduled-tasks/ScheduledTasksPage').then(module => ({ default: module.ScheduledTasksPage })))
 const ConfigAdvancedPage = lazy(() => import('@/components/config/ConfigAdvancedPage').then(module => ({ default: module.ConfigAdvancedPage })))
+const WorkflowBuilder = lazy(() => import('@/components/workflows/WorkflowBuilder').then(module => ({ default: module.default })))
+const WebhooksPage = lazy(() => import('@/components/gateway/WebhooksPage').then(module => ({ default: module.WebhooksPage })))
 const EmbeddingMigrationWizard = lazy(() => import('@/components/embedding-migration/EmbeddingMigrationWizard').then(module => ({ default: module.EmbeddingMigrationWizard })))
 
 function RouteBoundary({ children }: { children: ReactNode }) {
@@ -91,7 +93,9 @@ function AppRoutes() {
           <Route path="/tools" element={<RouteBoundary><ToolsPage /></RouteBoundary>} />
           <Route path="/skills" element={<RouteBoundary><SkillsPage /></RouteBoundary>} />
           <Route path="/rag" element={<RouteBoundary><RAGPage /></RouteBoundary>} />
+          <Route path="/workflows" element={<RouteBoundary><WorkflowBuilder /></RouteBoundary>} />
           <Route path="/gateway" element={<RouteBoundary><ServicesPage /></RouteBoundary>} />
+          <Route path="/webhooks" element={<RouteBoundary><WebhooksPage /></RouteBoundary>} />
           <Route path="/gateway/health" element={<RouteBoundary><HealthPage /></RouteBoundary>} />
           <Route path="/costs" element={<RouteBoundary><CostsPage /></RouteBoundary>} />
           <Route path="/alerts" element={<RouteBoundary><AlertsPage /></RouteBoundary>} />

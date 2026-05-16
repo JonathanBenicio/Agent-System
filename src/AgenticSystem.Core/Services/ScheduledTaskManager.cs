@@ -403,22 +403,28 @@ public class ScheduledTaskManager : IScheduledTaskManager
 
     private static DateTime? CalculateNextRun(string cronExpression)
     {
-        // Simplified CRON parser for v1 — supports basic intervals
-        // Full CRON parsing can be added via NCronTab in future
         if (string.IsNullOrEmpty(cronExpression))
             return null;
 
-        // Simple pattern: "*/5 * * * *" → every 5 minutes
-        if (cronExpression.StartsWith("*/"))
+        try
         {
-            var parts = cronExpression.Split(' ');
-            if (parts.Length > 0 && int.TryParse(parts[0].Replace("*/", ""), out var minutes))
-            {
-                return DateTime.UtcNow.AddMinutes(minutes);
-            }
+            var expression = new Quartz.CronExpression(cronExpression);
+            var next = expression.GetNextValidTimeAfter(DateTimeOffset.UtcNow);
+            return next?.UtcDateTime;
         }
+        catch
+        {
+            // Fallback for simple interval format if needed, or invalid CRON
+            if (cronExpression.StartsWith("interval:", StringComparison.OrdinalIgnoreCase))
+            {
+                var val = cronExpression.Replace("interval:", "").Replace("s", "");
+                if (double.TryParse(val, out var seconds))
+                {
+                    return DateTime.UtcNow.AddSeconds(seconds);
+                }
+            }
 
-        // Default: 1 hour from now
-        return DateTime.UtcNow.AddHours(1);
+            return null;
+        }
     }
 }

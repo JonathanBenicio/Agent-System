@@ -176,6 +176,32 @@ public class InMemoryVectorStore : IVectorStore
         return Task.CompletedTask;
     }
 
+    public Task<VectorStoreStats> GetStatsAsync(string tenantId, CancellationToken ct = default)
+    {
+        long docCount = 0;
+        long totalBytes = 0;
+
+        foreach (var (name, docs) in _collections)
+        {
+            lock (docs)
+            {
+                var tenantDocs = docs.Where(d => d.TenantId == tenantId).ToList();
+                docCount += tenantDocs.Count;
+                totalBytes += tenantDocs.Sum(d => 
+                    d.Content.Length * 2 + 
+                    (d.Embedding?.Length ?? 0) * 4 + 
+                    (d.ContextualSummary?.Length ?? 0) * 2);
+            }
+        }
+
+        return Task.FromResult(new VectorStoreStats
+        {
+            TenantId = tenantId,
+            DocumentCount = docCount,
+            TotalBytes = totalBytes
+        });
+    }
+
     private static double CalculateRelevance(string query, EmbeddingDocument doc, float[]? queryEmbedding)
     {
         // Semantic search via cosine similarity when embeddings are available

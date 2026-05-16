@@ -1,12 +1,22 @@
+using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Reflection;
+using System.Linq.Expressions;
 
 namespace AgenticSystem.Infrastructure.Persistence;
 
 public class AgenticDbContext : DbContext
 {
-    public AgenticDbContext(DbContextOptions<AgenticDbContext> options) : base(options) { }
+    private readonly ITenantContextAccessor _tenantContext;
+
+    public AgenticDbContext(
+        DbContextOptions<AgenticDbContext> options,
+        ITenantContextAccessor tenantContext) : base(options)
+    {
+        _tenantContext = tenantContext;
+    }
 
     public DbSet<SessionRecordEntity> SessionRecords => Set<SessionRecordEntity>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
@@ -46,10 +56,25 @@ public class AgenticDbContext : DbContext
     public DbSet<LlmPricingRuleEntity> LlmPricingRules => Set<LlmPricingRuleEntity>();
     public DbSet<ExternalProviderQuotaEntity> ExternalProviderQuotas => Set<ExternalProviderQuotaEntity>();
     public DbSet<SystemAlertEntity> SystemAlerts => Set<SystemAlertEntity>();
+    public DbSet<InboundWebhookEntity> InboundWebhooks => Set<InboundWebhookEntity>();
+    public DbSet<McpPluginEntity> McpPlugins => Set<McpPluginEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AgenticDbContext).Assembly);
+
+        // Global Query Filters for Multi-tenancy
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (typeof(ITenantEntity).IsAssignableFrom(entityType.ClrType))
+            {
+                var method = typeof(AgenticDbContext)
+                    .GetMethod(nameof(ApplyTenantFilter), BindingFlags.NonPublic | BindingFlags.Instance)
+                    ?.MakeGenericMethod(entityType.ClrType);
+                
+                method?.Invoke(this, new object[] { modelBuilder });
+            }
+        }
 
         if (Database.ProviderName != "Npgsql.EntityFrameworkCore.PostgreSQL")
         {
@@ -65,6 +90,43 @@ public class AgenticDbContext : DbContext
                     p => new { p.Content })
                 .HasIndex(p => p.SearchVector)
                 .HasMethod("GIN");
+        }
+    }
+
+    private void ApplyTenantFilter<T>(ModelBuilder modelBuilder) where T : class, ITenantEntity
+    {
+        modelBuilder.Entity<T>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
+    }
+
+    public string CurrentTenantId => _tenantContext.Current.TenantId;
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        OnBeforeSaving();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        OnBeforeSaving();
+        return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void OnBeforeSaving()
+    {
+        var tenantId = _tenantContext.Current.TenantId;
+
+        foreach (var entry in ChangeTracker.Entries<ITenantEntity>())
+        {
+            switch (entry.State)
+            {
+                case EntityState.Added:
+                    if (string.IsNullOrEmpty(entry.Entity.TenantId) || entry.Entity.TenantId == "default")
+                    {
+                        entry.Entity.TenantId = tenantId;
+                    }
+                    break;
+            }
         }
     }
 }

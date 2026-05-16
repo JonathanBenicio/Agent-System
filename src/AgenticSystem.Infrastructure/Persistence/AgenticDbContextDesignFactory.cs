@@ -19,6 +19,12 @@ public sealed class AgenticDbContextDesignFactory : IDesignTimeDbContextFactory<
             npgsql.UseVector();
         });
 
-        return new AgenticDbContext(optionsBuilder.Options);
+        return new AgenticDbContext(optionsBuilder.Options, new DummyTenantAccessor());
+    }
+
+    private class DummyTenantAccessor : AgenticSystem.Core.Interfaces.ITenantContextAccessor
+    {
+        public AgenticSystem.Core.Models.TenantContext Current => new() { TenantId = "design-time" };
+        public IDisposable BeginScope(AgenticSystem.Core.Models.TenantContext context) => null!;
     }
 }

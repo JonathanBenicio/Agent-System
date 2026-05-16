@@ -49,6 +49,7 @@ public class PostgresPersistenceExtensionsTests
         services.AddSingleton<IUserPreferenceEngine>(Substitute.For<IUserPreferenceEngine>());
         services.AddSingleton<ITriageService>(Substitute.For<ITriageService>());
         services.AddSingleton<IFastPathInterceptor>(Substitute.For<IFastPathInterceptor>());
+        services.AddSingleton<IExternalQuotaSyncService>(Substitute.For<IExternalQuotaSyncService>());
         services.AddSingleton<ISmartRouter, AgenticSystem.Core.Services.SmartRouter>();
 
         services.UsePostgresSmartRouter("Host=localhost;Database=test");
@@ -94,12 +95,13 @@ public class PersistentSmartRouterTests
     {
         _innerRouter = Substitute.For<ISmartRouter>();
         var logger = Substitute.For<ILogger<PersistentSmartRouter>>();
+        var tenantAccessor = Substitute.For<ITenantContextAccessor>();
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
             .UseInMemoryDatabase($"smart-router-tests-{Guid.NewGuid():N}")
             .Options;
         var factory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
         factory.CreateDbContextAsync(Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromResult(new AgenticDbContext(options)));
+            .Returns(_ => Task.FromResult(new AgenticDbContext(options, tenantAccessor)));
 
         _sut = new PersistentSmartRouter(_innerRouter, factory, logger);
     }

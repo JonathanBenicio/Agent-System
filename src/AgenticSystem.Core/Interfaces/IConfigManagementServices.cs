@@ -38,6 +38,7 @@ public interface IConfigStore
     Task DeleteAsync(string key);
     Task<IEnumerable<ConfigChangeLog>> GetChangeLogsAsync(string? key = null, int limit = 50);
     Task SaveChangeLogAsync(ConfigChangeLog log);
+    Task NotifyChangeAsync(string key);
 }
 
 /// <summary>

@@ -20,6 +20,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers.set(key, value)
   }
 
+  // Enforce Tenant ID context from the Knowledge Store for Multi-tenancy isolation
+  try {
+    const store = await import('@/store/useKnowledgeStore');
+    const tenantId = store.useKnowledgeStore.getState().activeWorkspaceId;
+    if (tenantId) {
+      headers.set('X-Tenant-Id', tenantId);
+    }
+  } catch (e) {
+    // Ignore if store is not initialized
+  }
+
   if (!(options?.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')
   }
@@ -308,6 +319,45 @@ export const embeddingMigrationApi = {
   cancelJob: (id: string) => post<{ message: string }>(`/api/admin/embedding-migration/jobs/${encodeURIComponent(id)}/cancel`),
   retryJob: (id: string) => post<{ message: string }>(`/api/admin/embedding-migration/jobs/${encodeURIComponent(id)}/retry`),
   switchCollection: (id: string) => post<{ message: string }>(`/api/admin/embedding-migration/jobs/${encodeURIComponent(id)}/switch`),
+}
+
+// ══════════════════════════════════════
+// Webhook API
+// ══════════════════════════════════════
+
+export interface InboundWebhook {
+  id: string;
+  name: string;
+  secret: string;
+  targetWorkflowId?: string;
+  targetAgentName?: string;
+  isActive: boolean;
+  createdAt: string;
+  lastTriggeredAt?: string;
+}
+
+export const webhookApi = {
+  list: () => get<InboundWebhook[]>('/api/webhooks/admin'),
+  create: (data: Partial<InboundWebhook>) => post<InboundWebhook>('/api/webhooks/admin', data),
+  delete: (id: string) => del(`/api/webhooks/admin/${encodeURIComponent(id)}`),
+}
+
+// ══════════════════════════════════════
+// Config Hot-Swap API
+// ══════════════════════════════════════
+
+export type HotSwapSubsystem = 'vectorstore' | 'llm' | 'embedding' | 'all'
+
+export interface HotSwapResult {
+  subsystem: string
+  status: string
+  message: string
+  timestamp: string
+}
+
+export const configApi = {
+  hotSwap: (subsystem: HotSwapSubsystem) =>
+    post<HotSwapResult>('/api/admin/config/hot-swap', { subsystem }),
 }
 
 export { ApiError }

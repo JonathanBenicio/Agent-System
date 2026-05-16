@@ -32,9 +32,14 @@ public interface IVectorStore
     /// Lista coleções disponíveis
     /// </summary>
     Task<IEnumerable<string>> GetCollectionsAsync();
-    
+
     /// <summary>
     /// Remove documentos antigos (limpeza)
     /// </summary>
     Task CleanupOldDocumentsAsync(TimeSpan olderThan);
+
+    /// <summary>
+    /// Returns usage statistics for a tenant.
+    /// </summary>
+    Task<VectorStoreStats> GetStatsAsync(string tenantId, CancellationToken ct = default);
 }

@@ -54,9 +54,26 @@ public class TenantIsolationService : ITenantIsolationEnforcer
 
         var limits = new TenantResourceLimits();
         
-        // This is a simplified check. In production, we'd query counts per tenant.
-        // IVectorStore would need a GetStatsAsync(tenantId) method.
-        // For now, we'll implement a basic check.
+        var stats = await _vectorStore.GetStatsAsync(tenantId, ct);
+
+        // Define generic limits if none exist on TenantResourceLimits right now
+        long maxDocs = limits.MaxDocuments > 0 ? limits.MaxDocuments : 50000;
+        long maxStorage = limits.MaxStorageMb > 0 ? limits.MaxStorageMb * 1024L * 1024L : 1024L * 1024 * 1024; // 1 GB default
+
+        if (stats.DocumentCount + newDocumentSizeCount > maxDocs)
+        {
+            _logger.LogWarning("🚫 Tenant {TenantId} reached document limit ({Current} + {New} > {Limit})", 
+                tenantId, stats.DocumentCount, newDocumentSizeCount, maxDocs);
+            return false;
+        }
+
+        if (stats.TotalBytes + newBytesCount > maxStorage)
+        {
+             _logger.LogWarning("🚫 Tenant {TenantId} reached storage limit ({Current} + {New} > {Limit})", 
+                tenantId, stats.TotalBytes, newBytesCount, maxStorage);
+            return false;
+        }
+
         return true;
     }
 
@@ -65,10 +82,14 @@ public class TenantIsolationService : ITenantIsolationEnforcer
         var sessions = await _sessionStore.GetByTenantAsync(tenantId, ct: ct);
         var activeCount = sessions.Count(s => !s.EndedAt.HasValue);
         
+        var stats = await _vectorStore.GetStatsAsync(tenantId, ct);
+
         return new TenantUsageSummary
         {
             TenantId = tenantId,
             ActiveSessions = activeCount,
+            TotalDocuments = (int)stats.DocumentCount,
+            StorageUsageBytes = stats.TotalBytes,
             Limits = new TenantResourceLimits()
         };
     }
