@@ -26,7 +26,7 @@ O objetivo deste *roadmap* é evoluir o Agentic System para uma plataforma modul
 *   **Agents:** `dotnet-expert`, `backend-specialist`, `database-architect`
 *   **Status:** ✅ CONCLUÍDO — Build: 0 erros, 607/608 testes passando.
 
-### Phase 1: Local Setup & Out-of-the-Box RAG
+### Phase 1: Local Setup & Out-of-the-Box RAG (Issue #19)
 *   **Tasks:**
     - [x] Implementar `SqliteVectorStore` (ou `DuckDbVectorStore`) para execução local.
     - [x] Construir a interface "Knowledge Rooms" em React com ingestão de RAG via *drag-and-drop*.
