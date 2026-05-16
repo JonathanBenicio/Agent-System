@@ -8,19 +8,8 @@ namespace AgenticSystem.Core.Interfaces;
 /// </summary>
 public interface ISessionConsolidator
 {
-    /// <summary>
-    /// Gera resumo de uma sessão usando LLM
-    /// </summary>
-    Task<SessionSummary> SummarizeSessionAsync(string sessionId, List<AgentEvent> events);
-
-    /// <summary>
-    /// Extrai fatos/decisões/preferências de uma sessão
-    /// </summary>
-    Task<SessionInsights> ExtractInsightsAsync(string sessionId, List<AgentEvent> events);
-
-    /// <summary>
-    /// Busca resumos anteriores relevantes ao contexto atual
-    /// </summary>
+    Task<SessionSummary> SummarizeSessionAsync(string sessionId, List<AgentEvent> events, string? userId = null, string? tenantId = null);
+    Task<SessionInsights> ExtractInsightsAsync(string sessionId, List<AgentEvent> events, string? userId = null, string? tenantId = null);
     Task<IEnumerable<SessionSummary>> GetRelevantSummariesAsync(string query, int maxResults = 5);
 }
 

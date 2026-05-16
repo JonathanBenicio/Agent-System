@@ -553,3 +553,30 @@ public class McpPluginEntity : ITenantEntity
     public bool AutoStart { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class SessionSummaryEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string Summary { get; set; } = string.Empty;
+    public string TopicsJson { get; set; } = "[]";
+    public string AgentsJson { get; set; } = "[]";
+    public int EventCount { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public TimeSpan? SessionDuration { get; set; }
+}
+
+public class SessionInsightEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string FactsJson { get; set; } = "[]";
+    public string DecisionsJson { get; set; } = "[]";
+    public string PreferencesJson { get; set; } = "[]";
+    public string ActionItemsJson { get; set; } = "[]";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
