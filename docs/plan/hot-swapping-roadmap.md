@@ -48,7 +48,7 @@ O objetivo deste *roadmap* é evoluir o Agentic System para uma plataforma modul
     - [x] Criar uma interface de importação de *templates* ligando ao já existente `AgentYamlValidator`.
 *   **Agents:** `dotnet-self-learning-architect`, `dotnet-expert`
 
-### Phase 4: Enterprise Scale & Performance
+### Phase 4: Enterprise Scale & Performance (Issue #22)
 *   **Tasks:**
     - [x] Implementar `PineconeVectorStore` (REST API, filtros `$eq`, namespaces, stats) + registro em `VectorStoreFactory`.
     - [x] Desenvolver a Pesquisa Híbrida: `HybridSearchAsync` com Reciprocal Rank Fusion (RRF k=60) combinando pgvector cosine + `ts_rank` FTS — fallback ILIKE.
