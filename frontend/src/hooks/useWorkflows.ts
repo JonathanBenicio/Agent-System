@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { workflowApi } from '@/lib/api'
-import type { WorkflowDefinitionSummary, WorkflowDefinition } from '@/types/api'
+import type { WorkflowDefinitionSummary, WorkflowDefinition, WorkflowExecution } from '@/types/api'
 
 export function useWorkflows() {
   const [workflows, setWorkflows] = useState<WorkflowDefinitionSummary[]>([])
@@ -75,4 +76,17 @@ export function useWorkflows() {
     listExecutions,
     getExecution,
   }
+}
+
+export function useWorkflowExecution(executionId: string | null) {
+  return useQuery({
+    queryKey: ['workflow-execution', executionId],
+    queryFn: () => executionId ? workflowApi.getExecution(executionId) : Promise.resolve(null),
+    enabled: !!executionId,
+    refetchInterval: (query) => {
+      // Poll every 2 seconds if running
+      const data = query.state.data as WorkflowExecution | null
+      return data?.status === 0 ? 2000 : false
+    }
+  })
 }
