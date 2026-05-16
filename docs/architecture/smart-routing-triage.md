@@ -38,6 +38,39 @@ O sistema processa a entrada do usuário através de três filtros sequenciais:
     - `RequiresTools`: Booleano
     - `RecommendedAgentTier`: Sugestão de especialista.
 
+## 🏋️ Treinamento do Modelo ML (FastPathTrainer)
+
+O projeto `src/AgenticSystem.FastPathTrainer` é uma aplicação console dedicada a treinar o modelo de classificação multiclasse do ML.NET e exportá-lo para os formatos necessários.
+
+*   **Localização**: `src/AgenticSystem.FastPathTrainer`
+*   **O que faz**: Carrega uma lista de exemplos rotulados (Saudações, Status do Sistema, Ajuda, etc.), treina o modelo e gera os arquivos `fastpath_model.zip` e `fastpath_model.onnx`.
+*   **Como Executar**:
+    ```bash
+    dotnet run --project src/AgenticSystem.FastPathTrainer/AgenticSystem.FastPathTrainer.csproj
+    ```
+*   **Categorias Suportadas**: `Greeting`, `SmallTalk_HowAreYou`, `SmallTalk_Thanks`, `Agent_Capabilities`, `System_Status`, `Goodbye`, `Feedback_Positive`, `Feedback_Negative`, `User_Help`.
+
+---
+
+## 🔄 Detalhamento do Fluxo de Triagem (Legível por Humanos)
+
+Para entender o fluxo sem depender do diagrama visual, imagine o seguinte processamento passo a passo:
+
+### Exemplo 1: Usuário diz "Olá"
+1.  **Camada 0 (Regex)**: O interceptor verifica se a string bate com padrões como `^ol[áa]$`.
+2.  **Resultado**: Bateu! O sistema responde "Olá! Como posso ajudar?" instantaneamente. **Fim do fluxo.**
+
+### Exemplo 2: Usuário diz "Como está a saúde da aplicação?"
+1.  **Camada 0 (Regex)**: Não há regex exata para essa frase variada.
+2.  **Camada 0.5 (ML.NET)**: O modelo analisa a frase e a classifica como `System_Status` com 92% de confiança.
+3.  **Resultado**: Como 92% > 80% (threshold), o sistema executa a ação de status. **Fim do fluxo.**
+
+### Exemplo 3: Usuário diz "Crie um plano de migração para o banco X"
+1.  **Camada 0 (Regex)**: Não bate.
+2.  **Camada 0.5 (ML.NET)**: O modelo não encontra um padrão conhecido com alta confiança (< 80%).
+3.  **Camada 1 (LLM Triage)**: A requisição é enviada para um LLM menor. Ele retorna um JSON dizendo que a intenção é complexa e requer o `Orchestrator`.
+4.  **Resultado**: A tarefa é enviada para o Orquestrador Completo.
+
 ---
 
 ## 🎯 Fluxo de Decisão (Decision Tree)
