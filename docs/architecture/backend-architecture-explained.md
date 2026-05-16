@@ -172,37 +172,44 @@ builder.Services.AddKeyedSingleton<AIAgent>("AgenticSystem", (sp, key) =>
 ```
 
 > **Nota de Infraestrutura**: Containers Linux que utilizam clientes Npgsql requerem a biblioteca `libgssapi-krb5-2` instalada no `Dockerfile` para evitar erros de biblioteca compartilhada em tempo de execução.
-> **Nota de Compatibilidade**: A versão atual do `ModelContextProtocol.AspNetCore` apresenta `TypeLoadException` com `Microsoft.Extensions.AI` 10.6.0. O MCP está temporariamente desabilitado aguardando alinhamento de versões.
+> **Nota de Compatibilidade**: O MCP server via `ModelContextProtocol.AspNetCore` está comentado no `Program.cs` (`app.MapMcp("/mcp").RequireAuthorization()`) aguardando alinhamento de versões com `Microsoft.Extensions.AI` 10.6.0.
 
-### 5.1 Registro no Program.cs
-A inicialização do sistema resolve os microsserviços do Core e Infrastructure de forma estruturada:
+### 5.2 Registro no Program.cs
+
+A inicialização do sistema resolve os microsserviços do Core e Infrastructure de forma estruturada. Os protocolos A2A e AG-UI são registrados **sob feature flags** (`ProtocolHosting:A2A:Enabled` e `ProtocolHosting:AgUI:Enabled`):
 
 ```csharp
 var builder = WebApplication.CreateBuilder(args);
 
 // 1. Registro de Dependências Básicas de Negócio e Banco
 builder.Services.AddAgenticSystemCore();
-builder.Services.AddAgenticSystemInfrastructure();
+builder.Services.AddAgenticSystemInfrastructure(builder.Configuration);
 
-// 2. Registro do Microsoft Agent Framework (Hosting Nativo)
-builder.Services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
+// 2. Protocol Hosting — sob feature flags
+var protocolHosting = builder.Configuration.GetSection("ProtocolHosting");
+var a2aEnabled = protocolHosting.GetValue<bool>("A2A:Enabled");
+var agUiEnabled = protocolHosting.GetValue<bool>("AgUI:Enabled");
 
-builder.Services.AddAIAgent(
-    OrchestratorMetadata.Default.Name,
-    static (sp, _) => sp.GetRequiredService<OrchestratorContext>().OrchestratorAgent,
-    ServiceLifetime.Scoped)
-    .WithSessionStore(
-        static (sp, _) => sp.GetRequiredService<SimpleSessionStoreAdapter>(),
-        ServiceLifetime.Singleton);
+if (a2aEnabled || agUiEnabled)
+{
+    builder.Services.AddKeyedSingleton<AIAgent>("AgenticSystem", /* ScopedAgentProxy */);
+    if (a2aEnabled) builder.Services.AddA2AServer("AgenticSystem");
+    if (agUiEnabled) builder.Services.AddAGUI();
+}
 
-// 3. Registro de Protocolos e Portas de Entrada
+// 3. Autenticação, SignalR, Rate Limiting, CORS
 builder.Services.AddAuthentication("MultiAuth").AddPolicyScheme(...);
 builder.Services.AddSignalR();
-builder.Services.AddA2AServer("AgenticSystem");
-builder.Services.AddAGUI();
 ```
 
-### 5.2 IChatClient Pipeline (Microsoft.Extensions.AI)
+No pipeline de execução (`app`):
+```csharp
+// Protocol endpoints — mapeados condicionalmente
+if (a2aEnabled) app.MapA2AHttpJson("AgenticSystem", "/a2a").RequireAuthorization();
+if (agUiEnabled) app.MapAGUI("AgenticSystem", "/agui").RequireAuthorization();
+```
+
+### 5.3 IChatClient Pipeline (Microsoft.Extensions.AI)
 Para garantir governança, custos previsíveis e flexibilidade de provedores, o `IChatClient` é registrado como um pipeline decorator de múltiplas camadas:
 
 ```
