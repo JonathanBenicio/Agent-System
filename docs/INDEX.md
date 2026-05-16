@@ -97,9 +97,12 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 |-----------|-----------|
 | [planejamento/AI_Capabilities_Gaps.md](planejamento/AI_Capabilities_Gaps.md) | Diagnóstico vivo de gaps e oportunidades arquiteturais |
 | [planejamento/AI_Advanced_Capabilities_Roadmap.md](planejamento/AI_Advanced_Capabilities_Roadmap.md) | Roadmap futuro para capacidades avançadas |
-| [planejamento/framework-first-migration-plan.md](planejamento/framework-first-migration-plan.md) | Documento transitório: backlog residual da migração framework-first + histórico do cutover |
-| [planejamento/MAF_NATIVE_REFACTORING.md](planejamento/MAF_NATIVE_REFACTORING.md) | Documento transitório: trilha de redução de código MAF nativo e rollout residual |
-| [planejamento/REFACTORING_PROGRESS.md](planejamento/REFACTORING_PROGRESS.md) | Painel transitório de progresso; fases concluídas funcionam como trilha histórica |
+| [planejamento/framework-first-migration-plan.md](planejamento/framework-first-migration-plan.md) | Resumo histórico da migração framework-first (concluída) |
+| [planejamento/MAF_NATIVE_REFACTORING.md](planejamento/MAF_NATIVE_REFACTORING.md) | Trilha de redução de código MAF nativo (concluída) |
+| [planejamento/master-fullstack-roadmap.md](planejamento/master-fullstack-roadmap.md) | Roadmap fullstack consolidado |
+| [planejamento/p2-gateway-observability-finops.md](planejamento/p2-gateway-observability-finops.md) | Gateway observability e FinOps |
+| [planejamento/p4-selfhost-ollama-stabilization.md](planejamento/p4-selfhost-ollama-stabilization.md) | Stabilização do Ollama self-hosted |
+| [planejamento/agent-yaml-orchestration.md](planejamento/agent-yaml-orchestration.md) | Orquestração via agent.yaml |
 | [planejamento/overengineering-assessment.md](planejamento/overengineering-assessment.md) | Assessment de simplificação e hotspots de complexidade |
 
 ---

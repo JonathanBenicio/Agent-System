@@ -185,152 +185,63 @@ data/obsidian-vault/                # Obsidian notes
 
 ### 1. Configurar appsettings.json
 
+A estrutura real de configuração usa `AgenticSystem` como seção raiz:
+
 ```json
 {
-  "LLMProviders": {
-    "DefaultProvider": "OpenAI",
-    "FallbackEnabled": true,
-    "Providers": {
-      "OpenAI": {
-        "ApiKey": "sk-proj-...",
-        "DefaultModel": "gpt-4o",
-        "IsEnabled": true,
-        "Priority": 1,
-        "DefaultParameters": {
-          "Temperature": 0.7,
-          "MaxTokens": 2000
-        }
-      },
-      "Protocols": {
-        "EnableMcp": true,
-        "EnableA2A": true,
-        "EnableAgUi": true,
-        "EnableOpenAICompatible": true
-      },
-
-      "Memory": {
-        "ObsidianVaultPath": "./data/obsidian-vault",
-        "VectorStoreType": "PostgreSQL",
-        "ConnectionString": "Host=localhost;Port=5432;Database=agentic_memory;Username=postgres;Password=postgres"
-        "agent-routing": { "Temperature": 0.0 }
-      }
-    },
-    "CreativeAgent": {
-      "PreferredModel": "gpt-4o",
-      "DefaultParameters": {
-        "Temperature": 0.9,
-        "MaxTokens": 3000,
-        "PresencePenalty": 0.3
-      },
-      "TaskParameters": {
-        "brainstorming": { "Temperature": 1.1 },
-        "writing": { "Temperature": 0.8 }
-      }
-    }
-  },
-
-  "EmbeddingProviders": {
-    "DefaultProvider": "OpenAI",
-    "Providers": {
-      "OpenAI": {
-        "ApiKey": "sk-proj-...",
-        "Model": "text-embedding-3-small",
-        "Dimensions": 1536,
-        "IsEnabled": true,
-        "Priority": 1
-      },
-      "Google": {
-        "ApiKey": "AIza...",
-        "Model": "text-embedding-004",
-        "Dimensions": 768,
-        "IsEnabled": true,
-        "Priority": 2
-      },
-      "Ollama": {
-        "BaseUrl": "http://localhost:11434",
-        "Model": "nomic-embed-text",
-        "Dimensions": 768,
-        "IsEnabled": true,
-        "Priority": 3
-      }
-    }
-  },
-
-  "VisionProviders": {
-    "DefaultProvider": "OpenAI",
-    "Providers": {
-      "OpenAI": { "Model": "gpt-4o", "IsEnabled": true, "Priority": 1 },
-      "GoogleVision": { "ApiKey": "AIza...", "IsEnabled": false, "Priority": 2 },
-      "AzureVision": { "Endpoint": "https://...", "ApiKey": "...", "IsEnabled": false, "Priority": 3 },
-      "Ollama": { "BaseUrl": "http://localhost:11434", "Model": "llava", "IsEnabled": true, "Priority": 4 }
-    }
-  },
-
-  "Protocols": {
-    "EnableMcp": true,
-    "EnableA2A": true,
-    "EnableAgUi": true,
-    "EnableOpenAICompatible": true
-  },
-
-  "ObsidianSync": {
-    "VaultPath": "./data/obsidian-vault",
-    "AutoSync": true,
-    "IndexOnStartup": true
-  },
-
-  "ConnectionStrings": {
-    "SessionStore": "Host=localhost;Database=agentic;Username=postgres;Password=..."  // Se omitido → InMemorySessionStore (dev/test)
-  },
-
-  "PostgreSQL": {
-    "ConnectionString": "Host=localhost;Database=agentic;Username=postgres;Password=...",
-    "VectorDimensions": 1536,
-    "CollectionPrefix": "agentic"
-  },
-
-  "ServiceGateway": {
-    "DefaultCircuitBreaker": {
-      "FailureThreshold": 5,
-      "SamplingDuration": "00:01:00",
-      "BreakDuration": "00:00:30",
-      "MinimumThroughput": 10
-    },
-    "DefaultRateLimits": {
-      "RequestsPerMinute": 60,
-      "RequestsPerHour": 1000,
-      "TokensPerDay": 100000
-    },
-    "CostTracking": {
+  "AgenticSystem": {
+    "Ollama": {
+      "BaseUrl": "http://localhost:11434",
+      "DefaultModel": "phi3",
+      "EmbeddingModel": "nomic-embed-text",
       "Enabled": true,
-      "DefaultDailyBudget": 10.00,
-      "AlertThresholdPercent": 80,
-      "PersistToDatabase": true
+      "Priority": 1
     },
-    "HealthChecks": {
-      "IntervalSeconds": 30,
-      "TimeoutSeconds": 5,
-      "UnhealthyThreshold": 3,
-      "AutoFailover": true
+    "OpenAI": {
+      "ApiKey": "sk-proj-...",
+      "BaseUrl": "https://api.openai.com/",
+      "DefaultModel": "gpt-4o-mini",
+      "Enabled": false,
+      "Priority": 10
     },
-    "Dashboard": {
-      "MetricsRetentionDays": 30,
-      "SnapshotIntervalSeconds": 10,
-      "SignalREnabled": true
+    "Gemini": {
+      "ApiKey": "AIza...",
+      "Enabled": false,
+      "Priority": 5
     },
-    "ServiceOverrides": {
-      "OpenAI": {
-        "RateLimits": { "RequestsPerMinute": 100, "TokensPerDay": 500000 },
-        "DailyBudget": 5.00
-      },
-      "Ollama": {
-        "CircuitBreaker": { "FailureThreshold": 10, "BreakDuration": "00:00:15" },
-        "RateLimits": { "RequestsPerMinute": 0 }
-      }
+    "Claude": {
+      "ApiKey": "sk-ant-...",
+      "Enabled": false,
+      "Priority": 3
+    },
+    "Gateway": {
+      "DefaultDailyBudget": 50.00,
+      "DefaultFailureThreshold": 5
+    },
+    "Memory": {
+      "ObsidianVaultPath": "",
+      "VectorStoreType": "InMemory"
+    },
+    "RAG": {
+      "ReRanking": { "Enabled": true, "UseDedicatedProvider": true }
+    },
+    "CollaborationWorkflow": {
+      "EnableAdvancedWorkflow": false,
+      "EnableConcurrentContextStage": true
     }
+  },
+  "ConnectionStrings": {
+    "SessionStore": "Host=localhost;Port=5432;Database=agentic;Username=postgres;Password=..."
+  },
+  "ProtocolHosting": {
+    "A2A": { "Enabled": true },
+    "AgUI": { "Enabled": true },
+    "OpenAICompatible": { "Enabled": true }
   }
 }
 ```
+
+> Veja `src/AgenticSystem.Api/appsettings.example.json` para o exemplo completo.
 
 ### 2. Variáveis de Ambiente (alternativa)
 
@@ -418,7 +329,7 @@ POST /api/admin/mcp/plugins                    # Registrar plugin
 
 - [**Agentic Design Manifesto**](docs/agentic-design-manifesto.md) — Os 10 princípios que guiam o design do sistema
 - [Extension Examples](docs/extension-examples.md) — Guia para criar novos Agents, Tools, Skills e Maturity Levels
-- [Design Philosophy](docs/architecture/design-philosophy.md) — Pilares arquiteturais do sistema (8 pilares + ML1-15)
+- [Design Philosophy](docs/architecture/concepts.md) — Pilares arquiteturais do sistema (8 pilares + ML1-15)
 - [Obsidian Vault](docs/obsidian-vault.md) — Memória episódica: interface, implementação, configuração e limitações
 
 ## 📄 Document Ingestion + RAG Pipeline
