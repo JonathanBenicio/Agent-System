@@ -1913,7 +1913,10 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 | Real-time (SignalR) | 3 | US-23 a US-25 | 2 | ✅ |
 | Transversal | 5 | US-26 a US-30 | 5 | ✅ |
 | Chat Dedicado | 3 | US-31 a US-33 | 2 | ✅ |
-| **Total** | **34** | | **28 componentes** | **✅** |
+| Workflow Orchestration | 2 | US-34, US-35 | 1 | ⏳ |
+| Webhooks Integration | 2 | US-36, US-37 | 1 | ⏳ |
+| Alerts History | 2 | US-38, US-39 | 1 | ⏳ |
+| **Total** | **40** | | **31 componentes** | **⏳** |
 
 ---
 
@@ -2010,3 +2013,88 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 | Frontend | `useChat` instanciado separadamente por page (App.tsx vs AgentChatPage) |
 | Frontend | Estado de mensagens isolado por instância do hook |
 | Backend | Compatibilidade mantida — sem targetAgent = comportamento original |
+
+---
+
+## US-34 — Visualizar e manipular Canvas de Workflows
+
+**Como** administrador  
+**Quero** visualizar e manipular um canvas interativo de workflows  
+**Para** orquestrar visualmente tarefas entre agentes e ferramentas
+
+### Critérios de Aceite
+
+- [ ] Canvas interativo com suporte a drag and drop de nós e conexões
+- [ ] Tipos de nós suportados: Agent Node e Tool Node
+- [ ] Toolbar com ações de adicionar nós, salvar e executar
+- [ ] Painel de status do motor exibindo nós ativos e conexões
+
+---
+
+## US-35 — Salvar e Executar Workflow
+
+**Como** administrador  
+**Quero** salvar a definição do workflow e executá-lo  
+**Para** automatizar processos complexos no sistema
+
+### Critérios de Aceite
+
+- [ ] Botão "Save Workflow" gera a definição do workflow (JSON) e envia para a API
+- [ ] Botão "Run" dispara a execução do workflow no backend
+- [ ] Feedback visual de salvamento e execução
+
+---
+
+## US-36 — Gerenciar Webhooks (CRUD)
+
+**Como** administrador  
+**Quero** listar, criar e excluir webhooks  
+**Para** permitir que sistemas externos disparem ações no AgenticSystem
+
+### Critérios de Aceite
+
+- [ ] Lista de webhooks com nome, status (Ativo/Inativo), data de criação e último disparo
+- [ ] Formulário para criar webhook com nome, agente alvo (opcional) e workflow alvo (opcional)
+- [ ] Ação de excluir webhook com confirmação
+- [ ] Copiar URL do webhook para a área de transferência
+
+---
+
+## US-37 — Receber Webhook e disparar ação
+
+**Como** sistema externo  
+**Quero** enviar um payload para a URL do webhook  
+**Para** disparar um agente ou workflow automaticamente
+
+### Critérios de Aceite
+
+- [ ] Endpoint `/api/webhooks/receive/{id}` recebe requisições POST
+- [ ] Execução é encaminhada para o agente ou workflow configurado
+- [ ] Retorno de sucesso ou erro apropriado para o chamador
+
+---
+
+## US-38 — Visualizar Histórico de Alertas
+
+**Como** administrador  
+**Quero** visualizar o histórico de alertas de cota e saldo  
+**Para** monitorar o consumo e saúde financeira do sistema
+
+### Critérios de Aceite
+
+- [ ] Lista de alertas exibindo provider, tipo, mensagem, percentual restante e data
+- [ ] Alertas não lidos destacados visualmente
+- [ ] Botão para atualizar a lista de alertas
+
+---
+
+## US-39 — Marcar Alerta como Lido
+
+**Como** administrador  
+**Quero** marcar um alerta como lido  
+**Para** organizar meu histórico e focar nos alertas pendentes
+
+### Critérios de Aceite
+
+- [ ] Botão de check para marcar alerta como lido
+- [ ] Atualização do estado do alerta na interface sem recarregar a página
