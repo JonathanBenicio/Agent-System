@@ -124,6 +124,7 @@ import type {
   YamlValidationResult,
   WorkflowDefinitionSummary,
   WorkflowDefinition,
+  WorkflowExecution,
 } from '@/types/api'
 
 export const agentApi = {
