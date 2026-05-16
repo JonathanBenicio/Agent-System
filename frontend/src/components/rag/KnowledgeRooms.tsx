@@ -81,11 +81,8 @@ export function KnowledgeRooms() {
     try {
       const result = await ragApi.ingestBatch(files, activeRoomId);
       if (activeRoom) {
-        updateRoom({ 
-          id: activeRoom.id, 
-          data: {
-            documentCount: activeRoom.documentCount + result.succeeded,
-          }
+        updateRoom(activeRoom.id, {
+          documentCount: activeRoom.documentCount + result.succeeded,
         });
       }
     } catch (error) {

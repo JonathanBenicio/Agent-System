@@ -641,6 +641,32 @@ export interface WorkflowStep {
   errorStrategy: number;
 }
 
+export interface WorkflowStepExecution {
+  stepId: string;
+  stepName: string;
+  status: number;
+  output: Record<string, unknown>;
+  errorMessage?: string;
+  retryCount: number;
+  compensationExecuted: boolean;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface WorkflowExecution {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  status: number;
+  stepExecutions: WorkflowStepExecution[];
+  variables: Record<string, unknown>;
+  initiatedBy?: string;
+  errorMessage?: string;
+  startedAt: string;
+  completedAt?: string;
+  duration?: string;
+}
+
 // ══════════════════════════════════════
 // RAG & Embedding Migration Models
 // ══════════════════════════════════════
