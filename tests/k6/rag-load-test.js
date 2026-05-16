@@ -18,7 +18,32 @@ export const options = {
 const BASE_URL = __ENV.API_BASE_URL || 'http://localhost:5000'
 const errorRate = new Rate('api_errors')
 
-export default function () {
+export function setup() {
+  const url = `${BASE_URL}/api/test/rag/seed`
+  const payload = JSON.stringify({ count: 1000, tenantId: 'tenant-stress-01' })
+  const params = {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  }
+
+  console.log('🌱 Iniciando Seed de dados automatizado...')
+  const res = http.post(url, payload, params)
+
+  const success = check(res, {
+    'seed concluído com sucesso': (r) => r.status === 200,
+  })
+
+  if (!success) {
+    console.log('❌ Falha no seed de dados!')
+  } else {
+    console.log('✅ Seed concluído. Iniciando teste de carga...')
+  }
+
+  return { seeded: success }
+}
+
+export default function (data) {
   group('RAG Search API', () => {
     const payload = JSON.stringify({
       query: 'sistema agentic',
