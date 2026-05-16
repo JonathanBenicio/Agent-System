@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { 
   ReactFlow, 
   Background, 
@@ -22,12 +22,12 @@ import {
   Clock,
   GitBranch
 } from 'lucide-react';
-import { useWorkflowStore, WorkflowStepType } from '@/store/useWorkflowStore';
+import { useWorkflowStore } from '@/store/useWorkflowStore';
 import { useNavigate } from 'react-router-dom';
 import { useWorkflows } from '@/hooks/useWorkflows';
 import { useToast } from '@/components/shared/Toast';
 
-// Simple Custom Node Components (Internal for now)
+// Simple Custom Node Components
 const AgentNode = ({ data }: any) => (
   <div className="px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 border-teal-500/50 min-w-[150px]">
     <div className="flex items-center gap-2 mb-1">
@@ -83,34 +83,31 @@ export function WorkflowBuilderPage() {
   const navigate = useNavigate();
   const { workflows, saveWorkflow, deleteWorkflow, getWorkflow, executeWorkflow } = useWorkflows();
   const { addToast } = useToast();
-  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const { 
     nodes, 
     edges, 
+    activeWorkflowId,
+    workflowName,
     onNodesChange, 
     onEdgesChange, 
     onConnect, 
     addNode,
     setNodes,
     setEdges,
-    toWorkflowDefinition 
+    setWorkflowName,
+    setActiveWorkflowId,
+    toWorkflowDefinition,
+    fromWorkflowDefinition,
+    clear
   } = useWorkflowStore();
   
   const { screenToFlowPosition } = useReactFlow();
 
   const handleSave = async () => {
     try {
-      const definition = toWorkflowDefinition("Visual Workflow " + new Date().toLocaleDateString());
-      if (activeWorkflowId) {
-        definition.id = activeWorkflowId;
-        const w = workflows.find(x => x.id === activeWorkflowId);
-        if (w) {
-          definition.name = w.name;
-          definition.version = w.version;
-        }
-      }
+      const definition = toWorkflowDefinition();
       const saved = await saveWorkflow(definition);
       setActiveWorkflowId(saved.id);
       addToast('Workflow salvo com sucesso', 'success');
@@ -125,44 +122,13 @@ export function WorkflowBuilderPage() {
       x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
       y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
     });
-    addNode({ id, type: 'agent', position, data: { label: 'New Agent Task', agentName: 'orchestrator', stepType: WorkflowStepType.Action } });
+    addNode({ id, type: 'agent', position, data: { label: 'New Agent Task', agentName: 'orchestrator', stepType: 0 } });
   };
 
   const loadWorkflow = async (id: string) => {
     try {
       const def = await getWorkflow(id);
-      setActiveWorkflowId(def.id);
-      
-      const newNodes: Node[] = def.steps.map(s => ({
-        id: s.id,
-        type: s.agentName ? 'agent' : s.toolName ? 'tool' : 'agent',
-        position: { x: Math.random() * 400 + 100, y: Math.random() * 400 + 100 },
-        data: {
-          label: s.name,
-          agentName: s.agentName,
-          toolName: s.toolName,
-          description: s.actionDescription,
-          input: s.input,
-          condition: s.conditionExpression,
-          stepType: s.stepType
-        }
-      }));
-
-      const newEdges: Edge[] = [];
-      def.steps.forEach(s => {
-        if (s.dependsOn) {
-          s.dependsOn.forEach(dep => {
-            newEdges.push({
-              id: `e-${dep}-${s.id}`,
-              source: dep,
-              target: s.id
-            });
-          });
-        }
-      });
-
-      setNodes(newNodes);
-      setEdges(newEdges);
+      fromWorkflowDefinition(def);
       addToast('Workflow carregado', 'success');
     } catch {
       addToast('Erro ao carregar workflow', 'error');
@@ -175,7 +141,7 @@ export function WorkflowBuilderPage() {
       x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
       y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
     });
-    addNode({ id, type: 'tool', position, data: { label: 'New Tool Task', toolName: 'http_tool', stepType: WorkflowStepType.Action } });
+    addNode({ id, type: 'tool', position, data: { label: 'New Tool Task', toolName: 'http_tool', stepType: 0 } });
   };
 
   const onAddDecision = () => {
@@ -184,7 +150,7 @@ export function WorkflowBuilderPage() {
       x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
       y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
     });
-    addNode({ id, type: 'decision', position, data: { label: 'New Decision', condition: '{{previous.result}} == true', stepType: WorkflowStepType.Decision } });
+    addNode({ id, type: 'decision', position, data: { label: 'New Decision', condition: '{{previous.result}} == true', stepType: 1 } });
   };
 
   const onAddWait = () => {
@@ -193,22 +159,27 @@ export function WorkflowBuilderPage() {
       x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
       y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
     });
-    addNode({ id, type: 'wait', position, data: { label: 'Wait Event', timeout: '00:05:00', stepType: WorkflowStepType.Wait } });
+    addNode({ id, type: 'wait', position, data: { label: 'Wait Event', timeout: '00:05:00', stepType: 3 } });
   };
 
   return (
     <div className="h-full w-full bg-zinc-950 flex flex-col">
       {/* Toolbar */}
       <div className="h-16 border-b border-zinc-800 bg-zinc-900/50 flex items-center justify-between px-6 shrink-0">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-1">
           <button 
             onClick={() => navigate(-1)}
             className="p-2 hover:bg-zinc-800 rounded-lg text-zinc-400 transition-all"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
-          <div>
-            <h1 className="text-lg font-bold text-white leading-none">Workflow Builder</h1>
+          <div className="flex flex-col">
+            <input 
+              value={workflowName}
+              onChange={(e) => setWorkflowName(e.target.value)}
+              className="bg-transparent border-none text-lg font-bold text-white leading-none focus:outline-none focus:ring-0 p-0"
+              placeholder="Workflow Name"
+            />
             <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-widest font-medium">Visual Orchestration Engine</p>
           </div>
         </div>
@@ -257,7 +228,7 @@ export function WorkflowBuilderPage() {
                 return;
               }
               try {
-                await useWorkflows().executeWorkflow(activeWorkflowId); // Need to use the hook correctly
+                await executeWorkflow(activeWorkflowId);
                 addToast('Execução iniciada!', 'success');
               } catch {
                 addToast('Erro ao iniciar execução', 'error');
@@ -276,11 +247,7 @@ export function WorkflowBuilderPage() {
           <div className="p-4 border-b border-zinc-800 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-zinc-200">Workflows</h3>
             <button 
-              onClick={() => {
-                setActiveWorkflowId(null);
-                setNodes([]);
-                setEdges([]);
-              }}
+              onClick={() => clear()}
               className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-100"
               title="Novo Workflow"
             >
@@ -325,7 +292,7 @@ export function WorkflowBuilderPage() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onNodeClick={(e, node) => setSelectedNodeId(node.id)}
+            onNodeClick={(_e, node) => setSelectedNodeId(node.id)}
             onPaneClick={() => setSelectedNodeId(null)}
             nodeTypes={nodeTypes}
             colorMode="dark"

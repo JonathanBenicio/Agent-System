@@ -13,51 +13,42 @@ import {
   applyNodeChanges,
   applyEdgeChanges
 } from '@xyflow/react';
-
-export interface WorkflowDefinition {
-  id: string;
-  name: string;
-  steps: WorkflowStep[];
-}
+import type { WorkflowDefinition, WorkflowStep } from '@/types/api';
 
 export const WorkflowStepType = {
   Action: 0,
   Decision: 1,
   Parallel: 2,
-  Event: 3
+  Wait: 3,
+  Approval: 4,
+  Subworkflow: 5
 } as const;
-
-export type WorkflowStepType = typeof WorkflowStepType[keyof typeof WorkflowStepType];
-
-export interface WorkflowStep {
-  id: string;
-  name: string;
-  stepType: WorkflowStepType;
-  dependsOn: string[];
-  agentName?: string;
-  toolName?: string;
-  actionDescription?: string;
-  input: Record<string, unknown>;
-  conditionExpression?: string;
-}
 
 interface WorkflowState {
   nodes: Node[];
   edges: Edge[];
+  activeWorkflowId: string | null;
+  workflowName: string;
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
   addNode: (node: Node) => void;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
+  setWorkflowName: (name: string) => void;
+  setActiveWorkflowId: (id: string | null) => void;
   
   // Conversion logic
-  toWorkflowDefinition: (name: string) => WorkflowDefinition;
+  toWorkflowDefinition: () => WorkflowDefinition;
+  fromWorkflowDefinition: (def: WorkflowDefinition) => void;
+  clear: () => void;
 }
 
 export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
   nodes: [],
   edges: [],
+  activeWorkflowId: null,
+  workflowName: 'New Workflow',
 
   onNodesChange: (changes: NodeChange[]) => {
     set({
@@ -85,9 +76,13 @@ export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
 
   setNodes: (nodes: Node[]) => set({ nodes }),
   setEdges: (edges: Edge[]) => set({ edges }),
+  setWorkflowName: (workflowName: string) => set({ workflowName }),
+  setActiveWorkflowId: (activeWorkflowId: string | null) => set({ activeWorkflowId }),
 
-  toWorkflowDefinition: (name: string): WorkflowDefinition => {
-    const { nodes, edges } = get();
+  clear: () => set({ nodes: [], edges: [], activeWorkflowId: null, workflowName: 'New Workflow' }),
+
+  toWorkflowDefinition: (): WorkflowDefinition => {
+    const { nodes, edges, activeWorkflowId, workflowName } = get();
     
     const steps: WorkflowStep[] = nodes.map(node => {
       const incomingEdges = edges.filter(e => e.target === node.id);
@@ -96,20 +91,68 @@ export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
       return {
         id: node.id,
         name: node.data.label as string || node.id,
-        stepType: (node.data.stepType as WorkflowStepType) ?? WorkflowStepType.Action,
+        stepType: (node.data.stepType as number) ?? 0,
         dependsOn,
         agentName: node.data.agentName as string,
         toolName: node.data.toolName as string,
         actionDescription: node.data.description as string,
         input: (node.data.input as Record<string, unknown>) || {},
+        output: {},
         conditionExpression: node.data.condition as string,
+        parallelSteps: [],
+        maxRetries: 0,
+        errorStrategy: 0,
       };
     });
 
     return {
-      id: crypto.randomUUID(),
-      name,
-      steps
+      id: activeWorkflowId || crypto.randomUUID(),
+      name: workflowName,
+      version: 1,
+      steps,
+      variables: {},
+      triggerType: 0,
+      createdAt: new Date().toISOString(),
     };
+  },
+
+  fromWorkflowDefinition: (def: WorkflowDefinition) => {
+    // Basic layout algorithm or just use saved positions if available in steps?
+    // Current WorkflowDefinition doesn't store positions. 
+    // In a real app, we'd store them in DefinitionJson or a separate field.
+    // For now, let's just arrange them horizontally.
+    
+    const nodes: Node[] = def.steps.map((step, index) => ({
+      id: step.id,
+      type: 'default',
+      position: { x: 100 + (index * 250), y: 100 + (index % 2 * 100) },
+      data: { 
+        label: step.name,
+        stepType: step.stepType,
+        agentName: step.agentName,
+        toolName: step.toolName,
+        description: step.actionDescription,
+        input: step.input,
+        condition: step.conditionExpression,
+      },
+    }));
+
+    const edges: Edge[] = [];
+    def.steps.forEach(step => {
+      step.dependsOn.forEach(depId => {
+        edges.push({
+          id: `e-${depId}-${step.id}`,
+          source: depId,
+          target: step.id,
+        });
+      });
+    });
+
+    set({ 
+      nodes, 
+      edges, 
+      activeWorkflowId: def.id, 
+      workflowName: def.name 
+    });
   }
 }));
