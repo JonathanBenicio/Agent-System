@@ -41,7 +41,7 @@ O objetivo deste *roadmap* é evoluir o Agentic System para uma plataforma modul
     - [x] Expor o `MCPPluginManager` na interface gráfica (UI) para injeção de *plugins* ao vivo.
 *   **Agents:** `frontend-specialist`, `dotnet-expert`
 
-### Phase 3: External Orchestration & Templates
+### Phase 3: External Orchestration & Templates (Issue #21)
 *   **Tasks:**
     - [x] Expandir o `ScheduledTaskHostedService` utilizando o Quartz.NET para trabalhos *cron* dinâmicos.
     - [x] Implementar um canal SignalR BYOB (*Bring Your Own Bot*) para a orquestração de agentes externos.
