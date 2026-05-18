@@ -13,14 +13,15 @@ namespace AgenticSystem.Tests;
 public class MCPPluginControllerTests
 {
     private readonly IMCPPluginManager _pluginManager;
+    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly MCPPluginController _sut;
 
     public MCPPluginControllerTests()
     {
         _pluginManager = Substitute.For<IMCPPluginManager>();
-        var dbContextFactory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
+        _dbContextFactory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
         var logger = Substitute.For<ILogger<MCPPluginController>>();
-        _sut = new MCPPluginController(_pluginManager, dbContextFactory, logger);
+        _sut = new MCPPluginController(_pluginManager, _dbContextFactory, logger);
     }
 
     [Fact]
@@ -29,19 +30,18 @@ public class MCPPluginControllerTests
         var plugin = CreateMockPlugin("p1", "Plugin 1");
         _pluginManager.GetLoadedPlugins().Returns(new[] { plugin });
 
-        var options = new DbContextOptionsBuilder<AgenticDbContext>().UseInMemoryDatabase("test").Options;
-        var db = Substitute.For<AgenticDbContext>(options, Substitute.For<ITenantContextAccessor>());
-        
-        var mockSet = Substitute.For<DbSet<AgenticSystem.Infrastructure.Persistence.Entities.McpPluginEntity>, IQueryable<AgenticSystem.Infrastructure.Persistence.Entities.McpPluginEntity>>();
-        ((IQueryable<AgenticSystem.Infrastructure.Persistence.Entities.McpPluginEntity>)mockSet).Provider.Returns(Substitute.For<IQueryProvider>());
-        ((IQueryable<AgenticSystem.Infrastructure.Persistence.Entities.McpPluginEntity>)mockSet).Expression.Returns(new List<AgenticSystem.Infrastructure.Persistence.Entities.McpPluginEntity>().AsQueryable().Expression);
-        ((IQueryable<AgenticSystem.Infrastructure.Persistence.Entities.McpPluginEntity>)mockSet).ElementType.Returns(typeof(AgenticSystem.Infrastructure.Persistence.Entities.McpPluginEntity));
-        ((IQueryable<AgenticSystem.Infrastructure.Persistence.Entities.McpPluginEntity>)mockSet).GetEnumerator().Returns(new List<AgenticSystem.Infrastructure.Persistence.Entities.McpPluginEntity>().GetEnumerator());
-        
-        db.McpPlugins.Returns(mockSet);
+        var tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
+        tenantContextAccessor.Current.Returns(new TenantContext { TenantId = Tenant.DefaultTenantId });
 
-        var dbContextFactory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
-        dbContextFactory.CreateDbContextAsync(Arg.Any<CancellationToken>()).Returns(db);
+        var options = new DbContextOptionsBuilder<AgenticDbContext>()
+            .UseInMemoryDatabase("test-getplugins-" + Guid.NewGuid())
+            .EnableServiceProviderCaching(false)
+            .Options;
+        
+        using var db = new AgenticDbContext(options, tenantContextAccessor);
+        await db.Database.EnsureCreatedAsync();
+        
+        _dbContextFactory.CreateDbContextAsync(Arg.Any<CancellationToken>()).Returns(db);
 
         var result = await _sut.GetPlugins();
 
