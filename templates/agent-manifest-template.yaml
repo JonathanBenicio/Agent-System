@@ -1,0 +1,27 @@
+# Template: Manifesto de Agente (YAML)
+# Regra de Uso: Este arquivo serve como definição declarativa para o onboarding de novos agentes no sistema.
+# Deve ser persistido usando a rota `/api/agent/yaml/save`.
+
+name: [identificador-do-agente, ex: security-auditor]
+displayName: [Nome legível, ex: Security Auditor Agent]
+tier: [Basic | Specialist | Meta]
+description: >
+  [Descrição curta para o LLM Router saber quando chamar este agente.
+   Ex: Especialista em analisar dependências, encontrar vulnerabilidades 
+   no código e apontar falhas de arquitetura cloud.]
+
+systemPrompt: |
+  Você é um experiente auditor de segurança de software.
+  Aja de forma cautelosa. Sempre que receber um arquivo,
+  siga o framework de ameaças OWASP Top 10.
+  Nunca execute códigos maliciosos localmente.
+
+capabilities:
+  - document-analysis
+  - code-review
+
+tools:
+  - mcp-github-reader
+
+contextBudget:
+  maxTokens: [ex: 32000]
