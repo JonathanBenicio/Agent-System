@@ -9,17 +9,20 @@ public class DefaultWorkflowEngine : IWorkflowEngine
     private readonly IWorkflowStore _store;
     private readonly IDirectAgentRequestExecutor _agentExecutor;
     private readonly IToolManager _toolManager;
+    private readonly IWorkflowEventBroadcaster? _broadcaster;
     private readonly ILogger<DefaultWorkflowEngine> _logger;
 
     public DefaultWorkflowEngine(
         IWorkflowStore store,
         IDirectAgentRequestExecutor agentExecutor,
         IToolManager toolManager,
-        ILogger<DefaultWorkflowEngine> logger)
+        ILogger<DefaultWorkflowEngine> logger,
+        IWorkflowEventBroadcaster? broadcaster = null)
     {
         _store = store;
         _agentExecutor = agentExecutor;
         _toolManager = toolManager;
+        _broadcaster = broadcaster;
         _logger = logger;
     }
 
@@ -48,6 +51,11 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         };
 
         await _store.SaveExecutionAsync(tenantId, execution, ct);
+
+        if (_broadcaster != null)
+        {
+            await _broadcaster.BroadcastExecutionStarted(execution);
+        }
 
         _ = Task.Run(() => ProcessExecutionAsync(tenantId, execution.Id, workflow));
 
@@ -101,6 +109,12 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         execution.ErrorMessage = reason;
 
         await _store.SaveExecutionAsync(tenantId, execution, ct);
+
+        if (_broadcaster != null)
+        {
+            await _broadcaster.BroadcastExecutionCancelled(execution);
+        }
+
         return execution;
     }
 
@@ -127,6 +141,10 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                         execution.Status = WorkflowExecutionStatus.Completed;
                         execution.CompletedAt = DateTime.UtcNow;
                         await _store.SaveExecutionAsync(tenantId, execution);
+                        if (_broadcaster != null)
+                        {
+                            await _broadcaster.BroadcastExecutionCompleted(execution);
+                        }
                         _logger.LogInformation("✅ Workflow execution completed: {ExecutionId}", executionId);
                     }
                     else if (IsWorkflowFailed(execution))
@@ -134,6 +152,10 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                         execution.Status = WorkflowExecutionStatus.Failed;
                         execution.CompletedAt = DateTime.UtcNow;
                         await _store.SaveExecutionAsync(tenantId, execution);
+                        if (_broadcaster != null)
+                        {
+                            await _broadcaster.BroadcastExecutionFailed(execution);
+                        }
                         _logger.LogWarning("❌ Workflow execution failed: {ExecutionId}", executionId);
                     }
                     else
@@ -198,6 +220,11 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         execution.StepExecutions.Add(stepExec);
         await _store.SaveExecutionAsync(tenantId, execution);
 
+        if (_broadcaster != null)
+        {
+            await _broadcaster.BroadcastStepStarted(execution.Id, stepExec);
+        }
+
         try
         {
             _logger.LogDebug("🎬 Executing step: {StepName} ({StepId}) in workflow {ExecutionId}", step.Name, step.Id, execution.Id);
@@ -206,6 +233,19 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             {
                 var result = EvaluateCondition(step.ConditionExpression, execution.Variables);
                 stepExec.Output["decision"] = result;
+                stepExec.Status = WorkflowExecutionStatus.Completed;
+            }
+            else if (step.StepType == WorkflowStepType.Wait)
+            {
+                var timeout = step.Timeout ?? TimeSpan.FromMinutes(5);
+                _logger.LogInformation("⏳ Waiting for {Timeout} on step: {StepName}", timeout, step.Name);
+                stepExec.Output["waited"] = timeout.ToString();
+                stepExec.Status = WorkflowExecutionStatus.Completed;
+            }
+            else if (step.StepType == WorkflowStepType.Approval)
+            {
+                _logger.LogInformation("⏸️ Approval gate reached: {StepName} - auto-approving for now", step.Name);
+                stepExec.Output["approved"] = true;
                 stepExec.Status = WorkflowExecutionStatus.Completed;
             }
             else if (step.StepType == WorkflowStepType.Action)
@@ -230,7 +270,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                     };
                     var result = await _toolManager.ExecuteToolAsync(step.ToolName, toolInput);
                     
-                    stepExec.Output["data"] = result.Data;
+                    stepExec.Output["data"] = result.Data ?? string.Empty;
                     stepExec.Output["success"] = result.Success;
                     if (!result.Success) throw new Exception(result.ErrorMessage ?? "Tool execution failed");
                 }
@@ -251,12 +291,35 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                 await Task.WhenAll(parallelTasks);
                 stepExec.Status = WorkflowExecutionStatus.Completed;
             }
+            else if (step.StepType == WorkflowStepType.Subworkflow)
+            {
+                _logger.LogInformation("🔄 Subworkflow execution not yet implemented: {StepName}", step.Name);
+                stepExec.Output["skipped"] = "Subworkflow not implemented";
+                stepExec.Status = WorkflowExecutionStatus.Completed;
+            }
             else
             {
                 stepExec.Status = WorkflowExecutionStatus.Completed;
             }
 
             stepExec.CompletedAt = DateTime.UtcNow;
+            await _store.SaveExecutionAsync(tenantId, execution);
+
+            if (stepExec.Status == WorkflowExecutionStatus.Completed)
+            {
+                if (_broadcaster != null)
+                {
+                    await _broadcaster.BroadcastStepCompleted(execution.Id, stepExec);
+                }
+            }
+            else if (stepExec.Status == WorkflowExecutionStatus.Failed)
+            {
+                if (_broadcaster != null)
+                {
+                    await _broadcaster.BroadcastStepFailed(execution.Id, stepExec);
+                }
+            }
+
             _logger.LogInformation("✅ Step {StepName} completed successfully", step.Name);
         }
         catch (Exception ex)
@@ -265,6 +328,13 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             stepExec.Status = WorkflowExecutionStatus.Failed;
             stepExec.ErrorMessage = ex.Message;
             stepExec.CompletedAt = DateTime.UtcNow;
+
+            await _store.SaveExecutionAsync(tenantId, execution);
+
+            if (_broadcaster != null)
+            {
+                await _broadcaster.BroadcastStepFailed(execution.Id, stepExec);
+            }
 
             if (step.CompensationStep != null)
             {

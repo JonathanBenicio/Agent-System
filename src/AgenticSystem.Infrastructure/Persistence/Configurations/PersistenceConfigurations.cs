@@ -770,3 +770,22 @@ public class KnowledgeRoomConfiguration : IEntityTypeConfiguration<KnowledgeRoom
         builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_knowledge_rooms_tenant_id");
     }
 }
+
+public class KnowledgeRoomPermissionConfiguration : IEntityTypeConfiguration<KnowledgeRoomPermissionEntity>
+{
+    public void Configure(EntityTypeBuilder<KnowledgeRoomPermissionEntity> builder)
+    {
+        builder.ToTable("knowledge_room_permissions");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.RoomId).HasColumnName("room_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.UserId).HasColumnName("user_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.Role).HasColumnName("role").HasMaxLength(32).IsRequired();
+        builder.Property(e => e.GrantedAt).HasColumnName("granted_at");
+
+        builder.HasIndex(e => new { e.RoomId, e.UserId }).IsUnique().HasDatabaseName("ix_knowledge_room_permissions_room_user");
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_knowledge_room_permissions_tenant_id");
+    }
+}

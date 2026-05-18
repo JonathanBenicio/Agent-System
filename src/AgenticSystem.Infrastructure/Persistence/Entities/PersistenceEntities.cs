@@ -543,6 +543,16 @@ public class KnowledgeRoomEntity : ITenantEntity
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
+public class KnowledgeRoomPermissionEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string RoomId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty; // "Admin", "Editor", "Reader"
+    public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class McpPluginEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;

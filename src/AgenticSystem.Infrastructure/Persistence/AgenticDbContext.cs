@@ -58,6 +58,7 @@ public class AgenticDbContext : DbContext
     public DbSet<SystemAlertEntity> SystemAlerts => Set<SystemAlertEntity>();
     public DbSet<InboundWebhookEntity> InboundWebhooks => Set<InboundWebhookEntity>();
     public DbSet<KnowledgeRoomEntity> KnowledgeRooms => Set<KnowledgeRoomEntity>();
+    public DbSet<KnowledgeRoomPermissionEntity> KnowledgeRoomPermissions => Set<KnowledgeRoomPermissionEntity>();
     public DbSet<McpPluginEntity> McpPlugins => Set<McpPluginEntity>();
     public DbSet<SessionSummaryEntity> SessionSummaries => Set<SessionSummaryEntity>();
     public DbSet<SessionInsightEntity> SessionInsights => Set<SessionInsightEntity>();
