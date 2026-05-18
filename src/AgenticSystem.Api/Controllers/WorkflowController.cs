@@ -68,7 +68,7 @@ public class WorkflowController : ControllerBase
         if (definition == null) return NotFound("Workflow definition not found");
 
         var userId = User.Identity?.Name ?? "anonymous";
-        var execution = await _engine.StartAsync(definition, variables, userId, ct);
+        var execution = await _engine.StartAsync(tenantId, definition, variables, userId, ct);
         
         return Ok(execution);
     }
@@ -77,7 +77,7 @@ public class WorkflowController : ControllerBase
     public async Task<IActionResult> GetExecution(string id, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
-        var execution = await _store.GetExecutionAsync(tenantId, id, ct);
+        var execution = await _engine.GetExecutionAsync(tenantId, id, ct);
         if (execution == null) return NotFound();
         return Ok(execution);
     }
@@ -86,7 +86,7 @@ public class WorkflowController : ControllerBase
     public async Task<IActionResult> ListExecutions([FromQuery] WorkflowExecutionStatus? status, [FromQuery] int limit = 50, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
-        var executions = await _store.ListExecutionsAsync(tenantId, status, limit, ct);
+        var executions = await _engine.ListExecutionsAsync(tenantId, status, limit, ct);
         return Ok(executions);
     }
 
@@ -94,7 +94,7 @@ public class WorkflowController : ControllerBase
     public async Task<IActionResult> CancelExecution(string id, [FromQuery] string? reason, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
-        var execution = await _engine.CancelAsync(id, reason, ct);
+        var execution = await _engine.CancelAsync(tenantId, id, reason, ct);
         return Ok(execution);
     }
 }

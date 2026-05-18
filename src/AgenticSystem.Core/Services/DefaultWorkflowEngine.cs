@@ -27,17 +27,13 @@ public class DefaultWorkflowEngine : IWorkflowEngine
     }
 
     public async Task<WorkflowExecution> StartAsync(
+        string tenantId,
         WorkflowDefinition workflow,
         Dictionary<string, object>? initialVariables = null,
         string? initiatedBy = null,
         CancellationToken ct = default)
     {
-        // For now, let's assume we can get tenantId from somewhere or it's passed.
-        // Since IWorkflowEngine.StartAsync doesn't have tenantId, I'll use "default" or try to find it in definition.
-        // Actually, I should probably update the interface.
-        var tenantId = "default"; // Placeholder
-        
-        _logger.LogInformation("🚀 Starting workflow: {WorkflowName} ({WorkflowId})", workflow.Name, workflow.Id);
+        _logger.LogInformation("🚀 Starting workflow: {WorkflowName} ({WorkflowId}) for tenant {TenantId}", workflow.Name, workflow.Id, tenantId);
 
         var execution = new WorkflowExecution
         {
@@ -63,12 +59,11 @@ public class DefaultWorkflowEngine : IWorkflowEngine
     }
 
     public async Task<WorkflowExecution> ResumeAsync(
+        string tenantId,
         string executionId,
         Dictionary<string, object>? additionalInput = null,
         CancellationToken ct = default)
     {
-        // Need tenantId here too.
-        var tenantId = "default"; 
         var execution = await _store.GetExecutionAsync(tenantId, executionId, ct);
         if (execution == null) throw new ArgumentException("Execution not found", nameof(executionId));
 
@@ -94,11 +89,11 @@ public class DefaultWorkflowEngine : IWorkflowEngine
     }
 
     public async Task<WorkflowExecution> CancelAsync(
+        string tenantId,
         string executionId,
         string? reason = null,
         CancellationToken ct = default)
     {
-        var tenantId = "default";
         var execution = await _store.GetExecutionAsync(tenantId, executionId, ct);
         if (execution == null) throw new ArgumentException("Execution not found", nameof(executionId));
 
@@ -118,11 +113,11 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         return execution;
     }
 
-    public Task<WorkflowExecution?> GetExecutionAsync(string executionId, CancellationToken ct = default)
-        => _store.GetExecutionAsync("default", executionId, ct);
+    public Task<WorkflowExecution?> GetExecutionAsync(string tenantId, string executionId, CancellationToken ct = default)
+        => _store.GetExecutionAsync(tenantId, executionId, ct);
 
-    public Task<IReadOnlyList<WorkflowExecution>> ListExecutionsAsync(WorkflowExecutionStatus? statusFilter = null, int limit = 20, CancellationToken ct = default)
-        => _store.ListExecutionsAsync("default", statusFilter, limit, ct);
+    public Task<IReadOnlyList<WorkflowExecution>> ListExecutionsAsync(string tenantId, WorkflowExecutionStatus? statusFilter = null, int limit = 20, CancellationToken ct = default)
+        => _store.ListExecutionsAsync(tenantId, statusFilter, limit, ct);
 
     private async Task ProcessExecutionAsync(string tenantId, string executionId, WorkflowDefinition definition)
     {
