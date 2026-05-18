@@ -90,9 +90,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         success: msg.success,
         sessionId: msg.sessionId,
         timestamp: msg.timestamp,
+        isHistory: msg.isHistory,
       }
       setMessages(prev => [...prev, chatMsg])
-      setIsProcessing(false)
+      if (!msg.isHistory) setIsProcessing(false)
       if (msg.sessionId) setSessionId(msg.sessionId)
     })
 
@@ -113,6 +114,20 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     conn.on('Connected', (data: { connectionId: string; timestamp: string }) => {
       console.log('SignalR connected:', data.connectionId)
+    })
+
+    conn.on('SessionJoined', (data: { sessionId: string; title: string | null; messageCount: number }) => {
+      console.log(`Session joined: ${data.sessionId} (${data.messageCount} messages)`)
+    })
+
+    conn.on('JoinSessionError', (data: { error: string; sessionId: string }) => {
+      const errorMsg: ChatMessage = {
+        id: generateId(),
+        role: 'system',
+        content: `Erro ao carregar sessão: ${data.error}`,
+        timestamp: new Date().toISOString(),
+      }
+      setMessages(prev => [...prev, errorMsg])
     })
 
     conn.onreconnecting(() => {
@@ -146,6 +161,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       conn.off('ProcessingStarted')
       conn.off('ReceiveError')
       conn.off('Connected')
+      conn.off('SessionJoined')
+      conn.off('JoinSessionError')
     }
   }, [])
 

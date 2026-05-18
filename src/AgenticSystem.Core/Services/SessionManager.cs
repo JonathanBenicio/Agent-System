@@ -126,6 +126,24 @@ public class SessionManager : ISessionManager
         }
     }
 
+    public async Task<string> GetMemoryContextAsync(string userQuery, string userId, string tenantId, CancellationToken ct = default)
+    {
+        if (_memoryInjection == null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return await _memoryInjection.BuildMemoryContextAsync(userQuery, userId, tenantId, ct: ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to build memory context for user {UserId}", userId);
+            return string.Empty;
+        }
+    }
+
     private static Dictionary<string, string> BuildRuntimeSettings(UserContext userContext)
     {
         var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

@@ -184,10 +184,12 @@ public class MetaAgentOrchestrator : IMetaAgent
     {
         using var llmScope = _llmRuntimeContextAccessor.BeginScope(context, sessionId);
 
+        var effectiveInput = await InjectMemoryContextAsync(input, context, ct);
+
         try
         {
             // 0. Triage Layer (Fast Path & Complexity Analysis)
-            var (isFastPath, fastPathResponse, triage) = await _smartRouter.TriageAsync(input, context, ct);
+            var (isFastPath, fastPathResponse, triage) = await _smartRouter.TriageAsync(effectiveInput, context, ct);
             if (isFastPath)
             {
                 return AgentResponse.Ok(fastPathResponse ?? string.Empty, "FastPath", AgentTier.Support);
@@ -205,17 +207,17 @@ public class MetaAgentOrchestrator : IMetaAgent
                 if (triage.Complexity == AgenticSystem.Core.Models.Triage.ComplexityLevel.Low && 
                     triage.Intent == AgenticSystem.Core.Models.Triage.IntentType.DirectAnswer)
                 {
-                    _logger.LogInformation("⚡ Executing Tier 1 logic (Low Complexity Direct Execution) for input: {Input}", input[..Math.Min(50, input.Length)]);
+                    _logger.LogInformation("⚡ Executing Tier 1 logic (Low Complexity Direct Execution) for input: {Input}", effectiveInput[..Math.Min(50, effectiveInput.Length)]);
                     var target = !string.IsNullOrWhiteSpace(triage.EstimatedAgent) ? triage.EstimatedAgent : "GeneralAgent";
-                    return await _directAgentRequestExecutor.ExecuteAsync(sessionId, input, context, target, ct);
+                    return await _directAgentRequestExecutor.ExecuteAsync(sessionId, effectiveInput, context, target, ct);
                 }
 
             }
 
-            _logger.LogInformation("🎯 Workflow executando request: {Input}", input[..Math.Min(50, input.Length)]);
+            _logger.LogInformation("🎯 Workflow executando request: {Input}", effectiveInput[..Math.Min(50, effectiveInput.Length)]);
 
             // 1. Analyze Context for Routing Decisions (Phase 2 Integration)
-            var analysis = await _contextAnalyzer.AnalyzeAsync(input, context);
+            var analysis = await _contextAnalyzer.AnalyzeAsync(effectiveInput, context);
 
             // 2. Delegate to Workflow Engine if specific complex intent or workflow template is matched
             if (_workflowEngine != null && (analysis.Intent == IntentType.Analyze || analysis.Intent == IntentType.Plan))
@@ -227,15 +229,15 @@ public class MetaAgentOrchestrator : IMetaAgent
             }
 
             // 3. Delegate to Collaboration Workflow if debate or high complexity (Phase 2 Integration)
-            if (_collaborationWorkflow != null && await _collaborationWorkflow.ShouldRunAsync(input, analysis, ct))
+            if (_collaborationWorkflow != null && await _collaborationWorkflow.ShouldRunAsync(effectiveInput, analysis, ct))
             {
                 _logger.LogInformation("Delegating to Collaboration Workflow (Multi-Agent)");
-                return await _collaborationWorkflow.ExecuteAsync(sessionId, input, context, analysis, ct);
+                return await _collaborationWorkflow.ExecuteAsync(sessionId, effectiveInput, context, analysis, ct);
             }
 
             // 4. Fallback to Primary Framework Orchestrator
             _logger.LogDebug("Delegating to Framework Orchestrator");
-            return await _frameworkOrchestrator.ExecuteAsync(sessionId, input, context, ct);
+            return await _frameworkOrchestrator.ExecuteAsync(sessionId, effectiveInput, context, ct);
         }
         catch (Exception ex)
         {
@@ -309,6 +311,21 @@ public class MetaAgentOrchestrator : IMetaAgent
     private async Task<AgentResponse> ProcessDirectRequestCoreAsync(string sessionId, string input, UserContext context, string targetAgent, CancellationToken ct)
     {
         using var llmScope = _llmRuntimeContextAccessor.BeginScope(context, sessionId);
-        return await _directAgentRequestExecutor.ExecuteAsync(sessionId, input, context, targetAgent, ct);
+        var effectiveInput = await InjectMemoryContextAsync(input, context, ct);
+        return await _directAgentRequestExecutor.ExecuteAsync(sessionId, effectiveInput, context, targetAgent, ct);
+    }
+
+    private async Task<string> InjectMemoryContextAsync(string input, UserContext context, CancellationToken ct)
+    {
+        var tenantId = string.IsNullOrWhiteSpace(context.TenantId) ? Tenant.DefaultTenantId : context.TenantId;
+        var memoryContext = await _sessionManager.GetMemoryContextAsync(input, context.UserId, tenantId, ct);
+
+        if (string.IsNullOrEmpty(memoryContext))
+        {
+            return input;
+        }
+
+        _logger.LogDebug("🧠 Injected {Length} chars of memory context", memoryContext.Length);
+        return memoryContext + "\n\n" + input;
     }
 }

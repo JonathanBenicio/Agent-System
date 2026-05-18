@@ -35,8 +35,8 @@ export function ChatPage({
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>()
 
   const handleSelectSession = useCallback((id: string) => {
-    setActiveSessionId(id)
     onClearMessages()
+    setActiveSessionId(id)
 
     const conn = getConnection()
     conn.invoke('JoinSession', id).catch(err => {

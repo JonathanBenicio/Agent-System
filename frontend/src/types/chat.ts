@@ -10,6 +10,7 @@ export interface ChatMessage {
   sessionId?: string
   timestamp: string
   isStreaming?: boolean
+  isHistory?: boolean
 }
 
 export interface ChatSession {
@@ -45,4 +46,5 @@ export interface SignalRMessage {
   success: boolean
   sessionId: string
   timestamp: string
+  isHistory?: boolean
 }
