@@ -44,10 +44,12 @@ Todas as definições de agentes, skills e workflows estão centralizadas no dir
 
 ### 📜 Governança de Documentação (Roadmap Q2 2026)
 Toda nova funcionalidade estratégica deve ser precedida por:
-1. **Plano de Execução** em `plan/`.
-2. **ADR** em `docs/architecture/adr/`.
-3. **User Story** em `docs/USER-STORIES.md`.
-4. **Atualização de Índices** (`README.md`, `INDEX.md`, `CONSOLIDATED_DOCS.md`).
+1. **GitHub Issue**: Criação da Issue/Epic no repositório.
+2. **Plano de Execução** em `plan/`.
+3. **ADR** em `docs/architecture/adr/`.
+4. **User Story** em `docs/USER-STORIES.md`.
+5. **Rastreabilidade**: Commits devem obrigatoriamente mencionar a issue (ex: `feat: ... Closes #ID`).
+6. **Atualização de Índices** (`README.md`, `INDEX.md`, `CONSOLIDATED_DOCS.md`).
 
 Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridades correntes.
 

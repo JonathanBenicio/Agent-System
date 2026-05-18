@@ -45,6 +45,17 @@ reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coverage-report
 - **Architecture**: `docs/architecture/backend-architecture-explained.md` (MAF 1.5.0 framework-first)
 - **Product Boundary**: `.github/copilot-instructions.md` (Core vs Lab governance)
 
+### 📜 Governança de Documentação (Regra de Ouro)
+Toda nova funcionalidade estratégica deve ser precedida por:
+1. **GitHub Issue**: Criação da Issue ou Epic correspondente no repositório.
+2. **Plano de Execução**: Documento detalhado no diretório `plan/`.
+3. **ADR (Architectural Decision Record)**: Registro da decisão em `docs/architecture/adr/`.
+4. **User Story**: Inclusão dos critérios de aceite em `docs/USER-STORIES.md`.
+5. **Rastreabilidade**: Commits devem obrigatoriamente mencionar a issue (ex: `feat: ... Closes #ID`).
+6. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
+
+Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridades.
+
 ### Package Responsibilities
 - **AgenticSystem.Api**: Web API + SignalR hubs (`/hubs/chat`, `/hubs/gateway`, `/hubs/external-agent`)
 - **AgenticSystem.Core**: Business logic, agents, workflows (MAF native)
@@ -65,6 +76,10 @@ await dbContext.Database.MigrateAsync();
 ```
 - No manual migration execution needed
 - PostgreSQL connection required for production
+- **To generate new migrations in the correct folder, use:**
+  ```bash
+  dotnet ef migrations add <Name> --project src/AgenticSystem.Infrastructure --startup-project src/AgenticSystem.Api --output-dir Persistence/Migrations
+  ```
 
 ### Authentication & Authorization
 - **MultiAuth**: API Key OR JWT via `PolicyScheme`
