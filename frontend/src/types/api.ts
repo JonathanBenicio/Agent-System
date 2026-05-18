@@ -671,6 +671,16 @@ export interface WorkflowExecution {
 // RAG & Embedding Migration Models
 // ══════════════════════════════════════
 
+export type KnowledgeRoomRole = 'Reader' | 'Editor' | 'Admin';
+
+export interface KnowledgeRoomPermission {
+  id: string;
+  roomId: string;
+  userId: string;
+  role: KnowledgeRoomRole;
+  grantedAt: string;
+}
+
 export interface KnowledgeRoom {
   id: string;
   name: string;

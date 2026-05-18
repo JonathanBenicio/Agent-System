@@ -17,10 +17,12 @@ import { useKnowledgeRooms } from '@/hooks/useKnowledgeRooms';
 import { Badge } from '@/components/shared/Badge';
 import { cn } from '@/lib/utils';
 import { ragApi } from '@/lib/api';
+import { RoomAccessModal } from './RoomAccessModal';
 
 export function KnowledgeRooms() {
   const { rooms, activeRoomId, activeWorkspaceId, createRoom, deleteRoom, setActiveRoom, updateRoom, setActiveWorkspace } = useKnowledgeRooms();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showAccessModal, setShowAccessModal] = useState(false);
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomDesc, setNewRoomDesc] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -207,7 +209,10 @@ export function KnowledgeRooms() {
               <p className="text-zinc-500 text-sm mt-0.5">{activeRoom?.description || 'Collection of documents and context.'}</p>
             </div>
             <div className="flex items-center gap-2">
-              <button className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 rounded-lg text-sm font-medium transition-all">
+              <button 
+                onClick={() => setShowAccessModal(true)}
+                className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 rounded-lg text-sm font-medium transition-all"
+              >
                 <Users className="w-4 h-4" />
                 Manage Access
               </button>
@@ -386,6 +391,11 @@ export function KnowledgeRooms() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Manage Access Modal */}
+      {showAccessModal && activeRoomId && (
+        <RoomAccessModal roomId={activeRoomId} onClose={() => setShowAccessModal(false)} />
       )}
     </div>
   );

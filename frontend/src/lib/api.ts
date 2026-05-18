@@ -333,6 +333,9 @@ export const knowledgeRoomApi = {
   create: (data: Partial<KnowledgeRoom>) => post<KnowledgeRoom>('/api/knowledge/rooms', data),
   update: (id: string, data: Partial<KnowledgeRoom>) => put<KnowledgeRoom>(`/api/knowledge/rooms/${encodeURIComponent(id)}`, data),
   delete: (id: string) => del(`/api/knowledge/rooms/${encodeURIComponent(id)}`),
+  getPermissions: (id: string) => get<KnowledgeRoomPermission[]>(`/api/knowledge/rooms/${encodeURIComponent(id)}/permissions`),
+  updatePermission: (id: string, request: { userId: string; role: KnowledgeRoomRole }) => post<KnowledgeRoomPermission>(`/api/knowledge/rooms/${encodeURIComponent(id)}/permissions`, request),
+  deletePermission: (id: string, targetUserId: string) => del(`/api/knowledge/rooms/${encodeURIComponent(id)}/permissions/${encodeURIComponent(targetUserId)}`),
 }
 
 export const ragApi = {
