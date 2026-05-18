@@ -310,9 +310,20 @@ POST /api/admin/mcp/plugins                    # Registrar plugin
 
 **Dashboard Web**: `https://localhost:5001/dashboard`
 
-## 🗺️ Roadmap
+## 🗺️ Roadmap Q2 2026: Consolidação & Especialização
 
-### Core Capabilities (Integrated)
+Estamos evoluindo de um núcleo agentic robusto para uma plataforma especializada, observável e interoperável.
+
+| Track | Objetivo | Status |
+|-------|----------|:------:|
+| **1. Specialized Context** | Restringir conhecimento de agentes a salas específicas (RBAC + Precisão) | ⏳ Planejado |
+| **2. FinOps & Quotas** | Monitoramento em tempo real de custos e limites por tenant/agente | ⏳ Planejado |
+| **3. Protocol Hosting** | Exposição padronizada via A2A e AgUI para ecossistemas externos | ⏳ Planejado |
+| **4. Evaluation Suite** | Medição contínua de qualidade (Grounding, Fluency) via Golden Sets | ⏳ Planejado |
+
+> Plano mestre detalhado: [plan/master-roadmap-2026.md](plan/master-roadmap-2026.md)
+
+## 🗺️ Roadmap Histórico (ML Baseline)
 
 | Domínio | Capacidade | Status |
 |---------|------------|:------:|

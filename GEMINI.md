@@ -42,9 +42,27 @@ Todas as definições de agentes, skills e workflows estão centralizadas no dir
 2. **Orquestração Concorrente (Antigravity Swarm)**: O gerenciamento de subagentes paralelos é feito através da orquestração concurrente do Swarm, garantindo que as fronteiras de cada agente sejam rigorosamente respeitadas.
 3. **Barreira de Qualidade (Security Gate)**: Todo build, deploy ou finalização de tarefa deve passar pela validação de segurança da extensão `gemini-cli-extensions/security`, que bloqueia a conclusão em caso de vulnerabilidades críticas.
 
+### 📜 Governança de Documentação (Roadmap Q2 2026)
+Toda nova funcionalidade estratégica deve ser precedida por:
+1. **Plano de Execução** em `plan/`.
+2. **ADR** em `docs/architecture/adr/`.
+3. **User Story** em `docs/USER-STORIES.md`.
+4. **Atualização de Índices** (`README.md`, `INDEX.md`, `CONSOLIDATED_DOCS.md`).
+
+Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridades correntes.
+
 ### Comunicação
 - Responda no idioma do usuário.
 - Mantenha comentários e nomes de variáveis em Inglês, a menos que existam termos de domínio específicos já estabelecidos no projeto.
+
+---
+
+## 🗄️ Banco de Dados & Migrações
+- **Localização**: As migrations do EF Core devem ser geradas no projeto `AgenticSystem.Infrastructure` na pasta `Persistence/Migrations`.
+- **Comando**: Sempre use o comando abaixo para garantir a pasta correta:
+  ```bash
+  dotnet ef migrations add <Name> --project src/AgenticSystem.Infrastructure --startup-project src/AgenticSystem.Api --output-dir Persistence/Migrations
+  ```
 
 ---
 

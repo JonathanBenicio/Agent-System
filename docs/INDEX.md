@@ -55,6 +55,9 @@ Documento canônico de arquitetura atual:
 | [architecture/adr/016-unified-agent-structure.md](architecture/adr/016-unified-agent-structure.md) | ADR 016: Estrutura Unificada de Agentes |
 | [architecture/adr/017-design-system-teal-palette.md](architecture/adr/017-design-system-teal-palette.md) | ADR 017: Design System com Paleta Teal |
 | [architecture/adr/018-hot-swapping-architecture.md](architecture/adr/018-hot-swapping-architecture.md) | ADR 018: Arquitetura de Hot-Swapping para Provedores de IA e Vector Stores |
+| [../plan/adr-019-agent-room-association.md](../plan/adr-019-agent-room-association.md) | ADR 019: Associação Granular Agente-Sala (Contexto Restrito) |
+| [../plan/adr-020-protocol-hosting-standardization.md](../plan/adr-020-protocol-hosting-standardization.md) | ADR 020: Padronização e Exposição de Protocolos (A2A e AgUI) |
+| [../plan/adr-021-evaluation-framework.md](../plan/adr-021-evaluation-framework.md) | ADR 021: Framework de Avaliação Contínua e Golden Sets |
 
 ### Glossários
 
