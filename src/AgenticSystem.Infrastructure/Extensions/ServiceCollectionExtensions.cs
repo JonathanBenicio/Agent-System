@@ -281,11 +281,13 @@ public static class ServiceCollectionExtensions
         {
             services.AddSingleton<IAdvancedRetrievalService, PostgresAdvancedRetrievalService>();
             services.AddScoped<IKnowledgeRoomService, PostgresKnowledgeRoomStore>();
+            services.AddScoped<IAgentKnowledgeRoomStore, PostgresAgentKnowledgeRoomStore>();
         }
         else
         {
             services.AddSingleton<IAdvancedRetrievalService, InMemoryAdvancedRetrievalService>();
             services.AddSingleton<IKnowledgeRoomService, InMemoryKnowledgeRoomStore>();
+            services.AddSingleton<IAgentKnowledgeRoomStore, PostgresAgentKnowledgeRoomStore>();
         }
         services.AddSingleton<IRAGService, RAGService>();
 
