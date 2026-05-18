@@ -43,13 +43,19 @@ Todas as definições de agentes, skills e workflows estão centralizadas no dir
 3. **Barreira de Qualidade (Security Gate)**: Todo build, deploy ou finalização de tarefa deve passar pela validação de segurança da extensão `gemini-cli-extensions/security`, que bloqueia a conclusão em caso de vulnerabilidades críticas.
 
 ### 📜 Governança de Documentação (Roadmap Q2 2026)
-Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem:
+Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem e usar os templates da pasta `templates/`:
 1. **GitHub Issue**: Registro da necessidade. **Obrigatório atualizar a descrição da Issue com links para o ADR, Story e Plan assim que criados.**
-2. **ADR (Architectural Decision Record)**: Definição de padrões técnicos em `docs/architecture/adr/`.
-3. **User Story**: Detalhamento dos critérios de aceite em `docs/USER-STORIES.md`.
-4. **Implementation Plan**: Roteiro técnico detalhado em `plan/`.
-5. **Rastreabilidade**: Commits vinculados à issue (ex: `feat: ... Closes #ID`).
-6. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
+2. **ADR (Architectural Decision Record)**: Definição de padrões técnicos em `docs/architecture/adr/`. **Use o template em `templates/adr-template.md`.**
+3. **User Story**: Detalhamento dos critérios de aceite em `docs/USER-STORIES.md`. **Use o template em `templates/user-stories-template.md`.**
+4. **BDD Features**: Para especificações de comportamento, use `templates/bdd-template.feature`.
+5. **Implementation Plan**: Roteiro técnico detalhado em `plan/`. **Use o template em `templates/plan-template.md`.**
+6. **Rastreabilidade**: Commits vinculados à issue (ex: `feat: ... Closes #ID`).
+7. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
+
+### 🧪 Padrões de Teste
+- **E2E e API**: Use Playwright. Siga a estrutura definida em `templates/playwright-structure-template.md`.
+- **POM**: Use o Page Object Model para testes de interface conforme mostrado em `templates/pom-e2e-template.md`.
+
 
 Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridades correntes.
 

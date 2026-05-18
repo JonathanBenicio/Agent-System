@@ -316,7 +316,7 @@ Estamos evoluindo de um núcleo agentic robusto para uma plataforma especializad
 
 | Track | Objetivo | Status |
 |-------|----------|:------:|
-| **1. Specialized Context** | Restringir conhecimento de agentes a salas específicas (RBAC + Precisão) | ⏳ Planejado |
+| **1. Specialized Context** | Restringir conhecimento de agentes a salas específicas (RBAC + Precisão) | 🚧 Em Progresso (ADR-019, Entity + Migration criados) |
 | **2. FinOps & Quotas** | Monitoramento em tempo real de custos e limites por tenant/agente | ⏳ Planejado |
 | **3. Protocol Hosting** | Exposição padronizada via A2A e AgUI para ecossistemas externos | ⏳ Planejado |
 | **4. Evaluation Suite** | Medição contínua de qualidade (Grounding, Fluency) via Golden Sets | ⏳ Planejado |

@@ -8,7 +8,7 @@
 cp appsettings.example.json appsettings.json  # Configure API keys
 dotnet restore
 dotnet run --project src/AgenticSystem.Api   # https://localhost:5001
-dotnet test                                 # 344 unit tests, 80% coverage required
+dotnet test                                 # 608 unit tests, 80% coverage required
 
 # Build & publish
 dotnet build --configuration Release
@@ -57,9 +57,9 @@ Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem:
 Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridades.
 
 ### Package Responsibilities
-- **AgenticSystem.Api**: Web API + SignalR hubs (`/hubs/chat`, `/hubs/gateway`, `/hubs/external-agent`)
-- **AgenticSystem.Core**: Business logic, agents, workflows (MAF native)
-- **AgenticSystem.Infrastructure**: External services (LLM, vector stores, MCP, gateway)
+- **AgenticSystem.Api**: Web API + SignalR hubs (`/hubs/chat`, `/hubs/gateway`, `/hubs/external-agent`, `/hubs/workflow`)
+- **AgenticSystem.Core**: Business logic, agents, workflows, tenant isolation (MAF native)
+- **AgenticSystem.Infrastructure**: External services (LLM, vector stores, MCP, gateway, PostgreSQL persistence)
 - **AgenticSystem.Tests**: Unit tests (xUnit + FluentAssertions + NSubstitute)
 
 ## Runtime Quirks & Constraints
@@ -71,7 +71,7 @@ Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridade
 
 ### Auto-Migrations & Startup
 ```csharp
-// EF Core migrations auto-run on startup (Program.cs:399-415)
+// EF Core migrations auto-run on startup (Program.cs)
 await dbContext.Database.MigrateAsync();
 ```
 - No manual migration execution needed
@@ -83,7 +83,7 @@ await dbContext.Database.MigrateAsync();
 
 ### Authentication & Authorization
 - **MultiAuth**: API Key OR JWT via `PolicyScheme`
-- **Tenant Context**: Middleware isolates multi-tenant data
+- **Tenant Context**: `TenantMiddleware` extracts tenant from `X-Tenant-Id` header (priority) or JWT `tenant_id` claim (fallback). Unknown tenants are accepted for dev/test scenarios.
 - **Rate Limiting**: Per-tenant sliding window (`/api/chat`: 30 req/min default)
 
 ### Configuration Sections
@@ -93,7 +93,8 @@ await dbContext.Database.MigrateAsync();
     "Ollama": { "Enabled": true, "Priority": 1 },      // Default provider
     "OpenAI": { "Enabled": false, "Priority": 10 },    // Disabled by default
     "Gateway": { "DefaultDailyBudget": 50.00 },
-    "Memory": { "VectorStoreType": "InMemory" }      // Dev fallback
+    "Memory": { "VectorStoreType": "InMemory" },       // Dev fallback
+    "LocalExecution": { "StorageMode": "PostgreSQL" }  // Production
   }
 }
 ```
@@ -101,14 +102,14 @@ await dbContext.Database.MigrateAsync();
 ### Service Dependencies
 - **PostgreSQL**: Required for production (pgvector support)
 - **Ollama**: Optional local LLM (docker-compose.yml includes it)
-- **SignalR**: Real-time chat and gateway monitoring
+- **SignalR**: Real-time chat, gateway monitoring, and workflow progress streaming
 
 ## Testing & Quality
 
 ### Test Commands
 ```bash
 # Backend
-dotnet test                              # Full suite
+dotnet test                              # Full suite (608 tests)
 dotnet test --filter "Name~Tests"       # Specific tests
 
 # Frontend
@@ -152,7 +153,7 @@ npm run lint && npm run build && npm run cy:run
 ### Observability
 - **Logging**: Serilog with structured events
 - **Telemetry**: OpenTelemetry + Application Insights
-- **Real-time**: SignalR hubs for gateway events
+- **Real-time**: SignalR hubs for chat, gateway, and workflow events
 
 ## Deployment & Operations
 
@@ -161,7 +162,7 @@ npm run lint && npm run build && npm run cy:run
 # Build
 docker build -t agentic-system .
 
-# Run with dependencies
+# Run with dependencies (API + PostgreSQL + Ollama)
 docker-compose up -d
 
 # Health checks
@@ -178,3 +179,25 @@ curl http://localhost:8080/health
 - **Secrets**: User secrets in API project (`UserSecretsId`)
 - **Environment**: `ASPNETCORE_ENVIRONMENT` controls behavior
 - **CORS**: Development allows all origins, production requires configured origins
+
+## Implemented Features (Recent)
+
+### RAG Metrics
+- `GET /api/document/stats` — returns total chunks, search count (24h), ONNX runtime status
+
+### Knowledge Rooms
+- Full CRUD via `GET/POST/PUT/DELETE /api/knowledge/rooms`
+- Permission-based access control (`KnowledgeRoomPermissionEntity`)
+- Tenant-isolated with `X-Tenant-Id` header
+
+### Workflow Builder
+- Definition CRUD via `GET/POST/DELETE /api/workflow/definitions`
+- Execution lifecycle via `POST /api/workflow/executions/start/{id}`, `GET /api/workflow/executions/{id}`, `POST /api/workflow/executions/{id}/cancel`
+- SignalR real-time progress streaming via `/hubs/workflow`
+- Step types: Action, Decision, Wait, Approval, Parallel, Subworkflow
+- Event broadcasting: `IWorkflowEventBroadcaster` → `SignalRWorkflowEventBroadcaster`
+
+### Tenant Isolation
+- `X-Tenant-Id` header takes precedence over JWT `tenant_id` claim
+- Unknown tenants accepted (dev/test fallback)
+- Global EF Core query filters apply `TenantId` to all `ITenantEntity` types
