@@ -299,6 +299,8 @@ export const scheduledTasksApi = {
 
 import type {
   KnowledgeRoom,
+  KnowledgeRoomRole,
+  KnowledgeRoomPermission,
   RagStats,
   IngestDocumentResponse,
   EmbeddingModelConfig,

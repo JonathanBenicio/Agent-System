@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { X, Users, Shield, Plus, Loader2, Trash2 } from 'lucide-react';
+import { X, Users, Shield, Loader2, Trash2 } from 'lucide-react';
 import { knowledgeRoomApi } from '@/lib/api';
 import type { KnowledgeRoomRole } from '@/types/api';
 
