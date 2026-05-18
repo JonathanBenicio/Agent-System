@@ -46,12 +46,12 @@ reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coverage-report
 - **Product Boundary**: `.github/copilot-instructions.md` (Core vs Lab governance)
 
 ### 📜 Governança de Documentação (Regra de Ouro)
-Toda nova funcionalidade estratégica deve ser precedida por:
-1. **GitHub Issue**: Criação da Issue ou Epic correspondente no repositório.
-2. **Plano de Execução**: Documento detalhado no diretório `plan/`.
-3. **ADR (Architectural Decision Record)**: Registro da decisão em `docs/architecture/adr/`.
-4. **User Story**: Inclusão dos critérios de aceite em `docs/USER-STORIES.md`.
-5. **Rastreabilidade**: Commits devem obrigatoriamente mencionar a issue (ex: `feat: ... Closes #ID`).
+Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem:
+1. **GitHub Issue**: Registro da necessidade. **Obrigatório atualizar a descrição da Issue com links para o ADR, Story e Plan assim que criados.**
+2. **ADR (Architectural Decision Record)**: Definição de padrões em `docs/architecture/adr/`.
+3. **User Story**: Critérios de aceite em `docs/USER-STORIES.md`.
+4. **Implementation Plan**: Roteiro técnico em `plan/`.
+5. **Rastreabilidade**: Commits vinculados à issue (ex: `feat: ... Closes #ID`).
 6. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
 
 Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridades.

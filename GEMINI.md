@@ -43,13 +43,13 @@ Todas as definições de agentes, skills e workflows estão centralizadas no dir
 3. **Barreira de Qualidade (Security Gate)**: Todo build, deploy ou finalização de tarefa deve passar pela validação de segurança da extensão `gemini-cli-extensions/security`, que bloqueia a conclusão em caso de vulnerabilidades críticas.
 
 ### 📜 Governança de Documentação (Roadmap Q2 2026)
-Toda nova funcionalidade estratégica deve ser precedida por:
-1. **GitHub Issue**: Criação da Issue/Epic no repositório.
-2. **Plano de Execução** em `plan/`.
-3. **ADR** em `docs/architecture/adr/`.
-4. **User Story** em `docs/USER-STORIES.md`.
-5. **Rastreabilidade**: Commits devem obrigatoriamente mencionar a issue (ex: `feat: ... Closes #ID`).
-6. **Atualização de Índices** (`README.md`, `INDEX.md`, `CONSOLIDATED_DOCS.md`).
+Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem:
+1. **GitHub Issue**: Registro da necessidade. **Obrigatório atualizar a descrição da Issue com links para o ADR, Story e Plan assim que criados.**
+2. **ADR (Architectural Decision Record)**: Definição de padrões técnicos em `docs/architecture/adr/`.
+3. **User Story**: Detalhamento dos critérios de aceite em `docs/USER-STORIES.md`.
+4. **Implementation Plan**: Roteiro técnico detalhado em `plan/`.
+5. **Rastreabilidade**: Commits vinculados à issue (ex: `feat: ... Closes #ID`).
+6. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
 
 Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridades correntes.
 
