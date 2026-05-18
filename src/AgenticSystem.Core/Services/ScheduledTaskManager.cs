@@ -408,13 +408,13 @@ public class ScheduledTaskManager : IScheduledTaskManager
 
         try
         {
-            var expression = new Quartz.CronExpression(cronExpression);
+            var quartzExpression = NormalizeCronExpression(cronExpression);
+            var expression = new Quartz.CronExpression(quartzExpression);
             var next = expression.GetNextValidTimeAfter(DateTimeOffset.UtcNow);
             return next?.UtcDateTime;
         }
         catch
         {
-            // Fallback for simple interval format if needed, or invalid CRON
             if (cronExpression.StartsWith("interval:", StringComparison.OrdinalIgnoreCase))
             {
                 var val = cronExpression.Replace("interval:", "").Replace("s", "");
@@ -426,5 +426,22 @@ public class ScheduledTaskManager : IScheduledTaskManager
 
             return null;
         }
+    }
+
+    private static string NormalizeCronExpression(string cronExpression)
+    {
+        var parts = cronExpression.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        
+        if (parts.Length == 5)
+        {
+            return $"0 {parts[0]} {parts[1]} {parts[2]} {parts[3]} ?";
+        }
+        
+        if (parts.Length == 6)
+        {
+            return cronExpression;
+        }
+
+        return cronExpression;
     }
 }
