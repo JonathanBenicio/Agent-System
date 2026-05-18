@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   ReactFlow, 
   Background, 
@@ -7,7 +7,6 @@ import {
   useReactFlow,
   ReactFlowProvider
 } from '@xyflow/react';
-import type { Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { 
   Play, 
@@ -109,7 +108,6 @@ export function WorkflowBuilderPage() {
     onConnect, 
     addNode,
     setNodes,
-    setEdges,
     setWorkflowName,
     setActiveWorkflowId,
     toWorkflowDefinition,
@@ -120,7 +118,6 @@ export function WorkflowBuilderPage() {
   const { screenToFlowPosition } = useReactFlow();
 
   // Sync execution status to nodes visually
-  import { useEffect } from 'react';
   useEffect(() => {
     if (!selectedExecutionId) {
       // Clear execution status from all nodes
@@ -273,7 +270,7 @@ export function WorkflowBuilderPage() {
           <button 
             onClick={async () => {
               if (!activeWorkflowId) {
-                addToast('Salve o workflow antes de executar', 'warning');
+                addToast('Salve o workflow antes de executar', 'info');
                 return;
               }
               try {
@@ -469,6 +466,7 @@ export function WorkflowBuilderPage() {
           isOpen={isHistoryOpen}
           onClose={() => setIsHistoryOpen(false)}
           onSelectExecution={setSelectedExecutionId}
+          selectedExecutionId={selectedExecutionId}
         />
       </div>
     </div>

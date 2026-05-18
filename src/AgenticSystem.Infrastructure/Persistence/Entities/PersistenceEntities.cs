@@ -564,6 +564,15 @@ public class McpPluginEntity : ITenantEntity
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+public class AgentKnowledgeRoomAssignmentEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string AgentName { get; set; } = string.Empty;
+    public string RoomId { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class SessionSummaryEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;

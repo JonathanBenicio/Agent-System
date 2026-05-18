@@ -2113,11 +2113,11 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 |------|---------|
 | Componente | `AgentFormModal` (seletor múltiplo) |
 | API | `PUT /api/agent/agents/{name}/rooms` |
-| Status | ⏳ Planejado (ADR-019) |
+| Status | 🚧 Em Progresso (ADR-019) |
 
 **Critérios de Aceite:**
 - [ ] Lista de salas disponíveis carregada no modal de criação/edição de agente.
-- [ ] Persistência da associação em tabela junction `AgentKnowledgeRoomAssignment`.
+- [x] Persistência da associação em tabela junction `AgentKnowledgeRoomAssignment`.
 - [ ] O `KnowledgeSpecialist` filtra a busca vetorial automaticamente pelas salas associadas ao agente.
 
 ---

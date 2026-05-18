@@ -89,6 +89,50 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("tenants", (string)null);
                 });
 
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.AgentKnowledgeRoomAssignmentEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AgentName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("agent_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("RoomId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("room_id");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentName")
+                        .HasDatabaseName("ix_agent_room_assignments_agent");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_agent_room_assignments_tenant");
+
+                    b.HasIndex("AgentName", "RoomId", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_agent_room_assignment");
+
+                    b.ToTable("agent_knowledge_room_assignments", (string)null);
+                });
+
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.AgentMarketplaceEntryEntity", b =>
                 {
                     b.Property<string>("Id")

@@ -789,3 +789,24 @@ public class KnowledgeRoomPermissionConfiguration : IEntityTypeConfiguration<Kno
         builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_knowledge_room_permissions_tenant_id");
     }
 }
+
+public class AgentKnowledgeRoomAssignmentConfiguration : IEntityTypeConfiguration<AgentKnowledgeRoomAssignmentEntity>
+{
+    public void Configure(EntityTypeBuilder<AgentKnowledgeRoomAssignmentEntity> builder)
+    {
+        builder.ToTable("agent_knowledge_room_assignments");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.AgentName).HasColumnName("agent_name").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.RoomId).HasColumnName("room_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(e => new { e.AgentName, e.RoomId, e.TenantId })
+            .IsUnique()
+            .HasDatabaseName("ux_agent_room_assignment");
+        builder.HasIndex(e => e.AgentName).HasDatabaseName("ix_agent_room_assignments_agent");
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_agent_room_assignments_tenant");
+    }
+}
