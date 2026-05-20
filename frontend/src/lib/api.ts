@@ -1,4 +1,4 @@
-import { getAuthHeaders } from '@/lib/auth'
+import { useAuthStore } from '@/store/authStore'
 import type { SystemAlert } from '@/types/api'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
@@ -16,8 +16,10 @@ class ApiError extends Error {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = new Headers(options?.headers)
 
-  for (const [key, value] of Object.entries(getAuthHeaders())) {
-    headers.set(key, value)
+  // Use token from AuthStore (Supabase JWT)
+  const token = useAuthStore.getState().token
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
   }
 
   // Enforce Tenant ID context from the Knowledge Store for Multi-tenancy isolation
@@ -27,7 +29,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     if (tenantId) {
       headers.set('X-Tenant-Id', tenantId);
     }
-  } catch (e) {
+  } catch {
     // Ignore if store is not initialized
   }
 
@@ -38,6 +40,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
     headers,
+    credentials: 'include',
   })
 
   if (!res.ok) {
@@ -105,6 +108,9 @@ import type {
   LLMProviderSummary,
   UpdateDefaultLlmSelectionRequest,
   UpdateProviderRequest,
+  LLMProviderApiKey,
+  RegisterApiKeyRequest,
+  UpdateApiKeyRequest,
   PluginSummary,
   LoadPluginRequest,
   MCPToolInfo,
@@ -122,6 +128,12 @@ import type {
   DeliveryResult,
   AgentVersion,
   YamlValidationResult,
+  WorkflowDefinitionSummary,
+  WorkflowDefinition,
+  WorkflowExecution,
+  SessionListItem,
+  SessionDetail,
+  ChatMessageDto,
 } from '@/types/api'
 
 export const agentApi = {
@@ -161,6 +173,13 @@ export const skillApi = {
 }
 
 export const sessionApi = {
+  list: (limit?: number) =>
+    get<SessionListItem[]>(`/api/session${limit ? `?limit=${limit}` : ''}`),
+  get: (id: string) => get<SessionDetail>(`/api/session/${encodeURIComponent(id)}`),
+  messages: (id: string) => get<ChatMessageDto[]>(`/api/session/${encodeURIComponent(id)}/messages`),
+  delete: (id: string) => del(`/api/session/${encodeURIComponent(id)}`),
+  updateTitle: (id: string, title: string) =>
+    put<{ id: string; title: string }>(`/api/session/${encodeURIComponent(id)}/title`, { title }),
   getEvents: (sessionId: string, count?: number) =>
     get<AgentEvent[]>(`/api/agent/sessions/${encodeURIComponent(sessionId)}/events${count ? `?count=${count}` : ''}`),
   cleanup: () => post<{ message: string; timestamp: string }>('/api/agent/maintenance/cleanup'),
@@ -202,6 +221,22 @@ export const llmApi = {
   updateDefaultSelection: (req: UpdateDefaultLlmSelectionRequest) =>
     put<LLMConfigurationInfo>('/api/admin/llm/default-selection', req),
   syncQuotas: () => post<{ message: string }>('/api/admin/llm/providers/sync-quotas'),
+  
+  // API Keys
+  getKeys: (providerName: string) => 
+    get<LLMProviderApiKey[]>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys`),
+  registerKey: (providerName: string, req: RegisterApiKeyRequest) => 
+    post<LLMProviderApiKey>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys`, req),
+  updateKey: (providerName: string, id: string, req: UpdateApiKeyRequest) => 
+    put<LLMProviderApiKey>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys/${encodeURIComponent(id)}`, req),
+  deleteKey: (providerName: string, id: string) => 
+    del(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys/${encodeURIComponent(id)}`),
+  setDefaultKey: (providerName: string, id: string) => 
+    post<{ message: string }>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys/${encodeURIComponent(id)}/default`),
+  testKey: (providerName: string, id: string) => 
+    post<{ success: boolean }>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys/${encodeURIComponent(id)}/test`),
+  discoverModelsForKey: (providerName: string, id: string) => 
+    post<{ success: boolean; discoveredModels: string[]; errorMessage?: string }>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys/${encodeURIComponent(id)}/discover-models`),
 }
 
 // ══════════════════════════════════════
@@ -285,13 +320,50 @@ export const scheduledTasksApi = {
 // ══════════════════════════════════════
 
 import type {
+  KnowledgeRoom,
+  KnowledgeRoomRole,
+  KnowledgeRoomPermission,
+  RagStats,
   IngestDocumentResponse,
   EmbeddingModelConfig,
   StartMigrationRequest,
   MigrationJob,
 } from '@/types/api'
 
+export const workflowApi = {
+  // Definitions
+  listDefinitions: (limit?: number) => get<WorkflowDefinitionSummary[]>(`/api/workflow/definitions${limit ? `?limit=${limit}` : ''}`),
+  getDefinition: (id: string) => get<WorkflowDefinition>(`/api/workflow/definitions/${encodeURIComponent(id)}`),
+  saveDefinition: (def: WorkflowDefinition) => post<WorkflowDefinition>('/api/workflow/definitions', def),
+  deleteDefinition: (id: string) => del(`/api/workflow/definitions/${encodeURIComponent(id)}`),
+
+  // Executions
+  startWorkflow: (definitionId: string, variables?: Record<string, unknown>) => 
+    post<WorkflowExecution>(`/api/workflow/executions/start/${encodeURIComponent(definitionId)}`, variables),
+  getExecution: (id: string) => get<WorkflowExecution>(`/api/workflow/executions/${encodeURIComponent(id)}`),
+  listExecutions: (status?: number, limit?: number) => {
+    const params = new URLSearchParams()
+    if (status !== undefined) params.set('status', status.toString())
+    if (limit) params.set('limit', limit.toString())
+    const qs = params.toString()
+    return get<WorkflowExecution[]>(`/api/workflow/executions${qs ? `?${qs}` : ''}`)
+  },
+  cancelExecution: (id: string, reason?: string) => 
+    post<WorkflowExecution>(`/api/workflow/executions/${encodeURIComponent(id)}/cancel${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`),
+}
+
+export const knowledgeRoomApi = {
+  list: () => get<KnowledgeRoom[]>('/api/knowledge/rooms'),
+  create: (data: Partial<KnowledgeRoom>) => post<KnowledgeRoom>('/api/knowledge/rooms', data),
+  update: (id: string, data: Partial<KnowledgeRoom>) => put<KnowledgeRoom>(`/api/knowledge/rooms/${encodeURIComponent(id)}`, data),
+  delete: (id: string) => del(`/api/knowledge/rooms/${encodeURIComponent(id)}`),
+  getPermissions: (id: string) => get<KnowledgeRoomPermission[]>(`/api/knowledge/rooms/${encodeURIComponent(id)}/permissions`),
+  updatePermission: (id: string, request: { userId: string; role: KnowledgeRoomRole }) => post<KnowledgeRoomPermission>(`/api/knowledge/rooms/${encodeURIComponent(id)}/permissions`, request),
+  deletePermission: (id: string, targetUserId: string) => del(`/api/knowledge/rooms/${encodeURIComponent(id)}/permissions/${encodeURIComponent(targetUserId)}`),
+}
+
 export const ragApi = {
+  stats: () => get<RagStats>('/api/document/stats'),
   ingest: (file: File, source?: string) => {
     const formData = new FormData()
     formData.append('file', file)

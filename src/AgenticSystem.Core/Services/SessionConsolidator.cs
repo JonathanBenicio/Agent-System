@@ -14,16 +14,21 @@ namespace AgenticSystem.Core.Services;
 public class SessionConsolidator : ISessionConsolidator
 {
     private readonly IChatClient _chatClient;
+    private readonly ISessionSummaryStore? _summaryStore;
     private readonly ILogger<SessionConsolidator> _logger;
     private readonly ConcurrentBag<SessionSummary> _summaries = [];
 
-    public SessionConsolidator(IChatClient chatClient, ILogger<SessionConsolidator> logger)
+    public SessionConsolidator(
+        IChatClient chatClient,
+        ILogger<SessionConsolidator> logger,
+        ISessionSummaryStore? summaryStore = null)
     {
         _chatClient = chatClient;
+        _summaryStore = summaryStore;
         _logger = logger;
     }
 
-    public async Task<SessionSummary> SummarizeSessionAsync(string sessionId, List<AgentEvent> events)
+    public async Task<SessionSummary> SummarizeSessionAsync(string sessionId, List<AgentEvent> events, string? userId = null, string? tenantId = null)
     {
         if (events.Count == 0)
         {
@@ -63,11 +68,17 @@ Return ONLY a valid JSON object:
             if (string.IsNullOrWhiteSpace(content))
             {
                 _logger.LogWarning("LLM summarization failed for session {SessionId}, using fallback", sessionId);
-                return BuildFallbackSummary(sessionId, events);
+                return await HandleFallbackSummary(sessionId, events, userId, tenantId);
             }
 
             var summary = ParseSummary(sessionId, content, events);
             _summaries.Add(summary);
+
+            if (_summaryStore != null && !string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(tenantId))
+            {
+                await _summaryStore.SaveSummaryAsync(summary, userId, tenantId);
+            }
+
             _logger.LogInformation("📋 Session {SessionId} summarized: {Topics}",
                 sessionId, string.Join(", ", summary.TopicsDiscussed));
             return summary;
@@ -77,17 +88,15 @@ Return ONLY a valid JSON object:
             if (ex.GetType().FullName == "Polly.CircuitBreaker.BrokenCircuitException")
             {
                 _logger.LogWarning(ex, "🚨 Summarization discarded for session {SessionId}: LLM Circuit Breaker is open.", sessionId);
-                return BuildFallbackSummary(sessionId, events);
+                return await HandleFallbackSummary(sessionId, events, userId, tenantId);
             }
 
             _logger.LogWarning(ex, "⚠️ Summarization failed for session {SessionId}, using fallback.", sessionId);
-            var fallback = BuildFallbackSummary(sessionId, events);
-            _summaries.Add(fallback);
-            return fallback;
+            return await HandleFallbackSummary(sessionId, events, userId, tenantId);
         }
     }
 
-    public async Task<SessionInsights> ExtractInsightsAsync(string sessionId, List<AgentEvent> events)
+    public async Task<SessionInsights> ExtractInsightsAsync(string sessionId, List<AgentEvent> events, string? userId = null, string? tenantId = null)
     {
         if (events.Count == 0)
         {
@@ -130,27 +139,38 @@ RULES:
 
             if (string.IsNullOrWhiteSpace(content))
             {
-                return BuildFallbackInsights(sessionId, events);
+                return await HandleFallbackInsights(sessionId, events, userId, tenantId);
             }
 
-            return ParseInsights(sessionId, content);
+            var insights = ParseInsights(sessionId, content);
+
+            if (_summaryStore != null && !string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(tenantId))
+            {
+                await _summaryStore.SaveInsightsAsync(insights, userId, tenantId);
+            }
+
+            return insights;
         }
         catch (Exception ex)
         {
             if (ex.GetType().FullName == "Polly.CircuitBreaker.BrokenCircuitException")
             {
                 _logger.LogWarning(ex, "🚨 Insight extraction discarded for session {SessionId}: LLM Circuit Breaker is open.", sessionId);
-                return BuildFallbackInsights(sessionId, events);
+                return await HandleFallbackInsights(sessionId, events, userId, tenantId);
             }
 
             _logger.LogWarning(ex, "⚠️ Insight extraction failed for session {SessionId}, using fallback.", sessionId);
-            return BuildFallbackInsights(sessionId, events);
+            return await HandleFallbackInsights(sessionId, events, userId, tenantId);
         }
     }
 
-    public Task<IEnumerable<SessionSummary>> GetRelevantSummariesAsync(string query, int maxResults = 5)
+    public async Task<IEnumerable<SessionSummary>> GetRelevantSummariesAsync(string query, int maxResults = 5)
     {
-        // Simple keyword-based relevance for now
+        if (_summaryStore != null)
+        {
+            return await _summaryStore.GetRelevantAsync(query, maxResults);
+        }
+
         var queryTerms = query.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
         var relevant = _summaries
@@ -162,7 +182,32 @@ RULES:
             .Take(maxResults)
             .ToList();
 
-        return Task.FromResult<IEnumerable<SessionSummary>>(relevant);
+        return relevant;
+    }
+
+    private async Task<SessionSummary> HandleFallbackSummary(string sessionId, List<AgentEvent> events, string? userId, string? tenantId)
+    {
+        var fallback = BuildFallbackSummary(sessionId, events);
+        _summaries.Add(fallback);
+
+        if (_summaryStore != null && !string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(tenantId))
+        {
+            await _summaryStore.SaveSummaryAsync(fallback, userId, tenantId);
+        }
+
+        return fallback;
+    }
+
+    private async Task<SessionInsights> HandleFallbackInsights(string sessionId, List<AgentEvent> events, string? userId, string? tenantId)
+    {
+        var fallback = BuildFallbackInsights(sessionId, events);
+
+        if (_summaryStore != null && !string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(tenantId))
+        {
+            await _summaryStore.SaveInsightsAsync(fallback, userId, tenantId);
+        }
+
+        return fallback;
     }
 
     private static string BuildTranscript(List<AgentEvent> events)

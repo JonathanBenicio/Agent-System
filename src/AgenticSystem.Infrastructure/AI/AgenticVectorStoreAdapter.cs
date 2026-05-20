@@ -330,103 +330,126 @@ public class AgenticVectorStoreAdapter : VectorStore
                 _ => null
             };
         }
+    }
 
-        private static double CalculateScore(string? queryText, float[]? queryVector, EmbeddingDocument document)
+    private static double CalculateScore(string? queryText, float[]? queryVector, EmbeddingDocument document)
+    {
+        if (queryVector is { Length: > 0 } && document.Embedding is { Length: > 0 })
+            return NormalizeCosine(queryVector, document.Embedding);
+        if (!string.IsNullOrWhiteSpace(queryText))
+            return CalculateLexicalScore(queryText, document);
+        return 1.0;
+    }
+
+    private static double CalculateLexicalScore(string query, EmbeddingDocument document)
+    {
+        var queryLower = query.ToLowerInvariant();
+        var contentLower = document.Content.ToLowerInvariant();
+        var words = queryLower.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (words.Length == 0) return 0;
+        var matchCount = words.Count(contentLower.Contains);
+        var score = (double)matchCount / words.Length;
+        if (contentLower.Contains(queryLower)) score = Math.Min(score + 0.3, 1.0);
+        return score;
+    }
+
+    private static double NormalizeCosine(float[] left, float[] right)
+    {
+        if (left.Length != right.Length) return 0;
+        double dot = 0, leftNorm = 0, rightNorm = 0;
+        for (var i = 0; i < left.Length; i++)
         {
-            if (queryVector is { Length: > 0 } && document.Embedding is { Length: > 0 })
-            {
-                return NormalizeCosine(queryVector, document.Embedding);
-            }
-
-            if (!string.IsNullOrWhiteSpace(queryText))
-            {
-                return CalculateLexicalScore(queryText, document);
-            }
-
-            return 1.0;
+            dot += left[i] * (double)right[i];
+            leftNorm += left[i] * (double)left[i];
+            rightNorm += right[i] * (double)right[i];
         }
+        var denominator = Math.Sqrt(leftNorm) * Math.Sqrt(rightNorm);
+        return denominator == 0 ? 0 : (dot / denominator + 1d) / 2d;
+    }
 
-        private static double CalculateLexicalScore(string query, EmbeddingDocument document)
+    private static EmbeddingDocument ToEmbeddingDocument(SearchMatch match, bool includeVectors)
+    {
+        return new EmbeddingDocument
         {
-            var queryLower = query.ToLowerInvariant();
-            var contentLower = document.Content.ToLowerInvariant();
-            var words = queryLower.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            Id = match.Id,
+            Content = match.Content,
+            Type = match.Type,
+            Collection = match.Collection,
+            Embedding = includeVectors ? match.Embedding : null,
+            Metadata = match.Metadata,
+            IndexedAt = match.IndexedAt
+        };
+    }
 
-            if (words.Length == 0)
-            {
-                return 0;
-            }
-
-            var matchCount = words.Count(contentLower.Contains);
-            var score = (double)matchCount / words.Length;
-
-            if (contentLower.Contains(queryLower))
-            {
-                score = Math.Min(score + 0.3, 1.0);
-            }
-
-            return score;
-        }
-
-        private static double NormalizeCosine(float[] left, float[] right)
+    private static EmbeddingDocument WithoutVectors(EmbeddingDocument document)
+    {
+        return new EmbeddingDocument
         {
-            if (left.Length != right.Length)
-            {
-                return 0;
-            }
+            Id = document.Id,
+            Content = document.Content,
+            Type = document.Type,
+            Collection = document.Collection,
+            Embedding = null,
+            Metadata = document.Metadata,
+            IndexedAt = document.IndexedAt
+        };
+    }
 
-            double dot = 0;
-            double leftNorm = 0;
-            double rightNorm = 0;
-
-            for (var i = 0; i < left.Length; i++)
-            {
-                dot += left[i] * (double)right[i];
-                leftNorm += left[i] * (double)left[i];
-                rightNorm += right[i] * (double)right[i];
-            }
-
-            var denominator = Math.Sqrt(leftNorm) * Math.Sqrt(rightNorm);
-            if (denominator == 0)
-            {
-                return 0;
-            }
-
-            return (dot / denominator + 1d) / 2d;
-        }
-
-        private static EmbeddingDocument ToEmbeddingDocument(SearchMatch match, bool includeVectors)
+    private static Dictionary<string, object?> ToDictionary(EmbeddingDocument document, bool includeVectors)
+    {
+        return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
         {
-            return new EmbeddingDocument
-            {
-                Id = match.Id,
-                Content = match.Content,
-                Type = match.Type,
-                Collection = match.Collection,
-                Embedding = includeVectors ? match.Embedding ?? Array.Empty<float>() : Array.Empty<float>(),
-                Metadata = match.Metadata,
-                IndexedAt = match.IndexedAt
-            };
-        }
+            ["id"] = document.Id,
+            ["content"] = document.Content,
+            ["type"] = document.Type,
+            ["collection"] = document.Collection,
+            ["indexedAt"] = document.IndexedAt,
+            ["metadata"] = document.Metadata,
+            ["embedding"] = includeVectors ? document.Embedding : null
+        };
+    }
 
-        private static EmbeddingDocument WithoutVectors(EmbeddingDocument document)
+    private static Dictionary<string, object?> WithoutVectors(Dictionary<string, object?> record)
+    {
+        var clone = new Dictionary<string, object?>(record, StringComparer.OrdinalIgnoreCase);
+        clone["embedding"] = null;
+        return clone;
+    }
+
+    private static EmbeddingDocument ToEmbeddingDocument(Dictionary<string, object?> record)
+    {
+        var metadata = record.TryGetValue("metadata", out var metadataValue) && metadataValue is Dictionary<string, string> typedMetadata
+            ? typedMetadata
+            : new Dictionary<string, string>();
+
+        return new EmbeddingDocument
         {
-            return new EmbeddingDocument
-            {
-                Id = document.Id,
-                Content = document.Content,
-                Type = document.Type,
-                Collection = document.Collection,
-                Embedding = Array.Empty<float>(),
-                Metadata = document.Metadata,
-                IndexedAt = document.IndexedAt
-            };
-        }
+            Id = record["id"]?.ToString() ?? Guid.NewGuid().ToString("N"),
+            Content = record["content"]?.ToString() ?? string.Empty,
+            Type = record["type"]?.ToString() ?? string.Empty,
+            Collection = record["collection"]?.ToString() ?? string.Empty,
+            Metadata = metadata,
+            IndexedAt = record.TryGetValue("indexedAt", out var indexedAtValue) && indexedAtValue is DateTime indexedAt
+                ? indexedAt
+                : DateTime.UtcNow,
+            Embedding = record.TryGetValue("embedding", out var embeddingValue)
+                ? embeddingValue switch
+                {
+                    float[] vector => vector,
+                    ReadOnlyMemory<float> vector => vector.ToArray(),
+                    _ => null
+                }
+                : null
+        };
     }
 
     private sealed class AgenticDynamicCollection : VectorStoreCollection<object, Dictionary<string, object?>>
     {
-        private readonly AgenticEmbeddingCollection _inner;
+        private readonly string _name;
+        private readonly VectorStoreCollectionDefinition _definition;
+        private readonly IVectorStore _store;
+        private readonly TextEmbeddingGenerator? _embeddingGenerator;
+        private readonly ConcurrentDictionary<string, byte> _managedCollections;
         private readonly VectorStoreCollectionMetadata _metadata;
 
         public AgenticDynamicCollection(
@@ -436,30 +459,58 @@ public class AgenticVectorStoreAdapter : VectorStore
             TextEmbeddingGenerator? embeddingGenerator,
             ConcurrentDictionary<string, byte> managedCollections)
         {
-            _inner = new AgenticEmbeddingCollection(name, definition, store, embeddingGenerator, managedCollections);
+            _name = name;
+            _definition = definition;
+            _store = store;
+            _embeddingGenerator = embeddingGenerator;
+            _managedCollections = managedCollections;
             _metadata = new VectorStoreCollectionMetadata
             {
-                VectorStoreSystemName = s_storeMetadata.VectorStoreSystemName,
-                VectorStoreName = s_storeMetadata.VectorStoreName,
+                VectorStoreSystemName = AgenticVectorStoreAdapter.s_storeMetadata.VectorStoreSystemName,
+                VectorStoreName = AgenticVectorStoreAdapter.s_storeMetadata.VectorStoreName,
                 CollectionName = name
             };
         }
 
-        public override string Name => _inner.Name;
+        public override string Name => _name;
 
-        public override Task<bool> CollectionExistsAsync(CancellationToken cancellationToken = default)
-            => _inner.CollectionExistsAsync(cancellationToken);
+        public override async Task<bool> CollectionExistsAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (_managedCollections.ContainsKey(_name)) return true;
+            var collections = await _store.GetCollectionsAsync();
+            return collections.Any(c => string.Equals(c, _name, StringComparison.OrdinalIgnoreCase));
+        }
 
         public override Task EnsureCollectionExistsAsync(CancellationToken cancellationToken = default)
-            => _inner.EnsureCollectionExistsAsync(cancellationToken);
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _managedCollections.TryAdd(_name, 0);
+            return Task.CompletedTask;
+        }
 
-        public override Task EnsureCollectionDeletedAsync(CancellationToken cancellationToken = default)
-            => _inner.EnsureCollectionDeletedAsync(cancellationToken);
+        public override async Task EnsureCollectionDeletedAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _managedCollections.TryRemove(_name, out _);
+            var documents = await LoadDocumentsAsync(includeVectors: false, cancellationToken);
+            foreach (var doc in documents)
+            {
+                await _store.DeleteAsync(doc.Id, _name);
+            }
+        }
 
         public override async Task<Dictionary<string, object?>?> GetAsync(object key, RecordRetrievalOptions? options = null, CancellationToken cancellationToken = default)
         {
-            var record = await _inner.GetAsync(key.ToString() ?? string.Empty, options, cancellationToken);
-            return record is null ? null : ToDictionary(record, options?.IncludeVectors ?? false);
+            cancellationToken.ThrowIfCancellationRequested();
+            var keyStr = key.ToString() ?? string.Empty;
+            var result = await _store.SearchWithFiltersAsync(string.Empty, new Dictionary<string, string>
+            {
+                ["collection"] = _name,
+                ["id"] = keyStr
+            });
+            var match = result.Matches.FirstOrDefault();
+            return match is null ? null : ToDictionary(ToEmbeddingDocument(match, options?.IncludeVectors ?? false), options?.IncludeVectors ?? false);
         }
 
         public override async IAsyncEnumerable<Dictionary<string, object?>> GetAsync(
@@ -468,37 +519,34 @@ public class AgenticVectorStoreAdapter : VectorStore
             FilteredRecordRetrievalOptions<Dictionary<string, object?>>? options = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var predicate = filter.Compile();
             var includeVectors = options?.IncludeVectors ?? false;
-
-            await foreach (var record in _inner.GetAsync(_ => true, int.MaxValue, new FilteredRecordRetrievalOptions<EmbeddingDocument> { IncludeVectors = true }, cancellationToken))
+            var documents = await LoadDocumentsAsync(includeVectors: true, cancellationToken);
+            foreach (var doc in documents.Where(d => predicate(ToDictionary(d, false))).Take(top))
             {
-                var dictionary = ToDictionary(record, includeVectors: true);
-                if (!predicate(dictionary))
-                {
-                    continue;
-                }
-
-                yield return includeVectors ? dictionary : WithoutVectors(dictionary);
-                if (--top == 0)
-                {
-                    yield break;
-                }
+                yield return includeVectors ? ToDictionary(doc, true) : WithoutVectors(ToDictionary(doc, false));
             }
         }
 
         public override Task DeleteAsync(object key, CancellationToken cancellationToken = default)
-            => _inner.DeleteAsync(key.ToString() ?? string.Empty, cancellationToken);
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return _store.DeleteAsync(key.ToString() ?? string.Empty, _name);
+        }
 
         public override Task UpsertAsync(Dictionary<string, object?> record, CancellationToken cancellationToken = default)
         {
-            return _inner.UpsertAsync(ToEmbeddingDocument(record), cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            _managedCollections.TryAdd(_name, 0);
+            return _store.UpsertAsync(ToEmbeddingDocument(record));
         }
 
         public override async Task UpsertAsync(IEnumerable<Dictionary<string, object?>> records, CancellationToken cancellationToken = default)
         {
             foreach (var record in records)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 await UpsertAsync(record, cancellationToken);
             }
         }
@@ -509,99 +557,75 @@ public class AgenticVectorStoreAdapter : VectorStore
             VectorSearchOptions<Dictionary<string, object?>>? options = null,
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            var documents = await LoadDocumentsAsync(includeVectors: true, cancellationToken);
             var filter = options?.Filter?.Compile();
             var includeVectors = options?.IncludeVectors ?? false;
-            var skipped = 0;
-            var yielded = 0;
+            var queryVector = await TryGetQueryVectorAsync(searchValue, cancellationToken);
+            var queryText = searchValue as string;
 
-            await foreach (var result in _inner.SearchAsync(
-                searchValue,
-                int.MaxValue,
-                new VectorSearchOptions<EmbeddingDocument>
-                {
-                    IncludeVectors = true
-                },
-                cancellationToken))
+            if (searchValue is not null && queryText is null && queryVector is null)
             {
-                if (options?.ScoreThreshold is { } threshold && result.Score < threshold)
-                {
-                    continue;
-                }
+                throw new NotSupportedException(
+                    "AgenticVectorStoreAdapter supports search inputs of type string, float[], ReadOnlyMemory<float> and Embedding<float>.");
+            }
 
-                var dictionary = ToDictionary(result.Record, includeVectors: true);
-                if (filter is not null && !filter(dictionary))
-                {
-                    continue;
-                }
+            var ranked = documents
+                .Select(doc => (Document: doc, Score: CalculateScore(queryText, queryVector, doc)))
+                .Where(item => item.Score > 0);
 
-                if (skipped < (options?.Skip ?? 0))
-                {
-                    skipped++;
-                    continue;
-                }
+            if (filter is not null)
+            {
+                ranked = ranked.Where(item => filter(ToDictionary(item.Document, false)));
+            }
 
-                yield return new VectorSearchResult<Dictionary<string, object?>>(ToDictionary(result.Record, includeVectors), result.Score);
-                yielded++;
+            if (options?.ScoreThreshold is { } threshold)
+            {
+                ranked = ranked.Where(item => item.Score >= threshold);
+            }
 
-                if (yielded >= top)
-                {
-                    yield break;
-                }
+            foreach (var item in ranked
+                .OrderByDescending(item => item.Score)
+                .Skip(options?.Skip ?? 0)
+                .Take(top))
+            {
+                var dict = ToDictionary(item.Document, includeVectors);
+                yield return new VectorSearchResult<Dictionary<string, object?>>(
+                    includeVectors ? dict : WithoutVectors(dict),
+                    item.Score);
             }
         }
 
         public override object? GetService(Type serviceType, object? serviceKey = null)
         {
-            if (serviceType == typeof(VectorStoreCollectionMetadata))
-                return _metadata;
-            return _inner.GetService(serviceType, serviceKey);
+            if (serviceType == typeof(IVectorStore)) return _store;
+            if (serviceType == typeof(VectorStoreCollectionMetadata)) return _metadata;
+            if (serviceType == typeof(VectorStoreCollectionDefinition)) return _definition;
+            return null;
         }
 
-        private static Dictionary<string, object?> ToDictionary(EmbeddingDocument document, bool includeVectors)
+        private async Task<List<EmbeddingDocument>> LoadDocumentsAsync(bool includeVectors, CancellationToken cancellationToken)
         {
-            return new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
+            cancellationToken.ThrowIfCancellationRequested();
+            var result = await _store.SearchWithFiltersAsync(string.Empty, new Dictionary<string, string>
             {
-                ["id"] = document.Id,
-                ["content"] = document.Content,
-                ["type"] = document.Type,
-                ["collection"] = document.Collection,
-                ["indexedAt"] = document.IndexedAt,
-                ["metadata"] = document.Metadata,
-                ["embedding"] = includeVectors ? document.Embedding : Array.Empty<float>()
-            };
+                ["collection"] = _name
+            });
+            return result.Matches
+                .Select(match => ToEmbeddingDocument(match, includeVectors))
+                .ToList();
         }
 
-        private static Dictionary<string, object?> WithoutVectors(Dictionary<string, object?> record)
+        private async Task<float[]?> TryGetQueryVectorAsync<TInput>(TInput searchValue, CancellationToken cancellationToken)
         {
-            var clone = new Dictionary<string, object?>(record, StringComparer.OrdinalIgnoreCase);
-            clone["embedding"] = Array.Empty<float>();
-            return clone;
-        }
-
-        private static EmbeddingDocument ToEmbeddingDocument(Dictionary<string, object?> record)
-        {
-            var metadata = record.TryGetValue("metadata", out var metadataValue) && metadataValue is Dictionary<string, string> typedMetadata
-                ? typedMetadata
-                : new Dictionary<string, string>();
-
-            return new EmbeddingDocument
+            return searchValue switch
             {
-                Id = record["id"]?.ToString() ?? Guid.NewGuid().ToString("N"),
-                Content = record["content"]?.ToString() ?? string.Empty,
-                Type = record["type"]?.ToString() ?? string.Empty,
-                Collection = record["collection"]?.ToString() ?? string.Empty,
-                Metadata = metadata,
-                IndexedAt = record.TryGetValue("indexedAt", out var indexedAtValue) && indexedAtValue is DateTime indexedAt
-                    ? indexedAt
-                    : DateTime.UtcNow,
-                Embedding = record.TryGetValue("embedding", out var embeddingValue)
-                    ? embeddingValue switch
-                    {
-                        float[] vector => vector,
-                        ReadOnlyMemory<float> vector => vector.ToArray(),
-                        _ => Array.Empty<float>()
-                    }
-                    : Array.Empty<float>()
+                string text when !string.IsNullOrWhiteSpace(text) && _embeddingGenerator is not null
+                    => (await _embeddingGenerator.GenerateAsync(text, cancellationToken: cancellationToken)).Vector.ToArray(),
+                float[] vector => vector,
+                ReadOnlyMemory<float> vector => vector.ToArray(),
+                Embedding<float> embedding => embedding.Vector.ToArray(),
+                _ => null
             };
         }
     }

@@ -6,6 +6,7 @@ import { Badge } from '@/components/shared/Badge'
 import { useToast } from '@/components/shared/Toast'
 import { cn } from '@/lib/utils'
 import type { LLMProviderInfo } from '@/types/api'
+import { ProviderApiKeysPanel } from './ProviderApiKeysPanel'
 
 export function ProvidersPage() {
   const {
@@ -405,6 +406,9 @@ export function ProvidersPage() {
                   </div>
                 </div>
               )}
+
+              {/* API Keys Panel */}
+              <ProviderApiKeysPanel providerName={p.name} />
             </div>
           ))}
         </div>

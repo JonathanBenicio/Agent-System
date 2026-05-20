@@ -2098,3 +2098,81 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 - [ ] Botão de check para marcar alerta como lido
 - [ ] Atualização do estado do alerta na interface sem recarregar a página
+
+---
+
+### Épico 9: Specialized Context & Evolution (Roadmap Q2 2026)
+
+#### US-41 — Associar Agente a Knowledge Rooms
+
+**Como** administrador de segurança,
+**quero** selecionar quais Knowledge Rooms um agente pode acessar,
+**para que** o escopo de busca semântica seja restrito a contextos específicos e seguros.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `AgentFormModal` (seletor múltiplo) |
+| API | `PUT /api/agent/agents/{name}/rooms` |
+| Status | 🚧 Em Progresso (ADR-019) |
+
+**Critérios de Aceite:**
+- [ ] Lista de salas disponíveis carregada no modal de criação/edição de agente.
+- [x] Persistência da associação em tabela junction `AgentKnowledgeRoomAssignment`.
+- [ ] O `KnowledgeSpecialist` filtra a busca vetorial automaticamente pelas salas associadas ao agente.
+
+---
+
+#### US-42 — Dashboard de FinOps e Previsão de Custos
+
+**Como** gestor financeiro,
+**quero** visualizar o consumo detalhado de tokens e custos por tenant/agente,
+**para que** eu possa prever gastos e ajustar quotas proativamente.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `FinOpsPage` (rota `/admin/finops`) |
+| API | `GET /api/admin/gateway/metrics/finops` |
+| Status | ⏳ Planejado (ADR-008) |
+
+**Critérios de Aceite:**
+- [ ] Gráficos de barra: Consumo por Provider (OpenAI, Gemini, Claude).
+- [ ] Tabela de Top-Agents por custo.
+- [ ] Alertas visuais quando um tenant atinge 80% da quota.
+
+---
+
+#### US-43 — Publicar Agentes via A2A/AgUI
+
+**Como** desenvolvedor de ecossistema,
+**quero** expor meus agentes internos via protocolos padronizados,
+**para que** eles possam ser consumidos por sistemas externos (ex: Copilot Studio).
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `ProtocolsPage` |
+| API | `GET /a2a` · `GET /agui` |
+| Status | ⏳ Planejado (ADR-020) |
+
+**Critérios de Aceite:**
+- [ ] Flag "Publicly Exportable" na configuração do agente.
+- [ ] Endpoint `/agui` retorna manifesto JSON válido do protocolo.
+- [ ] Logs de auditoria mostram chamadas originadas via protocolo.
+
+---
+
+#### US-44 — Executar Bateria de Avaliação de Qualidade
+
+**Como** arquiteto de prompts,
+**quero** rodar um Golden Set contra um agente após mudanças no sistema,
+**para que** eu valide scores de Relevância e Grounding (Grounding).
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `EvaluationPage` |
+| Engine | `Microsoft.Extensions.AI.Evaluation` |
+| Status | ⏳ Planejado (ADR-021) |
+
+**Critérios de Aceite:**
+- [ ] Upload/Edição de Golden Sets (Query vs Expected).
+- [ ] Relatório de comparação entre versões do agente.
+- [ ] Scores automáticos (0-1) para Grounding e Fluência.

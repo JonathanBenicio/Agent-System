@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Database, Search, FileText, Cpu, Upload, Layers, RefreshCw, Plus, Check, Play, AlertCircle, Settings2, Trash2, Box } from 'lucide-react'
+import { Database, Search, FileText, Cpu, Upload, /* Layers, */ RefreshCw, Plus, Check, Play, AlertCircle, Settings2, Trash2, Box } from 'lucide-react'
 import { Badge } from '@/components/shared/Badge'
 import { useRAG } from '@/hooks/useRAG'
 import type { IngestDocumentResponse } from '@/types/api'
@@ -30,6 +30,7 @@ export function RAGPage() {
     loading,
     ingesting,
     error,
+    stats,
     models,
     activeModel,
     jobs,
@@ -165,8 +166,8 @@ export function RAGPage() {
     }
   }
 
-  const totalIndexedChunks = models.length > 0 ? 1420 : 0
-  const searchCount24h = models.length > 0 ? 328 : 0
+  const totalIndexedChunks = stats?.totalChunks ?? 0
+  const searchCount24h = stats?.searchCount24h ?? 0
 
   return (
     <div className="h-full overflow-y-auto bg-zinc-950 text-zinc-100">
@@ -537,21 +538,23 @@ export function RAGPage() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between py-2 border-b border-zinc-800">
                     <span className="text-xs text-zinc-400">Módulo Native ORT</span>
-                    <Badge variant="success">Carregado</Badge>
+                    <Badge variant={stats?.onnxStatus?.loaded ? 'success' : 'danger'}>
+                      {stats?.onnxStatus?.loaded ? 'Carregado' : 'Não Carregado'}
+                    </Badge>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-zinc-800">
                     <span className="text-xs text-zinc-400">Modelo Reranker</span>
-                    <span className="text-xs font-semibold text-cyan-300">bge-reranker-small</span>
+                    <span className="text-xs font-semibold text-cyan-300">{stats?.onnxStatus?.modelName ?? 'bge-reranker-small'}</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-zinc-800">
                     <span className="text-xs text-zinc-400">Aceleração de Hardware</span>
                     <Badge variant="default" className="bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                      CPU / AVX2
+                      {stats?.onnxStatus?.hardware ?? 'CPU / AVX2'}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between py-2">
                     <span className="text-xs text-zinc-400">Latência Média</span>
-                    <span className="text-xs font-semibold text-teal-400">12.4 ms</span>
+                    <span className="text-xs font-semibold text-teal-400">{stats?.onnxStatus?.avgLatencyMs ?? 12.4} ms</span>
                   </div>
                 </div>
               </div>

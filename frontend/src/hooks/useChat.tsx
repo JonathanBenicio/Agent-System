@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
+import { useWorkflowStore } from '@/store/useWorkflowStore'
+import { toast } from 'sonner'
+import type { WorkflowDefinition, SessionSummaryDto, SessionInsightsDto } from '@/types/api'
 import { llmApi } from '@/lib/api'
 import { getConnection, startConnection, signalR } from '@/lib/signalr'
 import { getAuthHeaders } from '@/lib/auth'
@@ -18,6 +21,8 @@ interface ChatContextValue {
   isProcessing: boolean
   connectionState: string
   sessionId: string
+  activeSessionSummary?: SessionSummaryDto
+  activeSessionInsights?: SessionInsightsDto
   providers: LLMProviderInfo[]
   selectedProvider: string
   selectedModel: string
@@ -43,6 +48,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [providers, setProviders] = useState<LLMProviderInfo[]>([])
   const [selectedProvider, setSelectedProviderState] = useState('')
   const [selectedModel, setSelectedModelState] = useState('')
+  const [activeSessionSummary, setActiveSessionSummary] = useState<SessionSummaryDto | undefined>()
+  const [activeSessionInsights, setActiveSessionInsights] = useState<SessionInsightsDto | undefined>()
   const sendingRef = useRef(false)
 
   const refreshAiConfiguration = useCallback(async () => {
@@ -78,10 +85,42 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const conn = getConnection()
 
-    conn.on('ReceiveMessage', (msg: SignalRMessage) => {
+    conn.on('StreamEvent', (evt: unknown) => {
+      console.log('📡 StreamEvent:', evt)
+      const event = evt as Record<string, unknown>
+      if (event?.type === 20) {
+        const artifactData = event.data as Record<string, unknown> | undefined
+        if (artifactData?.artifactType === 'Plan' && artifactData?.definition) {
+          try {
+            const definition = typeof artifactData.definition === 'string'
+              ? JSON.parse(artifactData.definition) as WorkflowDefinition
+              : artifactData.definition as WorkflowDefinition
+            console.log('🧩 Workflow generated via chat:', definition)
+            useWorkflowStore.getState().fromWorkflowDefinition(definition)
+
+            toast.success('Novo workflow gerado!', {
+              description: `O fluxo "${artifactData.workflowName}" foi criado e está pronto para edição.`,
+              action: {
+                label: 'Ver Fluxo',
+                onClick: () => { window.location.hash = '/workflows' },
+              },
+            })
+          } catch {
+            console.warn('Failed to parse workflow definition from StreamEvent')
+          }
+        }
+      }
+    })
+
+    conn.on('ReceiveMessage', (msg: SignalRMessage & { memoryInjected?: boolean }) => {
+      if (!msg.content || msg.content.trim() === '') {
+        console.warn('⚠️ Received empty message from backend:', msg)
+        setIsProcessing(false)
+        return
+      }
       const chatMsg: ChatMessage = {
         id: generateId(),
-        role: 'assistant',
+        role: msg.agentName ? 'assistant' : 'user',
         content: msg.content,
         agentName: msg.agentName,
         agentTier: msg.agentTier,
@@ -90,9 +129,25 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         success: msg.success,
         sessionId: msg.sessionId,
         timestamp: msg.timestamp,
+        isHistory: msg.isHistory,
+        memoryInjected: msg.memoryInjected,
       }
-      setMessages(prev => [...prev, chatMsg])
-      setIsProcessing(false)
+
+      setMessages(prev => {
+        // Se for uma resposta em tempo real (não histórico) e tiver memória, 
+        // tentamos marcar a última mensagem do usuário
+        if (!msg.isHistory && msg.memoryInjected && msg.agentName) {
+           const lastUserIdx = prev.findLastIndex(m => m.role === 'user')
+           if (lastUserIdx !== -1) {
+             const newMessages = [...prev]
+             newMessages[lastUserIdx] = { ...newMessages[lastUserIdx], memoryInjected: true }
+             return [...newMessages, chatMsg]
+           }
+        }
+        return [...prev, chatMsg]
+      })
+
+      if (!msg.isHistory) setIsProcessing(false)
       if (msg.sessionId) setSessionId(msg.sessionId)
     })
 
@@ -113,6 +168,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     conn.on('Connected', (data: { connectionId: string; timestamp: string }) => {
       console.log('SignalR connected:', data.connectionId)
+    })
+
+    conn.on('SessionJoined', (data: { 
+      sessionId: string; 
+      title: string | null; 
+      messageCount: number;
+      summary?: SessionSummaryDto;
+      insights?: SessionInsightsDto;
+    }) => {
+      console.log(`Session joined: ${data.sessionId} (${data.messageCount} messages)`)
+      setActiveSessionSummary(data.summary)
+      setActiveSessionInsights(data.insights)
+    })
+
+    conn.on('JoinSessionError', (data: { error: string; sessionId: string }) => {
+      const errorMsg: ChatMessage = {
+        id: generateId(),
+        role: 'system',
+        content: `Erro ao carregar sessão: ${data.error}`,
+        timestamp: new Date().toISOString(),
+      }
+      setMessages(prev => [...prev, errorMsg])
     })
 
     conn.onreconnecting(() => {
@@ -142,10 +219,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     // Cleanup only on full unmount (app teardown)
     return () => {
+      conn.off('StreamEvent')
       conn.off('ReceiveMessage')
       conn.off('ProcessingStarted')
       conn.off('ReceiveError')
       conn.off('Connected')
+      conn.off('SessionJoined')
+      conn.off('JoinSessionError')
     }
   }, [])
 
@@ -249,6 +329,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         isProcessing,
         connectionState,
         sessionId,
+        activeSessionSummary,
+        activeSessionInsights,
         providers,
         selectedProvider,
         selectedModel,
@@ -283,6 +365,8 @@ export function useChat(targetAgent?: string) {
     isProcessing: ctx.isProcessing,
     connectionState: ctx.connectionState,
     sessionId: ctx.sessionId,
+    activeSessionSummary: ctx.activeSessionSummary,
+    activeSessionInsights: ctx.activeSessionInsights,
     providers: ctx.providers,
     selectedProvider: ctx.selectedProvider,
     selectedModel: ctx.selectedModel,

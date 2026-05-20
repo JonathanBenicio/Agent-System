@@ -152,7 +152,8 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
                         ["agentTier"] = response.AgentTier.ToString(),
                         ["actions"] = response.ActionsPerformed,
                         ["tools"] = response.ToolsUsed,
-                        ["confidence"] = response.Confidence?.Value ?? 0d
+                        ["confidence"] = response.Confidence?.Value ?? 0d,
+                        ["memoryInjected"] = context.Preferences.TryGetValue("memory_injected", out var mi) && mi is bool b && b
                     }
                 }, ct);
             }

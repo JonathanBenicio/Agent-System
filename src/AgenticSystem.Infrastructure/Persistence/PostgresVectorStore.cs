@@ -43,7 +43,7 @@ public class PostgresVectorStore : IVectorStore
             entity.Content = document.Content;
             entity.Type = document.Type;
             entity.Collection = document.Collection;
-            entity.Embedding = document.Embedding != null ? new Pgvector.Vector(document.Embedding) : null;
+            entity.Embedding = document.Embedding is { Length: > 0 } ? new Pgvector.Vector(document.Embedding) : null;
             entity.MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions);
             entity.ContextualSummary = document.ContextualSummary;
             entity.IndexedAt = DateTime.UtcNow;
@@ -415,7 +415,7 @@ public class PostgresVectorStore : IVectorStore
             Content = entity.Content,
             Type = entity.Type,
             Collection = entity.Collection,
-            Embedding = entity.Embedding?.ToArray() ?? Array.Empty<float>(),
+            Embedding = entity.Embedding?.ToArray(),
             Metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(entity.MetadataJson, JsonOptions) ?? new(),
             ContextualSummary = entity.ContextualSummary,
             IndexedAt = entity.IndexedAt
@@ -430,7 +430,7 @@ public class PostgresVectorStore : IVectorStore
             Content = document.Content,
             Type = document.Type,
             Collection = document.Collection,
-            Embedding = document.Embedding != null ? new Pgvector.Vector(document.Embedding) : null,
+            Embedding = document.Embedding is { Length: > 0 } ? new Pgvector.Vector(document.Embedding) : null,
             MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions),
             ContextualSummary = document.ContextualSummary,
             IndexedAt = DateTime.UtcNow

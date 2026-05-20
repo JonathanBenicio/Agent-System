@@ -32,4 +32,9 @@ public interface ISessionManager
     /// Finaliza sessão e consolida automaticamente
     /// </summary>
     Task EndSessionAsync(string sessionId);
+    
+    /// <summary>
+    /// Obtém contexto de memória relevante para uma consulta do usuário
+    /// </summary>
+    Task<string> GetMemoryContextAsync(string userQuery, string userId, string tenantId, CancellationToken ct = default);
 }

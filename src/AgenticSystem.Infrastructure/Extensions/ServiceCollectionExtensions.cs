@@ -280,10 +280,14 @@ public static class ServiceCollectionExtensions
         if (string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
         {
             services.AddSingleton<IAdvancedRetrievalService, PostgresAdvancedRetrievalService>();
+            services.AddScoped<IKnowledgeRoomService, PostgresKnowledgeRoomStore>();
+            services.AddScoped<IAgentKnowledgeRoomStore, PostgresAgentKnowledgeRoomStore>();
         }
         else
         {
             services.AddSingleton<IAdvancedRetrievalService, InMemoryAdvancedRetrievalService>();
+            services.AddSingleton<IKnowledgeRoomService, InMemoryKnowledgeRoomStore>();
+            services.AddSingleton<IAgentKnowledgeRoomStore, PostgresAgentKnowledgeRoomStore>();
         }
         services.AddSingleton<IRAGService, RAGService>();
 
@@ -346,6 +350,13 @@ public static class ServiceCollectionExtensions
     {
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<Core.Interfaces.ISessionStore, PostgresSessionStore>(services);
+        return services;
+    }
+
+    public static IServiceCollection UsePostgresSessionSummaryStore(this IServiceCollection services, string connectionString)
+    {
+        EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<Core.Interfaces.ISessionSummaryStore, PostgresSessionSummaryStore>(services);
         return services;
     }
 
@@ -492,6 +503,7 @@ public static class ServiceCollectionExtensions
         var useInMemoryEventBus = configuration.GetValue<bool>("AgenticSystem:EventBus:UseInMemory");
 
         services.UsePostgresSessionStore(connectionString);
+        services.UsePostgresSessionSummaryStore(connectionString);
         services.UsePostgresVectorStore(connectionString);
         services.UsePostgresCostTracker(connectionString);
         services.UsePostgresSmartRouter(connectionString);

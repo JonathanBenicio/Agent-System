@@ -89,6 +89,50 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("tenants", (string)null);
                 });
 
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.AgentKnowledgeRoomAssignmentEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AgentName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("agent_name");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("RoomId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("room_id");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgentName")
+                        .HasDatabaseName("ix_agent_room_assignments_agent");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_agent_room_assignments_tenant");
+
+                    b.HasIndex("AgentName", "RoomId", "TenantId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_agent_room_assignment");
+
+                    b.ToTable("agent_knowledge_room_assignments", (string)null);
+                });
+
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.AgentMarketplaceEntryEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -213,6 +257,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("source");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("UsageCount")
                         .HasColumnType("integer")
                         .HasColumnName("usage_count");
@@ -272,6 +320,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.Property<bool>("Success")
                         .HasColumnType("boolean")
                         .HasColumnName("success");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<double?>("UserSatisfaction")
                         .HasColumnType("double precision")
@@ -532,6 +584,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnName("success");
 
                     b.Property<string>("TenantId")
+                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
                         .HasColumnName("tenant_id");
@@ -607,6 +660,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("text")
                         .HasColumnName("previous_value_hash");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ConfigKey", "ChangedAt")
@@ -669,6 +726,12 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("status");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("tenant_id");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -683,8 +746,9 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.HasIndex("Category")
                         .HasDatabaseName("ix_config_entries_category");
 
-                    b.HasIndex("Key")
-                        .IsUnique();
+                    b.HasIndex("TenantId", "Key")
+                        .IsUnique()
+                        .HasDatabaseName("ix_config_entries_tenant_key");
 
                     b.ToTable("config_entries", (string)null);
                 });
@@ -827,6 +891,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnName("sync_schedule");
 
                     b.Property<string>("TenantId")
+                        .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .HasColumnName("tenant_id");
@@ -863,6 +928,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("name");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -943,6 +1012,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("tags");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -1084,6 +1157,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("session_id");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<double>("Threshold")
                         .HasColumnType("double precision")
                         .HasColumnName("threshold");
@@ -1100,6 +1177,93 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_runtime_evaluations_regression");
 
                     b.ToTable("runtime_evaluations", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.ExternalProviderQuotaEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ApiKeyId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<double>("BalanceRemaining")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("LastSyncAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("LimitRequests")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("LimitTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ProviderName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("RemainingRequests")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("RemainingTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("ResetAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<double>("TotalBalance")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("ExternalProviderQuotas");
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.InboundWebhookEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LastTriggeredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Secret")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TargetAgentName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TargetWorkflowId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("InboundWebhooks");
                 });
 
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.KnowledgeGraphEdgeEntity", b =>
@@ -1140,6 +1304,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .HasColumnName("target_node_id");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<double>("Weight")
                         .HasColumnType("double precision")
@@ -1200,6 +1368,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("source_document_id");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("EntityType")
@@ -1212,6 +1384,187 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_knowledge_graph_nodes_source_document");
 
                     b.ToTable("knowledge_graph_nodes", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.KnowledgeRoomEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("color");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("description");
+
+                    b.Property<int>("DocumentCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("document_count");
+
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("icon");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("name");
+
+                    b.PrimitiveCollection<string[]>("Tags")
+                        .IsRequired()
+                        .HasColumnType("text[]")
+                        .HasColumnName("tags");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_knowledge_rooms_tenant_id");
+
+                    b.ToTable("knowledge_rooms", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.KnowledgeRoomPermissionEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("GrantedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("granted_at");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("role");
+
+                    b.Property<string>("RoomId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("room_id");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_knowledge_room_permissions_tenant_id");
+
+                    b.HasIndex("RoomId", "UserId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_knowledge_room_permissions_room_user");
+
+                    b.ToTable("knowledge_room_permissions", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.LLMProviderApiKeyEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("EncryptedValue")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("encrypted_value");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("LastFour")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)")
+                        .HasColumnName("last_four");
+
+                    b.Property<string>("Models")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("models");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ProviderName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("provider_name");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "ProviderName")
+                        .HasDatabaseName("ix_llm_api_keys_tenant_provider");
+
+                    b.HasIndex("TenantId", "ProviderName", "IsDefault")
+                        .HasDatabaseName("ix_llm_api_keys_tenant_provider_default");
+
+                    b.HasIndex("TenantId", "ProviderName", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_llm_api_keys_tenant_provider_name");
+
+                    b.ToTable("llm_provider_api_keys", (string)null);
                 });
 
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.LlmPricingRuleEntity", b =>
@@ -1247,6 +1600,37 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("LlmPricingRules");
                 });
 
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.McpPluginEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("AutoStart")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("ConfigJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("McpPlugins");
+                });
+
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.MigrationJobEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -1268,6 +1652,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .HasColumnName("status");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -1317,6 +1705,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("success");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ModelId")
@@ -1357,6 +1749,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("ProcessedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("processed_at");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
@@ -1497,6 +1893,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("severity");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AgentName")
@@ -1576,6 +1976,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnName("role_id");
 
                     b.Property<string>("TenantId")
+                        .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)")
                         .HasColumnName("tenant_id");
@@ -1645,6 +2046,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.Property<string>("Summary")
                         .HasColumnType("text")
                         .HasColumnName("summary");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -1737,6 +2142,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("stream_count");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<long>("ToolApprovalsRequested")
                         .HasColumnType("bigint")
                         .HasColumnName("tool_approvals_requested");
@@ -1787,6 +2196,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("status");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
@@ -1829,12 +2242,57 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("task_id");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("ExecutionId");
 
                     b.HasIndex("TaskId")
                         .HasDatabaseName("ix_scheduled_task_executions_task_id");
 
                     b.ToTable("scheduled_task_executions", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.SessionInsightEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ActionItemsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DecisionsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("FactsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PreferencesJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SessionInsights");
                 });
 
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.SessionRecordEntity", b =>
@@ -1887,6 +2345,83 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("sessions", (string)null);
                 });
 
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.SessionSummaryEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AgentsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("EventCount")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeSpan?>("SessionDuration")
+                        .HasColumnType("interval");
+
+                    b.Property<string>("SessionId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TopicsJson")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SessionSummaries");
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.SystemAlertEntity", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<double?>("Percentage")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("ProviderName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Severity")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SystemAlerts");
+                });
+
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.TriggerRuleEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -1907,6 +2442,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("payload");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1945,6 +2484,9 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("vector")
                         .HasColumnName("embedding");
 
+                    b.Property<byte[]>("EmbeddingData")
+                        .HasColumnType("bytea");
+
                     b.Property<DateTime>("IndexedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("indexed_at");
@@ -1959,6 +2501,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("tsvector")
                         .HasAnnotation("Npgsql:TsVectorConfig", "english")
                         .HasAnnotation("Npgsql:TsVectorProperties", new[] { "Content" });
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("Type")
                         .IsRequired()
@@ -2006,6 +2552,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("name");
 
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("Version")
                         .HasColumnType("integer")
                         .HasColumnName("version");
@@ -2047,6 +2597,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
                         .HasColumnName("status");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<string>("VariablesJson")
                         .IsRequired()
@@ -2134,6 +2688,10 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("step_name");
+
+                    b.Property<string>("TenantId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 

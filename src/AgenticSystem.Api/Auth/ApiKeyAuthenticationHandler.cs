@@ -67,6 +67,7 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         var claims = new[]
         {
             new Claim(ClaimTypes.Name, "admin"),
+            new Claim(ClaimTypes.NameIdentifier, "admin"),
             new Claim(ClaimTypes.Role, "Admin"),
             new Claim("tenant_id", Core.Models.Tenant.DefaultTenantId)
         };

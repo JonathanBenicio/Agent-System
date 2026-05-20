@@ -6,6 +6,7 @@ public class LLMRequest
     public string? SystemPrompt { get; set; }
     public string? Model { get; set; }
     public string? Provider { get; set; }
+    public string? ApiKeyId { get; set; }
     public LLMParameters Parameters { get; set; } = new();
     public List<ChatMessage> Messages { get; set; } = new();
     public ResponseFormat? ResponseFormat { get; set; }

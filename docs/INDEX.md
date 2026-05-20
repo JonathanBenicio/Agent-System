@@ -15,6 +15,8 @@ Documento canônico de arquitetura atual:
 |-----------|-----------|
 | [PRD-Sistema-Agentic.md](PRD-Sistema-Agentic.md) | Visão de produto para stakeholders e áreas de negócio |
 | [USER-STORIES.md](USER-STORIES.md) | Catálogo funcional consolidado de MLs, épicos e user stories |
+| [user-stories/us-multi-provider-api-keys.md](user-stories/us-multi-provider-api-keys.md) | US-42: Gerenciamento e Roteamento de Múltiplas API Keys |
+| [issue-61-multi-provider-api-keys.md](issue-61-multi-provider-api-keys.md) | GitHub Issue #61: Multi-Provider API Keys Epic |
 | [agentic-design-manifesto.md](agentic-design-manifesto.md) | Princípios de design e filosofia do sistema |
 
 ### Arquitetura Corrente
@@ -55,6 +57,10 @@ Documento canônico de arquitetura atual:
 | [architecture/adr/016-unified-agent-structure.md](architecture/adr/016-unified-agent-structure.md) | ADR 016: Estrutura Unificada de Agentes |
 | [architecture/adr/017-design-system-teal-palette.md](architecture/adr/017-design-system-teal-palette.md) | ADR 017: Design System com Paleta Teal |
 | [architecture/adr/018-hot-swapping-architecture.md](architecture/adr/018-hot-swapping-architecture.md) | ADR 018: Arquitetura de Hot-Swapping para Provedores de IA e Vector Stores |
+| [architecture/adr/019-agent-room-association.md](architecture/adr/019-agent-room-association.md) | ADR 019: Associação Granular Agente-Sala (Contexto Restrito) |
+| [architecture/adr/020-multi-provider-api-keys.md](architecture/adr/020-multi-provider-api-keys.md) | ADR 020: Arquitetura de Múltiplas API Keys por Provedor LLM |
+| [../plan/adr-020-protocol-hosting-standardization.md](../plan/adr-020-protocol-hosting-standardization.md) | ADR 020: Padronização e Exposição de Protocolos (A2A e AgUI) |
+| [../plan/adr-021-evaluation-framework.md](../plan/adr-021-evaluation-framework.md) | ADR 021: Framework de Avaliação Contínua e Golden Sets |
 
 ### Glossários
 
@@ -84,6 +90,7 @@ Ver [bdd/README.md](bdd/README.md) para o inventário completo e instruções de
 | [bdd/backend-apis.feature](bdd/backend-apis.feature) | APIs de documentos, planner, voz, setup e memória |
 | [bdd/embedding-migration.feature](bdd/embedding-migration.feature) | Módulo administrativo ativo de migração de embeddings |
 | [bdd/api-key-masking-embedding.feature](bdd/api-key-masking-embedding.feature) | Mascaramento de segredos no módulo de embeddings |
+| [bdd/multi-provider-api-keys.feature](bdd/multi-provider-api-keys.feature) | BDD: Cenários executáveis para múltiplas API Keys |
 
 ---
 
@@ -95,6 +102,8 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 
 | Documento | Descrição |
 |-----------|-----------|
+| [plan/bug-chat-workflow.md](plan/bug-chat-workflow.md) | Bug Fix Plan: Resposta do chat não aparece no frontend |
+| [plan/multi-provider-api-keys.md](plan/multi-provider-api-keys.md) | Roadmap/Plan: Multi-Provider API Keys |
 | [planejamento/AI_Capabilities_Gaps.md](planejamento/AI_Capabilities_Gaps.md) | Diagnóstico vivo de gaps e oportunidades arquiteturais |
 | [planejamento/AI_Advanced_Capabilities_Roadmap.md](planejamento/AI_Advanced_Capabilities_Roadmap.md) | Roadmap futuro para capacidades avançadas |
 | [planejamento/framework-first-migration-plan.md](planejamento/framework-first-migration-plan.md) | Resumo histórico da migração framework-first (concluída) |

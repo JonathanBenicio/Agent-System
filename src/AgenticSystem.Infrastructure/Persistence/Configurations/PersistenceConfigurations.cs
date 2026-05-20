@@ -254,6 +254,7 @@ public class ConfigEntryConfiguration : IEntityTypeConfiguration<ConfigEntryEnti
 
         builder.HasKey(entry => entry.Id);
         builder.Property(entry => entry.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(entry => entry.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
         builder.Property(entry => entry.Key).HasColumnName("key").HasMaxLength(256).IsRequired();
         builder.Property(entry => entry.Value).HasColumnName("value").IsRequired();
         builder.Property(entry => entry.EncryptedValue).HasColumnName("encrypted_value");
@@ -267,7 +268,8 @@ public class ConfigEntryConfiguration : IEntityTypeConfiguration<ConfigEntryEnti
         builder.Property(entry => entry.ExpiresAt).HasColumnName("expires_at");
         builder.Property(entry => entry.MetadataJson).HasColumnName("metadata").HasColumnType("jsonb").IsRequired();
 
-        builder.HasIndex(entry => entry.Key).IsUnique();
+        // Make the Key unique per Tenant
+        builder.HasIndex(entry => new { entry.TenantId, entry.Key }).IsUnique().HasDatabaseName("ix_config_entries_tenant_key");
         builder.HasIndex(entry => entry.Category).HasDatabaseName("ix_config_entries_category");
     }
 }
@@ -744,5 +746,96 @@ public class EnhancedMemoryConfiguration : IEntityTypeConfiguration<EnhancedMemo
         builder.HasIndex(e => e.AgentName).HasDatabaseName("ix_enhanced_memory_agent");
         builder.HasIndex(e => e.SessionId).HasDatabaseName("ix_enhanced_memory_session");
         builder.HasIndex(e => e.MemoryType).HasDatabaseName("ix_enhanced_memory_type");
+    }
+}
+
+public class KnowledgeRoomConfiguration : IEntityTypeConfiguration<KnowledgeRoomEntity>
+{
+    public void Configure(EntityTypeBuilder<KnowledgeRoomEntity> builder)
+    {
+        builder.ToTable("knowledge_rooms");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(e => e.Description).HasColumnName("description").HasMaxLength(1024);
+        builder.Property(e => e.Color).HasColumnName("color").HasMaxLength(32);
+        builder.Property(e => e.Icon).HasColumnName("icon").HasMaxLength(32);
+        builder.Property(e => e.DocumentCount).HasColumnName("document_count");
+        builder.Property(e => e.Tags).HasColumnName("tags").HasColumnType("text[]");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_knowledge_rooms_tenant_id");
+    }
+}
+
+public class KnowledgeRoomPermissionConfiguration : IEntityTypeConfiguration<KnowledgeRoomPermissionEntity>
+{
+    public void Configure(EntityTypeBuilder<KnowledgeRoomPermissionEntity> builder)
+    {
+        builder.ToTable("knowledge_room_permissions");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.RoomId).HasColumnName("room_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.UserId).HasColumnName("user_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.Role).HasColumnName("role").HasMaxLength(32).IsRequired();
+        builder.Property(e => e.GrantedAt).HasColumnName("granted_at");
+
+        builder.HasIndex(e => new { e.RoomId, e.UserId }).IsUnique().HasDatabaseName("ix_knowledge_room_permissions_room_user");
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_knowledge_room_permissions_tenant_id");
+    }
+}
+
+public class AgentKnowledgeRoomAssignmentConfiguration : IEntityTypeConfiguration<AgentKnowledgeRoomAssignmentEntity>
+{
+    public void Configure(EntityTypeBuilder<AgentKnowledgeRoomAssignmentEntity> builder)
+    {
+        builder.ToTable("agent_knowledge_room_assignments");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.AgentName).HasColumnName("agent_name").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.RoomId).HasColumnName("room_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(e => new { e.AgentName, e.RoomId, e.TenantId })
+            .IsUnique()
+            .HasDatabaseName("ux_agent_room_assignment");
+        builder.HasIndex(e => e.AgentName).HasDatabaseName("ix_agent_room_assignments_agent");
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_agent_room_assignments_tenant");
+    }
+}
+
+public class LLMProviderApiKeyConfiguration : IEntityTypeConfiguration<LLMProviderApiKeyEntity>
+{
+    public void Configure(EntityTypeBuilder<LLMProviderApiKeyEntity> builder)
+    {
+        builder.ToTable("llm_provider_api_keys");
+
+        builder.HasKey(k => k.Id);
+        builder.Property(k => k.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(k => k.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+        builder.Property(k => k.ProviderName).HasColumnName("provider_name").HasMaxLength(64).IsRequired();
+        builder.Property(k => k.Name).HasColumnName("name").HasMaxLength(128).IsRequired();
+        builder.Property(k => k.EncryptedValue).HasColumnName("encrypted_value").IsRequired();
+        builder.Property(k => k.LastFour).HasColumnName("last_four").HasMaxLength(4).IsRequired();
+        builder.Property(k => k.IsEnabled).HasColumnName("is_enabled");
+        builder.Property(k => k.IsDefault).HasColumnName("is_default");
+        builder.Property(k => k.Models).HasColumnName("models").IsRequired();
+        builder.Property(k => k.CreatedAt).HasColumnName("created_at");
+        builder.Property(k => k.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(k => new { k.TenantId, k.ProviderName, k.Name })
+            .IsUnique()
+            .HasDatabaseName("ux_llm_api_keys_tenant_provider_name");
+        builder.HasIndex(k => new { k.TenantId, k.ProviderName })
+            .HasDatabaseName("ix_llm_api_keys_tenant_provider");
+        builder.HasIndex(k => new { k.TenantId, k.ProviderName, k.IsDefault })
+            .HasDatabaseName("ix_llm_api_keys_tenant_provider_default");
     }
 }

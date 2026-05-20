@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.EntityFrameworkCore;
 using MChatMessage = Microsoft.Extensions.AI.ChatMessage;
 using Polly;
 
@@ -813,16 +814,46 @@ public class LLMManager : ILLMAdministrationService
             provider.DefaultModel)
             ?? provider.DefaultModel;
 
-        var requestApiKey = runtime?.RequestApiKey;
-        var sessionApiKey = FirstNonEmpty(runtime?.SessionApiKey, ReadSessionSetting(session, "llm.session.apiKey"));
-        var tenantApiKey = ReadTenantApiKey(tenant, provider.Name);
-        var configApiKey = _configManager is null
-            ? null
-            : await _configManager.ResolveValueAsync($"{GetProviderConfigPrefix(provider.Name)}.apiKey");
+        string? resolvedApiKey = null;
+        var requestApiKeyId = request.ApiKeyId ?? runtime?.RequestApiKeyId;
 
-        var apiKey = FirstNonEmpty(requestApiKey, sessionApiKey, tenantApiKey, configApiKey);
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetService<AgenticSystem.Infrastructure.Persistence.AgenticDbContext>();
+            var encryptionService = scope.ServiceProvider.GetService<IConfigEncryptionService>();
 
-        return new ResolvedSelection(provider.Name, model, apiKey);
+            if (dbContext != null && encryptionService != null)
+            {
+                if (!string.IsNullOrWhiteSpace(requestApiKeyId))
+                {
+                    var keyEntity = await dbContext.ProviderApiKeys
+                        .FirstOrDefaultAsync(k => k.ProviderName == provider.Name && k.Id == requestApiKeyId && k.IsEnabled, ct);
+                    if (keyEntity != null)
+                        resolvedApiKey = encryptionService.Decrypt(keyEntity.EncryptedValue);
+                }
+                else
+                {
+                    var defaultKey = await dbContext.ProviderApiKeys
+                        .FirstOrDefaultAsync(k => k.ProviderName == provider.Name && k.IsDefault && k.IsEnabled, ct);
+                    if (defaultKey != null)
+                        resolvedApiKey = encryptionService.Decrypt(defaultKey.EncryptedValue);
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(resolvedApiKey))
+        {
+            var requestApiKey = runtime?.RequestApiKey;
+            var sessionApiKey = FirstNonEmpty(runtime?.SessionApiKey, ReadSessionSetting(session, "llm.session.apiKey"));
+            var tenantApiKey = ReadTenantApiKey(tenant, provider.Name);
+            var configApiKey = _configManager is null
+                ? null
+                : await _configManager.ResolveValueAsync($"{GetProviderConfigPrefix(provider.Name)}.apiKey");
+
+            resolvedApiKey = FirstNonEmpty(requestApiKey, sessionApiKey, tenantApiKey, configApiKey);
+        }
+
+        return new ResolvedSelection(provider.Name, model, resolvedApiKey);
     }
 
     private async Task<IChatClient> ResolveChatClientAsync(string providerName, string model, string? apiKey, CancellationToken ct)

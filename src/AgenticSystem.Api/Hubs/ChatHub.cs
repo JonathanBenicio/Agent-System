@@ -14,11 +14,13 @@ namespace AgenticSystem.Api.Hubs;
 public class ChatHub : Hub
 {
     private readonly IMetaAgent _metaAgent;
+    private readonly ISessionStore _sessionStore;
     private readonly ILogger<ChatHub> _logger;
 
-    public ChatHub(IMetaAgent metaAgent, ILogger<ChatHub> logger)
+    public ChatHub(IMetaAgent metaAgent, ISessionStore sessionStore, ILogger<ChatHub> logger)
     {
         _metaAgent = metaAgent;
+        _sessionStore = sessionStore;
         _logger = logger;
     }
 
@@ -65,7 +67,8 @@ public class ChatHub : Hub
                         tools = streamEvent.Data.TryGetValue("tools", out var tools) ? tools : null,
                         success = streamEvent.Data.TryGetValue("success", out var success) && success is bool ok && ok,
                         sessionId = streamEvent.SessionId,
-                        timestamp = streamEvent.Timestamp
+                        timestamp = streamEvent.Timestamp,
+                        memoryInjected = streamEvent.Data.TryGetValue("memoryInjected", out var mi) && mi is bool b && b
                     }, Context.ConnectionAborted);
                 }
             }
@@ -77,6 +80,69 @@ public class ChatHub : Hub
             {
                 error = "Erro ao processar mensagem.",
                 timestamp = DateTime.UtcNow
+            });
+        }
+    }
+
+    public async Task JoinSession(string sessionId)
+    {
+        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? Context.User?.FindFirst("sub")?.Value
+            ?? Context.User?.Identity?.Name
+            ?? "authenticated-user";
+
+        var session = await _sessionStore.GetAsync(sessionId, Context.ConnectionAborted);
+        if (session is null || session.UserId != userId)
+        {
+            await Clients.Caller.SendAsync("JoinSessionError", new
+            {
+                error = "Session not found or access denied.",
+                sessionId
+            });
+            return;
+        }
+
+        _logger.LogInformation("📂 Client {ConnectionId} joined session {SessionId}", Context.ConnectionId, sessionId);
+
+        await Clients.Caller.SendAsync("SessionJoined", new
+        {
+            sessionId = session.Id,
+            title = session.RuntimeSettings.TryGetValue("title", out var t) ? t : null,
+            startedAt = session.StartedAt,
+            messageCount = session.Events.Count,
+            summary = session.Summary != null ? SessionDtoMapper.ToSummary(session.Summary) : null,
+            insights = session.Insights != null ? SessionDtoMapper.ToInsights(session.Insights) : null
+        });
+
+        foreach (var evt in session.Events.OrderBy(e => e.Timestamp))
+        {
+            var memoryInjected = evt.Context.TryGetValue("memory_injected", out var mi) && mi is bool b && b;
+
+            await Clients.Caller.SendAsync("ReceiveMessage", new
+            {
+                content = evt.UserInput,
+                agentName = (string?)null,
+                agentTier = (string?)null,
+                actions = (object?)null,
+                tools = (object?)null,
+                success = true,
+                sessionId = evt.SessionId,
+                timestamp = evt.Timestamp,
+                isHistory = true,
+                memoryInjected
+            });
+
+            await Clients.Caller.SendAsync("ReceiveMessage", new
+            {
+                content = evt.AgentResponse,
+                agentName = evt.AgentName,
+                agentTier = evt.AgentTier.ToString(),
+                actions = evt.ActionsPerformed.Count > 0 ? evt.ActionsPerformed : null,
+                tools = evt.ToolsUsed.Count > 0 ? evt.ToolsUsed : null,
+                success = true,
+                sessionId = evt.SessionId,
+                timestamp = evt.Timestamp,
+                isHistory = true
             });
         }
     }

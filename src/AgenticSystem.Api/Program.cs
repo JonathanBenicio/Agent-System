@@ -37,6 +37,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddAgenticSystemCore();
 builder.Services.AddAgenticSystemInfrastructure(builder.Configuration);
+
+// Register SignalR-based workflow event broadcaster
+builder.Services.AddSingleton<AgenticSystem.Core.Interfaces.IWorkflowEventBroadcaster, AgenticSystem.Api.Hubs.SignalRWorkflowEventBroadcaster>();
 // builder.Services.AddMcpServer()
 //     .WithHttpTransport(options =>
 //     {
@@ -150,12 +153,18 @@ builder.Services.AddAuthentication(options =>
         options.Issuer = jwtSection["Issuer"] ?? "AgenticSystem";
         options.Audience = jwtSection["Audience"] ?? "AgenticSystem";
     })
-.AddPolicyScheme("MultiAuth", "ApiKey or JWT", options =>
+.AddSupabaseAuth(builder.Configuration)
+.AddPolicyScheme("MultiAuth", "ApiKey, JWT or Supabase", options =>
 {
     options.ForwardDefaultSelector = context =>
     {
-        if (context.Request.Headers.ContainsKey("Authorization"))
-            return JwtTenantAuthenticationHandler.SchemeName;
+        if (context.Request.Headers.ContainsKey("Authorization") || context.Request.Query.ContainsKey("access_token"))
+        {
+            // Simple heuristic: Supabase tokens are usually much longer than our custom ones, 
+            // but a better way is checking Issuer if we decode it without validation first.
+            // For now, let's try Supabase first if it's enabled.
+            return "Supabase"; 
+        }
         return ApiKeyAuthenticationHandler.SchemeName;
     };
 });
@@ -271,6 +280,7 @@ app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat").RequireAuthorization();
 app.MapHub<GatewayHub>("/hubs/gateway").RequireAuthorization();
 app.MapHub<ExternalAgentHub>("/hubs/external-agent").RequireAuthorization();
+app.MapHub<WorkflowHub>("/hubs/workflow").RequireAuthorization();
 
 app.MapMethods("/health", new[] { "GET", "HEAD" }, () => new { Status = "Healthy", Timestamp = DateTime.UtcNow }).AllowAnonymous();
 app.MapGet("/version", () => new { Version = "1.0.0", Build = DateTime.UtcNow.ToString("yyyyMMdd-HHmm") });

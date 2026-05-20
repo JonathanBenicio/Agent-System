@@ -51,7 +51,7 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
                 {
                     Id = Guid.NewGuid().ToString(),
                     ProviderName = providerName,
-                    TenantId = tenantId,
+                    TenantId = tenantId ?? "default",
                     ApiKeyId = apiKeyId
                 };
                 context.ExternalProviderQuotas.Add(entity);
@@ -126,7 +126,7 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
 
             if (entity == null)
             {
-                entity = new ExternalProviderQuotaEntity { Id = Guid.NewGuid().ToString(), ProviderName = "OpenRouter", TenantId = tenantId, ApiKeyId = apiKeyId };
+                entity = new ExternalProviderQuotaEntity { Id = Guid.NewGuid().ToString(), ProviderName = "OpenRouter", TenantId = tenantId ?? "default", ApiKeyId = apiKeyId };
                 context.ExternalProviderQuotas.Add(entity);
             }
 
@@ -169,7 +169,7 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
             { 
                 Id = Guid.NewGuid().ToString(), 
                 ProviderName = providerName, 
-                TenantId = tenantId, 
+                TenantId = tenantId ?? "default", 
                 ApiKeyId = apiKeyId,
                 RemainingRequests = 1000, // Default initial values
                 RemainingTokens = 1000000

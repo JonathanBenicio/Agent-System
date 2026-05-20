@@ -57,7 +57,13 @@ public class AgenticDbContext : DbContext
     public DbSet<ExternalProviderQuotaEntity> ExternalProviderQuotas => Set<ExternalProviderQuotaEntity>();
     public DbSet<SystemAlertEntity> SystemAlerts => Set<SystemAlertEntity>();
     public DbSet<InboundWebhookEntity> InboundWebhooks => Set<InboundWebhookEntity>();
+    public DbSet<KnowledgeRoomEntity> KnowledgeRooms => Set<KnowledgeRoomEntity>();
+    public DbSet<KnowledgeRoomPermissionEntity> KnowledgeRoomPermissions => Set<KnowledgeRoomPermissionEntity>();
+    public DbSet<AgentKnowledgeRoomAssignmentEntity> AgentKnowledgeRoomAssignments => Set<AgentKnowledgeRoomAssignmentEntity>();
     public DbSet<McpPluginEntity> McpPlugins => Set<McpPluginEntity>();
+    public DbSet<SessionSummaryEntity> SessionSummaries => Set<SessionSummaryEntity>();
+    public DbSet<SessionInsightEntity> SessionInsights => Set<SessionInsightEntity>();
+    public DbSet<LLMProviderApiKeyEntity> ProviderApiKeys => Set<LLMProviderApiKeyEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -247,6 +247,32 @@ export interface LLMProviderInfo {
   lastQuotaUpdate?: string
 }
 
+export interface LLMProviderApiKey {
+  id: string
+  providerName: string
+  name: string
+  lastFour: string
+  isEnabled: boolean
+  isDefault: boolean
+  models: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RegisterApiKeyRequest {
+  name: string
+  apiKey: string
+  isDefault: boolean
+}
+
+export interface UpdateApiKeyRequest {
+  name?: string
+  apiKey?: string
+  isEnabled?: boolean
+  isDefault?: boolean
+  models?: string[]
+}
+
 export interface LLMConfigurationInfo {
   defaultProvider: string
   defaultModel: string
@@ -601,8 +627,108 @@ export interface YamlValidationResult {
 }
 
 // ══════════════════════════════════════
+// Workflow Engine Models
+// ══════════════════════════════════════
+
+export interface WorkflowDefinitionSummary {
+  id: string;
+  name: string;
+  version: number;
+  createdAt: string;
+}
+
+export interface WorkflowDefinition {
+  id: string;
+  name: string;
+  description?: string;
+  version: number;
+  steps: WorkflowStep[];
+  variables: Record<string, unknown>;
+  triggerType: number;
+  cronExpression?: string;
+  createdAt: string;
+}
+
+export interface WorkflowStep {
+  id: string;
+  name: string;
+  stepType: number;
+  agentName?: string;
+  toolName?: string;
+  actionDescription?: string;
+  input: Record<string, unknown>;
+  output: Record<string, unknown>;
+  dependsOn: string[];
+  conditionExpression?: string;
+  parallelSteps: WorkflowStep[];
+  compensationStep?: WorkflowStep;
+  maxRetries: number;
+  timeout?: string;
+  errorStrategy: number;
+}
+
+export interface WorkflowStepExecution {
+  stepId: string;
+  stepName: string;
+  status: number;
+  output: Record<string, unknown>;
+  errorMessage?: string;
+  retryCount: number;
+  compensationExecuted: boolean;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface WorkflowExecution {
+  id: string;
+  workflowId: string;
+  workflowName: string;
+  status: number;
+  stepExecutions: WorkflowStepExecution[];
+  variables: Record<string, unknown>;
+  initiatedBy?: string;
+  errorMessage?: string;
+  startedAt: string;
+  completedAt?: string;
+  duration?: string;
+}
+
+// ══════════════════════════════════════
 // RAG & Embedding Migration Models
 // ══════════════════════════════════════
+
+export type KnowledgeRoomRole = 'Reader' | 'Editor' | 'Admin';
+
+export interface KnowledgeRoomPermission {
+  id: string;
+  roomId: string;
+  userId: string;
+  role: KnowledgeRoomRole;
+  grantedAt: string;
+}
+
+export interface KnowledgeRoom {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  icon: string;
+  documentCount: number;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RagStats {
+  totalChunks: number;
+  searchCount24h: number;
+  onnxStatus: {
+    loaded: boolean;
+    modelName: string;
+    hardware: string;
+    avgLatencyMs: number;
+  };
+}
 
 export interface IngestDocumentResponse {
   documentId: string
@@ -656,4 +782,53 @@ export interface SystemAlert {
   percentage: number
   createdAt: string
   isRead: boolean
+}
+
+// ══════════════════════════════════════
+// Session Models
+// ══════════════════════════════════════
+
+export interface SessionListItem {
+  id: string
+  title: string
+  lastActivity: string
+  messageCount: number
+  summary?: string
+}
+
+export interface SessionDetail {
+  id: string
+  title: string
+  startedAt: string
+  endedAt?: string
+  messages: ChatMessageDto[]
+  summary?: SessionSummaryDto
+  insights?: SessionInsightsDto
+}
+
+export interface ChatMessageDto {
+  id: string
+  role: string
+  content: string
+  agentName?: string
+  agentTier?: number
+  actions?: string[]
+  tools?: string[]
+  success?: boolean
+  timestamp: string
+  memoryInjected?: boolean
+}
+
+export interface SessionSummaryDto {
+  summary: string
+  topicsDiscussed: string[]
+  agentsUsed: string[]
+  eventCount: number
+}
+
+export interface SessionInsightsDto {
+  facts: string[]
+  decisions: string[]
+  preferences: string[]
+  actionItems: string[]
 }

@@ -81,6 +81,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </div>
         )}
 
+        {/* User badge with Memory indicator */}
+        {isUser && message.memoryInjected && (
+          <div className="flex items-center gap-1 mb-1">
+             <span className="text-[10px] text-teal-400 font-medium flex items-center gap-1 bg-teal-400/10 px-1.5 py-0.5 rounded-full border border-teal-400/20">
+               <Bot className="w-3 h-3" /> Memória Recuperada
+             </span>
+          </div>
+        )}
+
         {/* Message body */}
         <div
           className={cn(

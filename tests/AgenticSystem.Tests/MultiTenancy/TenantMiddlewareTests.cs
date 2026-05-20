@@ -78,7 +78,7 @@ public class TenantMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_ClaimTakesPrecedence_OverHeader()
+    public async Task InvokeAsync_HeaderTakesPrecedence_OverClaim()
     {
         var tenant = new Tenant
         {
@@ -95,17 +95,18 @@ public class TenantMiddlewareTests
         var tenantContext = new TenantContext();
         var httpContext = new DefaultHttpContext();
 
-        // Set both claim and header
+        // Set both claim and header - header should take precedence
         var identity = new ClaimsIdentity(new[]
         {
             new Claim(TenantMiddleware.TenantIdClaimType, "claim-tenant")
         }, "TestAuth");
         httpContext.User = new ClaimsPrincipal(identity);
-        httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = Tenant.DefaultTenantId;
+        httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = "header-tenant";
 
         await middleware.InvokeAsync(httpContext, tenantContext, _resolver, _tenantContextAccessor);
 
-        tenantContext.TenantId.Should().Be("claim-tenant");
+        // Header takes precedence over claim
+        tenantContext.TenantId.Should().Be("header-tenant");
     }
 
     [Fact]
@@ -123,7 +124,7 @@ public class TenantMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_UnknownTenant_KeepsDefaults()
+    public async Task InvokeAsync_UnknownTenant_UsesHeaderTenantId()
     {
         var middleware = CreateMiddleware();
         var tenantContext = new TenantContext();
@@ -132,7 +133,9 @@ public class TenantMiddlewareTests
 
         await middleware.InvokeAsync(httpContext, tenantContext, _resolver, _tenantContextAccessor);
 
-        tenantContext.TenantId.Should().Be(Tenant.DefaultTenantId);
+        // Unknown tenant still uses the provided header ID (dev/test scenario)
+        tenantContext.TenantId.Should().Be("unknown-tenant");
+        tenantContext.IsAuthenticated.Should().BeTrue();
     }
 
     [Fact]

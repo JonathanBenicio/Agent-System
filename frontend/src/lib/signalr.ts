@@ -10,7 +10,7 @@ export function getConnection(): signalR.HubConnection {
     connection = new signalR.HubConnectionBuilder()
       .withUrl(CHAT_HUB_URL, {
         accessTokenFactory: () => getAuthToken() ?? '',
-        headers: getApiKey() && getApiKey() !== 'admin' && !getAuthToken() ? { 'X-Api-Key': getApiKey()! } : {},
+        headers: getApiKey() && !getAuthToken() ? { 'X-Api-Key': getApiKey()! } : {},
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       .configureLogging(signalR.LogLevel.Information)
@@ -19,14 +19,21 @@ export function getConnection(): signalR.HubConnection {
   return connection
 }
 
+let startPromise: Promise<void> | null = null
+
 export async function startConnection(): Promise<void> {
   const conn = getConnection()
   if (conn.state === signalR.HubConnectionState.Disconnected) {
-    await conn.start()
+    startPromise = conn.start()
+    await startPromise
+    startPromise = null
   }
 }
 
 export async function stopConnection(): Promise<void> {
+  if (startPromise) {
+    await startPromise.catch(() => {})
+  }
   if (connection && connection.state !== signalR.HubConnectionState.Disconnected) {
     await connection.stop()
   }

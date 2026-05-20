@@ -529,6 +529,30 @@ public class InboundWebhookEntity : ITenantEntity
     public DateTime? LastTriggeredAt { get; set; }
 }
 
+public class KnowledgeRoomEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Color { get; set; } = string.Empty;
+    public string Icon { get; set; } = string.Empty;
+    public int DocumentCount { get; set; }
+    public string[] Tags { get; set; } = Array.Empty<string>();
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class KnowledgeRoomPermissionEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string RoomId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty; // "Admin", "Editor", "Reader"
+    public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class McpPluginEntity : ITenantEntity
 {
     public string Id { get; set; } = string.Empty;
@@ -539,3 +563,65 @@ public class McpPluginEntity : ITenantEntity
     public bool AutoStart { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+public class AgentKnowledgeRoomAssignmentEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string AgentName { get; set; } = string.Empty;
+    public string RoomId { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class SessionSummaryEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string Summary { get; set; } = string.Empty;
+    public string TopicsJson { get; set; } = "[]";
+    public string AgentsJson { get; set; } = "[]";
+    public int EventCount { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public TimeSpan? SessionDuration { get; set; }
+}
+
+public class SessionInsightEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string SessionId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string FactsJson { get; set; } = "[]";
+    public string DecisionsJson { get; set; } = "[]";
+    public string PreferencesJson { get; set; } = "[]";
+    public string ActionItemsJson { get; set; } = "[]";
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// ═══════════════════════════════════════════════════════════
+// Multi-Provider API Key Management (ADR-020, Issue #61)
+// ═══════════════════════════════════════════════════════════
+
+/// <summary>
+/// Credential entity for multi-provider API key management.
+/// Stores encrypted API keys with tenant isolation and per-key model discovery.
+/// The actual key value is encrypted at rest via IConfigEncryptionService (AES-256).
+/// Only the last 4 characters (LastFour) are stored in plaintext for secure UI differentiation.
+/// </summary>
+public class LLMProviderApiKeyEntity : ITenantEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string TenantId { get; set; } = "default";
+    public string ProviderName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string EncryptedValue { get; set; } = string.Empty;
+    public string LastFour { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; } = true;
+    public bool IsDefault { get; set; }
+    public string Models { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
