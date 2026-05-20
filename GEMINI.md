@@ -48,7 +48,7 @@ Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem e usa
 2. **ADR (Architectural Decision Record)**: Definição de padrões técnicos em `docs/architecture/adr/`. **Use o template em `templates/adr-template.md`.**
 3. **User Story**: Detalhamento dos critérios de aceite em `docs/USER-STORIES.md`. **Use o template em `templates/user-stories-template.md`.**
 4. **BDD Features**: Para especificações de comportamento, use `templates/bdd-template.feature`.
-5. **Implementation Plan**: Roteiro técnico detalhado em `plan/`. **Use o template em `templates/plan-template.md`.**
+5. **Implementation Plan**: Roteiro técnico detalhado em `docs/plan/`. **Use o template em `templates/plan-template.md`.**
 6. **Rastreabilidade**: Commits vinculados à issue (ex: `feat: ... Closes #ID`).
 7. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
 

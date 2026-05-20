@@ -50,7 +50,7 @@ Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem:
 1. **GitHub Issue**: Registro da necessidade. **Obrigatório atualizar a descrição da Issue com links para o ADR, Story e Plan assim que criados.**
 2. **ADR (Architectural Decision Record)**: Definição de padrões em `docs/architecture/adr/`.
 3. **User Story**: Critérios de aceite em `docs/USER-STORIES.md`.
-4. **Implementation Plan**: Roteiro técnico em `plan/`.
+4. **Implementation Plan**: Roteiro técnico em `docs/plan/`.
 5. **Rastreabilidade**: Commits vinculados à issue (ex: `feat: ... Closes #ID`).
 6. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
 

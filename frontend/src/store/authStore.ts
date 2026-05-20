@@ -36,7 +36,7 @@ export const useAuthStore = create<AuthState>()((set) => {
     loginWithApiKey: async (apiKey: string) => {
       const success = await loginWithApiKeyApi(apiKey)
       if (success) {
-        set({ apiKey: 'admin', token: null, isAuthenticated: true })
+        set({ apiKey, token: null, isAuthenticated: true })
         clearAuthToken()
         return true
       }

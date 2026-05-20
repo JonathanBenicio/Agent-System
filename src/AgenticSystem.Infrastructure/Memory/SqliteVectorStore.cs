@@ -48,7 +48,7 @@ public sealed class SqliteVectorStore : IVectorStore
             entity.Content = document.Content;
             entity.Type = document.Type;
             entity.Collection = document.Collection;
-            entity.EmbeddingData = document.Embedding != null ? VectorToBytes(document.Embedding) : null;
+            entity.EmbeddingData = document.Embedding is { Length: > 0 } ? VectorToBytes(document.Embedding) : null;
             entity.MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions);
             entity.ContextualSummary = document.ContextualSummary;
             entity.IndexedAt = DateTime.UtcNow;
@@ -233,7 +233,7 @@ public sealed class SqliteVectorStore : IVectorStore
             Content = document.Content,
             Type = document.Type,
             Collection = document.Collection,
-            EmbeddingData = document.Embedding != null ? VectorToBytes(document.Embedding) : null,
+            EmbeddingData = document.Embedding is { Length: > 0 } ? VectorToBytes(document.Embedding) : null,
             MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions),
             ContextualSummary = document.ContextualSummary,
             IndexedAt = DateTime.UtcNow
