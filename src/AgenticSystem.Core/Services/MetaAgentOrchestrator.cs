@@ -325,6 +325,9 @@ public class MetaAgentOrchestrator : IMetaAgent
             return input;
         }
 
+        // Flag that memory was used for this request
+        context.Preferences["memory_injected"] = true;
+        
         _logger.LogDebug("🧠 Injected {Length} chars of memory context", memoryContext.Length);
         return memoryContext + "\n\n" + input;
     }

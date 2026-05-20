@@ -11,6 +11,7 @@ export interface ChatMessage {
   timestamp: string
   isStreaming?: boolean
   isHistory?: boolean
+  memoryInjected?: boolean
 }
 
 export interface ChatSession {

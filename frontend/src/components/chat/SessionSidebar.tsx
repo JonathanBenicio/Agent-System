@@ -110,7 +110,14 @@ export function SessionSidebar({
                     onClick={e => e.stopPropagation()}
                   />
                 ) : (
-                  <span className="flex-1 truncate">{session.title}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate font-medium">{session.title}</div>
+                    {session.summary && (
+                      <div className="truncate text-[10px] text-zinc-500 leading-tight mt-0.5">
+                        {session.summary}
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 <div className="relative">

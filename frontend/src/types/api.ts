@@ -247,6 +247,32 @@ export interface LLMProviderInfo {
   lastQuotaUpdate?: string
 }
 
+export interface LLMProviderApiKey {
+  id: string
+  providerName: string
+  name: string
+  lastFour: string
+  isEnabled: boolean
+  isDefault: boolean
+  models: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RegisterApiKeyRequest {
+  name: string
+  apiKey: string
+  isDefault: boolean
+}
+
+export interface UpdateApiKeyRequest {
+  name?: string
+  apiKey?: string
+  isEnabled?: boolean
+  isDefault?: boolean
+  models?: string[]
+}
+
 export interface LLMConfigurationInfo {
   defaultProvider: string
   defaultModel: string
@@ -790,6 +816,7 @@ export interface ChatMessageDto {
   tools?: string[]
   success?: boolean
   timestamp: string
+  memoryInjected?: boolean
 }
 
 export interface SessionSummaryDto {

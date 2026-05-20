@@ -67,7 +67,8 @@ public class ChatHub : Hub
                         tools = streamEvent.Data.TryGetValue("tools", out var tools) ? tools : null,
                         success = streamEvent.Data.TryGetValue("success", out var success) && success is bool ok && ok,
                         sessionId = streamEvent.SessionId,
-                        timestamp = streamEvent.Timestamp
+                        timestamp = streamEvent.Timestamp,
+                        memoryInjected = streamEvent.Data.TryGetValue("memoryInjected", out var mi) && mi is bool b && b
                     }, Context.ConnectionAborted);
                 }
             }
@@ -108,11 +109,15 @@ public class ChatHub : Hub
             sessionId = session.Id,
             title = session.RuntimeSettings.TryGetValue("title", out var t) ? t : null,
             startedAt = session.StartedAt,
-            messageCount = session.Events.Count
+            messageCount = session.Events.Count,
+            summary = session.Summary != null ? SessionDtoMapper.ToSummary(session.Summary) : null,
+            insights = session.Insights != null ? SessionDtoMapper.ToInsights(session.Insights) : null
         });
 
         foreach (var evt in session.Events.OrderBy(e => e.Timestamp))
         {
+            var memoryInjected = evt.Context.TryGetValue("memory_injected", out var mi) && mi is bool b && b;
+
             await Clients.Caller.SendAsync("ReceiveMessage", new
             {
                 content = evt.UserInput,
@@ -123,7 +128,8 @@ public class ChatHub : Hub
                 success = true,
                 sessionId = evt.SessionId,
                 timestamp = evt.Timestamp,
-                isHistory = true
+                isHistory = true,
+                memoryInjected
             });
 
             await Clients.Caller.SendAsync("ReceiveMessage", new
