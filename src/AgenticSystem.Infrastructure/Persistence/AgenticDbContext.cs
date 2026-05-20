@@ -63,6 +63,7 @@ public class AgenticDbContext : DbContext
     public DbSet<McpPluginEntity> McpPlugins => Set<McpPluginEntity>();
     public DbSet<SessionSummaryEntity> SessionSummaries => Set<SessionSummaryEntity>();
     public DbSet<SessionInsightEntity> SessionInsights => Set<SessionInsightEntity>();
+    public DbSet<LLMProviderApiKeyEntity> ProviderApiKeys => Set<LLMProviderApiKeyEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

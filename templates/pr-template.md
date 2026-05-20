@@ -3,7 +3,7 @@
 ## 📌 Descrição
 <!-- Descreva brevemente as mudanças implementadas neste PR -->
 
-## 🔗 Relacionamento com Issues
+## 🔗 Relacionamento com Github Issues
 - Closes #<!-- ID da Issue que este PR fecha -->
 - Fixes #<!-- ID da Issue se for apenas uma correção -->
 

@@ -2,7 +2,7 @@
 
 **Objetivo:** Implementar Role-Based Access Control (RBAC) para gerenciar quem pode visualizar ou editar as Knowledge Rooms, com integração ponta a ponta (Banco, API e UI).
 
-**Fases de Implementação e Futuras Sub-issues:**
+**Fases de Implementação e Futuras Github Sub-issues:**
 
 1. **Fase 1: Entidade de Permissão e Migração (Backend)**
    - Criar `KnowledgeRoomPermissionEntity` associando `RoomId`, `UserId` e `Role` (Admin, Editor, Reader).

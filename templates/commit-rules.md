@@ -38,7 +38,7 @@ Closes #123
 
 ---
 
-## 🔗 Vinculação com Issues
+## 🔗 Vinculação com Github Issues
 
 Sempre que um commit resolver ou estiver relacionado a uma issue, referencie-a no rodapé ou no final da descrição:
 

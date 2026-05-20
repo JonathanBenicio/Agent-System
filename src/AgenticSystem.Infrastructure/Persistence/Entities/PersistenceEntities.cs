@@ -599,3 +599,29 @@ public class SessionInsightEntity : ITenantEntity
     public string ActionItemsJson { get; set; } = "[]";
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
+
+// ═══════════════════════════════════════════════════════════
+// Multi-Provider API Key Management (ADR-020, Issue #61)
+// ═══════════════════════════════════════════════════════════
+
+/// <summary>
+/// Credential entity for multi-provider API key management.
+/// Stores encrypted API keys with tenant isolation and per-key model discovery.
+/// The actual key value is encrypted at rest via IConfigEncryptionService (AES-256).
+/// Only the last 4 characters (LastFour) are stored in plaintext for secure UI differentiation.
+/// </summary>
+public class LLMProviderApiKeyEntity : ITenantEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string TenantId { get; set; } = "default";
+    public string ProviderName { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string EncryptedValue { get; set; } = string.Empty;
+    public string LastFour { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; } = true;
+    public bool IsDefault { get; set; }
+    public string Models { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
