@@ -40,13 +40,16 @@ Closes #123
 
 ## 🔗 Vinculação com Github Issues
 
-Sempre que um commit resolver ou estiver relacionado a uma issue, referencie-a no rodapé ou no final da descrição:
+**🚨 REGRA OBRIGATÓRIA:** É **estritamente proibido** realizar um commit do tipo `feat` ou `fix` sem referenciar uma GitHub Issue. Se você é um agente autônomo e não sabe o ID da issue, **PARE E PERGUNTE AO USUÁRIO** antes de rodar o `git commit`.
+
+Sempre referencie a issue no rodapé ou no final da descrição:
 
 - `Closes #123` - Fecha a issue quando o PR for mergeado.
 - `Fixes #123` - Indica que o commit corrige o problema da issue.
 - `Refs #123` - Apenas referencia a issue sem fechá-la.
 
 ## 🚫 Regras de Ouro
-1. **Use o imperativo** na descrição ("add" em vez de "added", "fix" em vez de "fixed").
-2. **Não use letras maiúsculas** no início da descrição (mantenha tudo em minúsculo após o tipo).
-3. **Seja conciso** na primeira linha (máximo 50-72 caracteres).
+1. **Obrigatório referenciar Issues** em `feat` e `fix`.
+2. **Use o imperativo** na descrição ("add" em vez de "added", "fix" em vez de "fixed").
+3. **Não use letras maiúsculas** no início da descrição (mantenha tudo em minúsculo após o tipo).
+4. **Seja conciso** na primeira linha (máximo 50-72 caracteres).

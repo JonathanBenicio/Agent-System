@@ -49,7 +49,7 @@ Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem e usa
 3. **User Story**: Detalhamento dos critérios de aceite em `docs/USER-STORIES.md`. **Use o template em `templates/user-stories-template.md`.**
 4. **BDD Features**: Para especificações de comportamento, use `templates/bdd-template.feature`.
 5. **Implementation Plan**: Roteiro técnico detalhado em `docs/plan/`. **Use o template em `templates/plan-template.md`.**
-6. **Rastreabilidade**: Commits vinculados à issue (ex: `feat: ... Closes #ID`).
+6. **Rastreabilidade (MANDATÓRIO)**: É **estritamente proibido** fazer commits de features (`feat:`) ou correções (`fix:`) sem referenciar uma GitHub Issue (ex: `Closes #ID`). Se você (Agente) não tiver o ID da issue no contexto, **você DEVE perguntar ao usuário** antes de executar o comando `git commit`.
 7. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
 
 ### 🧪 Padrões de Teste
