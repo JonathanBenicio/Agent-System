@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { ChevronRight, Cpu, Settings2 } from 'lucide-react'
 import type { LLMProviderInfo } from '@/types/api'
 import { Badge } from '@/components/shared/Badge'
+import { useLLMProviderApiKeys } from '@/hooks/useLLMProviderApiKeys'
 
 interface AISelectorBarProps {
   providers: LLMProviderInfo[]
@@ -20,6 +21,16 @@ export function AISelectorBar({
 }: AISelectorBarProps) {
   const activeProvider = providers.find(provider => provider.name === selectedProvider) ?? providers[0]
   const models = activeProvider?.models ?? []
+
+  const { keys } = useLLMProviderApiKeys(selectedProvider)
+
+  const getModelLabel = (model: string) => {
+    const key = keys.find(k => k.models && k.models.includes(model))
+    if (key) {
+      return `${model} (${key.name} ...${key.lastFour})`
+    }
+    return model
+  }
 
   return (
     <div className="border-b border-zinc-800 bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.16),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.18),_transparent_28%),#09090b] px-4 py-3">
@@ -61,7 +72,7 @@ export function AISelectorBar({
               className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-emerald-500"
             >
               {models.map(model => (
-                <option key={model} value={model}>{model}</option>
+                <option key={model} value={model}>{getModelLabel(model)}</option>
               ))}
             </select>
           </label>

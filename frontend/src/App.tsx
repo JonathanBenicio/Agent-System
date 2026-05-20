@@ -1,10 +1,11 @@
-import { lazy, Suspense, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Layout } from '@/components/layout/Layout'
 import { PageLoading } from '@/components/shared/Loading'
 import { ChatProvider, useChat } from '@/hooks/useChat'
 import { useSignalRAuth } from '@/hooks/useSignalRAuth'
+import { useAuthStore } from '@/store/authStore'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 
 const queryClient = new QueryClient({
@@ -42,6 +43,11 @@ function RouteBoundary({ children }: { children: ReactNode }) {
 
 function AppRoutes() {
   useSignalRAuth()
+  const checkAuth = useAuthStore(state => state.checkAuth)
+
+  useEffect(() => {
+    void checkAuth()
+  }, [checkAuth])
 
   const {
     messages,
