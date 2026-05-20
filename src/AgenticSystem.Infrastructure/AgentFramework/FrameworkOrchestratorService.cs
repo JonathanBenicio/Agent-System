@@ -107,7 +107,11 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         }
 
         // 4. Extrair conteúdo textual da resposta do framework
-        var content = ExtractContent(frameworkResponse);
+        var content = ExtractContent(frameworkResponse, _logger);
+
+        _logger.LogInformation(
+            "📝 Workflow extraction: {MsgCount} messages, content length: {Length}, isEmpty: {IsEmpty}",
+            frameworkResponse.Messages.Count, content.Length, string.IsNullOrWhiteSpace(content));
 
         // 5. Identificar qual especialista foi chamado (via tool calls no histórico ou eventos de handoff)
         var specialistCalls = GetSpecialistToolCalls(frameworkResponse);
@@ -135,25 +139,73 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
     private static FrameworkAgentResponse ExtractResponseFromWorkflowRun(Run run)
     {
         var messages = new List<ChatMessage>();
-        
-        // Coletar todas as mensagens de assistant produzidas durante o run
+        var eventCount = run.OutgoingEvents.Count();
+
+        // Primary: AgentResponseEvent
         foreach (var ev in run.OutgoingEvents)
         {
             if (ev is AgentResponseEvent responseEvent)
             {
                 messages.AddRange(responseEvent.Response.Messages);
             }
-            else if (ev is WorkflowOutputEvent outputEvent && outputEvent.Is<ChatMessage>(out var msg))
+            else if (ev is AgentResponseUpdateEvent updateEvent)
             {
-                messages.Add(msg);
+                messages.AddRange(updateEvent.AsResponse().Messages);
+            }
+            else if (ev is WorkflowOutputEvent outputEvent)
+            {
+                if (outputEvent.Is<ChatMessage>(out var msg))
+                {
+                    messages.Add(msg);
+                }
+                else if (outputEvent.Is<string>(out var text) && !string.IsNullOrWhiteSpace(text))
+                {
+                    messages.Add(new ChatMessage(ChatRole.Assistant, text));
+                }
             }
         }
 
-        // Se não houver mensagens, tenta pegar do log de mensagens do run se disponível
+        // Fallback: try to extract text from any object in OutgoingEvents
+        if (messages.Count == 0)
+        {
+            foreach (var ev in run.OutgoingEvents)
+            {
+                var text = ExtractTextFromEventObject(ev);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    messages.Add(new ChatMessage(ChatRole.Assistant, text));
+                }
+            }
+        }
+
         return new FrameworkAgentResponse
         {
             Messages = messages
         };
+    }
+
+    private static string ExtractTextFromEventObject(object ev)
+    {
+        var type = ev.GetType();
+        var responseProp = type.GetProperty("Response");
+        if (responseProp != null)
+        {
+            var response = responseProp.GetValue(ev);
+            if (response != null)
+            {
+                var messagesProp = response.GetType().GetProperty("Messages");
+                if (messagesProp?.GetValue(response) is IEnumerable<ChatMessage> msgs)
+                {
+                    return string.Join("\n", msgs
+                        .Where(m => m.Role == ChatRole.Assistant)
+                        .SelectMany(m => m.Contents.OfType<TextContent>())
+                        .Select(t => t.Text));
+                }
+            }
+        }
+
+        var textProp = type.GetProperty("Text");
+        return textProp?.GetValue(ev) as string ?? string.Empty;
     }
 
     private static string? ExtractHandoffAgent(FrameworkAgentResponse response)
@@ -277,7 +329,7 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         };
     }
 
-    private static string ExtractContent(FrameworkAgentResponse frameworkResponse)
+    private static string ExtractContent(FrameworkAgentResponse frameworkResponse, ILogger? logger = null)
     {
         // Extrair texto das mensagens do assistant
         var content = string.Join("\n", frameworkResponse.Messages
@@ -290,6 +342,15 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             content = string.Join("\n", frameworkResponse.Messages
                 .Where(m => m.Role == ChatRole.Assistant)
                 .Select(m => m.Text));
+        }
+
+        if (string.IsNullOrWhiteSpace(content) && logger != null)
+        {
+            logger.LogWarning(
+                "⚠️ ExtractContent returned empty. Messages: {Count}, Roles: {Roles}, TotalContents: {TotalContents}",
+                frameworkResponse.Messages.Count,
+                string.Join(", ", frameworkResponse.Messages.Select(m => m.Role.ToString())),
+                frameworkResponse.Messages.Sum(m => m.Contents.Count()));
         }
 
         return content ?? string.Empty;
