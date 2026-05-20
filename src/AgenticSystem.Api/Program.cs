@@ -153,12 +153,18 @@ builder.Services.AddAuthentication(options =>
         options.Issuer = jwtSection["Issuer"] ?? "AgenticSystem";
         options.Audience = jwtSection["Audience"] ?? "AgenticSystem";
     })
-.AddPolicyScheme("MultiAuth", "ApiKey or JWT", options =>
+.AddSupabaseAuth(builder.Configuration)
+.AddPolicyScheme("MultiAuth", "ApiKey, JWT or Supabase", options =>
 {
     options.ForwardDefaultSelector = context =>
     {
-        if (context.Request.Headers.ContainsKey("Authorization"))
-            return JwtTenantAuthenticationHandler.SchemeName;
+        if (context.Request.Headers.ContainsKey("Authorization") || context.Request.Query.ContainsKey("access_token"))
+        {
+            // Simple heuristic: Supabase tokens are usually much longer than our custom ones, 
+            // but a better way is checking Issuer if we decode it without validation first.
+            // For now, let's try Supabase first if it's enabled.
+            return "Supabase"; 
+        }
         return ApiKeyAuthenticationHandler.SchemeName;
     };
 });

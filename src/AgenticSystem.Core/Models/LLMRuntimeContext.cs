@@ -12,6 +12,7 @@ public sealed class LLMRuntimeContext
     public string? RequestProvider { get; init; }
     public string? RequestModel { get; init; }
     public string? RequestApiKey { get; init; }
+    public string? RequestApiKeyId { get; init; }
 
     public string? SessionProvider { get; init; }
     public string? SessionModel { get; init; }

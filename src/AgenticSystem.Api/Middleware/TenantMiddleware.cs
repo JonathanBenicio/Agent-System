@@ -74,10 +74,27 @@ public class TenantMiddleware
                 return val;
         }
 
-        // 2. JWT claim
+        // 2. JWT claim (Standard claim or Supabase claim)
         var claimValue = context.User?.FindFirst(TenantIdClaimType)?.Value;
         if (!string.IsNullOrWhiteSpace(claimValue))
             return claimValue;
+
+        // 3. Supabase Metadata (app_metadata.tenant_id)
+        // Note: Supabase puts custom claims inside app_metadata or user_metadata
+        // This requires the JWT to be parsed correctly by the handler
+        var metadataClaim = context.User?.FindFirst("app_metadata")?.Value;
+        if (!string.IsNullOrWhiteSpace(metadataClaim))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(metadataClaim);
+                if (doc.RootElement.TryGetProperty("tenant_id", out var tenantIdProp))
+                {
+                    return tenantIdProp.GetString();
+                }
+            }
+            catch { /* Ignore parse errors */ }
+        }
 
         return null;
     }

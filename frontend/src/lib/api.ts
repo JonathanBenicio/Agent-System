@@ -1,4 +1,4 @@
-import { getAuthHeaders } from '@/lib/auth'
+import { useAuthStore } from '@/store/authStore'
 import type { SystemAlert } from '@/types/api'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || ''
@@ -16,8 +16,10 @@ class ApiError extends Error {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers = new Headers(options?.headers)
 
-  for (const [key, value] of Object.entries(getAuthHeaders())) {
-    headers.set(key, value)
+  // Use token from AuthStore (Supabase JWT)
+  const token = useAuthStore.getState().token
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`)
   }
 
   // Enforce Tenant ID context from the Knowledge Store for Multi-tenancy isolation
@@ -27,7 +29,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     if (tenantId) {
       headers.set('X-Tenant-Id', tenantId);
     }
-  } catch (e) {
+  } catch {
     // Ignore if store is not initialized
   }
 
@@ -106,6 +108,9 @@ import type {
   LLMProviderSummary,
   UpdateDefaultLlmSelectionRequest,
   UpdateProviderRequest,
+  LLMProviderApiKey,
+  RegisterApiKeyRequest,
+  UpdateApiKeyRequest,
   PluginSummary,
   LoadPluginRequest,
   MCPToolInfo,
@@ -216,6 +221,22 @@ export const llmApi = {
   updateDefaultSelection: (req: UpdateDefaultLlmSelectionRequest) =>
     put<LLMConfigurationInfo>('/api/admin/llm/default-selection', req),
   syncQuotas: () => post<{ message: string }>('/api/admin/llm/providers/sync-quotas'),
+  
+  // API Keys
+  getKeys: (providerName: string) => 
+    get<LLMProviderApiKey[]>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys`),
+  registerKey: (providerName: string, req: RegisterApiKeyRequest) => 
+    post<LLMProviderApiKey>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys`, req),
+  updateKey: (providerName: string, id: string, req: UpdateApiKeyRequest) => 
+    put<LLMProviderApiKey>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys/${encodeURIComponent(id)}`, req),
+  deleteKey: (providerName: string, id: string) => 
+    del(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys/${encodeURIComponent(id)}`),
+  setDefaultKey: (providerName: string, id: string) => 
+    post<{ message: string }>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys/${encodeURIComponent(id)}/default`),
+  testKey: (providerName: string, id: string) => 
+    post<{ success: boolean }>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys/${encodeURIComponent(id)}/test`),
+  discoverModelsForKey: (providerName: string, id: string) => 
+    post<{ success: boolean; discoveredModels: string[]; errorMessage?: string }>(`/api/admin/llm/providers/${encodeURIComponent(providerName)}/keys/${encodeURIComponent(id)}/discover-models`),
 }
 
 // ══════════════════════════════════════
