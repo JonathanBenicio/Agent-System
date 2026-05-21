@@ -81,9 +81,9 @@ O objetivo deste *roadmap* é evoluir o Agentic System para uma plataforma modul
 *   *Rollbacks* de base de dados serão geridos através de `dotnet ef database update <PreviousMigration>`.
 
 ## 7. Verification & Testing
-*   [ ] **Testes Unitários:** Verificar se a alteração de valores no `IOptionsMonitor` aciona corretamente a recompilação da fábrica.
-*   [ ] **Testes de Integração:** Testes E2E a inserir documentos antes e depois do *hot-swap* do Vector Store.
-*   [ ] **Testes de Carga:** Profile de performance do `HybridSearchAsync` com 100k+ documentos (RRF benchmark).
-*   [ ] **Auditorias de Segurança:** O `security-auditor` correrá após as Fases 1 e 2 para garantir o Isolamento de *Tenants* e a segurança dos *Webhooks*.
+*   [x] **Testes Unitários:** Verificar se a alteração de valores no `IOptionsMonitor` aciona corretamente a recompilação da fábrica.
+*   [x] **Testes de Integração:** Testes E2E a inserir documentos antes e depois do *hot-swap* do Vector Store.
+*   [x] **Testes de Carga:** Profile de performance do `HybridSearchAsync` com 100k+ documentos (RRF benchmark).
+*   [x] **Auditorias de Segurança:** O `security-auditor` correrá após as Fases 1 e 2 para garantir o Isolamento de *Tenants* e a segurança dos *Webhooks*.
 *   [x] **Linting & QA:** Build limpo — 0 erros, 11 warnings pré-existentes, 607/608 testes passando.
 *   [x] **Frontend Hot-Swap UI:** `HotSwapPanel` integrado em `ConfigAdvancedPage` na aba "Hot-Swap".

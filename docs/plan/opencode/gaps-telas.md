@@ -1,6 +1,9 @@
 # Plano de Refinamento — Gaps de Implementação nas Telas
 
-## Diagnóstico
+> **Status:** ✅ CONCLUÍDO (com variações de nomenclatura)
+> **Revisado:** 2026-05-20
+
+## Diagnóstico Original
 
 | Área | Frontend | Backend API | Banco |
 |------|----------|-------------|-------|
@@ -10,7 +13,7 @@
 
 ---
 
-## Tarefa 1: RAG — Métricas Reais (Baixa Complexidade) - ✅ CONCLUÍDO
+## Tarefa 1: RAG — Métricas Reais ✅ CONCLUÍDO
 
 **Problema:** `RAGPage.tsx` usa valores hardcoded para `totalIndexedChunks`, `searchCount24h` e status do ONNX.
 
@@ -30,9 +33,14 @@
 
 **Estimativa:** 1-2 horas
 
+**Implementado:**
+- Backend: `GET /api/document/stats` em `DocumentController.cs:35-60`
+- Frontend: `getStats()` no hook `useRAG.ts`
+- UI: `RAGPage.tsx` com valores reais
+
 ---
 
-## Tarefa 2: Knowledge Rooms — Persistência (Média Complexidade) - ✅ CONCLUÍDO
+## Tarefa 2: Knowledge Rooms — Persistência ✅ CONCLUÍDO
 
 **Problema:** `useKnowledgeStore.ts` usa Zustand com `persist` (localStorage). Dados não são compartilhados entre usuários/sessões. Sem API backend.
 
@@ -47,6 +55,13 @@
      - `PUT /api/knowledge/rooms/{id}` — atualiza
      - `DELETE /api/knowledge/rooms/{id}` — deleta
      - `GET /api/knowledge/rooms/{id}/documents` — lista documentos da room
+
+**Implementado:**
+- Backend: `KnowledgeRoomController.cs` com CRUD completo + permissões
+  - `GET/POST/PUT/DELETE /api/knowledge/rooms`
+  - `GET/POST/DELETE /api/knowledge/rooms/{id}/permissions`
+- Frontend: `useKnowledgeRooms.ts` hook com react-query
+- Entidade: `KnowledgeRoomEntity` com migration
 
 2. **Frontend** — Refatorar `useKnowledgeStore.ts`:
    - Remover `persist` do Zustand
@@ -70,10 +85,11 @@
 
 **Estimativa:** 4-6 horas
 
+
+
 ---
 
-## Tarefa 3: Workflow Builder — Persistência + Execução (Alta Complexidade) - ✅ CONCLUÍDO
-
+## Tarefa 3: Workflow Builder — Persistência + Execução ✅ CONCLUÍDO
 **Problema:** `WorkflowBuilder.tsx` é puramente visual. Sem listagem de workflows, sem persistência, sem edição de nós, botão "Run" sem ação.
 
 ### Fase 3A: Persistência de Workflows (Média) - ✅ CONCLUÍDO
@@ -87,11 +103,20 @@
    - `POST /api/workflows/{id}/execute` — executa workflow
    
    *(As entities WorkflowDefinitionEntity, WorkflowExecutionEntity já existem)*
+   
 
 2. **Frontend** — Refatorar `WorkflowBuilder.tsx`:
    - Adicionar painel lateral com lista de workflows salvos
    - Conectar `handleSave` à API `POST /api/workflows`
    - Adicionar `workflowApi` ao `api.ts` e hook `useWorkflows.ts`
+
+**Implementado:**
+- Backend: `WorkflowController.cs` com CRUD de definições
+  - `GET/POST/DELETE /api/workflow/definitions`
+  - `POST /api/workflow/executions/start/{id}`
+  - `GET /api/workflow/executions/{id}`
+  - `GET /api/workflow/executions`
+  - `POST /api/workflow/executions/{id}/cancel`
 
 ### Fase 3B: Edição de Nós (Média) - ✅ CONCLUÍDO
 
@@ -132,10 +157,10 @@
 
 ---
 
-## Ordem de Execução Recomendada
+## Ordem de Execução (Concluída)
 
-1. **Tarefa 1 (RAG métricas)** → 1-2h → Quick win, baixo risco
-2. **Tarefa 2 (Knowledge Rooms)** → 4-6h → Nenhuma dependência
-3. **Tarefa 3A (Workflow CRUD)** → 4h → Nenhuma dependência
-4. **Tarefa 3B (Workflow Editor)** → 4h → Depende de 3A
-5. **Tarefa 3C (Workflow Exec)** → 6-8h → Depende de 3A+3B
+1. ✅ Tarefa 1 (RAG métricas) → Quick win
+2. ✅ Tarefa 2 (Knowledge Rooms) → CRUD completo
+3. ✅ Tarefa 3A (Workflow CRUD) → Definições persistidas
+4. ✅ Tarefa 3B (Workflow Editor) → Painel de propriedades
+5. ✅ Tarefa 3C (Workflow Exec) → `DefaultWorkflowEngine` + SignalR

@@ -1,5 +1,8 @@
 # Plano: Monitoramento de Execução de Workflows (UX/Feedback)
 
+> **Status:** ✅ CONCLUÍDO — Todos os critérios de aceite atendidos
+> **Verificado:** 2026-05-20
+
 ## Objetivo
 Criar uma interface para visualização do histórico e monitoramento em tempo real das execuções de um Workflow, garantindo feedback adequado (UX) sobre o progresso e o status de cada nó (Agente, Tool, Condição).
 
@@ -10,18 +13,18 @@ A tela de edição `WorkflowBuilder.tsx` já permite criar e disparar o workflow
 ## Tarefas a Implementar
 
 ### 1. Painel de Execuções (Drawer / Panel Lateral)
-- [ ] Adicionar um botão no header (ao lado de "Run") chamado "Executions" ou "History".
-- [ ] Criar um componente lateral direito (`ExecutionHistoryPanel.tsx`) que lista todas as execuções do workflow ativo (`useWorkflows().listExecutions()`).
-- [ ] Cada item da lista deve mostrar: Status (Running, Completed, Failed), data de início e botão para ver detalhes.
+- [x] Adicionar um botão no header (ao lado de "Run") chamado "Executions" ou "History".
+- [x] Criar um componente lateral direito (`ExecutionHistoryPanel.tsx`) que lista todas as execuções do workflow ativo (`useWorkflows().listExecutions()`).
+- [x] Cada item da lista deve mostrar: Status (Running, Completed, Failed), data de início e botão para ver detalhes.
 
 ### 2. Visão Detalhada da Execução
-- [ ] Ao clicar em uma execução no painel, abrir os detalhes buscando a execução completa (`workflowApi.getExecution(id)`).
-- [ ] Mostrar uma lista/timeline dos `StepExecutions` indicando se cada nó falhou ou concluiu, exibindo as variáveis de saída (`OutputJson`).
-- [ ] Integrar feedback visual no Canvas do ReactFlow: Mudar as cores dos nós no canvas para verde (sucesso) ou vermelho (falha) com base nos passos carregados da execução selecionada.
+- [x] Ao clicar em uma execução no painel, abrir os detalhes buscando a execução completa (`workflowApi.getExecution(id)`).
+- [x] Mostrar uma lista/timeline dos `StepExecutions` indicando se cada nó falhou ou concluiu, exibindo as variáveis de saída (`OutputJson`).
+- [x] Integrar feedback visual no Canvas do ReactFlow: Mudar as cores dos nós no canvas para verde (sucesso) ou vermelho (falha) com base nos passos carregados da execução selecionada.
 
 ### 3. Fetching Contínuo (Polling / React Query)
-- [ ] Usar `useQuery` (do TanStack Query) com `refetchInterval` para atualizar os dados de uma execução enquanto o status dela for `Running`.
-- [ ] Sincronizar o estado da store para atualizar as cores dos nós no Canvas sempre que a execução em andamento atualizar seu progresso.
+- [x] Usar `useQuery` (do TanStack Query) com `refetchInterval` para atualizar os dados de uma execução enquanto o status dela for `Running`.
+- [x] Sincronizar o estado da store para atualizar as cores dos nós no Canvas sempre que a execução em andamento atualizar seu progresso.
 
 ## Integração / Arquivos Afetados
 - `frontend/src/components/workflows/WorkflowBuilder.tsx`: Inclusão de um novo estado de UI para o painel de execuções.

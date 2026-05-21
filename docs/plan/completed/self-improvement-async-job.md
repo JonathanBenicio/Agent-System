@@ -1,7 +1,7 @@
 # Plano: Automação do Self-Improvement Engine via Background Job
 
 **ID do Plano:** `self-improvement-async-job`
-**Status:** 🛠️ Em Execução (Fase 1)
+**Status:** ✅ COMPLETED
 **Objetivo:** Transformar o ciclo de melhoria contínua em um processo batch diário e resiliente.
 
 ## 1. Mudanças na Estrutura de Dados
@@ -17,20 +17,20 @@ Utilizaremos a infraestrutura nativa do .NET 10:
 ## 3. Etapas de Implementação
 
 ### Fase 1: Atualização do Core (Services/Models)
-- [ ] Refatorar `AnalyzeAndImproveAsync` para aceitar um `sinceId` ou `sinceDate`.
-- [ ] Implementar a lógica de cálculo de confiança (baseada na recorrência de reflexões críticas).
-- [ ] Atualizar interfaces `ISelfImprovementEngine` e `IOperationalStore`.
+- [x] Refatorar `AnalyzeAndImproveAsync` para aceitar um `sinceId` ou `sinceDate`.
+- [x] Implementar a lógica de cálculo de confiança (baseada na recorrência de reflexões críticas).
+- [x] Atualizar interfaces `ISelfImprovementEngine` e `IOperationalStore`.
 
 ### Fase 2: Infraestrutura (O Job)
-- [ ] Criar `src/AgenticSystem.Infrastructure/BackgroundServices/SelfImprovementBackgroundJob.cs`.
-- [ ] Implementar o loop de execução segura (com `try-catch` e logs detalhados).
+- [x] Criar `src/AgenticSystem.Infrastructure/BackgroundServices/SelfImprovementBackgroundJob.cs`.
+- [x] Implementar o loop de execução segura (com `try-catch` e logs detalhados).
 
 ### Fase 3: Registro e Configuração
-- [ ] Adicionar o serviço no `Program.cs`.
-- [ ] Configurar o tempo de execução via `appsettings.json`.
+- [x] Adicionar o serviço no `Program.cs`.
+- [x] Configurar o tempo de execução via `appsettings.json`.
 
 ## 4. Critérios de Aceite
-- [ ] O Job executa apenas uma vez por dia.
-- [ ] Apenas agentes com novas reflexões críticas são analisados.
-- [ ] Melhorias com confiança > 0.8 são aplicadas automaticamente.
-- [ ] O sistema não re-processa reflexões antigas.
+- [x] O Job executa apenas uma vez por dia.
+- [x] Apenas agentes com novas reflexões críticas são analisados.
+- [x] Melhorias com confiança > 0.8 são aplicadas automaticamente.
+- [x] O sistema não re-processa reflexões antigas.

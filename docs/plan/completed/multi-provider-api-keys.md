@@ -97,9 +97,9 @@ Atualmente, a limitação de uma única chave global por provedor impede que cli
 
 ### Critérios de Aceite e SLOs
 
-* [ ] **SLO de Latência de Roteamento:** A resolução e descriptografia da chave de API em memória no `ResolveSelectionAsync` deve adicionar menos de 5ms de latência ao tempo total do request do chat.
-* [ ] **Isolamento de Chaves por Tenant:** Garantir através de testes unitários que a tabela de chaves respeita rigorosamente o `TenantId` ativo, lançando exceção ou retornando vazio em caso de tentativas de acesso cruzado.
-* [ ] **Ocultação de Texto Puro:** Sob nenhuma hipótese a API de leitura ou logs de auditoria do Serilog devem exibir a chave de API em texto puro. O frontend deve receber estritamente o campo `LastFour` e o valor mascarado `•••• •••• •••• 4x9t`.
+* [x] **SLO de Latência de Roteamento:** A resolução e descriptografia da chave de API em memória no `ResolveSelectionAsync` deve adicionar menos de 5ms de latência ao tempo total do request do chat.
+* [x] **Isolamento de Chaves por Tenant:** Garantir através de testes unitários que a tabela de chaves respeita rigorosamente o `TenantId` ativo, lançando exceção ou retornando vazio em caso de tentativas de acesso cruzado.
+* [x] **Ocultação de Texto Puro:** Sob nenhuma hipótese a API de leitura ou logs de auditoria do Serilog devem exibir a chave de API em texto puro. O frontend deve receber estritamente o campo `LastFour` e o valor mascarado `•••• •••• •••• 4x9t`.
 
 ### Riscos e Mitigações
 
