@@ -1208,12 +1208,12 @@ TriggerEngine.EvaluateAsync(rule)
 |------|---------|
 | Serviços | `LocalOnnxCrossEncoderReRankerProvider` |
 | Responsabilidade | Re-ranqueamento de chunks recuperados via modelo ONNX local |
-| Status | ⏳ Planejado |
+| Status | ✅ Implementado |
 
 **Critérios de Aceite:**
-- [ ] Carregamento do modelo ONNX e vocabulário na inicialização.
-- [ ] Processamento de pares (query, chunk) para atribuição de score de relevância.
-- [ ] Filtragem e reordenação dos Top-K resultados antes de passar para o gerador.
+- [x] Carregamento do modelo ONNX e vocabulário na inicialização.
+- [x] Processamento de pares (query, chunk) para atribuição de score de relevância.
+- [x] Filtragem e reordenação dos Top-K resultados antes de passar para o gerador.
 
 ---
 
@@ -1275,9 +1275,9 @@ TriggerEngine.EvaluateAsync(rule)
 | Vision | ML26 | 1 | ✅ |
 | MCP & Extensibility | ML27–ML28 | 3 | ✅ |
 | Agent Runtime Platform | ML29–ML34 | 6 | ✅ |
-| Advanced Capabilities | ML35–ML40 | 6 | ⏳ |
+| Advanced Capabilities | ML35–ML39 | 3 | ⏳ |
 | Transversal | T1–T10 | 10 | ✅ |
-| **Total** | **40 MLs + 10 Transversais** | **60 serviços** | **549+ testes** |
+| **Total** | **39 MLs + 10 Transversais** | **57 serviços** | **549+ testes** |
 
 ---
 
@@ -1916,7 +1916,11 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 | Workflow Orchestration | 2 | US-34, US-35 | 1 | ⏳ |
 | Webhooks Integration | 2 | US-36, US-37 | 1 | ⏳ |
 | Alerts History | 2 | US-38, US-39 | 1 | ⏳ |
-| **Total** | **40** | | **31 componentes** | **⏳** |
+| Specialized Context & Evolution | 4 | US-41 a US-44 | 1 | ⏳ |
+| Dynamic ONNX Inference Engine | 3 | US-45 a US-47 | 4 | ✅ |
+| Dynamic Customization & No-Code | 3 | US-48 a US-50 | 2 | ⏳ |
+| **Total** | **50** | | **38 componentes** | **⏳** |
+
 
 ---
 
@@ -2024,10 +2028,10 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Canvas interativo com suporte a drag and drop de nós e conexões
-- [ ] Tipos de nós suportados: Agent Node e Tool Node
-- [ ] Toolbar com ações de adicionar nós, salvar e executar
-- [ ] Painel de status do motor exibindo nós ativos e conexões
+- [x] Canvas interativo com suporte a drag and drop de nós e conexões
+- [x] Tipos de nós suportados: Agent Node e Tool Node
+- [x] Toolbar com ações de adicionar nós, salvar e executar
+- [x] Painel de status do motor exibindo nós ativos e conexões
 
 ---
 
@@ -2039,9 +2043,9 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Botão "Save Workflow" gera a definição do workflow (JSON) e envia para a API
-- [ ] Botão "Run" dispara a execução do workflow no backend
-- [ ] Feedback visual de salvamento e execução
+- [x] Botão "Save Workflow" gera a definição do workflow (JSON) e envia para a API
+- [x] Botão "Run" dispara a execução do workflow no backend
+- [x] Feedback visual de salvamento e execução
 
 ---
 
@@ -2053,10 +2057,10 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Lista de webhooks com nome, status (Ativo/Inativo), data de criação e último disparo
-- [ ] Formulário para criar webhook com nome, agente alvo (opcional) e workflow alvo (opcional)
-- [ ] Ação de excluir webhook com confirmação
-- [ ] Copiar URL do webhook para a área de transferência
+- [x] Lista de webhooks com nome, status (Ativo/Inativo), data de criação e último disparo
+- [x] Formulário para criar webhook com nome, agente alvo (opcional) e workflow alvo (opcional)
+- [x] Ação de excluir webhook com confirmação
+- [x] Copiar URL do webhook para a área de transferência
 
 ---
 
@@ -2068,9 +2072,9 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Endpoint `/api/webhooks/receive/{id}` recebe requisições POST
-- [ ] Execução é encaminhada para o agente ou workflow configurado
-- [ ] Retorno de sucesso ou erro apropriado para o chamador
+- [x] Endpoint `/api/webhooks/receive/{id}` recebe requisições POST
+- [x] Execução é encaminhada para o agente ou workflow configurado
+- [x] Retorno de sucesso ou erro apropriado para o chamador
 
 ---
 
@@ -2082,9 +2086,9 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Lista de alertas exibindo provider, tipo, mensagem, percentual restante e data
-- [ ] Alertas não lidos destacados visualmente
-- [ ] Botão para atualizar a lista de alertas
+- [x] Lista de alertas exibindo provider, tipo, mensagem, percentual restante e data
+- [x] Alertas não lidos destacados visualmente
+- [x] Botão para atualizar a lista de alertas
 
 ---
 
@@ -2096,8 +2100,8 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Botão de check para marcar alerta como lido
-- [ ] Atualização do estado do alerta na interface sem recarregar a página
+- [x] Botão de check para marcar alerta como lido
+- [x] Atualização do estado do alerta na interface sem recarregar a página
 
 ---
 
@@ -2113,12 +2117,12 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 |------|---------|
 | Componente | `AgentFormModal` (seletor múltiplo) |
 | API | `PUT /api/agent/agents/{name}/rooms` |
-| Status | 🚧 Em Progresso (ADR-019) |
+| Status | ✅ Implementado (ADR-019) |
 
 **Critérios de Aceite:**
-- [ ] Lista de salas disponíveis carregada no modal de criação/edição de agente.
+- [x] Lista de salas disponíveis carregada no modal de criação/edição de agente.
 - [x] Persistência da associação em tabela junction `AgentKnowledgeRoomAssignment`.
-- [ ] O `KnowledgeSpecialist` filtra a busca vetorial automaticamente pelas salas associadas ao agente.
+- [x] O `KnowledgeSpecialist` filtra a busca vetorial automaticamente pelas salas associadas ao agente.
 
 ---
 
@@ -2191,14 +2195,14 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 |------|---------|
 | Componente | `OnnxModelsPage` · `OnnxModelUploadModal` · `OnnxModelInspectModal` · `OnnxModelTestModal` |
 | API | `GET/POST/PUT/DELETE /api/onnx/models` · `POST /api/onnx/models/{id}/inspect` · `POST /api/onnx/models/{id}/test` |
-| Status | ⏳ Planejado (ADR-010) |
+| Status | ✅ Implementado (ADR-010) |
 
 **Critérios de Aceite:**
-- [ ] Interface de upload aceita o arquivo `.onnx` principal e opcionalmente o arquivo secundário de pesos (`.data` / `.bin`) para modelos split.
-- [ ] Formulário de upload com validações para metadados de inferência (Input/Output Nodes, Width, Height, Channels, Scale Factor, Mean R/G/B, Output Format).
-- [ ] Exibição de aviso visual claro e progresso de upload caso a soma dos arquivos exceda 50MB, indicando salvamento físico em disco.
-- [ ] Rota de deleção física e lógica que limpa registros no PostgreSQL e diretórios físicos correspondentes no disco.
-- [ ] Interface de testes rápidos (`TestModal`) que permite upload de imagem de teste local e exibe o resultado da inferência lado a lado com métricas de latência e shape.
+- [x] Interface de upload aceita o arquivo `.onnx` principal e opcionalmente o arquivo secundário de pesos (`.data` / `.bin`) para modelos split.
+- [x] Formulário de upload com validações para metadados de inferência (Input/Output Nodes, Width, Height, Channels, Scale Factor, Mean R/G/B, Output Format).
+- [x] Exibição de aviso visual claro e progresso de upload caso a soma dos arquivos exceda 50MB, indicando salvamento físico em disco.
+- [x] Rota de deleção física e lógica que limpa registros no PostgreSQL e diretórios físicos correspondentes no disco.
+- [x] Interface de testes rápidos (`TestModal`) que permite upload de imagem de teste local e exibe o resultado da inferência lado a lado com métricas de latência e shape.
 
 ---
 
@@ -2212,13 +2216,13 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 |------|---------|
 | Componente | `DynamicOnnxProcessorTool` (`ITool`) · `WorkflowBuilder.tsx` (Properties Panel) |
 | API | SignalR `hubs/chat` · REST execution APIs |
-| Status | ⏳ Planejado (ADR-010) |
+| Status | ✅ Implementado (ADR-010) |
 
 **Critérios de Aceite:**
-- [ ] Registro correto da tool `onnx_processor` no `IToolManager` com a categoria `AI`.
-- [ ] Properties Panel do Workflow Builder exibe dropdown populado dinamicamente com os modelos ONNX ativos ao selecionar o nó `onnx_processor`.
-- [ ] A execução do processador decodifica a imagem base64 de entrada, realiza o pré-processamento de canais/normalização, cria a `InferenceSession`, executa a inferência e pós-processa o output de volta para base64.
-- [ ] Tratamento de erros gracioso: falhas internas do runtime ONNX retornam uma descrição legível de erro no `ToolResult` em vez de crashar a thread.
+- [x] Registro correto da tool `onnx_processor` no `IToolManager` com a categoria `AI`.
+- [x] Properties Panel do Workflow Builder exibe dropdown populado dinamicamente com os modelos ONNX ativos ao selecionar o nó `onnx_processor`.
+- [x] A execução do processador decodifica a imagem base64 de entrada, realiza o pré-processamento de canais/normalização, cria a `InferenceSession`, executa a inferência e pós-processa o output de volta para base64.
+- [x] Tratamento de erros gracioso: falhas internas do runtime ONNX retornam uma descrição legível de erro no `ToolResult` em vez de crashar a thread.
 
 ---
 
@@ -2232,10 +2236,77 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 |------|---------|
 | Componente | `TenantMiddleware` · `AgenticDbContext` · `OnnxModelController` |
 | Segurança | Isolamento Físico e Lógico (T5, T7) |
-| Status | ⏳ Planejado (ADR-010) |
+| Status | ✅ Implementado (ADR-010) |
 
 **Critérios de Aceite:**
-- [ ] Aplicação de filtro global EF Core (`TenantId`) na entidade `CustomOnnxModelEntity`.
-- [ ] Modelos armazenados fisicamente são salvos estritamente sob a estrutura `wwwroot/onnx-models/{tenantId}/{modelId}/` com nomes originais preservados.
-- [ ] Resolução de arquivos secundários (`.data` / `.bin`) via path absoluto restrita estritamente ao diretório do respectivo `tenantId`, bloqueando acessos transversais de diretório (Directory Traversal).
-- [ ] Validação no `DeleteModel` para impedir que um tenant delete arquivos pertencentes a outro através da manipulação do `modelId`.
+- [x] Aplicação de filtro global EF Core (`TenantId`) na entidade `CustomOnnxModelEntity`.
+- [x] Modelos armazenados fisicamente são salvos estritamente sob a estrutura `wwwroot/onnx-models/{tenantId}/{modelId}/` com nomes originais preservados.
+- [x] Resolução de arquivos secundários (`.data` / `.bin`) via path absoluto restrita estritamente ao diretório do respectivo `tenantId`, bloqueando acessos transversais de diretório (Directory Traversal).
+- [x] Validação no `DeleteModel` para impedir que um tenant delete arquivos pertencentes a outro através da manipulação do `modelId`.
+
+---
+
+### Épico 11: Dynamic Customization & No-Code Orchestration (Future Roadmap)
+
+#### US-48 — No-Code Skills (Dynamic Custom Skills via UI)
+
+**Como** construtor de agentes ou administrador do sistema,  
+**quero** criar, persistir de forma relacional e fiar dinamicamente Skills personalizadas diretamente pela interface de usuário (sem precisar codificar C#),  
+**para que** eu possa estender o comportamento dos agentes rapidamente usando instruções declarativas, parâmetros de inputs/outputs e prompts estruturados.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `CustomSkillsPage` · `SkillCreatorWizard` |
+| API / Serviço | `ICustomSkillManager` · `GET/POST/PUT/DELETE /api/skills/custom` |
+| Status | ⏳ Planejado (Future Roadmap) |
+
+**Critérios de Aceite:**
+- [ ] Interface visual para criação de Skills (Nome, Descrição, System Prompt/Instruções e Variáveis de Entrada/Saída).
+- [ ] Persistência relacional em banco de dados das custom skills com isolamento multi-tenant (`TenantId`).
+- [ ] Associação dinâmica a agentes existentes com fiação em tempo real (runtime reflection).
+- [ ] Validação de schema e tipos das variáveis de entrada/saída declaradas.
+- [ ] Suporte a importação/exportação de definições de Skills em formato YAML/JSON.
+
+---
+
+#### US-49 — Agent Constructor (Visual Agent Builder)
+
+**Como** administrador do sistema,  
+**quero** uma interface visual de construção de agentes que me permita arrastar ou selecionar via checkboxes as capabilities, tools, salas de RAG e skills de forma dinâmica,  
+**para que** novos agentes especializados possam ser montados em minutos sem qualquer deploy de código.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `AgentConstructorPage` · `AgentBuilderCanvas` |
+| API / Serviço | `IDynamicAgentFactory` · `PUT /api/agent/agents/{name}/wire` |
+| Status | ⏳ Planejado (Future Roadmap) |
+
+**Critérios de Aceite:**
+- [ ] Form Wizard visual premium com etapas claras para definição do perfil do Agente (Nome, Avatar, Modelo de LLM, Temperatura, Max Tokens).
+- [ ] Painel de Checkboxes / Multi-select interativo para Capabilities (Web Search, File Search, Advanced Math).
+- [ ] Painel para fiação de Tools de infraestrutura e plugins MCP registrados.
+- [ ] Seletor de Knowledge Rooms autorizadas para o agente (RAG).
+- [ ] Seletor de Custom Skills criadas declarativamente pela interface.
+- [ ] Visualização ao vivo do "Prompt Consolidado" resultante e testes rápidos integrados antes de salvar.
+
+---
+
+#### US-50 — Auto-Triage Pipeline (Semantic Router & Ingest Pipeline)
+
+**Como** arquiteto do sistema agêntico,  
+**quero** um classificador semântico em background que avalie e roteie de forma inteligente uploads de arquivos e mensagens no chat entre RAG (Knowledge Rooms) e Memória Episódica (Histórico/Conhecimento Pessoal do Usuário),  
+**para que** o armazenamento seja otimizado e a recuperação de contexto seja extremamente relevante e rápida.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | Background Ingest Monitor |
+| API / Serviço | `IAutoTriageService` · `SemanticTriageWorker` (Background Service) |
+| Status | ⏳ Planejado (Future Roadmap) |
+
+**Critérios de Aceite:**
+- [ ] Pipeline assíncrono em background (HostedService ou Worker) ativado após uploads ou interações significativas.
+- [ ] Classificador semântico que determina a natureza do dado (ex: manual/documento estático -> RAG Room; decisão/fato pessoal -> Memória Episódica).
+- [ ] Execução assíncrona em background que não bloqueia a interface do usuário nem o envio inicial de mensagens.
+- [ ] Mecanismo de re-indexação inteligente que move chunks stale ou consolidados entre as camadas de memória.
+- [ ] Painel de monitoramento visual do pipeline de triagem com status do routing e estatísticas de destinação.
+

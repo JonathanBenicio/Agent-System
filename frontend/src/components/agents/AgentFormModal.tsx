@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, Bot, Shield, Wrench, FileCode, CheckCircle2, AlertTriangle, Search } from 'lucide-react'
-import type { AgentInfo, AgentSpecification, ToolSummary, YamlValidationError } from '@/types/api'
+import type { AgentInfo, AgentSpecification, ToolSummary, YamlValidationError, KnowledgeRoom } from '@/types/api'
 import { TierLabels, AutonomyLevel, AutonomyLabels, AutonomyColors } from '@/types/api'
-import { toolApi, agentApi } from '@/lib/api'
+import { toolApi, agentApi, knowledgeRoomApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -37,6 +37,14 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  // --- Estado das Salas de Conhecimento (Knowledge Rooms) ---
+  const [availableRooms, setAvailableRooms] = useState<KnowledgeRoom[]>([])
+  const [selectedRooms, setSelectedRooms] = useState<string[]>([])
+  const [roomsLoading, setRoomsLoading] = useState(false)
+  const [roomsSearch, setRoomsSearch] = useState('')
+  const [roomsDropdownOpen, setRoomsDropdownOpen] = useState(false)
+  const roomsDropdownRef = useRef<HTMLDivElement>(null)
+
   // --- Estado do Editor YAML ---
   const [yamlText, setYamlText] = useState('')
   const [yamlValid, setYamlValid] = useState(true)
@@ -53,11 +61,43 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
       .catch(err => console.error('Erro ao carregar ferramentas:', err))
   }, [])
 
+  // Carregar salas de conhecimento disponíveis do backend
+  useEffect(() => {
+    knowledgeRoomApi.list()
+      .then(setAvailableRooms)
+      .catch(err => console.error('Erro ao carregar salas de conhecimento:', err))
+  }, [])
+
+  // Carregar salas associadas ao agente em modo de edição
+  useEffect(() => {
+    if (agent?.name) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRoomsLoading(true)
+      agentApi.getRooms(agent.name)
+        .then(setSelectedRooms)
+        .catch(err => console.error('Erro ao carregar salas associadas ao agente:', err))
+        .finally(() => setRoomsLoading(false))
+    } else {
+      setSelectedRooms([])
+    }
+  }, [agent])
+
   // Fechar dropdown de ferramentas ao clicar fora
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setToolDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Fechar dropdown de salas de conhecimento ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (roomsDropdownRef.current && !roomsDropdownRef.current.contains(event.target as Node)) {
+        setRoomsDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -194,6 +234,14 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
         // Salva passando a especificação visual tradicional
         await onSave(form)
       }
+
+      // Persistir as salas selecionadas após salvar o agente com sucesso
+      const agentName = form.name || agent?.name
+      if (agentName) {
+        await agentApi.setRooms(agentName, selectedRooms)
+      }
+    } catch (err) {
+      console.error('Erro ao salvar agente ou associar salas de conhecimento:', err)
     } finally {
       setSaving(false)
     }
@@ -538,6 +586,111 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
                   ))}
                   {form.capabilities.length === 0 && (
                     <p className="text-xs text-zinc-500 italic pl-1">Sem capabilities cadastradas.</p>
+                  )}
+                </div>
+              </Field>
+
+              {/* KNOWLEDGE ROOMS ASSOCIATION (US-41) */}
+              <Field label="Salas de Conhecimento Autorizadas (RAG Scope)">
+                <div className="relative" ref={roomsDropdownRef}>
+                  {/* Selector Bar */}
+                  <div
+                    onClick={() => setRoomsDropdownOpen(prev => !prev)}
+                    className="min-h-[42px] p-2 bg-zinc-900/50 border border-zinc-800 rounded-lg flex flex-wrap gap-1.5 items-center cursor-pointer hover:border-zinc-700 transition-colors"
+                  >
+                    {selectedRooms.length > 0 ? (
+                      selectedRooms.map(roomId => {
+                        const room = availableRooms.find(r => r.id === roomId)
+                        return (
+                          <span
+                            key={roomId}
+                            className="inline-flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 text-xs bg-zinc-800/80 border border-zinc-700/50 rounded text-zinc-300 hover:bg-zinc-750 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedRooms(prev => prev.filter(id => id !== roomId))
+                            }}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: room?.color || '#0d9488' }} />
+                            {room?.name || roomId}
+                            <button type="button" className="text-zinc-500 hover:text-red-400 font-bold">×</button>
+                          </span>
+                        )
+                      })
+                    ) : (
+                      <span className="text-xs text-teal-400/90 font-medium px-1 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse" />
+                        Todas as Salas (Escopo Global Herdado do Tenant)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Dropdown Menu */}
+                  {roomsDropdownOpen && (
+                    <div className="absolute top-[105%] left-0 right-0 mt-1 bg-zinc-950 border border-zinc-800 rounded-lg shadow-2xl z-20 max-h-60 overflow-y-auto p-3 space-y-3">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                        <input
+                          type="text"
+                          placeholder="Filtrar salas de conhecimento..."
+                          value={roomsSearch}
+                          onChange={e => setRoomsSearch(e.target.value)}
+                          onClick={e => e.stopPropagation()}
+                          className="w-full pl-8 pr-3 py-1.5 text-xs bg-zinc-900 border border-zinc-800 rounded text-zinc-200 focus:outline-none focus:border-teal-500"
+                        />
+                      </div>
+
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {roomsLoading ? (
+                          <p className="text-[11px] text-zinc-500 text-center py-2">Carregando salas...</p>
+                        ) : availableRooms.length > 0 ? (
+                          (() => {
+                            const filteredRooms = availableRooms.filter(room =>
+                              room.name.toLowerCase().includes(roomsSearch.toLowerCase()) ||
+                              (room.description && room.description.toLowerCase().includes(roomsSearch.toLowerCase()))
+                            )
+                            if (filteredRooms.length === 0) {
+                              return <p className="text-[11px] text-zinc-500 text-center py-2">Nenhuma sala encontrada.</p>
+                            }
+                            return filteredRooms.map(room => {
+                              const isSelected = selectedRooms.includes(room.id)
+                              return (
+                                <button
+                                  type="button"
+                                  key={room.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedRooms(prev =>
+                                      isSelected
+                                        ? prev.filter(id => id !== room.id)
+                                        : [...prev, room.id]
+                                    )
+                                  }}
+                                  className={cn(
+                                    'w-full flex items-center justify-between p-2 rounded text-left border text-xs transition-colors',
+                                    isSelected
+                                      ? 'bg-teal-500/10 border-teal-500/40 text-teal-300 font-medium'
+                                      : 'bg-zinc-900/30 border-transparent text-zinc-400 hover:bg-zinc-900/60'
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full border border-black/30 shadow-sm" style={{ backgroundColor: room.color || '#0d9488' }} />
+                                    <div className="flex flex-col">
+                                      <span className="text-zinc-200">{room.name}</span>
+                                      {room.description && (
+                                        <span className="text-[10px] text-zinc-500 line-clamp-1">{room.description}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />}
+                                </button>
+                              )
+                            })
+                          })()
+                        ) : (
+                          <p className="text-[11px] text-zinc-500 text-center py-2">Sem salas de conhecimento ativas no tenant.</p>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               </Field>

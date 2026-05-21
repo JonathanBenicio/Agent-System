@@ -22,6 +22,7 @@ public class AgentController : ControllerBase
     private readonly IOperationalStore? _operationalStore;
     private readonly IRuntimeEvaluator? _runtimeEvaluator;
     private readonly IAgentVersioningService? _versioningService;
+    private readonly IAgentKnowledgeRoomStore? _agentRoomStore;
     private readonly ILogger<AgentController> _logger;
 
     public AgentController(
@@ -36,7 +37,8 @@ public class AgentController : ControllerBase
         ILogger<AgentController> logger,
         IOperationalStore? operationalStore = null,
         IRuntimeEvaluator? runtimeEvaluator = null,
-        IAgentVersioningService? versioningService = null)
+        IAgentVersioningService? versioningService = null,
+        IAgentKnowledgeRoomStore? agentRoomStore = null)
     {
         _metaAgent = metaAgent;
         _agentFactory = agentFactory;
@@ -49,6 +51,7 @@ public class AgentController : ControllerBase
         _operationalStore = operationalStore;
         _runtimeEvaluator = runtimeEvaluator;
         _versioningService = versioningService;
+        _agentRoomStore = agentRoomStore;
         _logger = logger;
     }
 
@@ -583,6 +586,40 @@ public class AgentController : ControllerBase
             Version = targetVersion
         });
     }
+
+    /// <summary>
+    /// Obtém as salas de conhecimento associadas ao agente
+    /// </summary>
+    [HttpGet("agents/{name}/rooms")]
+    public async Task<IActionResult> GetAgentRooms(string name, CancellationToken ct)
+    {
+        if (_agentRoomStore is null)
+        {
+            return StatusCode(503, new { error = "Serviço de associação de salas de conhecimento não disponível." });
+        }
+
+        var tenantId = GetTenantId();
+        var roomIds = await _agentRoomStore.GetRoomIdsForAgentAsync(name, tenantId, ct);
+        return Ok(roomIds);
+    }
+
+    /// <summary>
+    /// Define as salas de conhecimento associadas ao agente
+    /// </summary>
+    [HttpPut("agents/{name}/rooms")]
+    public async Task<IActionResult> SetAgentRooms(string name, [FromBody] List<string> roomIds, CancellationToken ct)
+    {
+        if (_agentRoomStore is null)
+        {
+            return StatusCode(503, new { error = "Serviço de associação de salas de conhecimento não disponível." });
+        }
+
+        var tenantId = GetTenantId();
+        await _agentRoomStore.SetRoomsForAgentAsync(name, roomIds, tenantId, ct);
+        return NoContent();
+    }
+
+    private string GetTenantId() => Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
 }
 
 public record ApprovalDecisionRequest(string DecidedBy, string? Comment = null);

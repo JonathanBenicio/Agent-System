@@ -149,6 +149,8 @@ export const agentApi = {
   saveYaml: (yaml: string) => post<{ agent: AgentInfo; version?: AgentVersion }>('/api/agent/agents/save-yaml', { yaml }),
   getHistory: (name: string, limit?: number) => get<AgentVersion[]>(`/api/agent/agents/${encodeURIComponent(name)}/history${limit ? `?limit=${limit}` : ''}`),
   rollback: (name: string, versionId: string) => post<{ message: string; agent: AgentInfo; version: AgentVersion }>(`/api/agent/agents/${encodeURIComponent(name)}/rollback/${encodeURIComponent(versionId)}`),
+  getRooms: (name: string) => get<string[]>(`/api/agent/agents/${encodeURIComponent(name)}/rooms`),
+  setRooms: (name: string, roomIds: string[]) => put<void>(`/api/agent/agents/${encodeURIComponent(name)}/rooms`, roomIds),
 }
 
 export const toolApi = {
