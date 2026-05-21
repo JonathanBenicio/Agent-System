@@ -22,6 +22,7 @@ public class OrchestratorHostBuilder
     private readonly OrchestratorInstructionService _instructionService;
     private readonly OrchestratorToolBindingService _toolBindingService;
     private readonly OrchestratorAuxiliaryToolService _auxiliaryToolService;
+    private readonly ISkillManager _skillManager;
     private readonly RAGContextProvider? _ragContextProvider;
     private readonly IQualityGateService? _qualityGateService;
     private readonly ILogger<OrchestratorHostBuilder> _logger;
@@ -36,6 +37,7 @@ public class OrchestratorHostBuilder
         OrchestratorToolBindingService toolBindingService,
         OrchestratorAuxiliaryToolService auxiliaryToolService,
         ILogger<OrchestratorHostBuilder> logger,
+        ISkillManager skillManager,
         RAGContextProvider? ragContextProvider = null,
         IQualityGateService? qualityGateService = null)
     {
@@ -48,6 +50,7 @@ public class OrchestratorHostBuilder
         _toolBindingService = toolBindingService ?? throw new ArgumentNullException(nameof(toolBindingService));
         _auxiliaryToolService = auxiliaryToolService ?? throw new ArgumentNullException(nameof(auxiliaryToolService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _skillManager = skillManager ?? throw new ArgumentNullException(nameof(skillManager));
         _ragContextProvider = ragContextProvider;
         _qualityGateService = qualityGateService;
     }
@@ -68,6 +71,9 @@ public class OrchestratorHostBuilder
         allTools.AddRange(auxiliaryTools);
 
         var instructions = _instructionService.GetInstructions(activeAgents, auxiliaryTools);
+
+        // Enriquecer as instruções do orquestrador principal com as C# Skills contextuais!
+        instructions = await _skillManager.BuildEnrichedPromptAsync(_metadata.Name, "orchestrator", instructions);
 
         _logger.LogDebug(
             "Building orchestrator agent with {SpecialistCount} specialists and {ToolCount} tools",

@@ -199,7 +199,9 @@ public static class ServiceCollectionExtensions
                 return new RAGContextProvider(
                     ragService,
                     sp.GetService<IContextBudgetManager>(),
-                    sp.GetRequiredService<ILogger<RAGContextProvider>>());
+                    sp.GetRequiredService<ILogger<RAGContextProvider>>(),
+                    sp,
+                    sp.GetRequiredService<ITenantContextAccessor>());
             });
 
             services.AddSingleton<OrchestratorHostBuilder>(sp =>
@@ -213,6 +215,7 @@ public static class ServiceCollectionExtensions
                     sp.GetRequiredService<OrchestratorToolBindingService>(),
                     sp.GetRequiredService<OrchestratorAuxiliaryToolService>(),
                     sp.GetRequiredService<ILogger<OrchestratorHostBuilder>>(),
+                    sp.GetRequiredService<ISkillManager>(),
                     sp.GetService<RAGContextProvider>(),
                     sp.GetService<IQualityGateService>()));
 

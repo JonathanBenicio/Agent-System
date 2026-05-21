@@ -147,4 +147,142 @@ public class MetaAgentOrchestratorTests
         result.Success.Should().BeTrue();
         await _directAgentRequestExecutor.Received(1).ExecuteAsync(sessionId, input, userContext, targetAgent, Arg.Any<CancellationToken>());
     }
+
+    [Fact]
+    public async Task ProcessRequestAsync_WithStartWorkflowCommand_StartsWorkflowAndReturnsMarkdown()
+    {
+        // Arrange
+        var workflowStore = Substitute.For<IWorkflowStore>();
+        var workflowEngine = Substitute.For<IWorkflowEngine>();
+        
+        var sutWithWorkflows = new MetaAgentOrchestrator(
+            _frameworkOrchestrator,
+            _directAgentRequestExecutor,
+            _llmRuntimeContextAccessor,
+            _agentFactory,
+            _sessionManager,
+            _runtimeCoordinator,
+            _contextAnalyzer,
+            _smartRouter,
+            _logger,
+            workflowEngine: workflowEngine,
+            workflowStore: workflowStore);
+
+        var input = "iniciar workflow wf-abc";
+        var userContext = new UserContext { UserId = "user-1", TenantId = "tenant-1" };
+        var sessionId = "session-1";
+
+        var definition = new WorkflowDefinition { Id = "wf-abc", Name = "Test Workflow" };
+        var execution = new WorkflowExecution { Id = "exec-123", Status = WorkflowExecutionStatus.Running, InitiatedBy = "user-1" };
+
+        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        workflowStore.GetDefinitionAsync("tenant-1", "wf-abc", Arg.Any<CancellationToken>()).Returns(definition);
+        workflowEngine.StartAsync("tenant-1", definition, initiatedBy: "user-1", ct: Arg.Any<CancellationToken>()).Returns(execution);
+
+        // Act
+        var result = await sutWithWorkflows.ProcessRequestAsync(input, userContext);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Content.Should().Contain("Test Workflow");
+        result.Content.Should().Contain("exec-123");
+        result.Content.Should().Contain("Running");
+        await workflowEngine.Received(1).StartAsync("tenant-1", definition, initiatedBy: "user-1", ct: Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProcessRequestAsync_WithCancelWorkflowCommand_CancelsWorkflowAndReturnsMarkdown()
+    {
+        // Arrange
+        var workflowStore = Substitute.For<IWorkflowStore>();
+        var workflowEngine = Substitute.For<IWorkflowEngine>();
+        
+        var sutWithWorkflows = new MetaAgentOrchestrator(
+            _frameworkOrchestrator,
+            _directAgentRequestExecutor,
+            _llmRuntimeContextAccessor,
+            _agentFactory,
+            _sessionManager,
+            _runtimeCoordinator,
+            _contextAnalyzer,
+            _smartRouter,
+            _logger,
+            workflowEngine: workflowEngine,
+            workflowStore: workflowStore);
+
+        var input = "cancelar workflow exec-456";
+        var userContext = new UserContext { UserId = "user-1", TenantId = "tenant-1" };
+        var sessionId = "session-1";
+
+        var execution = new WorkflowExecution { Id = "exec-456", WorkflowName = "Test Workflow", Status = WorkflowExecutionStatus.Running };
+        var cancelledExecution = new WorkflowExecution 
+        { 
+            Id = "exec-456", 
+            WorkflowName = "Test Workflow", 
+            Status = WorkflowExecutionStatus.Cancelled, 
+            ErrorMessage = "Cancelado via chat conversacional pelo usuário.",
+            CompletedAt = DateTime.UtcNow
+        };
+
+        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        workflowEngine.GetExecutionAsync("tenant-1", "exec-456", Arg.Any<CancellationToken>()).Returns(execution);
+        workflowEngine.CancelAsync("tenant-1", "exec-456", Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(cancelledExecution);
+
+        // Act
+        var result = await sutWithWorkflows.ProcessRequestAsync(input, userContext);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Content.Should().Contain("Test Workflow");
+        result.Content.Should().Contain("exec-456");
+        result.Content.Should().Contain("Cancelled");
+        await workflowEngine.Received(1).CancelAsync("tenant-1", "exec-456", Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProcessRequestAsync_WithListWorkflowsCommand_ReturnsWorkflowsList()
+    {
+        // Arrange
+        var workflowStore = Substitute.For<IWorkflowStore>();
+        var workflowEngine = Substitute.For<IWorkflowEngine>();
+        
+        var sutWithWorkflows = new MetaAgentOrchestrator(
+            _frameworkOrchestrator,
+            _directAgentRequestExecutor,
+            _llmRuntimeContextAccessor,
+            _agentFactory,
+            _sessionManager,
+            _runtimeCoordinator,
+            _contextAnalyzer,
+            _smartRouter,
+            _logger,
+            workflowEngine: workflowEngine,
+            workflowStore: workflowStore);
+
+        var input = "listar workflows";
+        var userContext = new UserContext { UserId = "user-1", TenantId = "tenant-1" };
+        var sessionId = "session-1";
+
+        var executions = new List<WorkflowExecution>
+        {
+            new() { Id = "exec-1", WorkflowName = "Workflow 1", Status = WorkflowExecutionStatus.Completed, StartedAt = DateTime.UtcNow.AddMinutes(-5), CompletedAt = DateTime.UtcNow },
+            new() { Id = "exec-2", WorkflowName = "Workflow 2", Status = WorkflowExecutionStatus.Running, StartedAt = DateTime.UtcNow }
+        };
+
+        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        workflowEngine.ListExecutionsAsync("tenant-1", limit: 10, ct: Arg.Any<CancellationToken>()).Returns(executions);
+
+        // Act
+        var result = await sutWithWorkflows.ProcessRequestAsync(input, userContext);
+
+        // Assert
+        result.Success.Should().BeTrue();
+        result.Content.Should().Contain("Workflow 1");
+        result.Content.Should().Contain("exec-1");
+        result.Content.Should().Contain("Completed");
+        result.Content.Should().Contain("Workflow 2");
+        result.Content.Should().Contain("exec-2");
+        result.Content.Should().Contain("Running");
+        await workflowEngine.Received(1).ListExecutionsAsync("tenant-1", limit: 10, ct: Arg.Any<CancellationToken>());
+    }
 }

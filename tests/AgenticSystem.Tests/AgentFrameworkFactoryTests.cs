@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.AgentFramework;

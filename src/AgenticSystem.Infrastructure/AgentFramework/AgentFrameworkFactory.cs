@@ -21,6 +21,7 @@ public class AgentFrameworkFactory
     private readonly IChatClient _chatClient;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IServiceProvider _serviceProvider;
+    private readonly ISkillManager? _skillManager;
     private readonly UnifiedAIToolProvider? _toolProvider;
     private readonly McpToolsAIFunctionAdapter? _mcpToolsAdapter;
     private readonly SimpleSessionStoreAdapter? _sessionStore;
@@ -34,6 +35,7 @@ public class AgentFrameworkFactory
         IChatClient chatClient,
         ILoggerFactory loggerFactory,
         IServiceProvider serviceProvider,
+        ISkillManager? skillManager = null,
         UnifiedAIToolProvider? toolProvider = null,
         McpToolsAIFunctionAdapter? mcpToolsAdapter = null,
         SimpleSessionStoreAdapter? sessionStore = null)
@@ -41,6 +43,7 @@ public class AgentFrameworkFactory
         _chatClient = chatClient;
         _loggerFactory = loggerFactory;
         _serviceProvider = serviceProvider;
+        _skillManager = skillManager;
         _toolProvider = toolProvider;
         _mcpToolsAdapter = mcpToolsAdapter;
         _sessionStore = sessionStore;
@@ -53,7 +56,7 @@ public class AgentFrameworkFactory
     /// é controlada pelo SimpleSessionStoreAdapter quando o agent roda.
     /// </summary>
     public async Task<FrameworkAgent> CreateFromAgentAsync(IAgent agent, CancellationToken ct = default)
-        => await CreateFromAgentAsync(agent, additionalTools: null, ct);
+         => await CreateFromAgentAsync(agent, additionalTools: null, ct);
 
     public async Task<FrameworkAgent> CreateFromAgentAsync(
         IAgent agent,
@@ -65,9 +68,14 @@ public class AgentFrameworkFactory
         var tools = await GetUnifiedToolsAsync(ct);
         tools = MergeTools(tools, additionalTools);
 
+        // Enriquecer as instruções do especialista usando as C# Skills!
+        var enrichedInstructions = _skillManager != null
+            ? await _skillManager.BuildEnrichedPromptAsync(agent.Name, agent.Domain, agent.Instructions)
+            : agent.Instructions;
+
         var chatAgent = new ChatClientAgent(
             _chatClient,
-            agent.Instructions,  // instructions (system prompt rico)
+            enrichedInstructions, // instructions (system prompt rico com skills)
             agent.Name,          // name
             agent.Description,   // description
             tools,               // tools — MCP tools via adapter
@@ -89,9 +97,14 @@ public class AgentFrameworkFactory
 
         var tools = await GetUnifiedToolsAsync(ct);
 
+        // Enriquecer as instruções da especificação dinâmica usando as C# Skills!
+        var enrichedInstructions = _skillManager != null
+            ? await _skillManager.BuildEnrichedPromptAsync(spec.Name, spec.Domain ?? "general", spec.Instructions)
+            : spec.Instructions;
+
         var chatAgent = new ChatClientAgent(
             _chatClient,
-            spec.Instructions,   // instructions
+            enrichedInstructions,   // instructions (system prompt rico com skills)
             spec.Name,           // name
             spec.Description,    // description
             tools,               // tools — MCP tools via adapter

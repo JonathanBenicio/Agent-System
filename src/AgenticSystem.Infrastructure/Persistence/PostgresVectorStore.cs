@@ -463,7 +463,27 @@ public class PostgresVectorStore : IVectorStore
         }
 
         var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(metadataJson, JsonOptions) ?? new();
-        return filters.All(filter => metadata.TryGetValue(filter.Key, out var value) && string.Equals(value, filter.Value, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var filter in filters)
+        {
+            if (string.Equals(filter.Key, "room_ids", StringComparison.OrdinalIgnoreCase))
+            {
+                var allowedRooms = filter.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var hasRoomId = metadata.TryGetValue("room_id", out var docRoomId) || metadata.TryGetValue("roomId", out docRoomId);
+                if (!hasRoomId || string.IsNullOrWhiteSpace(docRoomId) || !allowedRooms.Contains(docRoomId, StringComparer.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+                continue;
+            }
+
+            if (!metadata.TryGetValue(filter.Key, out var value) || !string.Equals(value, filter.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static double CalculateCosineDistanceLocal(float[] v1, float[] v2)

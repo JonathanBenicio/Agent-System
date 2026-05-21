@@ -38,6 +38,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddAgenticSystemCore();
 builder.Services.AddAgenticSystemInfrastructure(builder.Configuration);
 
+// Register SignalR-based session event publisher for real-time UI sync
+builder.Services.AddSingleton<AgenticSystem.Core.Interfaces.IEventPublisher, AgenticSystem.Api.SignalR.SignalRSessionEventPublisher>();
+
 // Register SignalR-based workflow event broadcaster
 builder.Services.AddSingleton<AgenticSystem.Core.Interfaces.IWorkflowEventBroadcaster, AgenticSystem.Api.Hubs.SignalRWorkflowEventBroadcaster>();
 // builder.Services.AddMcpServer()
@@ -158,12 +161,40 @@ builder.Services.AddAuthentication(options =>
 {
     options.ForwardDefaultSelector = context =>
     {
-        if (context.Request.Headers.ContainsKey("Authorization") || context.Request.Query.ContainsKey("access_token"))
+        string? token = null;
+        if (context.Request.Headers.TryGetValue("Authorization", out var authHeaderValue))
         {
-            // Simple heuristic: Supabase tokens are usually much longer than our custom ones, 
-            // but a better way is checking Issuer if we decode it without validation first.
-            // For now, let's try Supabase first if it's enabled.
-            return "Supabase"; 
+            var authHeader = authHeaderValue.ToString();
+            if (authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                token = authHeader.Substring("Bearer ".Length).Trim();
+            }
+        }
+
+        if (string.IsNullOrEmpty(token) && context.Request.Query.TryGetValue("access_token", out var queryToken))
+        {
+            token = queryToken.ToString();
+        }
+
+        if (!string.IsNullOrEmpty(token))
+        {
+            try
+            {
+                var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                if (handler.CanReadToken(token))
+                {
+                    var jwtToken = handler.ReadJwtToken(token);
+                    if (string.Equals(jwtToken.Issuer, "AgenticSystem", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return JwtTenantAuthenticationHandler.SchemeName;
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback to Supabase if parsing fails
+            }
+            return "Supabase";
         }
         return ApiKeyAuthenticationHandler.SchemeName;
     };

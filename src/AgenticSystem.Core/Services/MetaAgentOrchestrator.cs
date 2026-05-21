@@ -22,6 +22,8 @@ public class MetaAgentOrchestrator : IMetaAgent
     private readonly IAgentCollaborationWorkflow? _collaborationWorkflow;
     private readonly IWorkflowEngine? _workflowEngine;
     private readonly ITenantIsolationEnforcer? _isolationEnforcer;
+    private readonly IEventPublisher? _eventPublisher;
+    private readonly IWorkflowStore? _workflowStore;
     private readonly ILogger<MetaAgentOrchestrator> _logger;
 
     public MetaAgentOrchestrator(
@@ -36,7 +38,9 @@ public class MetaAgentOrchestrator : IMetaAgent
         ILogger<MetaAgentOrchestrator>? logger = null,
         IAgentCollaborationWorkflow? collaborationWorkflow = null,
         IWorkflowEngine? workflowEngine = null,
-        ITenantIsolationEnforcer? isolationEnforcer = null)
+        ITenantIsolationEnforcer? isolationEnforcer = null,
+        IEventPublisher? eventPublisher = null,
+        IWorkflowStore? workflowStore = null)
     {
         _frameworkOrchestrator = frameworkOrchestrator;
         _directAgentRequestExecutor = directAgentRequestExecutor;
@@ -50,6 +54,8 @@ public class MetaAgentOrchestrator : IMetaAgent
         _collaborationWorkflow = collaborationWorkflow;
         _workflowEngine = workflowEngine;
         _isolationEnforcer = isolationEnforcer;
+        _eventPublisher = eventPublisher;
+        _workflowStore = workflowStore;
     }
 
     // Backwards-compatible constructor for existing tests and custom setups
@@ -137,6 +143,11 @@ public class MetaAgentOrchestrator : IMetaAgent
         var sessionId = await _sessionManager.StartSessionAsync(context);
         context.Preferences["sessionId"] = sessionId;
 
+        if (_eventPublisher != null)
+        {
+            await _eventPublisher.PublishAsync(new SessionCreatedEvent(sessionId, context.UserId, context.TenantId), ct);
+        }
+
         try
         {
             await foreach (var streamEvent in _runtimeCoordinator.StreamAsync(
@@ -151,6 +162,11 @@ public class MetaAgentOrchestrator : IMetaAgent
         finally
         {
             await _sessionManager.EndSessionAsync(sessionId);
+
+            if (_eventPublisher != null)
+            {
+                await _eventPublisher.PublishAsync(new SessionEndedEvent(sessionId, context.UserId, context.TenantId), ct);
+            }
         }
     }
 
@@ -162,6 +178,11 @@ public class MetaAgentOrchestrator : IMetaAgent
     {
         var sessionId = await _sessionManager.StartSessionAsync(context);
         context.Preferences["sessionId"] = sessionId;
+
+        if (_eventPublisher != null)
+        {
+            await _eventPublisher.PublishAsync(new SessionCreatedEvent(sessionId, context.UserId, context.TenantId), ct);
+        }
 
         try
         {
@@ -177,6 +198,11 @@ public class MetaAgentOrchestrator : IMetaAgent
         finally
         {
             await _sessionManager.EndSessionAsync(sessionId);
+
+            if (_eventPublisher != null)
+            {
+                await _eventPublisher.PublishAsync(new SessionEndedEvent(sessionId, context.UserId, context.TenantId), ct);
+            }
         }
     }
 
@@ -188,6 +214,74 @@ public class MetaAgentOrchestrator : IMetaAgent
 
         try
         {
+            // Intercept conversational workflow commands via chat
+            if (_workflowEngine != null && _workflowStore != null)
+            {
+                var inputTrimmed = input.Trim();
+                var inputLower = inputTrimmed.ToLowerInvariant();
+                var tenantId = string.IsNullOrWhiteSpace(context.TenantId) ? Tenant.DefaultTenantId : context.TenantId;
+
+                // 1. Start Workflow
+                if (inputLower.StartsWith("iniciar workflow ") || inputLower.StartsWith("executar workflow ") || inputLower.StartsWith("rodar workflow "))
+                {
+                    var workflowId = inputTrimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries).Last();
+                    var definition = await _workflowStore.GetDefinitionAsync(tenantId, workflowId, ct);
+                    if (definition == null)
+                    {
+                        return AgentResponse.Error($"❌ Workflow com ID '{workflowId}' não encontrado para o tenant atual.", "WorkflowEngine");
+                    }
+
+                    var execution = await _workflowEngine.StartAsync(tenantId, definition, initiatedBy: context.UserId, ct: ct);
+                    return AgentResponse.Ok(
+                        $"🚀 Workflow **{definition.Name}** iniciado com sucesso!\n\n" +
+                        $"* **ID da Execução:** `{execution.Id}`\n" +
+                        $"* **Status:** `{execution.Status}`\n" +
+                        $"* **Iniciado por:** `{execution.InitiatedBy}`\n\n" +
+                        $"O progresso detalhado de cada etapa está sendo transmitido em tempo real pelo SignalR.",
+                        "WorkflowEngine",
+                        AgentTier.Support);
+                }
+
+                // 2. Cancel Workflow
+                if (inputLower.StartsWith("cancelar workflow ") || inputLower.StartsWith("parar workflow ") || inputLower.StartsWith("abortar workflow "))
+                {
+                    var executionId = inputTrimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries).Last();
+                    var execution = await _workflowEngine.GetExecutionAsync(tenantId, executionId, ct);
+                    if (execution == null)
+                    {
+                        return AgentResponse.Error($"❌ Execução de workflow com ID '{executionId}' não encontrada.", "WorkflowEngine");
+                    }
+
+                    var cancelled = await _workflowEngine.CancelAsync(tenantId, executionId, "Cancelado via chat conversacional pelo usuário.", ct);
+                    return AgentResponse.Ok(
+                        $"⏹️ Workflow **{cancelled.WorkflowName}** (Execução `{cancelled.Id}`) foi cancelado com sucesso!\n\n" +
+                        $"* **Status Atual:** `{cancelled.Status}`\n" +
+                        $"* **Motivo:** {cancelled.ErrorMessage}\n" +
+                        $"* **Encerrado em:** {cancelled.CompletedAt?.ToString("g")}",
+                        "WorkflowEngine",
+                        AgentTier.Support);
+                }
+
+                // 3. List Workflows
+                if (inputLower == "listar workflows" || inputLower == "status dos workflows" || inputLower == "workflows ativos")
+                {
+                    var executions = await _workflowEngine.ListExecutionsAsync(tenantId, limit: 10, ct: ct);
+                    if (executions.Count == 0)
+                    {
+                        return AgentResponse.Ok("📋 Nenhum workflow recente foi executado neste tenant.", "WorkflowEngine", AgentTier.Support);
+                    }
+
+                    var sb = new System.Text.StringBuilder();
+                    sb.AppendLine("📋 **Histórico Recente de Execuções de Workflows:**\n");
+                    foreach (var exec in executions)
+                    {
+                        var duration = exec.CompletedAt.HasValue ? $" (Duração: {(exec.CompletedAt.Value - exec.StartedAt).TotalSeconds:F1}s)" : "";
+                        sb.AppendLine($"* **ID:** `{exec.Id}` | **Workflow:** {exec.WorkflowName} | **Status:** `{exec.Status}`{duration}");
+                    }
+
+                    return AgentResponse.Ok(sb.ToString(), "WorkflowEngine", AgentTier.Support);
+                }
+            }
             // 0. Triage Layer (Fast Path & Complexity Analysis)
             var (isFastPath, fastPathResponse, triage) = await _smartRouter.TriageAsync(effectiveInput, context, ct);
             if (isFastPath)

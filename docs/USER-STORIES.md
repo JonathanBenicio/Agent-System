@@ -2176,3 +2176,66 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 - [ ] Upload/Edição de Golden Sets (Query vs Expected).
 - [ ] Relatório de comparação entre versões do agente.
 - [ ] Scores automáticos (0-1) para Grounding e Fluência.
+
+---
+
+### Épico 10: Dynamic ONNX In-Process Inference Engine (Roadmap Q2 2026)
+
+#### US-45 — Upload e Gerenciamento Dinâmico de Modelos ONNX
+
+**Como** administrador do sistema,  
+**quero** fazer upload e configurar modelos ONNX pela interface web,  
+**para que** novas capacidades de IA local sejam incorporadas sem a necessidade de novos deploys de código C#.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `OnnxModelsPage` · `OnnxModelUploadModal` · `OnnxModelInspectModal` · `OnnxModelTestModal` |
+| API | `GET/POST/PUT/DELETE /api/onnx/models` · `POST /api/onnx/models/{id}/inspect` · `POST /api/onnx/models/{id}/test` |
+| Status | ⏳ Planejado (ADR-010) |
+
+**Critérios de Aceite:**
+- [ ] Interface de upload aceita o arquivo `.onnx` principal e opcionalmente o arquivo secundário de pesos (`.data` / `.bin`) para modelos split.
+- [ ] Formulário de upload com validações para metadados de inferência (Input/Output Nodes, Width, Height, Channels, Scale Factor, Mean R/G/B, Output Format).
+- [ ] Exibição de aviso visual claro e progresso de upload caso a soma dos arquivos exceda 50MB, indicando salvamento físico em disco.
+- [ ] Rota de deleção física e lógica que limpa registros no PostgreSQL e diretórios físicos correspondentes no disco.
+- [ ] Interface de testes rápidos (`TestModal`) que permite upload de imagem de teste local e exibe o resultado da inferência lado a lado com métricas de latência e shape.
+
+---
+
+#### US-46 — Execução Genérica via DynamicOnnxProcessorTool (ITool)
+
+**Como** construtor de workflows,  
+**quero** utilizar uma tool genérica do processador ONNX como bloco em meu fluxo,  
+**para que** eu possa aplicar inferências de IA em dados de imagem encadeados de forma transparente.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `DynamicOnnxProcessorTool` (`ITool`) · `WorkflowBuilder.tsx` (Properties Panel) |
+| API | SignalR `hubs/chat` · REST execution APIs |
+| Status | ⏳ Planejado (ADR-010) |
+
+**Critérios de Aceite:**
+- [ ] Registro correto da tool `onnx_processor` no `IToolManager` com a categoria `AI`.
+- [ ] Properties Panel do Workflow Builder exibe dropdown populado dinamicamente com os modelos ONNX ativos ao selecionar o nó `onnx_processor`.
+- [ ] A execução do processador decodifica a imagem base64 de entrada, realiza o pré-processamento de canais/normalização, cria a `InferenceSession`, executa a inferência e pós-processa o output de volta para base64.
+- [ ] Tratamento de erros gracioso: falhas internas do runtime ONNX retornam uma descrição legível de erro no `ToolResult` em vez de crashar a thread.
+
+---
+
+#### US-47 — Isolamento Multi-Tenant e Segurança Físico-Lógica dos Modelos ONNX
+
+**Como** cliente/tenant da plataforma,  
+**quero** garantia absoluta de que meus modelos ONNX e arquivos de pesos carregados estão isolados física e logicamente,  
+**para que** meus ativos intelectuais e de dados nunca vazem para outros tenants.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `TenantMiddleware` · `AgenticDbContext` · `OnnxModelController` |
+| Segurança | Isolamento Físico e Lógico (T5, T7) |
+| Status | ⏳ Planejado (ADR-010) |
+
+**Critérios de Aceite:**
+- [ ] Aplicação de filtro global EF Core (`TenantId`) na entidade `CustomOnnxModelEntity`.
+- [ ] Modelos armazenados fisicamente são salvos estritamente sob a estrutura `wwwroot/onnx-models/{tenantId}/{modelId}/` com nomes originais preservados.
+- [ ] Resolução de arquivos secundários (`.data` / `.bin`) via path absoluto restrita estritamente ao diretório do respectivo `tenantId`, bloqueando acessos transversais de diretório (Directory Traversal).
+- [ ] Validação no `DeleteModel` para impedir que um tenant delete arquivos pertencentes a outro através da manipulação do `modelId`.
