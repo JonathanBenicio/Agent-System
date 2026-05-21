@@ -832,3 +832,45 @@ export interface SessionInsightsDto {
   preferences: string[]
   actionItems: string[]
 }
+
+// ══════════════════════════════════════
+// ONNX Model Management
+// ══════════════════════════════════════
+
+export interface OnnxModelSummary {
+  id: string
+  name: string
+  description: string | null
+  inputWidth: number
+  inputHeight: number
+  channels: number
+  outputFormat: string
+  isActive: boolean
+  fileSizeBytes: number
+  storedOnDisk: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OnnxModelDetail extends OnnxModelSummary {
+  inputNodeName: string
+  outputNodeName: string
+  scaleFactor: number
+  meanRed: number
+  meanGreen: number
+  meanBlue: number
+  postProcessConfigJson: string
+}
+
+export interface OnnxInspectResult {
+  inputNodes: { name: string; shape: number[]; type: string }[]
+  outputNodes: { name: string; shape: number[]; type: string }[]
+}
+
+export interface OnnxTestResult {
+  outputImage?: string
+  outputTensor?: number[]
+  latencyMs: number
+  inputShape: number[]
+  outputShape: number[]
+}

@@ -839,3 +839,56 @@ public class LLMProviderApiKeyConfiguration : IEntityTypeConfiguration<LLMProvid
             .HasDatabaseName("ix_llm_api_keys_tenant_provider_default");
     }
 }
+
+public class SystemStateConfiguration : IEntityTypeConfiguration<SystemStateEntity>
+{
+    public void Configure(EntityTypeBuilder<SystemStateEntity> builder)
+    {
+        builder.ToTable("system_states");
+
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(s => s.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(s => s.Value).HasColumnName("value").IsRequired();
+        builder.Property(s => s.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(s => s.TenantId).HasDatabaseName("ix_system_states_tenant_id");
+    }
+}
+
+public class CustomOnnxModelConfiguration : IEntityTypeConfiguration<CustomOnnxModelEntity>
+{
+    public void Configure(EntityTypeBuilder<CustomOnnxModelEntity> builder)
+    {
+        builder.ToTable("custom_onnx_models");
+
+        builder.HasKey(m => m.Id);
+        builder.Property(m => m.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(m => m.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(m => m.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(m => m.Description).HasColumnName("description");
+        builder.Property(m => m.ModelFileName).HasColumnName("model_file_name").HasMaxLength(512);
+        builder.Property(m => m.ModelData).HasColumnName("model_data");
+        builder.Property(m => m.InputNodeName).HasColumnName("input_node_name").HasMaxLength(128).IsRequired();
+        builder.Property(m => m.OutputNodeName).HasColumnName("output_node_name").HasMaxLength(128).IsRequired();
+        builder.Property(m => m.InputWidth).HasColumnName("input_width");
+        builder.Property(m => m.InputHeight).HasColumnName("input_height");
+        builder.Property(m => m.Channels).HasColumnName("channels");
+        builder.Property(m => m.ScaleFactor).HasColumnName("scale_factor");
+        builder.Property(m => m.MeanRed).HasColumnName("mean_red");
+        builder.Property(m => m.MeanGreen).HasColumnName("mean_green");
+        builder.Property(m => m.MeanBlue).HasColumnName("mean_blue");
+        builder.Property(m => m.OutputFormat).HasColumnName("output_format").HasMaxLength(32).IsRequired();
+        builder.Property(m => m.PostProcessConfigJson).HasColumnName("post_process_config").HasColumnType("jsonb").IsRequired();
+        builder.Property(m => m.FileSizeBytes).HasColumnName("file_size_bytes");
+        builder.Property(m => m.IsActive).HasColumnName("is_active");
+        builder.Property(m => m.CreatedAt).HasColumnName("created_at");
+        builder.Property(m => m.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(m => new { m.TenantId, m.Name })
+            .IsUnique()
+            .HasDatabaseName("ux_custom_onnx_models_tenant_name");
+        builder.HasIndex(m => m.IsActive).HasDatabaseName("ix_custom_onnx_models_active");
+        builder.HasIndex(m => m.TenantId).HasDatabaseName("ix_custom_onnx_models_tenant_id");
+    }
+}

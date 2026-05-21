@@ -36,6 +36,7 @@ const ConfigAdvancedPage = lazy(() => import('@/components/config/ConfigAdvanced
 const WorkflowBuilder = lazy(() => import('@/components/workflows/WorkflowBuilder').then(module => ({ default: module.default })))
 const WebhooksPage = lazy(() => import('@/components/gateway/WebhooksPage').then(module => ({ default: module.WebhooksPage })))
 const EmbeddingMigrationWizard = lazy(() => import('@/components/embedding-migration/EmbeddingMigrationWizard').then(module => ({ default: module.EmbeddingMigrationWizard })))
+const OnnxModelsPage = lazy(() => import('@/components/onnx/OnnxModelsPage'))
 
 function RouteBoundary({ children }: { children: ReactNode }) {
   return <Suspense fallback={<PageLoading />}>{children}</Suspense>
@@ -113,6 +114,7 @@ function AppRoutes() {
           <Route path="/config" element={<RouteBoundary><SettingsPage /></RouteBoundary>} />
           <Route path="/config/advanced" element={<RouteBoundary><ConfigAdvancedPage /></RouteBoundary>} />
           <Route path="/embedding-migration" element={<RouteBoundary><EmbeddingMigrationWizard /></RouteBoundary>} />
+          <Route path="/onnx-models" element={<RouteBoundary><OnnxModelsPage /></RouteBoundary>} />
         </Route>
       </Route>
     </Routes>

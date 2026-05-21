@@ -27,6 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWorkflows, useWorkflowExecution } from '@/hooks/useWorkflows';
 import { useToast } from '@/components/shared/Toast';
 import { ExecutionHistoryPanel } from './ExecutionHistoryPanel';
+import { useOnnxModelsList } from '@/hooks/useOnnxModels';
 
 // Helper to determine node border color based on status
 const getBorderClass = (status?: number) => {
@@ -37,6 +38,7 @@ const getBorderClass = (status?: number) => {
 };
 
 // Simple Custom Node Components
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AgentNode = ({ data }: any) => (
   <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-teal-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
@@ -48,17 +50,60 @@ const AgentNode = ({ data }: any) => (
   </div>
 );
 
-const ToolNode = ({ data }: any) => (
-  <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-blue-500/50'}`}>
-    <div className="flex items-center gap-2 mb-1">
-      <Wrench className="w-4 h-4 text-blue-400" />
-      <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Tool</span>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ToolNode = ({ data }: any) => {
+  const isOnnx = data.toolName === 'onnx_processor';
+  return (
+    <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-blue-500/50'}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <Wrench className="w-4 h-4 text-blue-400" />
+        <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Tool</span>
+      </div>
+      <div className="text-sm font-semibold text-white">{data.label}</div>
+      <div className="text-[10px] text-zinc-500 mt-1">
+        {isOnnx ? 'ONNX Inference Engine' : data.toolName}
+      </div>
     </div>
-    <div className="text-sm font-semibold text-white">{data.label}</div>
-    <div className="text-[10px] text-zinc-500 mt-1">{data.toolName}</div>
-  </div>
-);
+  );
+};
 
+interface OnnxModelSelectorProps {
+  value: string;
+  onChange: (val: string) => void;
+}
+
+function OnnxModelSelector({ value, onChange }: OnnxModelSelectorProps) {
+  const { data: models, isLoading } = useOnnxModelsList();
+
+  return (
+    <div className="mt-3">
+      <label className="block text-xs text-zinc-400 mb-1">Modelo ONNX</label>
+      {isLoading ? (
+        <div className="text-xs text-zinc-500 animate-pulse py-2">Carregando modelos...</div>
+      ) : (
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+        >
+          <option value="">Selecione um modelo...</option>
+          {models?.filter(m => m.isActive).map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.name} ({model.inputWidth}x{model.inputHeight})
+            </option>
+          ))}
+        </select>
+      )}
+      {!isLoading && (!models || models.filter(m => m.isActive).length === 0) && (
+        <p className="text-[10px] text-amber-500 mt-1">
+          Nenhum modelo ONNX ativo. Cadastre um na página "Modelos IA".
+        </p>
+      )}
+    </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const DecisionNode = ({ data }: any) => (
   <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-amber-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
@@ -70,6 +115,7 @@ const DecisionNode = ({ data }: any) => (
   </div>
 );
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const WaitNode = ({ data }: any) => (
   <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-purple-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
@@ -133,6 +179,7 @@ export function WorkflowBuilderPage() {
         // Match step execution by node Id (stepName is the nodeId in this architecture, or we need to find how they match)
         // Wait, in DefaultWorkflowEngine, stepName is saved. Let's assume stepName == node.id or node.data.label.
         // Actually, looking at the store `toWorkflowDefinition`, the node.id is the Key of the step. So stepName = node.id
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const step = executionDetails.stepExecutions.find((s: any) => s.stepName === n.id);
         return {
           ...n,
@@ -140,6 +187,7 @@ export function WorkflowBuilderPage() {
         };
       }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [executionDetails, selectedExecutionId]); // Omit nodes to avoid infinite loop when updating
 
 
@@ -149,7 +197,7 @@ export function WorkflowBuilderPage() {
       const saved = await saveWorkflow(definition);
       setActiveWorkflowId(saved.id);
       addToast('Workflow salvo com sucesso', 'success');
-    } catch (err) {
+    } catch {
       addToast('Erro ao salvar workflow', 'error');
     }
   };
@@ -409,15 +457,35 @@ export function WorkflowBuilderPage() {
                     </div>
                   )}
                   {node.type === 'tool' && (
-                    <div>
-                      <label className="block text-xs text-zinc-400 mb-1">Tool Name</label>
-                      <input 
-                        value={node.data.toolName as string || ''}
-                        onChange={(e) => {
-                          setNodes(nodes.map(n => n.id === node.id ? { ...n, data: { ...n.data, toolName: e.target.value } } : n));
-                        }}
-                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200"
-                      />
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Tool Name</label>
+                        <input 
+                          value={node.data.toolName as string || ''}
+                          onChange={(e) => {
+                            setNodes(nodes.map(n => n.id === node.id ? { ...n, data: { ...n.data, toolName: e.target.value } } : n));
+                          }}
+                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200"
+                        />
+                      </div>
+                      
+                      {node.data.toolName === 'onnx_processor' && (
+                        <OnnxModelSelector 
+                          value={((node.data.input as any)?.parameters?.modelId as string) || ''}
+                          onChange={(modelId) => {
+                            setNodes(nodes.map(n => n.id === node.id ? {
+                              ...n,
+                              data: {
+                                ...n.data,
+                                input: {
+                                  action: 'process',
+                                  parameters: { modelId }
+                                }
+                              }
+                            } : n));
+                          }}
+                        />
+                      )}
                     </div>
                   )}
                   {node.type === 'decision' && (

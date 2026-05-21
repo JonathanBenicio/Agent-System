@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -18,6 +19,8 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddAgenticSystemCore(this IServiceCollection services)
     {
+        services.AddMemoryCache();
+
         services.AddSingleton<IMetaAgent, MetaAgentOrchestrator>();
         services.AddSingleton<IContextAnalyzer, ContextAnalyzer>();
         services.AddSingleton<IAgentFactory, HierarchicalAgentFactory>();
@@ -234,6 +237,12 @@ public static class ServiceCollectionExtensions
         toolManager.RegisterTool(new DateTimeTool());
         toolManager.RegisterTool(new CalculatorTool());
         toolManager.RegisterTool(new FileSearchTool());
+        toolManager.RegisterTool(new DynamicOnnxProcessorTool(
+            serviceProvider,
+            serviceProvider.GetRequiredService<ILogger<DynamicOnnxProcessorTool>>()));
+        toolManager.RegisterTool(new TenantAnalyticsTool(
+            serviceProvider,
+            serviceProvider.GetRequiredService<ILogger<TenantAnalyticsTool>>()));
 
         // Register built-in skills
         var skillManager = serviceProvider.GetRequiredService<ISkillManager>();

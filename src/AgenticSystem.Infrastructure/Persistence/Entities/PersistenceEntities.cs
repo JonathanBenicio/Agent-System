@@ -600,6 +600,14 @@ public class SessionInsightEntity : ITenantEntity
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+public class SystemStateEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = "default";
+    public string Value { get; set; } = string.Empty;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
 // ═══════════════════════════════════════════════════════════
 // Multi-Provider API Key Management (ADR-020, Issue #61)
 // ═══════════════════════════════════════════════════════════
@@ -621,6 +629,46 @@ public class LLMProviderApiKeyEntity : ITenantEntity
     public bool IsEnabled { get; set; } = true;
     public bool IsDefault { get; set; }
     public string Models { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// ═══════════════════════════════════════════════════════════
+// Dynamic ONNX Model Management (ADR-010 Extension)
+// ═══════════════════════════════════════════════════════════
+
+/// <summary>
+/// Custom ONNX model entity for dynamic in-process inference.
+/// Supports dual storage: ≤50MB in DB (ModelData), >50MB on disk (ModelFileName).
+/// All inference parameters are stored as metadata — zero C# code per model.
+/// </summary>
+public class CustomOnnxModelEntity : ITenantEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string TenantId { get; set; } = "default";
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+
+    /// <summary>Path on disk for models >50MB (wwwroot/onnx-models/{tenantId}/{guid}.onnx).</summary>
+    public string? ModelFileName { get; set; }
+    /// <summary>Raw model bytes for models ≤50MB (stored in PostgreSQL bytea).</summary>
+    public byte[]? ModelData { get; set; }
+
+    public string InputNodeName { get; set; } = "input";
+    public string OutputNodeName { get; set; } = "output";
+    public int InputWidth { get; set; } = 512;
+    public int InputHeight { get; set; } = 512;
+    public int Channels { get; set; } = 3;
+    public float ScaleFactor { get; set; } = 1f / 255f;
+    public float MeanRed { get; set; }
+    public float MeanGreen { get; set; }
+    public float MeanBlue { get; set; }
+
+    /// <summary>Output interpretation: "image" | "tensor" | "text".</summary>
+    public string OutputFormat { get; set; } = "image";
+    public string PostProcessConfigJson { get; set; } = "{}";
+    public long FileSizeBytes { get; set; }
+    public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

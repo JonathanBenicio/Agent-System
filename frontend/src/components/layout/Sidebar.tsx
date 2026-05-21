@@ -23,6 +23,7 @@ import {
   ArrowLeftRight,
   LogOut,
   User,
+  Brain,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { icon: DollarSign, label: 'Custos', path: '/costs' },
   { icon: Bell, label: 'Alertas', path: '/alerts' },
   { icon: Cpu, label: 'IAs', path: '/ai' },
+  { icon: Brain, label: 'Modelos IA', path: '/onnx-models' },
   { icon: Plug, label: 'Plugins', path: '/plugins' },
   { icon: Clock, label: 'Scheduled Tasks', path: '/scheduled-tasks' },
   { icon: Settings, label: 'Config', path: '/config' },

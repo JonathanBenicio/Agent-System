@@ -432,5 +432,26 @@ export const configApi = {
     post<HotSwapResult>('/api/admin/config/hot-swap', { subsystem }),
 }
 
+// ══════════════════════════════════════
+// ONNX Model Management API
+// ══════════════════════════════════════
+
+import type {
+  OnnxModelSummary,
+  OnnxModelDetail,
+  OnnxInspectResult,
+  OnnxTestResult,
+} from '@/types/api'
+
+export const onnxModelApi = {
+  list: () => get<OnnxModelSummary[]>('/api/onnx/models'),
+  get: (id: string) => get<OnnxModelDetail>(`/api/onnx/models/${encodeURIComponent(id)}`),
+  create: (formData: FormData) => postForm<OnnxModelSummary>('/api/onnx/models', formData),
+  update: (id: string, data: Partial<OnnxModelDetail>) => put<OnnxModelDetail>(`/api/onnx/models/${encodeURIComponent(id)}`, data),
+  delete: (id: string) => del(`/api/onnx/models/${encodeURIComponent(id)}`),
+  inspect: (id: string) => post<OnnxInspectResult>(`/api/onnx/models/${encodeURIComponent(id)}/inspect`),
+  test: (id: string, formData: FormData) => postForm<OnnxTestResult>(`/api/onnx/models/${encodeURIComponent(id)}/test`, formData),
+}
+
 export { ApiError }
 
