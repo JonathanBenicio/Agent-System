@@ -82,6 +82,7 @@ export function OnnxModelTestModal({ modelId, onClose }: Props) {
               accept="image/*"
               onChange={handleFileSelect}
               className="hidden"
+              aria-label="Selecionar imagem de teste"
             />
           </div>
 

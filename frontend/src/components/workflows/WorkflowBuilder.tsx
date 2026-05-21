@@ -117,10 +117,10 @@ const DecisionNode = ({ data }: any) => (
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const WaitNode = ({ data }: any) => (
-  <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-purple-500/50'}`}>
+  <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-pink-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
-      <Clock className="w-4 h-4 text-purple-400" />
-      <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Wait</span>
+      <Clock className="w-4 h-4 text-pink-400" />
+      <span className="text-xs font-bold text-pink-400 uppercase tracking-wider">Wait</span>
     </div>
     <div className="text-sm font-semibold text-white">{data.label}</div>
     <div className="text-[10px] text-zinc-500 mt-1 font-mono">{data.timeout || 'No timeout'}</div>
@@ -296,7 +296,7 @@ export function WorkflowBuilderPage() {
             onClick={onAddWait}
             className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-lg text-xs font-medium transition-all"
           >
-            <Clock className="w-3.5 h-3.5 text-purple-400" />
+            <Clock className="w-3.5 h-3.5 text-pink-400" />
             Wait
           </button>
           <div className="w-px h-6 bg-zinc-800 mx-1" />

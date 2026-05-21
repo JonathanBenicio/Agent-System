@@ -99,6 +99,7 @@ export function SessionSidebar({
                 {editingId === session.id ? (
                   <input
                     autoFocus
+                    aria-label="Renomear conversa"
                     value={editTitle}
                     onChange={e => setEditTitle(e.target.value)}
                     onBlur={() => saveEdit(session.id)}

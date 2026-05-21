@@ -69,7 +69,7 @@ export function SessionInsights({ insights }: SessionInsightsProps) {
 
       {insights.actionItems.length > 0 && (
         <section>
-          <div className="flex items-center gap-2 text-purple-400 mb-2 font-semibold text-xs uppercase tracking-wider">
+          <div className="flex items-center gap-2 text-teal-400 mb-2 font-semibold text-xs uppercase tracking-wider">
             <Target className="w-3.5 h-3.5" /> Próximos Passos
           </div>
           <ul className="space-y-2">
