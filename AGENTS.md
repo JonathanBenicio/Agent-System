@@ -27,7 +27,7 @@ npm run cy:run       # Cypress E2E tests
 
 ### CI Commands
 ```bash
-# Backend CI (uses .NET 8 - note: code targets net10.0)
+# Backend CI (uses .NET 10 - aligned with code targets net10.0)
 dotnet restore
 dotnet build --no-restore --configuration Release
 dotnet test --no-build --configuration Release \
@@ -64,10 +64,10 @@ Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridade
 
 ## Runtime Quirks & Constraints
 
-### .NET Version Mismatch
+### .NET Version Alignment
 - **Code targets**: .NET 10.0 (all csproj files)
-- **CI uses**: .NET 8.0 (workflows/ci.yml) - **CI is outdated**
-- **SDK**: Use .NET 10 locally, ignore CI version mismatch
+- **CI uses**: .NET 10.0 (workflows/ci.yml) - **CI is fully aligned**
+- **SDK**: Use .NET 10 locally and in CI
 
 ### Auto-Migrations & Startup
 ```csharp

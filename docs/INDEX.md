@@ -105,6 +105,7 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 | Documento | Descrição |
 |-----------|-----------|
 | [plan/opencode/onnx-in-process.md](plan/opencode/onnx-in-process.md) | Roadmap/Plan: Dynamic ONNX In-Process Inference Engine (Issue #74) |
+| [plan/gap-mitigation-plan.md](plan/gap-mitigation-plan.md) | Roadmap/Plan: Mitigação de Gaps Técnicos de Segurança e Performance (Issues #76, #77, #78, #79) |
 | [plan/bug-chat-workflow.md](plan/bug-chat-workflow.md) | Bug Fix Plan: Resposta do chat não aparece no frontend |
 | [plan/multi-provider-api-keys.md](plan/multi-provider-api-keys.md) | Roadmap/Plan: Multi-Provider API Keys |
 | [plan/unified-chat-integration.md](plan/unified-chat-integration.md) | Roadmap/Plan: Integração Unificada do Chat (12 Pilares) |
