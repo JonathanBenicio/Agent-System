@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useState, createContext, useContext, useCallback } from 'react'
 
 interface Toast {

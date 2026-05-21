@@ -23,6 +23,7 @@ export default function AlertsPage() {
   }
 
   useEffect(() => {
+
     fetchAlerts()
   }, [])
 
@@ -44,7 +45,7 @@ export default function AlertsPage() {
         hour: '2-digit',
         minute: '2-digit'
       })
-    } catch (e) {
+    } catch {
       return dateStr
     }
   }
@@ -63,7 +64,7 @@ export default function AlertsPage() {
             Acompanhe os alertas de cota e saldo do sistema.
           </p>
         </div>
-        <button 
+        <button
           onClick={fetchAlerts}
           className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
         >
@@ -82,7 +83,7 @@ export default function AlertsPage() {
           </div>
         ) : (
           alerts.map(alert => (
-            <div 
+            <div
               key={alert.id}
               className={cn(
                 "p-5 bg-card rounded-xl border border-border/50 hover:border-border transition-all flex items-start gap-4 backdrop-blur-sm",
@@ -95,7 +96,7 @@ export default function AlertsPage() {
               )}>
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              
+
               <div className="flex-1 space-y-1 min-w-0">
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -114,7 +115,7 @@ export default function AlertsPage() {
                     {formatDate(alert.createdAt)}
                   </span>
                 </div>
-                
+
                 <p className="text-muted-foreground text-sm md:text-base">
                   {alert.message}
                 </p>

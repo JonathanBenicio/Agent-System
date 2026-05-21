@@ -20,6 +20,7 @@ export function useSkills() {
     }
   }, [])
 
+
   useEffect(() => { refresh() }, [refresh])
 
   const deleteSkill = useCallback(async (id: string) => {

@@ -28,6 +28,7 @@ export function RoomAccessModal({ roomId, onClose }: RoomAccessModalProps) {
       setNewUserId('');
       setErrorMsg('');
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (err: any) => {
       setErrorMsg(err?.message || 'Failed to update permission. Are you an Admin?');
     }
@@ -38,6 +39,7 @@ export function RoomAccessModal({ roomId, onClose }: RoomAccessModalProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['knowledge-room-permissions', roomId] });
     },
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     onError: (err: any) => {
       setErrorMsg(err?.message || 'Failed to remove permission.');
     }

@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Api.Hubs;
 using System.Security.Claims;
 
 namespace AgenticSystem.Api.Controllers;
@@ -12,11 +14,13 @@ namespace AgenticSystem.Api.Controllers;
 public class SessionController : ControllerBase
 {
     private readonly ISessionStore _sessionStore;
+    private readonly IHubContext<ChatHub> _hubContext;
     private readonly ILogger<SessionController> _logger;
 
-    public SessionController(ISessionStore sessionStore, ILogger<SessionController> logger)
+    public SessionController(ISessionStore sessionStore, IHubContext<ChatHub> hubContext, ILogger<SessionController> logger)
     {
         _sessionStore = sessionStore;
+        _hubContext = hubContext;
         _logger = logger;
     }
 
@@ -75,6 +79,8 @@ public class SessionController : ControllerBase
         await _sessionStore.DeleteAsync(id, ct);
         _logger.LogInformation("Session {SessionId} deleted by user {UserId}", id, userId);
 
+        await _hubContext.Clients.User(userId).SendAsync("SessionDeleted", id, ct);
+
         return NoContent();
     }
 
@@ -95,6 +101,8 @@ public class SessionController : ControllerBase
         await _sessionStore.SaveAsync(session, ct);
 
         _logger.LogInformation("Session {SessionId} title updated by user {UserId}", id, userId);
+
+        await _hubContext.Clients.User(userId).SendAsync("SessionUpdated", id, request.Title.Trim(), ct);
 
         return Ok(new { id = session.Id, title = request.Title.Trim() });
     }

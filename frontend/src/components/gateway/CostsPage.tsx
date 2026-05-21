@@ -38,6 +38,7 @@ export function CostsPage() {
   }
 
   useEffect(() => {
+
     refresh()
 
     // Conectar SignalR Gateway Hub para atualizações de custo em tempo real (P2 FinOps)

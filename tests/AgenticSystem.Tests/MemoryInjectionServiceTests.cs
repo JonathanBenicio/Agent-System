@@ -2,6 +2,7 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
 using FluentAssertions;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
@@ -11,14 +12,16 @@ namespace AgenticSystem.Tests;
 public class MemoryInjectionServiceTests
 {
     private readonly IVectorStore _vectorStore;
+    private readonly IMemoryCache _memoryCache;
     private readonly ILogger<MemoryInjectionService> _logger;
     private readonly MemoryInjectionService _sut;
 
     public MemoryInjectionServiceTests()
     {
         _vectorStore = Substitute.For<IVectorStore>();
+        _memoryCache = new MemoryCache(new MemoryCacheOptions());
         _logger = Substitute.For<ILogger<MemoryInjectionService>>();
-        _sut = new MemoryInjectionService(_vectorStore, _logger);
+        _sut = new MemoryInjectionService(_vectorStore, _memoryCache, _logger);
     }
 
     [Fact]

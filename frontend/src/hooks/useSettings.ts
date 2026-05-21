@@ -21,6 +21,7 @@ export function useSettings() {
     }
   }, [])
 
+
   useEffect(() => { refresh() }, [refresh])
 
   const saveGateway = useCallback(async (s: GatewaySettings) => {

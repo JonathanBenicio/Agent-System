@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Cable, 
-  Plus, 
-  Trash2, 
-  Copy, 
-  Check, 
-  Zap, 
-  Clock, 
-  Shield, 
+import {
+  Cable,
+  Plus,
+  Trash2,
+  Copy,
+  Check,
+  Zap,
+  Clock,
+  Shield,
   RefreshCw,
   Bot,
   Workflow as WorkflowIcon
@@ -32,7 +32,7 @@ export function WebhooksPage() {
     try {
       const data = await webhookApi.list();
       setWebhooks(data);
-    } catch (err) {
+    } catch {
       addToast('Erro ao carregar webhooks', 'error');
     } finally {
       setLoading(false);
@@ -40,7 +40,9 @@ export function WebhooksPage() {
   };
 
   useEffect(() => {
+
     fetchWebhooks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -57,7 +59,7 @@ export function WebhooksPage() {
       setTargetAgentName('');
       setShowForm(false);
       fetchWebhooks();
-    } catch (err) {
+    } catch {
       addToast('Erro ao criar webhook', 'error');
     }
   };
@@ -68,7 +70,7 @@ export function WebhooksPage() {
       await webhookApi.delete(id);
       addToast('Webhook removido', 'success');
       fetchWebhooks();
-    } catch (err) {
+    } catch {
       addToast('Erro ao remover webhook', 'error');
     }
   };
@@ -85,7 +87,7 @@ export function WebhooksPage() {
   return (
     <div className="h-full overflow-y-auto bg-zinc-950 text-zinc-100">
       <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        
+
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800/80 pb-6">
           <div>
@@ -213,12 +215,12 @@ export function WebhooksPage() {
 
                 <div className="flex flex-col justify-center space-y-3 min-w-[280px]">
                   <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-2 flex items-center gap-2 group-hover:border-zinc-700 transition-all">
-                    <input 
-                      readOnly 
-                      value={getWebhookUrl(w.id)} 
+                    <input
+                      readOnly
+                      value={getWebhookUrl(w.id)}
                       className="bg-transparent border-none text-[10px] font-mono text-zinc-400 flex-1 px-1 focus:outline-none"
                     />
-                    <button 
+                    <button
                       onClick={() => copyToClipboard(getWebhookUrl(w.id), w.id)}
                       className="p-1.5 hover:bg-zinc-800 rounded-lg text-zinc-500 hover:text-teal-400 transition-all"
                     >
@@ -239,7 +241,7 @@ export function WebhooksPage() {
                       </div>
                     )}
                     <div className="flex-1" />
-                    <button 
+                    <button
                       onClick={() => handleDelete(w.id)}
                       className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all"
                     >

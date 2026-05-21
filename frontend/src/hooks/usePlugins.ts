@@ -25,6 +25,7 @@ export function usePlugins() {
     }
   }, [])
 
+
   useEffect(() => { refresh() }, [refresh])
 
   const loadPlugin = useCallback(async (req: LoadPluginRequest) => {

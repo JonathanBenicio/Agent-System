@@ -20,6 +20,7 @@ export function useTools() {
     }
   }, [])
 
+
   useEffect(() => { refresh() }, [refresh])
 
   const executeTool = useCallback(async (id: string, input: ToolInput): Promise<ToolResult> => {

@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using AgenticSystem.Api.Controllers;
+using AgenticSystem.Api.Hubs;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
@@ -14,6 +16,7 @@ namespace AgenticSystem.Tests;
 public class SessionControllerTests
 {
     private readonly ISessionStore _sessionStore;
+    private readonly IHubContext<ChatHub> _hubContext;
     private readonly ILogger<SessionController> _logger;
     private readonly SessionController _sut;
     private const string UserId = "user-123";
@@ -21,8 +24,9 @@ public class SessionControllerTests
     public SessionControllerTests()
     {
         _sessionStore = Substitute.For<ISessionStore>();
+        _hubContext = Substitute.For<IHubContext<ChatHub>>();
         _logger = Substitute.For<ILogger<SessionController>>();
-        _sut = new SessionController(_sessionStore, _logger);
+        _sut = new SessionController(_sessionStore, _hubContext, _logger);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {

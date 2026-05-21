@@ -28,7 +28,7 @@ COPY fastpath_model.onnx .
 # COPY embeddings_model.onnx . (Descomentar quando o arquivo existir)
 # COPY reranker_model.onnx . (Descomentar quando o arquivo existir)
 
-RUN mkdir -p models/rerank models/embeddings
+RUN mkdir -p models/rerank models/embeddings wwwroot/onnx-models && chown -R app:app /app
 
 USER app
 

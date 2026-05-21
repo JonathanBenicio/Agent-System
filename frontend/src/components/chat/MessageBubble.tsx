@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import Markdown from 'react-markdown'
-import { Bot, User, AlertTriangle } from 'lucide-react'
+import { Bot, User, AlertTriangle, BookOpen, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { ChatMessage } from '@/types/chat'
 
@@ -24,6 +25,7 @@ interface MessageBubbleProps {
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const isSystem = message.role === 'system'
+  const [expandedCitation, setExpandedCitation] = useState<number | null>(null)
 
   if (isSystem) {
     return (
@@ -139,6 +141,39 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <span className="text-[10px] text-zinc-600 mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
           {new Date(message.timestamp).toLocaleTimeString('pt-BR')}
         </span>
+
+        {/* Citations */}
+        {message.citations && message.citations.length > 0 && (
+          <div className="mt-2 pt-2 border-t border-zinc-700/50">
+            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+              <BookOpen className="w-3 h-3" /> Fontes ({message.citations.length})
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {message.citations.map((citation, i) => (
+                <div key={citation.id} className="relative">
+                  <button
+                    onClick={() => setExpandedCitation(expandedCitation === i ? null : i)}
+                    className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-950/40 text-blue-300 border border-blue-800/40 hover:bg-blue-900/50 transition-colors"
+                  >
+                    <FileText className="w-2.5 h-2.5" />
+                    [{i + 1}] {citation.sourceDocumentName.length > 20 ? citation.sourceDocumentName.slice(0, 20) + '...' : citation.sourceDocumentName}
+                    {expandedCitation === i ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                  </button>
+                  {expandedCitation === i && (
+                    <div className="absolute bottom-full left-0 mb-1 z-50 w-72 p-3 rounded-lg bg-zinc-850 border border-zinc-700 shadow-xl text-xs">
+                      <div className="font-semibold text-zinc-200 mb-1">{citation.sourceDocumentName}</div>
+                      <div className="text-zinc-400 mb-2 italic">"{citation.relevantExcerpt}"</div>
+                      <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                        <span>Confiança: {(citation.confidence * 100).toFixed(0)}%</span>
+                        {citation.pageNumber && <span>Pág. {citation.pageNumber}</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* User avatar */}

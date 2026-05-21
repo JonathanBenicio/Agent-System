@@ -38,17 +38,20 @@ export function ChatPage({
 }: ChatPageProps) {
   const [activeSessionId, setActiveSessionId] = useState<string | undefined>()
   const [showInsights, setShowInsights] = useState(false)
-  const { activeSessionInsights, activeSessionSummary } = useChat()
+  const { activeSessionInsights, activeSessionSummary, loadHistory } = useChat()
 
   const handleSelectSession = useCallback((id: string) => {
     onClearMessages()
     setActiveSessionId(id)
 
+    // Fire-and-forget carregar histórico da API
+    loadHistory(id).catch(console.error)
+
     const conn = getConnection()
     conn.invoke('JoinSession', id).catch(err => {
       console.error('Failed to join session:', err)
     })
-  }, [onClearMessages])
+  }, [onClearMessages, loadHistory])
 
   const handleNewSession = useCallback(() => {
     setActiveSessionId(undefined)

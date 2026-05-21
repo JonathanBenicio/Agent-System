@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { sessionApi } from '@/lib/api'
+import { getConnection } from '@/lib/signalr'
 import type { SessionListItem, ChatMessageDto } from '@/types/api'
 import type { ChatMessage } from '@/types/chat'
 
@@ -7,6 +8,7 @@ export function useSessions() {
   const [sessions, setSessions] = useState<SessionListItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const handlersRegistered = useRef(false)
 
   const loadSessions = useCallback(async () => {
     setIsLoading(true)
@@ -47,7 +49,33 @@ export function useSessions() {
   }, [])
 
   useEffect(() => {
+
     void loadSessions()
+  }, [loadSessions])
+
+  useEffect(() => {
+    if (handlersRegistered.current) return
+    handlersRegistered.current = true
+
+    const conn = getConnection()
+
+    conn.on('SessionCreated', () => {
+      void loadSessions()
+    })
+
+    conn.on('SessionDeleted', () => {
+      void loadSessions()
+    })
+
+    conn.on('SessionUpdated', () => {
+      void loadSessions()
+    })
+
+    return () => {
+      conn.off('SessionCreated')
+      conn.off('SessionDeleted')
+      conn.off('SessionUpdated')
+    }
   }, [loadSessions])
 
   return {

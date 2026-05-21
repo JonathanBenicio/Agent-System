@@ -1,3 +1,14 @@
+export interface Citation {
+  id: string
+  sourceDocumentId: string
+  sourceDocumentName: string
+  pageNumber?: number
+  section?: string
+  relevantExcerpt: string
+  confidence: number
+  type: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -12,6 +23,7 @@ export interface ChatMessage {
   isStreaming?: boolean
   isHistory?: boolean
   memoryInjected?: boolean
+  citations?: Citation[]
 }
 
 export interface ChatSession {
@@ -48,4 +60,6 @@ export interface SignalRMessage {
   sessionId: string
   timestamp: string
   isHistory?: boolean
+  memoryInjected?: boolean
+  citations?: Citation[]
 }

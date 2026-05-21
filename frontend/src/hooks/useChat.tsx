@@ -1,12 +1,13 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { useWorkflowStore } from '@/store/useWorkflowStore'
 import { toast } from 'sonner'
-import type { WorkflowDefinition, SessionSummaryDto, SessionInsightsDto } from '@/types/api'
-import { llmApi } from '@/lib/api'
+import type { WorkflowDefinition, SessionSummaryDto, SessionInsightsDto, ChatMessageDto } from '@/types/api'
+import { llmApi, sessionApi } from '@/lib/api'
 import { getConnection, startConnection, signalR } from '@/lib/signalr'
 import { getAuthHeaders } from '@/lib/auth'
 import type { LLMProviderInfo } from '@/types/api'
-import type { ChatMessage, SignalRMessage } from '@/types/chat'
+import type { ChatMessage, SignalRMessage, Citation } from '@/types/chat'
 
 const ProviderStorageKey = 'agentic.chat.provider'
 const ModelStorageKey = 'agentic.chat.model'
@@ -31,6 +32,7 @@ interface ChatContextValue {
   refreshAiConfiguration: () => Promise<void>
   sendMessage: (text: string, targetAgent?: string) => Promise<void>
   clearMessages: () => void
+  loadHistory: (sessionId: string) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -51,6 +53,31 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [activeSessionSummary, setActiveSessionSummary] = useState<SessionSummaryDto | undefined>()
   const [activeSessionInsights, setActiveSessionInsights] = useState<SessionInsightsDto | undefined>()
   const sendingRef = useRef(false)
+
+  const loadHistory = useCallback(async (id: string) => {
+    setIsProcessing(true)
+    try {
+      const msgs = await sessionApi.messages(id)
+      const mapped: ChatMessage[] = msgs.map((m: ChatMessageDto) => ({
+        id: m.id,
+        role: m.role as ChatMessage['role'],
+        content: m.content,
+        agentName: m.agentName,
+        agentTier: m.agentTier,
+        actions: m.actions,
+        tools: m.tools,
+        timestamp: m.timestamp,
+        isHistory: true,
+      }))
+      setMessages(mapped)
+      setSessionId(id)
+    } catch (err) {
+      console.error('Failed to load session history:', err)
+      toast.error('Erro ao carregar histórico da sessão')
+    } finally {
+      setIsProcessing(false)
+    }
+  }, [])
 
   const refreshAiConfiguration = useCallback(async () => {
     try {
@@ -112,7 +139,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }
     })
 
-    conn.on('ReceiveMessage', (msg: SignalRMessage & { memoryInjected?: boolean }) => {
+    conn.on('ReceiveMessage', (msg: SignalRMessage & { memoryInjected?: boolean; citations?: Citation[] }) => {
       if (!msg.content || msg.content.trim() === '') {
         console.warn('⚠️ Received empty message from backend:', msg)
         setIsProcessing(false)
@@ -131,18 +158,19 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         timestamp: msg.timestamp,
         isHistory: msg.isHistory,
         memoryInjected: msg.memoryInjected,
+        citations: msg.citations,
       }
 
       setMessages(prev => {
         // Se for uma resposta em tempo real (não histórico) e tiver memória, 
         // tentamos marcar a última mensagem do usuário
         if (!msg.isHistory && msg.memoryInjected && msg.agentName) {
-           const lastUserIdx = prev.findLastIndex(m => m.role === 'user')
-           if (lastUserIdx !== -1) {
-             const newMessages = [...prev]
-             newMessages[lastUserIdx] = { ...newMessages[lastUserIdx], memoryInjected: true }
-             return [...newMessages, chatMsg]
-           }
+          const lastUserIdx = prev.findLastIndex(m => m.role === 'user')
+          if (lastUserIdx !== -1) {
+            const newMessages = [...prev]
+            newMessages[lastUserIdx] = { ...newMessages[lastUserIdx], memoryInjected: true }
+            return [...newMessages, chatMsg]
+          }
         }
         return [...prev, chatMsg]
       })
@@ -170,9 +198,9 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       console.log('SignalR connected:', data.connectionId)
     })
 
-    conn.on('SessionJoined', (data: { 
-      sessionId: string; 
-      title: string | null; 
+    conn.on('SessionJoined', (data: {
+      sessionId: string;
+      title: string | null;
       messageCount: number;
       summary?: SessionSummaryDto;
       insights?: SessionInsightsDto;
@@ -230,6 +258,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
+
     void refreshAiConfiguration()
 
     const handleRefresh = () => {
@@ -339,6 +368,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         refreshAiConfiguration,
         sendMessage,
         clearMessages,
+        loadHistory,
       }}
     >
       {children}
@@ -356,6 +386,7 @@ export function useChat(targetAgent?: string) {
 
   const boundSend = useCallback(
     (text: string) => ctx.sendMessage(text, targetAgent),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [ctx.sendMessage, targetAgent],
   )
 
@@ -375,6 +406,7 @@ export function useChat(targetAgent?: string) {
     refreshAiConfiguration: ctx.refreshAiConfiguration,
     sendMessage: boundSend,
     clearMessages: ctx.clearMessages,
+    loadHistory: ctx.loadHistory,
   }
 }
 
