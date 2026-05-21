@@ -16,16 +16,19 @@ public class SessionAutoConsolidator : BackgroundService
     private readonly TimeSpan _interval;
     private readonly ISemanticCompressor? _semanticCompressor;
     private readonly ITenantStore? _tenantStore;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
     public SessionAutoConsolidator(
         IServiceProvider serviceProvider,
         ILogger<SessionAutoConsolidator> logger,
+        ITenantContextAccessor tenantContextAccessor,
         IOptions<SessionConsolidationOptions>? options = null,
         ISemanticCompressor? semanticCompressor = null,
         ITenantStore? tenantStore = null)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
         _interval = options?.Value?.ConsolidationInterval ?? TimeSpan.FromMinutes(5);
         _semanticCompressor = semanticCompressor;
         _tenantStore = tenantStore;
@@ -79,6 +82,8 @@ public class SessionAutoConsolidator : BackgroundService
 
         foreach (var tenantId in tenants)
         {
+            using var tenantScope = _tenantContextAccessor.BeginScope(new Core.Models.TenantContext { TenantId = tenantId });
+
             var sessions = await sessionStore.GetByTenantAsync(tenantId, maxResults: 50, ct: ct);
             var pending = sessions.Where(s => s.EndedAt.HasValue && !s.IsConsolidated).ToList();
 

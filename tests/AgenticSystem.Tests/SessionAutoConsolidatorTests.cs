@@ -23,6 +23,7 @@ public class SessionAutoConsolidatorTests
         _consolidator = Substitute.For<ISessionConsolidator>();
         _memoryInjection = Substitute.For<IMemoryInjectionService>();
         _logger = Substitute.For<ILogger<SessionAutoConsolidator>>();
+        var tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
 
         var services = new ServiceCollection();
         services.AddSingleton(_sessionStore);
@@ -31,7 +32,7 @@ public class SessionAutoConsolidatorTests
         services.AddSingleton(Substitute.For<ILogger<SessionAutoConsolidator>>());
         _serviceProvider = services.BuildServiceProvider();
 
-        _sut = new SessionAutoConsolidator(_serviceProvider, _logger);
+        _sut = new SessionAutoConsolidator(_serviceProvider, _logger, tenantContextAccessor);
     }
 
     [Fact]
