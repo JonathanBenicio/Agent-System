@@ -16,23 +16,17 @@ public class ChatHub : Hub
     private readonly IMetaAgent _metaAgent;
     private readonly ISessionStore _sessionStore;
     private readonly ILogger<ChatHub> _logger;
-    private readonly TenantContext _tenantContext;
-    private readonly ITenantResolver _tenantResolver;
     private readonly ITenantContextAccessor _tenantContextAccessor;
 
     public ChatHub(
         IMetaAgent metaAgent, 
         ISessionStore sessionStore, 
         ILogger<ChatHub> logger,
-        TenantContext tenantContext,
-        ITenantResolver tenantResolver,
         ITenantContextAccessor tenantContextAccessor)
     {
         _metaAgent = metaAgent;
         _sessionStore = sessionStore;
         _logger = logger;
-        _tenantContext = tenantContext;
-        _tenantResolver = tenantResolver;
         _tenantContextAccessor = tenantContextAccessor;
     }
 
@@ -43,8 +37,6 @@ public class ChatHub : Hub
         string? model = null,
         string? apiKey = null)
     {
-        using var tenantScope = await InitializeTenantContextScopeAsync();
-
         // Identity from authenticated principal — never trust client-supplied userId
         var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? Context.User?.FindFirst("sub")?.Value
@@ -57,7 +49,7 @@ public class ChatHub : Hub
         {
             UserId = userId,
             Name = userId,
-            TenantId = _tenantContext.TenantId ?? Tenant.DefaultTenantId,
+            TenantId = _tenantContextAccessor.Current.TenantId ?? Tenant.DefaultTenantId,
             Language = "pt-BR",
             Preferences = BuildLlmPreferences(provider, model, apiKey)
         };
@@ -102,8 +94,6 @@ public class ChatHub : Hub
 
     public async Task JoinSession(string sessionId)
     {
-        using var tenantScope = await InitializeTenantContextScopeAsync();
-
         var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? Context.User?.FindFirst("sub")?.Value
             ?? Context.User?.Identity?.Name
@@ -223,69 +213,5 @@ public class ChatHub : Hub
         return !string.IsNullOrWhiteSpace(targetAgent)
             ? _metaAgent.ProcessDirectRequestStreamAsync(message, userContext, targetAgent, ct)
             : _metaAgent.ProcessRequestStreamAsync(message, userContext, ct);
-    }
-
-    private async Task<IDisposable> InitializeTenantContextScopeAsync()
-    {
-        var tenantId = ResolveTenantId();
-        if (!string.IsNullOrWhiteSpace(tenantId))
-        {
-            var resolved = await _tenantResolver.ResolveAsync(tenantId);
-            if (resolved is not null)
-            {
-                _tenantContext.TenantId = resolved.TenantId;
-                _tenantContext.TenantName = resolved.TenantName;
-                _tenantContext.Plan = resolved.Plan;
-                _tenantContext.Limits = resolved.Limits;
-                _tenantContext.IsAuthenticated = resolved.IsAuthenticated;
-            }
-            else
-            {
-                _tenantContext.TenantId = tenantId;
-                _tenantContext.TenantName = tenantId;
-                _tenantContext.IsAuthenticated = true;
-            }
-        }
-        else
-        {
-            _tenantContext.TenantId = Tenant.DefaultTenantId;
-            _tenantContext.TenantName = Tenant.DefaultTenantId;
-        }
-
-        return _tenantContextAccessor.BeginScope(_tenantContext);
-    }
-
-    private string? ResolveTenantId()
-    {
-        // 1. JWT claim (Standard claim or Supabase claim)
-        var claimValue = Context.User?.FindFirst("tenant_id")?.Value;
-        if (!string.IsNullOrWhiteSpace(claimValue))
-            return claimValue;
-
-        // 2. Supabase Metadata (app_metadata.tenant_id)
-        var metadataClaim = Context.User?.FindFirst("app_metadata")?.Value;
-        if (!string.IsNullOrWhiteSpace(metadataClaim))
-        {
-            try
-            {
-                using var doc = System.Text.Json.JsonDocument.Parse(metadataClaim);
-                if (doc.RootElement.TryGetProperty("tenant_id", out var tenantIdProp))
-                {
-                    return tenantIdProp.GetString();
-                }
-            }
-            catch { /* Ignore parse errors */ }
-        }
-
-        // 3. Fallback to HttpContext Headers if available during connection handshake
-        var httpContext = Context.GetHttpContext();
-        if (httpContext != null && httpContext.Request.Headers.TryGetValue("X-Tenant-Id", out var headerValue))
-        {
-            var val = headerValue.FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(val))
-                return val;
-        }
-
-        return null;
     }
 }

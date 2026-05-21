@@ -135,7 +135,10 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-builder.Services.AddSignalR();
+builder.Services.AddSignalR(options =>
+{
+    options.AddFilter<AgenticSystem.Api.SignalR.TenantHubFilter>();
+});
 
 builder.Services.AddAuthentication(options =>
 {
