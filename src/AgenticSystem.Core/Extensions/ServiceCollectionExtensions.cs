@@ -128,6 +128,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMigrationJobStore, InMemoryMigrationJobStore>();
         services.AddSingleton<IEmbeddingMigrationManager, EmbeddingMigrationManager>();
 
+        services.AddSingleton<IOnnxSessionCache, OnnxSessionCache>();
+
         // ONNX Runtime Integration (Task 1.2 & 3.3)
         if (System.IO.File.Exists("fastpath_model.onnx"))
         {
@@ -239,7 +241,8 @@ public static class ServiceCollectionExtensions
         toolManager.RegisterTool(new FileSearchTool());
         toolManager.RegisterTool(new DynamicOnnxProcessorTool(
             serviceProvider,
-            serviceProvider.GetRequiredService<ILogger<DynamicOnnxProcessorTool>>()));
+            serviceProvider.GetRequiredService<ILogger<DynamicOnnxProcessorTool>>(),
+            serviceProvider.GetRequiredService<IOnnxSessionCache>()));
         toolManager.RegisterTool(new TenantAnalyticsTool(
             serviceProvider,
             serviceProvider.GetRequiredService<ILogger<TenantAnalyticsTool>>()));

@@ -1,4 +1,5 @@
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Services.Ml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML.OnnxRuntime;
@@ -24,11 +25,16 @@ public class DynamicOnnxProcessorTool : ITool
 
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DynamicOnnxProcessorTool> _logger;
+    private readonly IOnnxSessionCache _sessionCache;
 
-    public DynamicOnnxProcessorTool(IServiceProvider serviceProvider, ILogger<DynamicOnnxProcessorTool> logger)
+    public DynamicOnnxProcessorTool(
+        IServiceProvider serviceProvider,
+        ILogger<DynamicOnnxProcessorTool> logger,
+        IOnnxSessionCache sessionCache)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _sessionCache = sessionCache;
     }
 
     public Task<bool> IsAvailableAsync(CancellationToken ct = default) => Task.FromResult(true);
@@ -76,7 +82,7 @@ public class DynamicOnnxProcessorTool : ITool
 
             var tensor = ImageToTensor(image, (int)model.InputWidth, (int)model.InputHeight, (int)model.Channels, (float)model.ScaleFactor, (float)model.MeanRed, (float)model.MeanGreen, (float)model.MeanBlue);
 
-            using var session = CreateSession(modelPath, modelBytes);
+            var session = _sessionCache.GetOrCreateSession(modelId, modelPath, modelBytes);
             var inputs = new List<NamedOnnxValue>
             {
                 NamedOnnxValue.CreateFromTensor(model.InputNodeName, tensor)
@@ -147,7 +153,7 @@ public class DynamicOnnxProcessorTool : ITool
                     return ToolResult.Fail("Model data is empty or file not found.");
             }
 
-            using var session = CreateSession(modelPath, modelBytes);
+            var session = _sessionCache.GetOrCreateSession(modelId, modelPath, modelBytes);
             var inputNodes = session.InputMetadata.Select(kv => new
             {
                 name = kv.Key,
@@ -292,25 +298,5 @@ public class DynamicOnnxProcessorTool : ITool
             return (T)Convert.ChangeType(value, typeof(T));
         }
         return default;
-    }
-
-    private static InferenceSession CreateSession(string? modelPath, byte[]? modelBytes)
-    {
-        try
-        {
-            return !string.IsNullOrEmpty(modelPath) && System.IO.File.Exists(modelPath)
-                ? new InferenceSession(modelPath)
-                : new InferenceSession(modelBytes ?? throw new InvalidOperationException("Model data not available."));
-        }
-        catch (OnnxRuntimeException ex) when (ex.Message.Contains("two nodes with same node name") || ex.Message.Contains("invalid model") || ex.Message.Contains("ErrorCode:Fail"))
-        {
-            var fallbackOptions = new Microsoft.ML.OnnxRuntime.SessionOptions
-            {
-                GraphOptimizationLevel = GraphOptimizationLevel.ORT_DISABLE_ALL
-            };
-            return !string.IsNullOrEmpty(modelPath) && System.IO.File.Exists(modelPath)
-                ? new InferenceSession(modelPath, fallbackOptions)
-                : new InferenceSession(modelBytes!, fallbackOptions);
-        }
     }
 }

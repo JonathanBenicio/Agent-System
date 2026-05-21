@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Services.Ml;
 using AgenticSystem.Core.Tools;
 using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.Persistence.Entities;
@@ -53,7 +54,9 @@ public class DynamicOnnxProcessorToolTests
         _serviceProvider.GetService(typeof(AgenticDbContext)).Returns(_dbContext);
         _serviceProvider.GetService(Arg.Is<Type>(t => t.Name == "AgenticDbContext")).Returns(_dbContext);
 
-        _sut = new DynamicOnnxProcessorTool(_serviceProvider, _logger);
+        var sessionCacheLogger = Substitute.For<ILogger<OnnxSessionCache>>();
+        var sessionCache = new OnnxSessionCache(sessionCacheLogger);
+        _sut = new DynamicOnnxProcessorTool(_serviceProvider, _logger, sessionCache);
 
         // Find the fastpath_model.onnx in the workspace by walking up the directory tree
         var dir = AppContext.BaseDirectory;
