@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { X, Bot, Shield, Wrench, FileCode, CheckCircle2, AlertTriangle, Search } from 'lucide-react'
+import { X, Bot, Shield, Wrench, FileCode, CheckCircle2, AlertTriangle, Search, Info } from 'lucide-react'
 import type { AgentInfo, AgentSpecification, ToolSummary, YamlValidationError, KnowledgeRoom } from '@/types/api'
 import { TierLabels, AutonomyLevel, AutonomyLabels, AutonomyColors } from '@/types/api'
 import { toolApi, agentApi, knowledgeRoomApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { CAPABILITY_CATALOG } from '@/lib/constants'
 
 interface Props {
   agent: AgentInfo | null
@@ -258,6 +259,14 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
 
   const removeCapability = (cap: string) => {
     setForm(prev => ({ ...prev, capabilities: prev.capabilities.filter(c => c !== cap) }))
+  }
+
+  const toggleCapability = (cap: string) => {
+    if (form.capabilities.includes(cap)) {
+      removeCapability(cap)
+    } else {
+      setForm(prev => ({ ...prev, capabilities: [...prev.capabilities, cap] }))
+    }
   }
 
   // Adicionar/Remover ferramentas permitidas (AllowedTools)
@@ -560,7 +569,7 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
 
               {/* CAPABILITIES */}
               <Field label="Capacidades Operacionais (Capabilities)">
-                <div className="flex gap-2 mb-2">
+                <div className="flex gap-2 mb-3">
                   <input
                     type="text"
                     value={capInput}
@@ -577,6 +586,43 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
                     Adicionar
                   </button>
                 </div>
+
+                {/* Catálogo de Sugestões Categorizadas */}
+                <div className="mb-4 space-y-3 p-3 bg-zinc-900/30 border border-zinc-850 rounded-xl">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Info className="w-3 h-3 text-teal-500" />
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Sugestões de DNA (PT-BR)</span>
+                  </div>
+                  
+                  {Object.entries(CAPABILITY_CATALOG).map(([category, tags]) => (
+                    <div key={category} className="space-y-1.5">
+                      <h4 className="text-[9px] font-semibold text-zinc-600 uppercase ml-0.5">{category}</h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(tags).map(([tag, description]) => {
+                          const isSelected = form.capabilities.includes(tag)
+                          return (
+                            <button
+                              key={tag}
+                              type="button"
+                              title={description}
+                              onClick={() => toggleCapability(tag)}
+                              className={cn(
+                                "group relative px-2 py-0.5 text-[10px] font-medium rounded-md border transition-all duration-200",
+                                isSelected
+                                  ? "bg-teal-500/10 border-teal-500/40 text-teal-300"
+                                  : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                              )}
+                            >
+                              {tag}
+                              {/* Tooltip Customizado Simples via title ou mini-popover se necessário */}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="flex flex-wrap gap-1.5">
                   {form.capabilities.map(c => (
                     <span key={c} className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-0.5 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-300">
@@ -617,9 +663,9 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
                         )
                       })
                     ) : (
-                      <span className="text-xs text-teal-400/90 font-medium px-1 flex items-center gap-1.5">
-                        <span className="w-1.5 h-1.5 bg-teal-400 rounded-full animate-pulse" />
-                        Todas as Salas (Escopo Global Herdado do Tenant)
+                      <span className="text-xs text-amber-400/90 font-medium px-1 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                        Nenhuma Sala (Acesso RAG Bloqueado - Segurança Máxima)
                       </span>
                     )}
                   </div>
