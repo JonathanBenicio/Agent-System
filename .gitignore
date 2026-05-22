@@ -32,3 +32,6 @@ coverage/
 **/StrykerOutput/
 
 .gemini/**
+
+## ONNX Local Models
+onnx/

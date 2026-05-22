@@ -671,5 +671,25 @@ public class CustomOnnxModelEntity : ITenantEntity
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<CustomOnnxModelFileEntity> AssociatedFiles { get; set; } = new List<CustomOnnxModelFileEntity>();
 }
+
+/// <summary>
+/// Associated file entity for a CustomOnnxModelEntity.
+/// Used to store external weights (.data files) or configurations.
+/// </summary>
+public class CustomOnnxModelFileEntity : ITenantEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string TenantId { get; set; } = "default";
+    public string ModelId { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public byte[] FileData { get; set; } = Array.Empty<byte>();
+    public long FileSizeBytes { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public CustomOnnxModelEntity? Model { get; set; }
+}
+
 

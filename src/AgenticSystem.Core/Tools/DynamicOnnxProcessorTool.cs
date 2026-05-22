@@ -7,6 +7,7 @@ using Microsoft.ML.OnnxRuntime.Tensors;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
+using System.Text.Json;
 
 namespace AgenticSystem.Core.Tools;
 
@@ -62,13 +63,89 @@ public class DynamicOnnxProcessorTool : ITool
             if (model == null)
                 return ToolResult.Fail($"Model '{modelId}' not found.");
 
-            string? modelPath = model.ModelFileName;
+            string resolvedModelPath = model.ModelFileName ?? string.Empty;
             byte[]? modelBytes = null;
-            if (string.IsNullOrEmpty(modelPath) || !System.IO.File.Exists(modelPath))
+
+            // 1. Handle Multi-part model files (.onnx + .data) using isolated temporary directories
+            var associatedFiles = model.AssociatedFiles as System.Collections.IEnumerable;
+            var filesList = new List<dynamic>();
+            if (associatedFiles != null)
             {
-                modelBytes = await GetModelBytesAsync(model);
-                if (modelBytes == null || modelBytes.Length == 0)
-                    return ToolResult.Fail("Model data is empty or file not found.");
+                foreach (dynamic file in associatedFiles)
+                {
+                    filesList.Add(file);
+                }
+            }
+
+            if (filesList.Count > 0)
+            {
+                var tenantId = (string)(model.TenantId ?? "default");
+                var tempDir = Path.Combine(Path.GetTempPath(), "agentic-onnx", tenantId, modelId);
+                Directory.CreateDirectory(tempDir);
+
+                string tempOnnxPath = Path.Combine(tempDir, $"{modelId}.onnx");
+                byte[]? dbModelBytes = model.ModelData;
+
+                // Write main ONNX file if size differs or not exists (reduces I/O wear)
+                bool shouldWriteOnnx = true;
+                if (File.Exists(tempOnnxPath))
+                {
+                    var fileInfo = new FileInfo(tempOnnxPath);
+                    long dbLength = dbModelBytes?.Length ?? (File.Exists(model.ModelFileName) ? new FileInfo(model.ModelFileName).Length : 0);
+                    if (fileInfo.Length == dbLength)
+                    {
+                        shouldWriteOnnx = false;
+                    }
+                }
+
+                if (shouldWriteOnnx)
+                {
+                    if (dbModelBytes != null && dbModelBytes.Length > 0)
+                    {
+                        await File.WriteAllBytesAsync(tempOnnxPath, dbModelBytes, ct);
+                    }
+                    else if (!string.IsNullOrEmpty(model.ModelFileName) && File.Exists(model.ModelFileName))
+                    {
+                        File.Copy(model.ModelFileName, tempOnnxPath, true);
+                    }
+                    else
+                    {
+                        return ToolResult.Fail("Model file not found and no model data in DB.");
+                    }
+                }
+
+                // Write associated weights/data files if size differs or not exists
+                foreach (var file in filesList)
+                {
+                    string filePath = Path.Combine(tempDir, file.FileName);
+                    byte[] fileData = file.FileData;
+                    bool shouldWriteFile = true;
+                    if (File.Exists(filePath))
+                    {
+                        var fileInfo = new FileInfo(filePath);
+                        if (fileInfo.Length == fileData.Length)
+                        {
+                            shouldWriteFile = false;
+                        }
+                    }
+
+                    if (shouldWriteFile)
+                    {
+                        await File.WriteAllBytesAsync(filePath, fileData, ct);
+                    }
+                }
+
+                resolvedModelPath = tempOnnxPath;
+            }
+            else
+            {
+                // Classic dual storage (single-file model)
+                if (string.IsNullOrEmpty(resolvedModelPath) || !System.IO.File.Exists(resolvedModelPath))
+                {
+                    modelBytes = await GetModelBytesAsync(model);
+                    if (modelBytes == null || modelBytes.Length == 0)
+                        return ToolResult.Fail("Model data is empty or file not found.");
+                }
             }
 
             var imageBytes = Convert.FromBase64String(imageData);
@@ -78,23 +155,118 @@ public class DynamicOnnxProcessorTool : ITool
             int inputH = (int)model.InputHeight;
 
             using var image = Image.Load<Rgb24>(imageBytes);
-            image.Mutate(x => x.Resize(inputW, inputH));
+            int originalW = image.Width;
+            int originalH = image.Height;
 
-            var tensor = ImageToTensor(image, (int)model.InputWidth, (int)model.InputHeight, (int)model.Channels, (float)model.ScaleFactor, (float)model.MeanRed, (float)model.MeanGreen, (float)model.MeanBlue);
+            // 2. Aspect Ratio Preserving Resizing
+            float scale = Math.Min((float)inputW / originalW, (float)inputH / originalH);
+            int newW = (int)Math.Round(originalW * scale);
+            int newH = (int)Math.Round(originalH * scale);
+            newW = Math.Max(1, newW);
+            newH = Math.Max(1, newH);
 
-            var session = _sessionCache.GetOrCreateSession(modelId, modelPath, modelBytes);
-            var inputs = new List<NamedOnnxValue>
+            image.Mutate(x => x.Resize(newW, newH));
+
+            // 3. Customizable Padding Color
+            var padColor = Color.Black;
+            string postProcessConfig = model.PostProcessConfigJson ?? "{}";
+            try
             {
-                NamedOnnxValue.CreateFromTensor(model.InputNodeName, tensor)
-            };
+                using var doc = JsonDocument.Parse(postProcessConfig);
+                if (doc.RootElement.TryGetProperty("PaddingColor", out var colorProp) && colorProp.ValueKind == JsonValueKind.String)
+                {
+                    var colorStr = colorProp.GetString();
+                    if (!string.IsNullOrEmpty(colorStr))
+                    {
+                        padColor = Color.Parse(colorStr);
+                    }
+                }
+            }
+            catch
+            {
+                // Fallback to black
+            }
+
+            using var paddedImage = new Image<Rgb24>(inputW, inputH);
+            int posX = (inputW - newW) / 2;
+            int posY = (inputH - newH) / 2;
+
+            paddedImage.ProcessPixelRows(accessorPadded =>
+            {
+                for (int y = 0; y < inputH; y++)
+                {
+                    var rowPadded = accessorPadded.GetRowSpan(y);
+                    
+                    int imgY = y - posY;
+                    bool hasImageRow = imgY >= 0 && imgY < newH;
+
+                    for (int x = 0; x < inputW; x++)
+                    {
+                        int imgX = x - posX;
+                        if (hasImageRow && imgX >= 0 && imgX < newW)
+                        {
+                            rowPadded[x] = image[imgX, imgY];
+                        }
+                        else
+                        {
+                            rowPadded[x] = padColor;
+                        }
+                    }
+                }
+            });
+
+            // 4. Retrieve session and dynamically detect input/output types (INT8 vs Float)
+            var session = _sessionCache.GetOrCreateSession(modelId, resolvedModelPath, modelBytes);
+
+            var inputMeta = session.InputMetadata[model.InputNodeName];
+            bool isByteInput = inputMeta.ElementDataType == TensorElementType.UInt8;
+
+            NamedOnnxValue onnxInput;
+            if (isByteInput)
+            {
+                var byteTensor = ImageToByteTensor(paddedImage, inputW, inputH, (int)model.Channels, (float)model.ScaleFactor, (float)model.MeanRed, (float)model.MeanGreen, (float)model.MeanBlue);
+                onnxInput = NamedOnnxValue.CreateFromTensor(model.InputNodeName, byteTensor);
+            }
+            else
+            {
+                var floatTensor = ImageToTensor(paddedImage, inputW, inputH, (int)model.Channels, (float)model.ScaleFactor, (float)model.MeanRed, (float)model.MeanGreen, (float)model.MeanBlue);
+                onnxInput = NamedOnnxValue.CreateFromTensor(model.InputNodeName, floatTensor);
+            }
+
+            var inputs = new List<NamedOnnxValue> { onnxInput };
 
             using var results = session.Run(inputs);
-            var outputTensor = results.First(r => r.Name == model.OutputNodeName).AsTensor<float>();
+            var resultVal = results.First(r => r.Name == model.OutputNodeName);
             sw.Stop();
+
+            var outputMeta = session.OutputMetadata[model.OutputNodeName];
+            bool isByteOutput = outputMeta.ElementDataType == TensorElementType.UInt8;
 
             if ((string)model.OutputFormat == "image")
             {
-                var outputImage = TensorToImage(outputTensor);
+                using var outputImage = isByteOutput
+                    ? TensorToImage(resultVal.AsTensor<byte>())
+                    : TensorToImage(resultVal.AsTensor<float>());
+
+                int outputW = outputImage.Width;
+                int outputH = outputImage.Height;
+
+                float upscaleFactorX = (float)outputW / inputW;
+                float upscaleFactorY = (float)outputH / inputH;
+
+                int cropX = (int)Math.Round(posX * upscaleFactorX);
+                int cropY = (int)Math.Round(posY * upscaleFactorY);
+                int cropW = (int)Math.Round(newW * upscaleFactorX);
+                int cropH = (int)Math.Round(newH * upscaleFactorY);
+
+                // Safe Crop clamping to avoid out of bounds exceptions
+                cropX = Math.Max(0, Math.Min(cropX, outputW - 1));
+                cropY = Math.Max(0, Math.Min(cropY, outputH - 1));
+                cropW = Math.Max(1, Math.Min(cropW, outputW - cropX));
+                cropH = Math.Max(1, Math.Min(cropH, outputH - cropY));
+
+                outputImage.Mutate(ctx => ctx.Crop(new Rectangle(cropX, cropY, cropW, cropH)));
+
                 using var ms = new MemoryStream();
                 await outputImage.SaveAsPngAsync(ms, ct);
                 var base64 = Convert.ToBase64String(ms.ToArray());
@@ -103,17 +275,21 @@ public class DynamicOnnxProcessorTool : ITool
                 {
                     outputImage = base64,
                     latencyMs = sw.ElapsedMilliseconds,
-                    inputShape = new[] { 1, (int)model.Channels, (int)model.InputHeight, (int)model.InputWidth },
-                    outputShape = outputTensor.Dimensions.ToArray()
+                    inputShape = new[] { 1, (int)model.Channels, inputH, inputW },
+                    outputShape = new[] { 1, (int)model.Channels, cropH, cropW }
                 });
             }
 
             return ToolResult.Ok(new
             {
-                outputTensor = outputTensor.ToArray(),
+                outputTensor = isByteOutput
+                    ? (object)resultVal.AsTensor<byte>().ToArray()
+                    : (object)resultVal.AsTensor<float>().ToArray(),
                 latencyMs = sw.ElapsedMilliseconds,
-                inputShape = new[] { 1, (int)model.Channels, (int)model.InputHeight, (int)model.InputWidth },
-                outputShape = outputTensor.Dimensions.ToArray()
+                inputShape = new[] { 1, (int)model.Channels, inputH, inputW },
+                outputShape = isByteOutput
+                    ? resultVal.AsTensor<byte>().Dimensions.ToArray()
+                    : resultVal.AsTensor<float>().Dimensions.ToArray()
             });
         }
         catch (OnnxRuntimeException ex)
@@ -245,6 +421,66 @@ public class DynamicOnnxProcessorTool : ITool
         return image;
     }
 
+    private static DenseTensor<byte> ImageToByteTensor(Image<Rgb24> image, int w, int h, int c, float scale, float meanR, float meanG, float meanB)
+    {
+        var tensor = new DenseTensor<byte>(new[] { 1, c, h, w });
+
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < h; y++)
+            {
+                var row = accessor.GetRowSpan(y);
+                for (int x = 0; x < w; x++)
+                {
+                    var pixel = row[x];
+                    tensor[0, 0, y, x] = (byte)Math.Clamp((pixel.R * scale) - meanR, 0, 255);
+                    if (c > 1) tensor[0, 1, y, x] = (byte)Math.Clamp((pixel.G * scale) - meanG, 0, 255);
+                    if (c > 2) tensor[0, 2, y, x] = (byte)Math.Clamp((pixel.B * scale) - meanB, 0, 255);
+                }
+            }
+        });
+
+        return tensor;
+    }
+
+    private static Image<Rgb24> TensorToImage(Tensor<byte> tensor)
+    {
+        var dimsArray = tensor.Dimensions.ToArray();
+        int channels = dimsArray.Length >= 4 ? dimsArray[1] : (dimsArray.Length >= 3 ? dimsArray[0] : 1);
+        int height = dimsArray.Length >= 4 ? dimsArray[2] : dimsArray[^2];
+        int width = dimsArray.Length >= 4 ? dimsArray[3] : dimsArray[^1];
+        bool is4d = dimsArray.Length >= 4;
+
+        var image = new Image<Rgb24>(width, height);
+        image.ProcessPixelRows(accessor =>
+        {
+            for (int y = 0; y < height; y++)
+            {
+                var row = accessor.GetRowSpan(y);
+                for (int x = 0; x < width; x++)
+                {
+                    byte r, g, b;
+                    if (is4d)
+                    {
+                        r = tensor[0, 0, y, x];
+                        g = channels > 1 ? tensor[0, 1, y, x] : r;
+                        b = channels > 2 ? tensor[0, 2, y, x] : r;
+                    }
+                    else
+                    {
+                        r = tensor[0, y, x];
+                        g = channels > 1 ? tensor[1, y, x] : r;
+                        b = channels > 2 ? tensor[2, y, x] : r;
+                    }
+
+                    row[x] = new Rgb24(r, g, b);
+                }
+            }
+        });
+
+        return image;
+    }
+
     private async Task<dynamic?> LoadModelEntityAsync(string modelId, CancellationToken ct)
     {
         // Resolve DbContext from scoped service provider to access tenant-isolated models
@@ -270,7 +506,33 @@ public class DynamicOnnxProcessorTool : ITool
         if (findMethod == null) return null;
 
         var task = findMethod.Invoke(dbSet, new object[] { new object[] { modelId }, ct })!;
-        return await (dynamic)task;
+        var model = await (dynamic)task;
+
+        if (model != null)
+        {
+            try
+            {
+                // Explicitly load AssociatedFiles using DbContext.Entry(entity).Collection("AssociatedFiles").Load() via reflection
+                var entryMethod = dbContext.GetType().GetMethod("Entry", new[] { typeof(object) });
+                var entry = entryMethod?.Invoke(dbContext, new[] { model });
+                if (entry != null)
+                {
+                    var collectionMethod = entry.GetType().GetMethod("Collection", new[] { typeof(string) });
+                    var collectionEntry = collectionMethod?.Invoke(entry, new[] { "AssociatedFiles" });
+                    if (collectionEntry != null)
+                    {
+                        var loadMethod = collectionEntry.GetType().GetMethod("Load");
+                        loadMethod?.Invoke(collectionEntry, null);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to explicitly load AssociatedFiles for model '{ModelId}'", modelId);
+            }
+        }
+
+        return model;
     }
 
     private static async Task<byte[]?> GetModelBytesAsync(dynamic model)

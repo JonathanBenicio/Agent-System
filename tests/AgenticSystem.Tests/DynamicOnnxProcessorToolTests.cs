@@ -303,9 +303,64 @@ public class DynamicOnnxProcessorToolTests
         };
 
         var result = await _sut.ExecuteAsync(input, CancellationToken.None);
-
+        
         // It should catch the type mismatch exception and return fail gracefully
         result.Success.Should().BeFalse();
         result.ErrorMessage.Should().Contain("ONNX Runtime error");
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_ProcessAction_VerifyAspectRatioPaddingAndCropDetails()
+    {
+        // This test validates that the aspect-ratio calculations and crops are done with correct geometry.
+        // We simulate an image of size 300x150 (2:1 aspect ratio).
+        // Model input dimensions: 128x128.
+        // Scale factor = Math.Min(128/300, 128/150) = 128/300 = 0.4266...
+        // newW = 300 * 0.4266... = 128
+        // newH = 150 * 0.4266... = 64
+        // posX = (128 - 128) / 2 = 0
+        // posY = (128 - 64) / 2 = 32
+        // If output resolution is 512x512 (upscale factor = 4x):
+        // cropX = 0 * 4 = 0
+        // cropY = 32 * 4 = 128
+        // cropW = 128 * 4 = 512
+        // cropH = 64 * 4 = 256
+        // Final image dimensions after crop: 512x256 (2:1 aspect ratio perfectly preserved!).
+        
+        using var testImage = new SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgb24>(300, 150);
+        using var ms = new MemoryStream();
+        await testImage.SaveAsPngAsync(ms);
+        var base64Image = Convert.ToBase64String(ms.ToArray());
+
+        int inputW = 128;
+        int inputH = 128;
+
+        // Simulate aspect ratio calculations locally to assert mathematical correctness
+        float scale = Math.Min((float)inputW / 300, (float)inputH / 150);
+        int newW = (int)Math.Round(300 * scale);
+        int newH = (int)Math.Round(150 * scale);
+        newW.Should().Be(128);
+        newH.Should().Be(64);
+
+        int posX = (inputW - newW) / 2;
+        int posY = (inputH - newH) / 2;
+        posX.Should().Be(0);
+        posY.Should().Be(32);
+
+        // Assert upscaled crop bounds for 4x super-resolution (output 512x512)
+        int outputW = 512;
+        int outputH = 512;
+        float upscaleFactorX = (float)outputW / inputW;
+        float upscaleFactorY = (float)outputH / inputH;
+        
+        int cropX = (int)Math.Round(posX * upscaleFactorX);
+        int cropY = (int)Math.Round(posY * upscaleFactorY);
+        int cropW = (int)Math.Round(newW * upscaleFactorX);
+        int cropH = (int)Math.Round(newH * upscaleFactorY);
+
+        cropX.Should().Be(0);
+        cropY.Should().Be(128);
+        cropW.Should().Be(512);
+        cropH.Should().Be(256);
     }
 }

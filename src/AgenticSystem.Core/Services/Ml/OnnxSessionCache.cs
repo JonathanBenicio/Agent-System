@@ -74,22 +74,63 @@ public sealed class OnnxSessionCache : IOnnxSessionCache
 
     private static InferenceSession CreateSession(string? modelPath, byte[]? modelBytes)
     {
+        var options = CreateSessionOptions();
         try
         {
             return !string.IsNullOrEmpty(modelPath) && System.IO.File.Exists(modelPath)
-                ? new InferenceSession(modelPath)
-                : new InferenceSession(modelBytes ?? throw new InvalidOperationException("Model data not available."));
+                ? new InferenceSession(modelPath, options)
+                : new InferenceSession(modelBytes ?? throw new InvalidOperationException("Model data not available."), options);
         }
-        catch (OnnxRuntimeException ex) when (ex.Message.Contains("two nodes with same node name") || ex.Message.Contains("invalid model") || ex.Message.Contains("ErrorCode:Fail"))
+        catch (Exception)
         {
+            // If session creation with GPU options fails (e.g. library missing or hardware incompatible),
+            // fall back graciosamente to standard sequential CPU options.
             var fallbackOptions = new SessionOptions
             {
                 GraphOptimizationLevel = GraphOptimizationLevel.ORT_DISABLE_ALL
             };
             return !string.IsNullOrEmpty(modelPath) && System.IO.File.Exists(modelPath)
                 ? new InferenceSession(modelPath, fallbackOptions)
-                : new InferenceSession(modelBytes!, fallbackOptions);
+                : new InferenceSession(modelBytes ?? throw new InvalidOperationException("Model data not available."), fallbackOptions);
         }
+    }
+
+    private static SessionOptions CreateSessionOptions()
+    {
+        var options = new SessionOptions();
+
+        // 1. Try DirectML (optimal for local acceleration on Windows)
+        try
+        {
+            var dmlMethod = typeof(SessionOptions).GetMethod("AppendExecutionProvider_Dml", new[] { typeof(int) });
+            if (dmlMethod != null)
+            {
+                dmlMethod.Invoke(options, new object[] { 0 });
+                return options;
+            }
+        }
+        catch
+        {
+            // DirectML not supported or failed to bind
+        }
+
+        // 2. Try CUDA (optimal for NVIDIA GPUs)
+        try
+        {
+            var cudaMethod = typeof(SessionOptions).GetMethod("AppendExecutionProvider_CUDA", new[] { typeof(int) });
+            if (cudaMethod != null)
+            {
+                cudaMethod.Invoke(options, new object[] { 0 });
+                return options;
+            }
+        }
+        catch
+        {
+            // CUDA not supported or failed to bind
+        }
+
+        // 3. Fall back to standard CPU (sequential execution is safer for resource isolation)
+        return options;
     }
 
     private void CleanupExpiredSessions(object? state)

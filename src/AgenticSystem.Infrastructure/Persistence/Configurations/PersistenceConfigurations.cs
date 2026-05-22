@@ -890,5 +890,32 @@ public class CustomOnnxModelConfiguration : IEntityTypeConfiguration<CustomOnnxM
             .HasDatabaseName("ux_custom_onnx_models_tenant_name");
         builder.HasIndex(m => m.IsActive).HasDatabaseName("ix_custom_onnx_models_active");
         builder.HasIndex(m => m.TenantId).HasDatabaseName("ix_custom_onnx_models_tenant_id");
+
+        builder.HasMany(m => m.AssociatedFiles)
+            .WithOne(f => f.Model)
+            .HasForeignKey(f => f.ModelId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
+
+public class CustomOnnxModelFileConfiguration : IEntityTypeConfiguration<CustomOnnxModelFileEntity>
+{
+    public void Configure(EntityTypeBuilder<CustomOnnxModelFileEntity> builder)
+    {
+        builder.ToTable("custom_onnx_model_files");
+
+        builder.HasKey(f => f.Id);
+        builder.Property(f => f.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(f => f.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(f => f.ModelId).HasColumnName("model_id").HasMaxLength(64).IsRequired();
+        builder.Property(f => f.FileName).HasColumnName("file_name").HasMaxLength(256).IsRequired();
+        builder.Property(f => f.FileData).HasColumnName("file_data").IsRequired();
+        builder.Property(f => f.FileSizeBytes).HasColumnName("file_size_bytes");
+        builder.Property(f => f.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(f => f.ModelId).HasDatabaseName("ix_custom_onnx_model_files_model_id");
+        builder.HasIndex(f => new { f.ModelId, f.FileName }).IsUnique().HasDatabaseName("ux_custom_onnx_model_files_model_name");
+        builder.HasIndex(f => f.TenantId).HasDatabaseName("ix_custom_onnx_model_files_tenant_id");
+    }
+}
+
