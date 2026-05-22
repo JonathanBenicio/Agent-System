@@ -57,3 +57,24 @@ export function useTestOnnxModel() {
       onnxModelApi.test(id, formData),
   })
 }
+
+export const JOBS_QUERY_KEY = ['onnx-jobs'] as const
+
+export function useOnnxJobsList(modelId?: string, page = 1, pageSize = 10) {
+  return useQuery({
+    queryKey: [...JOBS_QUERY_KEY, modelId, page, pageSize] as const,
+    queryFn: () => onnxModelApi.listJobs(modelId, page, pageSize),
+    refetchInterval: 5000, // Fallback polling
+  })
+}
+
+export function useDeleteOnnxJob() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (jobId: string) => onnxModelApi.deleteJob(jobId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: JOBS_QUERY_KEY })
+    },
+  })
+}

@@ -874,3 +874,25 @@ export interface OnnxTestResult {
   inputShape: number[]
   outputShape: number[]
 }
+
+export interface OnnxInferenceJob {
+  id: string
+  tenantId: string
+  modelId: string
+  modelName: string
+  status: 'Pending' | 'Processing' | 'Completed' | 'Failed'
+  inputImagePath: string | null
+  outputImagePath: string | null
+  latencyMs: number | null
+  errorMessage: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
+export interface OnnxJobsPagedResponse {
+  jobs: OnnxInferenceJob[]
+  page: number
+  pageSize: number
+  totalItems: number
+  totalPages: number
+}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Brain, Upload, Search, TestTube, Trash2, HardDrive, Database, Power, PowerOff, Edit } from 'lucide-react'
+import { Brain, Upload, Search, TestTube, Trash2, HardDrive, Database, Power, PowerOff, Edit, ImageIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useOnnxModelsList, useDeleteOnnxModel, useUpdateOnnxModel } from '@/hooks/useOnnxModels'
 import type { OnnxModelSummary } from '@/types/api'
@@ -7,6 +7,7 @@ import { OnnxModelUploadModal } from './OnnxModelUploadModal'
 import { OnnxModelInspectModal } from './OnnxModelInspectModal'
 import { OnnxModelTestModal } from './OnnxModelTestModal'
 import { OnnxModelEditModal } from './OnnxModelEditModal'
+import { OnnxGallery } from './OnnxGallery'
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
@@ -24,6 +25,7 @@ export function OnnxModelsPage() {
   const [inspectModelId, setInspectModelId] = useState<string | null>(null)
   const [testModelId, setTestModelId] = useState<string | null>(null)
   const [editModelId, setEditModelId] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'models' | 'gallery'>('models')
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
 
   const showToast = (type: 'success' | 'error', message: string) => {
@@ -72,6 +74,36 @@ export function OnnxModelsPage() {
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b border-zinc-800/80 gap-6 mt-2">
+        <button
+          onClick={() => setActiveTab('models')}
+          className={cn(
+            'flex items-center gap-2 pb-4 text-sm font-semibold transition-all relative px-1',
+            activeTab === 'models' ? 'text-cyan-400 font-bold' : 'text-zinc-400 hover:text-zinc-200'
+          )}
+        >
+          <Brain className="w-4 h-4" />
+          Modelos Disponíveis
+          {activeTab === 'models' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 rounded-full" />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('gallery')}
+          className={cn(
+            'flex items-center gap-2 pb-4 text-sm font-semibold transition-all relative px-1',
+            activeTab === 'gallery' ? 'text-cyan-400 font-bold' : 'text-zinc-400 hover:text-zinc-200'
+          )}
+        >
+          <ImageIcon className="w-4 h-4" />
+          Galeria de Resultados
+          {activeTab === 'gallery' && (
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-cyan-500 to-teal-500 rounded-full" />
+          )}
+        </button>
+      </div>
+
       {/* Toast */}
       {toast && (
         <div
@@ -87,28 +119,28 @@ export function OnnxModelsPage() {
       )}
 
       {/* Loading */}
-      {isLoading && (
+      {activeTab === 'models' && isLoading && (
         <div className="flex items-center justify-center py-20">
           <div className="w-8 h-8 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
         </div>
       )}
 
       {/* Error */}
-      {error && (
+      {activeTab === 'models' && error && (
         <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
           Erro ao carregar modelos: {error.message}
         </div>
       )}
 
       {/* Empty State */}
-      {!isLoading && !error && models.length === 0 && (
+      {activeTab === 'models' && !isLoading && !error && models.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 gap-4">
           <div className="w-16 h-16 rounded-2xl bg-zinc-800/50 border border-zinc-700/50 flex items-center justify-center">
             <Brain className="w-8 h-8 text-zinc-600" />
           </div>
           <div className="text-center">
             <p className="text-zinc-400 font-medium">Nenhum modelo ONNX cadastrado</p>
-            <p className="text-zinc-600 text-sm mt-1">
+            <p className="text-zinc-650 text-sm mt-1">
               Faça upload de um modelo pré-treinado para habilitar inferência local.
             </p>
           </div>
@@ -123,7 +155,7 @@ export function OnnxModelsPage() {
       )}
 
       {/* Model Grid */}
-      {!isLoading && models.length > 0 && (
+      {activeTab === 'models' && !isLoading && models.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {models.map((model) => (
             <div
@@ -225,6 +257,11 @@ export function OnnxModelsPage() {
         </div>
       )}
 
+      {/* Gallery tab */}
+      {activeTab === 'gallery' && (
+        <OnnxGallery />
+      )}
+
       {/* Modals */}
       {showUpload && (
         <OnnxModelUploadModal
@@ -255,6 +292,7 @@ export function OnnxModelsPage() {
         <OnnxModelTestModal
           modelId={testModelId}
           onClose={() => setTestModelId(null)}
+          onViewGallery={() => setActiveTab('gallery')}
         />
       )}
     </div>

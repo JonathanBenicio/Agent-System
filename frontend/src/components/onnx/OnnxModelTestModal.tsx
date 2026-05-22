@@ -1,14 +1,15 @@
 import { useState, useCallback, useRef } from 'react'
-import { X, Play, Upload, ImageIcon, Clock, Maximize2 } from 'lucide-react'
+import { X, Play, Upload, ImageIcon, CheckCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTestOnnxModel } from '@/hooks/useOnnxModels'
 
 interface Props {
   modelId: string
   onClose: () => void
+  onViewGallery?: () => void
 }
 
-export function OnnxModelTestModal({ modelId, onClose }: Props) {
+export function OnnxModelTestModal({ modelId, onClose, onViewGallery }: Props) {
   const testMutation = useTestOnnxModel()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -42,8 +43,57 @@ export function OnnxModelTestModal({ modelId, onClose }: Props) {
     testMutation.mutate({ id: modelId, formData })
   }
 
+  if (testMutation.data) {
+    const jobId = testMutation.data.jobId
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md animate-in fade-in duration-200">
+        <div className="relative w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl p-6 flex flex-col items-center text-center gap-5">
+          <div className="flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+            <CheckCircle className="w-8 h-8 animate-bounce" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-zinc-100">Tarefa Enfileirada!</h2>
+            <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
+              O processamento foi iniciado em segundo plano no servidor para evitar timeouts de gateway.
+            </p>
+          </div>
+          <div className="w-full bg-zinc-950/60 border border-zinc-800/80 rounded-xl p-4 text-left">
+            <div className="text-xs text-zinc-500 font-semibold tracking-wider uppercase">ID da Tarefa:</div>
+            <div className="text-sm font-mono text-cyan-400 truncate mt-1 select-all" title={jobId}>{jobId}</div>
+            
+            <div className="text-xs text-zinc-500 font-semibold tracking-wider uppercase mt-3.5">Status:</div>
+            <div className="inline-flex items-center gap-2 mt-1 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+              Na Fila / Pendente
+            </div>
+          </div>
+          <p className="text-xs text-zinc-500 leading-relaxed">
+            Você pode fechar esta tela e continuar navegando pelo sistema. Um pop-up global avisará assim que a imagem for gerada.
+          </p>
+          <div className="flex w-full gap-3 mt-2">
+            <button
+              onClick={() => {
+                onClose()
+                if (onViewGallery) onViewGallery()
+              }}
+              className="flex-1 px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white text-sm font-medium transition-all shadow-lg shadow-cyan-500/20 active:scale-95"
+            >
+              Ver na Galeria
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2.5 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-750 text-zinc-300 text-sm font-medium transition-all active:scale-95"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-zinc-900 border border-zinc-800 rounded-2xl shadow-2xl">
         {/* Header */}
         <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 bg-zinc-900/95 backdrop-blur border-b border-zinc-800 rounded-t-2xl">
@@ -60,7 +110,7 @@ export function OnnxModelTestModal({ modelId, onClose }: Props) {
           {/* Upload test image */}
           <div
             className={cn(
-              'flex flex-col items-center justify-center gap-3 p-6 rounded-xl border-2 border-dashed transition-all cursor-pointer',
+              'flex flex-col items-center justify-center gap-3 p-8 rounded-xl border-2 border-dashed transition-all cursor-pointer',
               dragOver
                 ? 'border-cyan-400 bg-cyan-500/5'
                 : file
@@ -72,9 +122,12 @@ export function OnnxModelTestModal({ modelId, onClose }: Props) {
             onDrop={handleDrop}
             onClick={() => fileInputRef.current?.click()}
           >
-            <Upload className={cn('w-6 h-6', file ? 'text-emerald-400' : 'text-zinc-500')} />
-            <p className="text-sm text-zinc-400">
+            <Upload className={cn('w-8 h-8 transition-transform group-hover:-translate-y-0.5', file ? 'text-emerald-400' : 'text-zinc-500')} />
+            <p className="text-sm font-medium text-zinc-300">
               {file ? file.name : 'Arraste uma imagem de teste ou clique para selecionar'}
+            </p>
+            <p className="text-xs text-zinc-500">
+              PNG, JPG, JPEG de qualquer tamanho. O processamento ocorrerá sequencialmente.
             </p>
             <input
               ref={fileInputRef}
@@ -87,72 +140,37 @@ export function OnnxModelTestModal({ modelId, onClose }: Props) {
           </div>
 
           {/* Side-by-side preview */}
-          {(preview || testMutation.data?.outputImage) && (
-            <div className="grid grid-cols-2 gap-4">
-              {/* Input */}
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
-                  <ImageIcon className="w-3.5 h-3.5" /> Input
-                </div>
-                {preview && (
-                  <div className="rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950/50">
-                    <img src={preview} alt="Input" className="w-full h-auto object-contain max-h-64" />
-                  </div>
-                )}
+          {preview && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                <ImageIcon className="w-3.5 h-3.5" /> Preview da Imagem de Entrada
               </div>
-
-              {/* Output */}
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-medium text-zinc-500">
-                  <Maximize2 className="w-3.5 h-3.5" /> Output
-                </div>
-                {testMutation.data?.outputImage ? (
-                  <div className="rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950/50">
-                    <img
-                      src={`data:image/png;base64,${testMutation.data.outputImage}`}
-                      alt="Output"
-                      className="w-full h-auto object-contain max-h-64"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-32 rounded-xl border border-zinc-800 bg-zinc-950/30">
-                    <p className="text-xs text-zinc-600">Aguardando resultado...</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Metrics */}
-          {testMutation.data && (
-            <div className="flex flex-wrap gap-3">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800/60 text-xs text-zinc-400">
-                <Clock className="w-3.5 h-3.5 text-cyan-400" />
-                {testMutation.data.latencyMs}ms
-              </div>
-              <div className="px-3 py-1.5 rounded-lg bg-zinc-800/60 text-xs text-zinc-400">
-                Input: [{testMutation.data.inputShape.join(', ')}]
-              </div>
-              <div className="px-3 py-1.5 rounded-lg bg-zinc-800/60 text-xs text-zinc-400">
-                Output: [{testMutation.data.outputShape.join(', ')}]
+              <div className="rounded-xl overflow-hidden border border-zinc-800 bg-zinc-950/50 p-2 flex justify-center max-h-80">
+                <img src={preview} alt="Input Preview" className="w-full h-auto object-contain max-h-72 rounded-lg" />
               </div>
             </div>
           )}
 
           {/* Error */}
           {testMutation.isError && (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium">
               {testMutation.error?.message || 'Falha ao executar teste.'}
             </div>
           )}
 
           {/* Run button */}
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-zinc-800 border border-zinc-700 hover:bg-zinc-750 text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-all"
+            >
+              Cancelar
+            </button>
             <button
               onClick={handleTest}
               disabled={!file || testMutation.isPending}
               className={cn(
-                'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all',
+                'flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all active:scale-95',
                 !file || testMutation.isPending
                   ? 'bg-zinc-700 text-zinc-500 cursor-not-allowed'
                   : 'bg-gradient-to-r from-cyan-600 to-teal-600 text-white hover:from-cyan-500 hover:to-teal-500 shadow-lg shadow-cyan-500/20'
@@ -161,7 +179,7 @@ export function OnnxModelTestModal({ modelId, onClose }: Props) {
               {testMutation.isPending ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Processando...
+                  Enfileirando...
                 </>
               ) : (
                 <>
@@ -176,3 +194,4 @@ export function OnnxModelTestModal({ modelId, onClose }: Props) {
     </div>
   )
 }
+

@@ -442,7 +442,7 @@ import type {
   OnnxModelSummary,
   OnnxModelDetail,
   OnnxInspectResult,
-  OnnxTestResult,
+  OnnxJobsPagedResponse,
 } from '@/types/api'
 
 export const onnxModelApi = {
@@ -452,7 +452,15 @@ export const onnxModelApi = {
   update: (id: string, data: Partial<OnnxModelDetail>) => put<OnnxModelDetail>(`/api/onnx/models/${encodeURIComponent(id)}`, data),
   delete: (id: string) => del(`/api/onnx/models/${encodeURIComponent(id)}`),
   inspect: (id: string) => post<OnnxInspectResult>(`/api/onnx/models/${encodeURIComponent(id)}/inspect`),
-  test: (id: string, formData: FormData) => postForm<OnnxTestResult>(`/api/onnx/models/${encodeURIComponent(id)}/test`, formData),
+  test: (id: string, formData: FormData) => postForm<{ jobId: string; status: string }>(`/api/onnx/models/${encodeURIComponent(id)}/test`, formData),
+  listJobs: (modelId?: string, page = 1, pageSize = 10) => {
+    const params = new URLSearchParams()
+    if (modelId) params.set('modelId', modelId)
+    params.set('page', page.toString())
+    params.set('pageSize', pageSize.toString())
+    return get<OnnxJobsPagedResponse>(`/api/onnx/models/jobs?${params.toString()}`)
+  },
+  deleteJob: (jobId: string) => del<void>(`/api/onnx/models/jobs/${encodeURIComponent(jobId)}`),
 }
 
 export { ApiError }
