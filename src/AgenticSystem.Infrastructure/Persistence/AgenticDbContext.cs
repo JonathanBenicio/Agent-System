@@ -67,6 +67,7 @@ public class AgenticDbContext : DbContext
     public DbSet<LLMProviderApiKeyEntity> ProviderApiKeys => Set<LLMProviderApiKeyEntity>();
     public DbSet<CustomOnnxModelEntity> CustomOnnxModels => Set<CustomOnnxModelEntity>();
     public DbSet<CustomOnnxModelFileEntity> CustomOnnxModelFiles => Set<CustomOnnxModelFileEntity>();
+    public DbSet<CustomOnnxInferenceJobEntity> CustomOnnxInferenceJobs => Set<CustomOnnxInferenceJobEntity>();
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

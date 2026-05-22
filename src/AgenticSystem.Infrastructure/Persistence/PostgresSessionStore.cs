@@ -70,7 +70,47 @@ public class PostgresSessionStore : ISessionStore
 
         try
         {
-            return JsonSerializer.Deserialize<SessionData>(json, JsonOptions);
+            var session = JsonSerializer.Deserialize<SessionData>(json, JsonOptions);
+            if (session is not null)
+            {
+                // Carregar resumo executivo se houver
+                var summaryEntity = await db.SessionSummaries
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.SessionId == sessionId, ct);
+
+                if (summaryEntity is not null)
+                {
+                    session.Summary = new SessionSummary
+                    {
+                        SessionId = summaryEntity.SessionId,
+                        Summary = summaryEntity.Summary,
+                        TopicsDiscussed = JsonSerializer.Deserialize<List<string>>(summaryEntity.TopicsJson, JsonOptions) ?? [],
+                        AgentsUsed = JsonSerializer.Deserialize<List<string>>(summaryEntity.AgentsJson, JsonOptions) ?? [],
+                        EventCount = summaryEntity.EventCount,
+                        CreatedAt = summaryEntity.CreatedAt,
+                        SessionDuration = summaryEntity.SessionDuration
+                    };
+                }
+
+                // Carregar insights se houver
+                var insightEntity = await db.SessionInsights
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(i => i.SessionId == sessionId, ct);
+
+                if (insightEntity is not null)
+                {
+                    session.Insights = new SessionInsights
+                    {
+                        SessionId = insightEntity.SessionId,
+                        Facts = JsonSerializer.Deserialize<List<string>>(insightEntity.FactsJson, JsonOptions) ?? [],
+                        Decisions = JsonSerializer.Deserialize<List<string>>(insightEntity.DecisionsJson, JsonOptions) ?? [],
+                        Preferences = JsonSerializer.Deserialize<List<string>>(insightEntity.PreferencesJson, JsonOptions) ?? [],
+                        ActionItems = JsonSerializer.Deserialize<List<string>>(insightEntity.ActionItemsJson, JsonOptions) ?? []
+                    };
+                }
+            }
+
+            return session;
         }
         catch (JsonException ex)
         {
@@ -90,7 +130,35 @@ public class PostgresSessionStore : ISessionStore
             .Select(record => record.DataJson)
             .ToListAsync(ct);
 
-        return DeserializeSessions(jsonRows);
+        var sessions = DeserializeSessions(jsonRows);
+        if (sessions.Count > 0)
+        {
+            var sessionIds = sessions.Select(s => s.Id).ToList();
+            var summaries = await db.SessionSummaries
+                .AsNoTracking()
+                .Where(s => sessionIds.Contains(s.SessionId))
+                .ToListAsync(ct);
+
+            foreach (var session in sessions)
+            {
+                var summaryEntity = summaries.FirstOrDefault(s => s.SessionId == session.Id);
+                if (summaryEntity is not null)
+                {
+                    session.Summary = new SessionSummary
+                    {
+                        SessionId = summaryEntity.SessionId,
+                        Summary = summaryEntity.Summary,
+                        TopicsDiscussed = JsonSerializer.Deserialize<List<string>>(summaryEntity.TopicsJson, JsonOptions) ?? [],
+                        AgentsUsed = JsonSerializer.Deserialize<List<string>>(summaryEntity.AgentsJson, JsonOptions) ?? [],
+                        EventCount = summaryEntity.EventCount,
+                        CreatedAt = summaryEntity.CreatedAt,
+                        SessionDuration = summaryEntity.SessionDuration
+                    };
+                }
+            }
+        }
+
+        return sessions;
     }
 
     public async Task<IReadOnlyList<SessionData>> GetByTenantAsync(string tenantId, string? userId = null, int maxResults = 10, CancellationToken ct = default)
@@ -111,7 +179,35 @@ public class PostgresSessionStore : ISessionStore
             .Select(record => record.DataJson)
             .ToListAsync(ct);
 
-        return DeserializeSessions(jsonRows);
+        var sessions = DeserializeSessions(jsonRows);
+        if (sessions.Count > 0)
+        {
+            var sessionIds = sessions.Select(s => s.Id).ToList();
+            var summaries = await db.SessionSummaries
+                .AsNoTracking()
+                .Where(s => sessionIds.Contains(s.SessionId))
+                .ToListAsync(ct);
+
+            foreach (var session in sessions)
+            {
+                var summaryEntity = summaries.FirstOrDefault(s => s.SessionId == session.Id);
+                if (summaryEntity is not null)
+                {
+                    session.Summary = new SessionSummary
+                    {
+                        SessionId = summaryEntity.SessionId,
+                        Summary = summaryEntity.Summary,
+                        TopicsDiscussed = JsonSerializer.Deserialize<List<string>>(summaryEntity.TopicsJson, JsonOptions) ?? [],
+                        AgentsUsed = JsonSerializer.Deserialize<List<string>>(summaryEntity.AgentsJson, JsonOptions) ?? [],
+                        EventCount = summaryEntity.EventCount,
+                        CreatedAt = summaryEntity.CreatedAt,
+                        SessionDuration = summaryEntity.SessionDuration
+                    };
+                }
+            }
+        }
+
+        return sessions;
     }
 
     public async Task DeleteAsync(string sessionId, CancellationToken ct = default)

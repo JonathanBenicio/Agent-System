@@ -43,6 +43,9 @@ builder.Services.AddSingleton<AgenticSystem.Core.Interfaces.IEventPublisher, Age
 
 // Register SignalR-based workflow event broadcaster
 builder.Services.AddSingleton<AgenticSystem.Core.Interfaces.IWorkflowEventBroadcaster, AgenticSystem.Api.Hubs.SignalRWorkflowEventBroadcaster>();
+
+// Register SignalR-based ONNX event broadcaster
+builder.Services.AddSingleton<AgenticSystem.Core.Interfaces.IOnnxEventBroadcaster, AgenticSystem.Api.Hubs.SignalROnnxEventBroadcaster>();
 // builder.Services.AddMcpServer()
 //     .WithHttpTransport(options =>
 //     {
@@ -315,6 +318,7 @@ app.MapHub<ChatHub>("/hubs/chat").RequireAuthorization();
 app.MapHub<GatewayHub>("/hubs/gateway").RequireAuthorization();
 app.MapHub<ExternalAgentHub>("/hubs/external-agent").RequireAuthorization();
 app.MapHub<WorkflowHub>("/hubs/workflow").RequireAuthorization();
+app.MapHub<OnnxHub>("/hubs/onnx").RequireAuthorization();
 
 app.MapMethods("/health", new[] { "GET", "HEAD" }, () => new { Status = "Healthy", Timestamp = DateTime.UtcNow }).AllowAnonymous();
 app.MapGet("/version", () => new { Version = "1.0.0", Build = DateTime.UtcNow.ToString("yyyyMMdd-HHmm") });

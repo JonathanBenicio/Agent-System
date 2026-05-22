@@ -129,6 +129,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IEmbeddingMigrationManager, EmbeddingMigrationManager>();
 
         services.AddSingleton<IOnnxSessionCache, OnnxSessionCache>();
+        services.AddSingleton<IOnnxInferenceQueue, OnnxInferenceQueue>();
 
         // ONNX Runtime Integration (Task 1.2 & 3.3)
         if (System.IO.File.Exists("fastpath_model.onnx"))

@@ -692,4 +692,23 @@ public class CustomOnnxModelFileEntity : ITenantEntity
     public CustomOnnxModelEntity? Model { get; set; }
 }
 
+/// <summary>
+/// Represents a background ONNX inference job for async execution and results gallery.
+/// </summary>
+public class CustomOnnxInferenceJobEntity : ITenantEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string TenantId { get; set; } = "default";
+    public string ModelId { get; set; } = string.Empty;
+    public string Status { get; set; } = "Pending"; // Pending, Processing, Completed, Failed
+    public string? InputImagePath { get; set; }
+    public string? OutputImagePath { get; set; }
+    public long? LatencyMs { get; set; }
+    public string? ErrorMessage { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? CompletedAt { get; set; }
+
+    public CustomOnnxModelEntity? Model { get; set; }
+}
+
 

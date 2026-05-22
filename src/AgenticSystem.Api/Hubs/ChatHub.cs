@@ -121,38 +121,6 @@ public class ChatHub : Hub
             summary = session.Summary != null ? SessionDtoMapper.ToSummary(session.Summary) : null,
             insights = session.Insights != null ? SessionDtoMapper.ToInsights(session.Insights) : null
         });
-
-        foreach (var evt in session.Events.OrderBy(e => e.Timestamp))
-        {
-            var memoryInjected = evt.Context.TryGetValue("memory_injected", out var mi) && mi is bool b && b;
-
-            await Clients.Caller.SendAsync("ReceiveMessage", new
-            {
-                content = evt.UserInput,
-                agentName = (string?)null,
-                agentTier = (string?)null,
-                actions = (object?)null,
-                tools = (object?)null,
-                success = true,
-                sessionId = evt.SessionId,
-                timestamp = evt.Timestamp,
-                isHistory = true,
-                memoryInjected
-            });
-
-            await Clients.Caller.SendAsync("ReceiveMessage", new
-            {
-                content = evt.AgentResponse,
-                agentName = evt.AgentName,
-                agentTier = evt.AgentTier.ToString(),
-                actions = evt.ActionsPerformed.Count > 0 ? evt.ActionsPerformed : null,
-                tools = evt.ToolsUsed.Count > 0 ? evt.ToolsUsed : null,
-                success = true,
-                sessionId = evt.SessionId,
-                timestamp = evt.Timestamp,
-                isHistory = true
-            });
-        }
     }
 
     public Task SendMessageStream(

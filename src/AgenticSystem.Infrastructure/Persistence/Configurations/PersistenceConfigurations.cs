@@ -919,3 +919,32 @@ public class CustomOnnxModelFileConfiguration : IEntityTypeConfiguration<CustomO
     }
 }
 
+public class CustomOnnxInferenceJobConfiguration : IEntityTypeConfiguration<CustomOnnxInferenceJobEntity>
+{
+    public void Configure(EntityTypeBuilder<CustomOnnxInferenceJobEntity> builder)
+    {
+        builder.ToTable("custom_onnx_inference_jobs");
+
+        builder.HasKey(j => j.Id);
+        builder.Property(j => j.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(j => j.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(j => j.ModelId).HasColumnName("model_id").HasMaxLength(64).IsRequired();
+        builder.Property(j => j.Status).HasColumnName("status").HasMaxLength(32).IsRequired();
+        builder.Property(j => j.InputImagePath).HasColumnName("input_image_path").HasMaxLength(512);
+        builder.Property(j => j.OutputImagePath).HasColumnName("output_image_path").HasMaxLength(512);
+        builder.Property(j => j.LatencyMs).HasColumnName("latency_ms");
+        builder.Property(j => j.ErrorMessage).HasColumnName("error_message");
+        builder.Property(j => j.CreatedAt).HasColumnName("created_at");
+        builder.Property(j => j.CompletedAt).HasColumnName("completed_at");
+
+        builder.HasIndex(j => j.TenantId).HasDatabaseName("ix_custom_onnx_inference_jobs_tenant_id");
+        builder.HasIndex(j => j.ModelId).HasDatabaseName("ix_custom_onnx_inference_jobs_model_id");
+        builder.HasIndex(j => j.Status).HasDatabaseName("ix_custom_onnx_inference_jobs_status");
+
+        builder.HasOne(j => j.Model)
+            .WithMany()
+            .HasForeignKey(j => j.ModelId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+

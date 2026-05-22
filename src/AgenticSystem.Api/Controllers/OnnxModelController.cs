@@ -1,3 +1,4 @@
+using AgenticSystem.Core.Services.Ml;
 using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.Authorization;
@@ -17,13 +18,19 @@ namespace AgenticSystem.Api.Controllers;
 public class OnnxModelController : ControllerBase
 {
     private readonly AgenticDbContext _db;
+    private readonly IOnnxInferenceQueue _queue;
     private readonly ILogger<OnnxModelController> _logger;
     private readonly IWebHostEnvironment _env;
     private const long MaxDbSize = 50 * 1024 * 1024; // 50 MB
 
-    public OnnxModelController(AgenticDbContext db, ILogger<OnnxModelController> logger, IWebHostEnvironment env)
+    public OnnxModelController(
+        AgenticDbContext db,
+        IOnnxInferenceQueue queue,
+        ILogger<OnnxModelController> logger,
+        IWebHostEnvironment env)
     {
         _db = db;
+        _queue = queue;
         _logger = logger;
         _env = env;
     }
@@ -278,7 +285,7 @@ public class OnnxModelController : ControllerBase
         }
     }
 
-    /// <summary>POST /api/onnx/models/{id}/test — quick test with image</summary>
+    /// <summary>POST /api/onnx/models/{id}/test — quick test with image (asynchronous)</summary>
     [HttpPost("{id}/test")]
     public async Task<IActionResult> TestModel(string id, [FromForm] IFormFile? image, [FromForm] string? imageData, CancellationToken ct)
     {
@@ -303,53 +310,141 @@ public class OnnxModelController : ControllerBase
 
         try
         {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var tenantId = GetTenantId();
+            var jobId = Guid.NewGuid().ToString();
 
-            using var img = SixLabors.ImageSharp.Image.Load<SixLabors.ImageSharp.PixelFormats.Rgb24>(imageBytes);
-            img.Mutate(x => x.Resize(entity.InputWidth, entity.InputHeight));
+            var webRoot = _env.WebRootPath ?? "wwwroot";
+            var uploadsDir = Path.Combine(webRoot, "onnx-uploads", tenantId);
+            Directory.CreateDirectory(uploadsDir);
 
-            var tensor = ImageToTensor(img, entity);
+            var relativeInputPath = $"/onnx-uploads/{tenantId}/{jobId}_input.png";
+            var absoluteInputPath = Path.Combine(webRoot, relativeInputPath.TrimStart('/'));
 
-            var modelBytes = !string.IsNullOrEmpty(entity.ModelFileName) && System.IO.File.Exists(entity.ModelFileName)
-                ? null
-                : await GetModelBytesAsync(entity);
-            using var session = CreateSession(entity.ModelFileName, modelBytes);
-            var inputs = new List<NamedOnnxValue>
+            await System.IO.File.WriteAllBytesAsync(absoluteInputPath, imageBytes, ct);
+
+            // Create background job entity in DB
+            var jobEntity = new CustomOnnxInferenceJobEntity
             {
-                NamedOnnxValue.CreateFromTensor(entity.InputNodeName, tensor)
+                Id = jobId,
+                TenantId = tenantId,
+                ModelId = id,
+                Status = "Pending",
+                InputImagePath = relativeInputPath,
+                CreatedAt = DateTime.UtcNow
             };
 
-            using var results = session.Run(inputs);
-            var outputTensor = results.First(r => r.Name == entity.OutputNodeName).AsTensor<float>();
-            sw.Stop();
+            _db.CustomOnnxInferenceJobs.Add(jobEntity);
+            await _db.SaveChangesAsync(ct);
 
-            string? outputImageBase64 = null;
-            if (entity.OutputFormat == "image")
-            {
-                var outputImg = TensorToImage(outputTensor, entity);
-                using var outMs = new MemoryStream();
-                await outputImg.SaveAsPngAsync(outMs, ct);
-                outputImageBase64 = Convert.ToBase64String(outMs.ToArray());
-            }
+            // Enqueue job request
+            var jobRequest = new OnnxInferenceJobRequest(
+                jobId,
+                tenantId,
+                id,
+                relativeInputPath
+            );
 
-            return Ok(new
-            {
-                outputImage = outputImageBase64,
-                latencyMs = sw.ElapsedMilliseconds,
-                inputShape = new[] { 1, entity.Channels, entity.InputHeight, entity.InputWidth },
-                outputShape = outputTensor.Dimensions.ToArray()
-            });
-        }
-        catch (OnnxRuntimeException ex)
-        {
-            _logger.LogError(ex, "ONNX test error for model {Id}", id);
-            return BadRequest(new { error = $"ONNX Runtime error: {ex.Message}" });
+            await _queue.EnqueueJobAsync(jobRequest, ct);
+
+            _logger.LogInformation("Enqueued ONNX inference job {JobId} for Model {ModelId} (Tenant {TenantId})", jobId, id, tenantId);
+
+            return Accepted(new { jobId, status = "Pending" });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Test error for model {Id}", id);
-            return BadRequest(new { error = $"Test failed: {ex.Message}" });
+            _logger.LogError(ex, "Failed to enqueue ONNX test job for model {Id}", id);
+            return BadRequest(new { error = $"Enqueue failed: {ex.Message}" });
         }
+    }
+
+    /// <summary>GET /api/onnx/models/jobs — list background jobs with pagination</summary>
+    [HttpGet("jobs")]
+    public async Task<IActionResult> ListJobs(
+        [FromQuery] string? modelId = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 10,
+        CancellationToken ct = default)
+    {
+        if (page < 1) page = 1;
+        if (pageSize < 1 || pageSize > 100) pageSize = 10;
+
+        var query = _db.CustomOnnxInferenceJobs
+            .Where(j => j.TenantId == GetTenantId());
+
+        if (!string.IsNullOrEmpty(modelId))
+        {
+            query = query.Where(j => j.ModelId == modelId);
+        }
+
+        var totalItems = await query.CountAsync(ct);
+
+        var jobs = await query
+            .OrderByDescending(j => j.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(j => new
+            {
+                j.Id,
+                j.TenantId,
+                j.ModelId,
+                modelName = j.Model != null ? j.Model.Name : "Unknown",
+                j.Status,
+                j.InputImagePath,
+                j.OutputImagePath,
+                j.LatencyMs,
+                j.ErrorMessage,
+                j.CreatedAt,
+                j.CompletedAt
+            })
+            .ToListAsync(ct);
+
+        return Ok(new
+        {
+            jobs,
+            page,
+            pageSize,
+            totalItems,
+            totalPages = (int)Math.Ceiling((double)totalItems / pageSize)
+        });
+    }
+
+    /// <summary>DELETE /api/onnx/models/jobs/{jobId} — physically and logically delete job results</summary>
+    [HttpDelete("jobs/{jobId}")]
+    public async Task<IActionResult> DeleteJob(string jobId, CancellationToken ct)
+    {
+        var job = await _db.CustomOnnxInferenceJobs
+            .FirstOrDefaultAsync(j => j.Id == jobId && j.TenantId == GetTenantId(), ct);
+
+        if (job == null) return NotFound();
+
+        var webRoot = _env.WebRootPath ?? "wwwroot";
+
+        // physically delete input image
+        if (!string.IsNullOrEmpty(job.InputImagePath))
+        {
+            var absoluteInputPath = Path.Combine(webRoot, job.InputImagePath.TrimStart('/'));
+            if (System.IO.File.Exists(absoluteInputPath))
+            {
+                try { System.IO.File.Delete(absoluteInputPath); }
+                catch (Exception ex) { _logger.LogError(ex, "Failed to physically delete job input image {Path}", absoluteInputPath); }
+            }
+        }
+
+        // physically delete output image
+        if (!string.IsNullOrEmpty(job.OutputImagePath))
+        {
+            var absoluteOutputPath = Path.Combine(webRoot, job.OutputImagePath.TrimStart('/'));
+            if (System.IO.File.Exists(absoluteOutputPath))
+            {
+                try { System.IO.File.Delete(absoluteOutputPath); }
+                catch (Exception ex) { _logger.LogError(ex, "Failed to physically delete job output image {Path}", absoluteOutputPath); }
+            }
+        }
+
+        _db.CustomOnnxInferenceJobs.Remove(job);
+        await _db.SaveChangesAsync(ct);
+
+        return NoContent();
     }
 
     private static async Task<byte[]?> GetModelBytesAsync(CustomOnnxModelEntity entity)

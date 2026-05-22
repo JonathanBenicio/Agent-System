@@ -329,6 +329,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddHostedService<SelfImprovementBackgroundJob>();
         services.AddHostedService<ExternalQuotaSyncHostedService>();
+        services.AddHostedService<OnnxInferenceBackgroundWorker>();
         
         var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
         if (!string.Equals(storageMode, "SQLite", StringComparison.OrdinalIgnoreCase) && 
