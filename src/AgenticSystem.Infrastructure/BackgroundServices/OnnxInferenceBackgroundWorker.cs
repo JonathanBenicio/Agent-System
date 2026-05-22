@@ -42,7 +42,7 @@ public class OnnxInferenceBackgroundWorker : BackgroundService
         // 1. Resiliência: Recuperação de jobs interrompidos (Pending/Processing) na inicialização
         try
         {
-            await ReenqueueInterruptedJobsAsync(CancellationToken.None);
+            await ReenqueueInterruptedJobsAsync(stoppingToken);
         }
         catch (Exception ex)
         {
@@ -50,7 +50,7 @@ public class OnnxInferenceBackgroundWorker : BackgroundService
         }
 
         // 2. Limpeza física inicial de resultados antigos (> 7 dias)
-        await PurgeOldResultsAsync(CancellationToken.None);
+        await PurgeOldResultsAsync(stoppingToken);
         var lastPurgeTime = DateTime.UtcNow;
 
         // 3. Loop principal de consumo sequencial (proteção de CPU do host)
@@ -82,7 +82,7 @@ public class OnnxInferenceBackgroundWorker : BackgroundService
         _logger.LogInformation("🛑 ONNX Inference Background Worker stopped.");
     }
 
-    private async Task ReenqueueInterruptedJobsAsync(CancellationToken ct)
+    internal async Task ReenqueueInterruptedJobsAsync(CancellationToken ct)
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();

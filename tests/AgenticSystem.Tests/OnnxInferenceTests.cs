@@ -103,18 +103,8 @@ public class OnnxInferenceTests
         var worker = new OnnxInferenceBackgroundWorker(serviceProvider, queue, broadcaster, logger);
 
         // Act
-        // Cancel token in StartAsync immediately to prevent worker loop blocking, running only the recovery stage
-        using var cts = new CancellationTokenSource();
-        cts.Cancel();
-
-        try
-        {
-            await worker.StartAsync(cts.Token);
-        }
-        catch (OperationCanceledException)
-        {
-            // Expected cancellation from Token during StartAsync
-        }
+        // Call the internal re-enqueue recovery method directly to test the robust recovery logic deterministically.
+        await worker.ReenqueueInterruptedJobsAsync(CancellationToken.None);
 
         // Assert
         // Verify queue.EnqueueJobAsync was called for job1 and job2
