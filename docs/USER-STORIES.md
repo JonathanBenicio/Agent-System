@@ -2349,3 +2349,27 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 - [ ] Mecanismo de re-indexação inteligente que move chunks stale ou consolidados entre as camadas de memória.
 - [ ] Painel de monitoramento visual do pipeline de triagem com status do routing e estatísticas de destinação.
 
+---
+
+### Épico 12: Multi-Provider LLM Sychronization & Integrity (Issue #94)
+
+#### US-51 — Inspeção Automática de Modelos LLM no Login
+
+**Como** usuário autenticado do sistema,  
+**quero** que a plataforma execute automaticamente em background a inspeção e descoberta de modelos LLM das chaves ativas associadas ao meu tenant,  
+**para que** a lista de modelos disponíveis na interface esteja sempre atualizada com as capacidades reais de cada provedor no momento do acesso.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `AuthController` (Backend Trigger) · `LlmCatalogUpdated` (SignalR Hub Notification) |
+| API / Serviço | `ILLMAdministrationService` · `ILLMProviderApiKeyService` · `IHubContext<ChatHub>` / `IHubContext<GatewayHub>` |
+| Status | ⏳ Planejado (ADR-021, Issue #94) |
+
+**Critérios de Aceite:**
+- [ ] O serviço `ILLMProviderApiKeyService` deve ser registrado no DI em `ServiceCollectionExtensions.cs` como Scoped.
+- [ ] O controller `AuthController.Login` deve injetar `IServiceScopeFactory` e disparar a descoberta em segundo plano via `Task.Run` sem bloquear o login HTTP.
+- [ ] A varredura de chaves armazenadas em banco deve ser restrita apenas ao **tenant do usuário logado**, mantendo o isolamento de dados entre os inquilinos.
+- [ ] As chaves ativas de infraestrutura global em `AgenticSystemSettings` devem ser inspecionadas se seus respectivos provedores estiverem ativos.
+- [ ] Notificar erros e falhas nas chamadas a APIs de LLM externas de forma isolada nos logs do Serilog, impedindo que a falha de um provedor afete os demais.
+- [ ] Disparar um evento SignalR `LlmCatalogUpdated` direcionado ao grupo do tenant no sucesso da varredura, notificando o frontend para atualizar o catálogo de modelos disponíveis dinamicamente em tempo real.
+

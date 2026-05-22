@@ -144,6 +144,11 @@ public class ChatHub : Hub
     public override async Task OnConnectedAsync()
     {
         _logger.LogInformation("🔌 Client connected: {ConnectionId}", Context.ConnectionId);
+        
+        // Add connection to tenant group for targeted notifications (like LlmCatalogUpdated)
+        var tenantId = _tenantContextAccessor.Current?.TenantId ?? Tenant.DefaultTenantId;
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}");
+        
         await Clients.Caller.SendAsync("Connected", new
         {
             connectionId = Context.ConnectionId,

@@ -320,6 +320,7 @@ Estamos evoluindo de um núcleo agentic robusto para uma plataforma especializad
 | **2. FinOps & Quotas** | Monitoramento em tempo real de custos e limites por tenant/agente | ⏳ Planejado |
 | **3. Protocol Hosting** | Exposição padronizada via A2A e AgUI para ecossistemas externos | ⏳ Planejado |
 | **4. Evaluation Suite** | Medição contínua de qualidade (Grounding, Fluency) via Golden Sets | ⏳ Planejado |
+| **5. Automatic LLM Sync** | Descoberta automática de modelos LLM no Login por Tenant | 🚧 Em Progresso (ADR-021, Issue #94) |
 
 > Plano mestre detalhado: [plan/master-roadmap-2026.md](plan/master-roadmap-2026.md)
 
