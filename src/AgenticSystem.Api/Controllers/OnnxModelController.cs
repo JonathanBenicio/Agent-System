@@ -99,6 +99,13 @@ public class OnnxModelController : ControllerBase
             return BadRequest(new { error = "Only .onnx files are accepted." });
 
         var tenantId = GetTenantId();
+
+        var exists = await _db.CustomOnnxModels.AnyAsync(m => m.TenantId == tenantId && m.Name == name, ct);
+        if (exists)
+        {
+            return BadRequest(new { error = $"A model with the name '{name}' already exists." });
+        }
+
         var entity = new CustomOnnxModelEntity
         {
             TenantId = tenantId,
