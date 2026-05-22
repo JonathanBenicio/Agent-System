@@ -63,6 +63,7 @@ Documento canônico de arquitetura atual:
 | [architecture/adr/020-multi-provider-api-keys.md](architecture/adr/020-multi-provider-api-keys.md) | ADR 020: Arquitetura de Múltiplas API Keys por Provedor LLM |
 | [architecture/adr/022-unified-chat-integration-architecture.md](architecture/adr/022-unified-chat-integration-architecture.md) | ADR 022: Arquitetura de Integração Unificada do Chat (12 Pilares) |
 | [architecture/adr/023-async-onnx-processing.md](architecture/adr/023-async-onnx-processing.md) | ADR 023: Processamento Assíncrono de Inferência ONNX e Galeria |
+| [architecture/adr/024-backend-architectural-refactoring.md](architecture/adr/024-backend-architectural-refactoring.md) | ADR 024: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
 | [../plan/adr-020-protocol-hosting-standardization.md](../plan/adr-020-protocol-hosting-standardization.md) | ADR 020: Padronização e Exposição de Protocolos (A2A e AgUI) |
 | [../plan/adr-021-evaluation-framework.md](../plan/adr-021-evaluation-framework.md) | ADR 021: Framework de Avaliação Contínua e Golden Sets |
 
@@ -113,6 +114,8 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 | [plan/multi-provider-api-keys.md](plan/multi-provider-api-keys.md) | Roadmap/Plan: Multi-Provider API Keys |
 | [plan/unified-chat-integration.md](plan/unified-chat-integration.md) | Roadmap/Plan: Integração Unificada do Chat (12 Pilares) |
 | [plan/async-onnx-processing-plan.md](plan/async-onnx-processing-plan.md) | Roadmap/Plan: Processamento Assíncrono de Inferência ONNX e Galeria |
+| [plan/backend-testing-roadmap.md](plan/backend-testing-roadmap.md) | Roadmap/Plan: Plano e Roteiro de Testes do Backend (.NET 10) |
+| [plan/architectural-refactoring-plan.md](plan/architectural-refactoring-plan.md) | Roadmap/Plan: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
 | [planejamento/AI_Capabilities_Gaps.md](planejamento/AI_Capabilities_Gaps.md) | Diagnóstico vivo de gaps e oportunidades arquiteturais |
 | [planejamento/AI_Advanced_Capabilities_Roadmap.md](planejamento/AI_Advanced_Capabilities_Roadmap.md) | Roadmap futuro para capacidades avançadas |
 | [planejamento/framework-first-migration-plan.md](planejamento/framework-first-migration-plan.md) | Resumo histórico da migração framework-first (concluída) |

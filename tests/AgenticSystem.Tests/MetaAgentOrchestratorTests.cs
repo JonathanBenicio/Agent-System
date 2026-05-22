@@ -15,7 +15,7 @@ public class MetaAgentOrchestratorTests
     private readonly ILLMRuntimeContextAccessor _llmRuntimeContextAccessor;
     private readonly IAgentFactory _agentFactory;
     private readonly ISessionManager _sessionManager;
-    private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
+    private readonly ISessionLifecycleCoordinator _sessionCoordinator;
     private readonly IContextAnalyzer _contextAnalyzer;
     private readonly ISmartRouter _smartRouter;
     private readonly ILogger<MetaAgentOrchestrator> _logger;
@@ -28,13 +28,16 @@ public class MetaAgentOrchestratorTests
         _llmRuntimeContextAccessor = Substitute.For<ILLMRuntimeContextAccessor>();
         _agentFactory = Substitute.For<IAgentFactory>();
         _sessionManager = Substitute.For<ISessionManager>();
-        _runtimeCoordinator = Substitute.For<IAgentRuntimeCoordinator>();
+        _sessionCoordinator = Substitute.For<ISessionLifecycleCoordinator>();
         _contextAnalyzer = Substitute.For<IContextAnalyzer>();
         _smartRouter = Substitute.For<ISmartRouter>();
         _logger = Substitute.For<ILogger<MetaAgentOrchestrator>>();
 
-        _runtimeCoordinator.BeginExecutionScope(Arg.Any<string>(), Arg.Any<UserContext>())
+        _sessionCoordinator.BeginExecutionScope(Arg.Any<string>(), Arg.Any<UserContext>())
             .Returns(Substitute.For<IDisposable>());
+
+        _sessionCoordinator.CanStartSessionAsync(Arg.Any<string>())
+            .Returns(true);
             
         _llmRuntimeContextAccessor.BeginScope(Arg.Any<UserContext>(), Arg.Any<string>())
             .Returns(Substitute.For<IDisposable>());
@@ -50,8 +53,8 @@ public class MetaAgentOrchestratorTests
             _directAgentRequestExecutor, 
             _llmRuntimeContextAccessor, 
             _agentFactory, 
-            _sessionManager, 
-            _runtimeCoordinator, 
+            _sessionCoordinator,
+            _sessionManager,
             _contextAnalyzer,
             _smartRouter,
             _logger);
@@ -64,7 +67,7 @@ public class MetaAgentOrchestratorTests
         var userContext = new UserContext { UserId = "user1", Name = "Test" };
         var sessionId = "session-1";
 
-        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        _sessionCoordinator.StartSessionAsync(userContext, Arg.Any<CancellationToken>()).Returns(sessionId);
         _frameworkOrchestrator.ExecuteAsync(sessionId, input, userContext, Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("It's 10 AM", "GeneralAgent", AgentTier.Support));
 
@@ -82,7 +85,7 @@ public class MetaAgentOrchestratorTests
         var userContext = new UserContext { UserId = "user1" };
         var sessionId = "session-1";
 
-        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        _sessionCoordinator.StartSessionAsync(userContext, Arg.Any<CancellationToken>()).Returns(sessionId);
         _frameworkOrchestrator.ExecuteAsync(sessionId, input, userContext, Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("response", "Agent", AgentTier.Support));
 
@@ -98,14 +101,14 @@ public class MetaAgentOrchestratorTests
         var userContext = new UserContext { UserId = "user1" };
         var sessionId = "session-1";
 
-        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        _sessionCoordinator.StartSessionAsync(userContext, Arg.Any<CancellationToken>()).Returns(sessionId);
         _frameworkOrchestrator.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("ok", "Agent", AgentTier.Support));
 
         await _sut.ProcessRequestAsync(input, userContext);
 
-        await _sessionManager.Received(1).StartSessionAsync(userContext);
-        _runtimeCoordinator.Received(1).BeginExecutionScope(sessionId, userContext);
+        await _sessionCoordinator.Received(1).StartSessionAsync(userContext, Arg.Any<CancellationToken>());
+        _sessionCoordinator.Received(1).BeginExecutionScope(sessionId, userContext);
     }
 
     [Fact]
@@ -138,7 +141,7 @@ public class MetaAgentOrchestratorTests
         var sessionId = "session-1";
         var targetAgent = "FinanceAgent";
 
-        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        _sessionCoordinator.StartSessionAsync(userContext, Arg.Any<CancellationToken>()).Returns(sessionId);
         _directAgentRequestExecutor.ExecuteAsync(sessionId, input, userContext, targetAgent, Arg.Any<CancellationToken>())
             .Returns(AgentResponse.Ok("Direct response", targetAgent, AgentTier.Specialist));
 
@@ -154,19 +157,22 @@ public class MetaAgentOrchestratorTests
         // Arrange
         var workflowStore = Substitute.For<IWorkflowStore>();
         var workflowEngine = Substitute.For<IWorkflowEngine>();
+        var chatWorkflowHandler = new ChatWorkflowCommandHandler(
+            Substitute.For<ILogger<ChatWorkflowCommandHandler>>(),
+            workflowEngine,
+            workflowStore);
         
         var sutWithWorkflows = new MetaAgentOrchestrator(
             _frameworkOrchestrator,
             _directAgentRequestExecutor,
             _llmRuntimeContextAccessor,
             _agentFactory,
+            _sessionCoordinator,
             _sessionManager,
-            _runtimeCoordinator,
             _contextAnalyzer,
             _smartRouter,
             _logger,
-            workflowEngine: workflowEngine,
-            workflowStore: workflowStore);
+            chatWorkflowCommandHandler: chatWorkflowHandler);
 
         var input = "iniciar workflow wf-abc";
         var userContext = new UserContext { UserId = "user-1", TenantId = "tenant-1" };
@@ -175,7 +181,7 @@ public class MetaAgentOrchestratorTests
         var definition = new WorkflowDefinition { Id = "wf-abc", Name = "Test Workflow" };
         var execution = new WorkflowExecution { Id = "exec-123", Status = WorkflowExecutionStatus.Running, InitiatedBy = "user-1" };
 
-        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        _sessionCoordinator.StartSessionAsync(userContext, Arg.Any<CancellationToken>()).Returns(sessionId);
         workflowStore.GetDefinitionAsync("tenant-1", "wf-abc", Arg.Any<CancellationToken>()).Returns(definition);
         workflowEngine.StartAsync("tenant-1", definition, initiatedBy: "user-1", ct: Arg.Any<CancellationToken>()).Returns(execution);
 
@@ -196,19 +202,22 @@ public class MetaAgentOrchestratorTests
         // Arrange
         var workflowStore = Substitute.For<IWorkflowStore>();
         var workflowEngine = Substitute.For<IWorkflowEngine>();
+        var chatWorkflowHandler = new ChatWorkflowCommandHandler(
+            Substitute.For<ILogger<ChatWorkflowCommandHandler>>(),
+            workflowEngine,
+            workflowStore);
         
         var sutWithWorkflows = new MetaAgentOrchestrator(
             _frameworkOrchestrator,
             _directAgentRequestExecutor,
             _llmRuntimeContextAccessor,
             _agentFactory,
+            _sessionCoordinator,
             _sessionManager,
-            _runtimeCoordinator,
             _contextAnalyzer,
             _smartRouter,
             _logger,
-            workflowEngine: workflowEngine,
-            workflowStore: workflowStore);
+            chatWorkflowCommandHandler: chatWorkflowHandler);
 
         var input = "cancelar workflow exec-456";
         var userContext = new UserContext { UserId = "user-1", TenantId = "tenant-1" };
@@ -224,7 +233,7 @@ public class MetaAgentOrchestratorTests
             CompletedAt = DateTime.UtcNow
         };
 
-        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        _sessionCoordinator.StartSessionAsync(userContext, Arg.Any<CancellationToken>()).Returns(sessionId);
         workflowEngine.GetExecutionAsync("tenant-1", "exec-456", Arg.Any<CancellationToken>()).Returns(execution);
         workflowEngine.CancelAsync("tenant-1", "exec-456", Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(cancelledExecution);
 
@@ -245,19 +254,22 @@ public class MetaAgentOrchestratorTests
         // Arrange
         var workflowStore = Substitute.For<IWorkflowStore>();
         var workflowEngine = Substitute.For<IWorkflowEngine>();
+        var chatWorkflowHandler = new ChatWorkflowCommandHandler(
+            Substitute.For<ILogger<ChatWorkflowCommandHandler>>(),
+            workflowEngine,
+            workflowStore);
         
         var sutWithWorkflows = new MetaAgentOrchestrator(
             _frameworkOrchestrator,
             _directAgentRequestExecutor,
             _llmRuntimeContextAccessor,
             _agentFactory,
+            _sessionCoordinator,
             _sessionManager,
-            _runtimeCoordinator,
             _contextAnalyzer,
             _smartRouter,
             _logger,
-            workflowEngine: workflowEngine,
-            workflowStore: workflowStore);
+            chatWorkflowCommandHandler: chatWorkflowHandler);
 
         var input = "listar workflows";
         var userContext = new UserContext { UserId = "user-1", TenantId = "tenant-1" };
@@ -269,7 +281,7 @@ public class MetaAgentOrchestratorTests
             new() { Id = "exec-2", WorkflowName = "Workflow 2", Status = WorkflowExecutionStatus.Running, StartedAt = DateTime.UtcNow }
         };
 
-        _sessionManager.StartSessionAsync(userContext).Returns(sessionId);
+        _sessionCoordinator.StartSessionAsync(userContext, Arg.Any<CancellationToken>()).Returns(sessionId);
         workflowEngine.ListExecutionsAsync("tenant-1", limit: 10, ct: Arg.Any<CancellationToken>()).Returns(executions);
 
         // Act

@@ -30,6 +30,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISessionManager, SessionManager>();
         services.AddSingleton<ILLMRuntimeContextAccessor, LLMRuntimeContextAccessor>();
         services.AddSingleton<IAgentRuntimeCoordinator, AgentRuntimeCoordinator>();
+        services.AddSingleton<ISessionLifecycleCoordinator, SessionLifecycleCoordinator>();
+        services.AddSingleton<IChatWorkflowCommandHandler, ChatWorkflowCommandHandler>();
         services.AddSingleton<IFinalResponseApprovalService, FinalResponseApprovalService>();
         services.AddSingleton<IAgentExecutionPreProcessingPipeline, AgentExecutionPreProcessingPipeline>();
         services.AddSingleton<IAgentExecutionPostProcessingPipeline, AgentExecutionPostProcessingPipeline>();

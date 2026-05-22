@@ -8,6 +8,7 @@ namespace AgenticSystem.Core.Services;
 /// <summary>
 /// Meta-Agent principal: analisa contexto, roteia para agents e gerencia sessões.
 /// Inspirado no Tech Lead do Labs com capacidade de orquestração.
+/// Refactored: dependencies reduced from 14 to 7 via SessionLifecycleCoordinator and ChatWorkflowCommandHandler.
 /// </summary>
 public class MetaAgentOrchestrator : IMetaAgent
 {
@@ -15,15 +16,12 @@ public class MetaAgentOrchestrator : IMetaAgent
     private readonly IDirectAgentRequestExecutor _directAgentRequestExecutor;
     private readonly ILLMRuntimeContextAccessor _llmRuntimeContextAccessor;
     private readonly IAgentFactory _agentFactory;
+    private readonly ISessionLifecycleCoordinator _sessionCoordinator;
     private readonly ISessionManager _sessionManager;
-    private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
     private readonly IContextAnalyzer _contextAnalyzer;
     private readonly ISmartRouter _smartRouter;
     private readonly IAgentCollaborationWorkflow? _collaborationWorkflow;
-    private readonly IWorkflowEngine? _workflowEngine;
-    private readonly ITenantIsolationEnforcer? _isolationEnforcer;
-    private readonly IEventPublisher? _eventPublisher;
-    private readonly IWorkflowStore? _workflowStore;
+    private readonly IChatWorkflowCommandHandler? _chatWorkflowCommandHandler;
     private readonly ILogger<MetaAgentOrchestrator> _logger;
 
     public MetaAgentOrchestrator(
@@ -31,31 +29,25 @@ public class MetaAgentOrchestrator : IMetaAgent
         IDirectAgentRequestExecutor directAgentRequestExecutor,
         ILLMRuntimeContextAccessor llmRuntimeContextAccessor,
         IAgentFactory agentFactory,
+        ISessionLifecycleCoordinator sessionCoordinator,
         ISessionManager sessionManager,
-        IAgentRuntimeCoordinator runtimeCoordinator,
         IContextAnalyzer contextAnalyzer,
         ISmartRouter smartRouter,
         ILogger<MetaAgentOrchestrator>? logger = null,
         IAgentCollaborationWorkflow? collaborationWorkflow = null,
-        IWorkflowEngine? workflowEngine = null,
-        ITenantIsolationEnforcer? isolationEnforcer = null,
-        IEventPublisher? eventPublisher = null,
-        IWorkflowStore? workflowStore = null)
+        IChatWorkflowCommandHandler? chatWorkflowCommandHandler = null)
     {
         _frameworkOrchestrator = frameworkOrchestrator;
         _directAgentRequestExecutor = directAgentRequestExecutor;
         _llmRuntimeContextAccessor = llmRuntimeContextAccessor;
         _agentFactory = agentFactory;
+        _sessionCoordinator = sessionCoordinator;
         _sessionManager = sessionManager;
-        _runtimeCoordinator = runtimeCoordinator;
         _contextAnalyzer = contextAnalyzer ?? new NullContextAnalyzer();
         _smartRouter = smartRouter;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<MetaAgentOrchestrator>.Instance;
         _collaborationWorkflow = collaborationWorkflow;
-        _workflowEngine = workflowEngine;
-        _isolationEnforcer = isolationEnforcer;
-        _eventPublisher = eventPublisher;
-        _workflowStore = workflowStore;
+        _chatWorkflowCommandHandler = chatWorkflowCommandHandler;
     }
 
     // Backwards-compatible constructor for existing tests and custom setups
@@ -72,8 +64,11 @@ public class MetaAgentOrchestrator : IMetaAgent
             directAgentRequestExecutor,
             llmRuntimeContextAccessor,
             agentFactory,
+            new SessionLifecycleCoordinator(
+                sessionManager,
+                runtimeCoordinator,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<SessionLifecycleCoordinator>.Instance),
             sessionManager,
-            runtimeCoordinator,
             new NullContextAnalyzer(),
             new NullSmartRouter(),
             logger)
@@ -111,26 +106,21 @@ public class MetaAgentOrchestrator : IMetaAgent
 
     public async Task<AgentResponse> ProcessRequestAsync(string input, UserContext context)
     {
-        if (_isolationEnforcer != null && !string.IsNullOrEmpty(context.TenantId))
+        if (!string.IsNullOrEmpty(context.TenantId) && !await _sessionCoordinator.CanStartSessionAsync(context.TenantId))
         {
-            if (!await _isolationEnforcer.CanStartSessionAsync(context.TenantId))
-            {
-                return AgentResponse.Error("🚫 Limite de sessões simultâneas atingido para o seu tenant.");
-            }
+            return AgentResponse.Error("🚫 Limite de sessões simultâneas atingido para o seu tenant.");
         }
 
-        var sessionId = await _sessionManager.StartSessionAsync(context);
-        context.Preferences["sessionId"] = sessionId;
-        using var scope = _runtimeCoordinator.BeginExecutionScope(sessionId, context);
+        var sessionId = await _sessionCoordinator.StartSessionAsync(context);
+        using var scope = _sessionCoordinator.BeginExecutionScope(sessionId, context);
         try
         {
             var response = await ProcessRequestCoreAsync(sessionId, input, context, CancellationToken.None);
-            await _sessionManager.EndSessionAsync(sessionId);
+            await _sessionCoordinator.EndSessionAsync(sessionId, context);
             return response;
         }
         catch (Exception)
         {
-            // Session ending on exception is already handled in ProcessRequestCoreAsync
             throw;
         }
     }
@@ -140,17 +130,11 @@ public class MetaAgentOrchestrator : IMetaAgent
         UserContext context,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var sessionId = await _sessionManager.StartSessionAsync(context);
-        context.Preferences["sessionId"] = sessionId;
-
-        if (_eventPublisher != null)
-        {
-            await _eventPublisher.PublishAsync(new SessionCreatedEvent(sessionId, context.UserId, context.TenantId), ct);
-        }
+        var sessionId = await _sessionCoordinator.StartSessionAsync(context, ct);
 
         try
         {
-            await foreach (var streamEvent in _runtimeCoordinator.StreamAsync(
+            await foreach (var streamEvent in _sessionCoordinator.StreamAsync(
                 sessionId,
                 context,
                 token => ProcessRequestCoreAsync(sessionId, input, context, token),
@@ -161,12 +145,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         }
         finally
         {
-            await _sessionManager.EndSessionAsync(sessionId);
-
-            if (_eventPublisher != null)
-            {
-                await _eventPublisher.PublishAsync(new SessionEndedEvent(sessionId, context.UserId, context.TenantId), ct);
-            }
+            await _sessionCoordinator.EndSessionAsync(sessionId, context, ct);
         }
     }
 
@@ -176,17 +155,11 @@ public class MetaAgentOrchestrator : IMetaAgent
         string targetAgent,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var sessionId = await _sessionManager.StartSessionAsync(context);
-        context.Preferences["sessionId"] = sessionId;
-
-        if (_eventPublisher != null)
-        {
-            await _eventPublisher.PublishAsync(new SessionCreatedEvent(sessionId, context.UserId, context.TenantId), ct);
-        }
+        var sessionId = await _sessionCoordinator.StartSessionAsync(context, ct);
 
         try
         {
-            await foreach (var streamEvent in _runtimeCoordinator.StreamAsync(
+            await foreach (var streamEvent in _sessionCoordinator.StreamAsync(
                 sessionId,
                 context,
                 token => ProcessDirectRequestCoreAsync(sessionId, input, context, targetAgent, token),
@@ -197,12 +170,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         }
         finally
         {
-            await _sessionManager.EndSessionAsync(sessionId);
-
-            if (_eventPublisher != null)
-            {
-                await _eventPublisher.PublishAsync(new SessionEndedEvent(sessionId, context.UserId, context.TenantId), ct);
-            }
+            await _sessionCoordinator.EndSessionAsync(sessionId, context, ct);
         }
     }
 
@@ -215,73 +183,13 @@ public class MetaAgentOrchestrator : IMetaAgent
         try
         {
             // Intercept conversational workflow commands via chat
-            if (_workflowEngine != null && _workflowStore != null)
+            if (_chatWorkflowCommandHandler != null)
             {
-                var inputTrimmed = input.Trim();
-                var inputLower = inputTrimmed.ToLowerInvariant();
-                var tenantId = string.IsNullOrWhiteSpace(context.TenantId) ? Tenant.DefaultTenantId : context.TenantId;
-
-                // 1. Start Workflow
-                if (inputLower.StartsWith("iniciar workflow ") || inputLower.StartsWith("executar workflow ") || inputLower.StartsWith("rodar workflow "))
-                {
-                    var workflowId = inputTrimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries).Last();
-                    var definition = await _workflowStore.GetDefinitionAsync(tenantId, workflowId, ct);
-                    if (definition == null)
-                    {
-                        return AgentResponse.Error($"❌ Workflow com ID '{workflowId}' não encontrado para o tenant atual.", "WorkflowEngine");
-                    }
-
-                    var execution = await _workflowEngine.StartAsync(tenantId, definition, initiatedBy: context.UserId, ct: ct);
-                    return AgentResponse.Ok(
-                        $"🚀 Workflow **{definition.Name}** iniciado com sucesso!\n\n" +
-                        $"* **ID da Execução:** `{execution.Id}`\n" +
-                        $"* **Status:** `{execution.Status}`\n" +
-                        $"* **Iniciado por:** `{execution.InitiatedBy}`\n\n" +
-                        $"O progresso detalhado de cada etapa está sendo transmitido em tempo real pelo SignalR.",
-                        "WorkflowEngine",
-                        AgentTier.Support);
-                }
-
-                // 2. Cancel Workflow
-                if (inputLower.StartsWith("cancelar workflow ") || inputLower.StartsWith("parar workflow ") || inputLower.StartsWith("abortar workflow "))
-                {
-                    var executionId = inputTrimmed.Split(' ', StringSplitOptions.RemoveEmptyEntries).Last();
-                    var execution = await _workflowEngine.GetExecutionAsync(tenantId, executionId, ct);
-                    if (execution == null)
-                    {
-                        return AgentResponse.Error($"❌ Execução de workflow com ID '{executionId}' não encontrada.", "WorkflowEngine");
-                    }
-
-                    var cancelled = await _workflowEngine.CancelAsync(tenantId, executionId, "Cancelado via chat conversacional pelo usuário.", ct);
-                    return AgentResponse.Ok(
-                        $"⏹️ Workflow **{cancelled.WorkflowName}** (Execução `{cancelled.Id}`) foi cancelado com sucesso!\n\n" +
-                        $"* **Status Atual:** `{cancelled.Status}`\n" +
-                        $"* **Motivo:** {cancelled.ErrorMessage}\n" +
-                        $"* **Encerrado em:** {cancelled.CompletedAt?.ToString("g")}",
-                        "WorkflowEngine",
-                        AgentTier.Support);
-                }
-
-                // 3. List Workflows
-                if (inputLower == "listar workflows" || inputLower == "status dos workflows" || inputLower == "workflows ativos")
-                {
-                    var executions = await _workflowEngine.ListExecutionsAsync(tenantId, limit: 10, ct: ct);
-                    if (executions.Count == 0)
-                    {
-                        return AgentResponse.Ok("📋 Nenhum workflow recente foi executado neste tenant.", "WorkflowEngine", AgentTier.Support);
-                    }
-
-                    var sb = new System.Text.StringBuilder();
-                    sb.AppendLine("📋 **Histórico Recente de Execuções de Workflows:**\n");
-                    foreach (var exec in executions)
-                    {
-                        var duration = exec.CompletedAt.HasValue ? $" (Duração: {(exec.CompletedAt.Value - exec.StartedAt).TotalSeconds:F1}s)" : "";
-                        sb.AppendLine($"* **ID:** `{exec.Id}` | **Workflow:** {exec.WorkflowName} | **Status:** `{exec.Status}`{duration}");
-                    }
-
-                    return AgentResponse.Ok(sb.ToString(), "WorkflowEngine", AgentTier.Support);
-                }
+                var workflowResponse = await _chatWorkflowCommandHandler.TryHandleAsync(effectiveInput, context, ct);
+                if (workflowResponse != null)
+                    return workflowResponse;
             }
+
             // 0. Triage Layer (Fast Path & Complexity Analysis)
             var (isFastPath, fastPathResponse, triage) = await _smartRouter.TriageAsync(effectiveInput, context, ct);
             if (isFastPath)
@@ -313,30 +221,21 @@ public class MetaAgentOrchestrator : IMetaAgent
             // 1. Analyze Context for Routing Decisions (Phase 2 Integration)
             var analysis = await _contextAnalyzer.AnalyzeAsync(effectiveInput, context);
 
-            // 2. Delegate to Workflow Engine if specific complex intent or workflow template is matched
-            if (_workflowEngine != null && (analysis.Intent == IntentType.Analyze || analysis.Intent == IntentType.Plan))
-            {
-                _logger.LogInformation("Delegating to Workflow Engine for intent: {Intent}", analysis.Intent);
-                // In a real implementation, we'd resolve the workflow definition first
-                // For this deep integration, we signal the intent
-                context.Preferences["workflow.intent"] = analysis.Intent.ToString();
-            }
-
-            // 3. Delegate to Collaboration Workflow if debate or high complexity (Phase 2 Integration)
+            // 2. Delegate to Collaboration Workflow if debate or high complexity (Phase 2 Integration)
             if (_collaborationWorkflow != null && await _collaborationWorkflow.ShouldRunAsync(effectiveInput, analysis, ct))
             {
                 _logger.LogInformation("Delegating to Collaboration Workflow (Multi-Agent)");
                 return await _collaborationWorkflow.ExecuteAsync(sessionId, effectiveInput, context, analysis, ct);
             }
 
-            // 4. Fallback to Primary Framework Orchestrator
+            // 3. Fallback to Primary Framework Orchestrator
             _logger.LogDebug("Delegating to Framework Orchestrator");
             return await _frameworkOrchestrator.ExecuteAsync(sessionId, effectiveInput, context, ct);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ Workflow execution failed: {Message}", ex.Message);
-            await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
+            await _sessionCoordinator.PublishEventAsync(new AgentStreamEvent
             {
                 Type = AgentStreamEventType.Error,
                 Message = ex.Message,
@@ -347,7 +246,7 @@ public class MetaAgentOrchestrator : IMetaAgent
                 }
             }, ct);
 
-            try { await _sessionManager.EndSessionAsync(sessionId); }
+            try { await _sessionCoordinator.EndSessionAsync(sessionId, context, ct); }
             catch (Exception endEx) { _logger.LogWarning(endEx, "Falha ao finalizar sessão {SessionId}", sessionId); }
 
             return AgentResponse.Error("Erro interno ao processar a requisição.", "MetaAgentOrchestrator");
@@ -385,19 +284,17 @@ public class MetaAgentOrchestrator : IMetaAgent
 
     public async Task<AgentResponse> ProcessDirectRequestAsync(string input, UserContext context, string targetAgent)
     {
-        var sessionId = await _sessionManager.StartSessionAsync(context);
-        context.Preferences["sessionId"] = sessionId;
-        using var scope = _runtimeCoordinator.BeginExecutionScope(sessionId, context);
+        var sessionId = await _sessionCoordinator.StartSessionAsync(context);
+        using var scope = _sessionCoordinator.BeginExecutionScope(sessionId, context);
         try
         {
             var response = await ProcessDirectRequestCoreAsync(sessionId, input, context, targetAgent, CancellationToken.None);
-            await _sessionManager.EndSessionAsync(sessionId);
+            await _sessionCoordinator.EndSessionAsync(sessionId, context);
             return response;
         }
         catch (Exception)
         {
-            // In a real scenario, we might want to end session here too if not handled in core
-            await _sessionManager.EndSessionAsync(sessionId);
+            await _sessionCoordinator.EndSessionAsync(sessionId, context);
             throw;
         }
     }
