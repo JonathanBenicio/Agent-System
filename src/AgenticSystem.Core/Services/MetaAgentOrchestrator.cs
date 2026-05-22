@@ -3,6 +3,8 @@ using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 
+[assembly: InternalsVisibleTo("AgenticSystem.Tests")]
+
 namespace AgenticSystem.Core.Services;
 
 /// <summary>
@@ -51,7 +53,7 @@ public class MetaAgentOrchestrator : IMetaAgent
     }
 
     // Backwards-compatible constructor for existing tests and custom setups
-    public MetaAgentOrchestrator(
+    internal MetaAgentOrchestrator(
         IFrameworkOrchestratorService frameworkOrchestrator,
         IDirectAgentRequestExecutor directAgentRequestExecutor,
         ILLMRuntimeContextAccessor llmRuntimeContextAccessor,
