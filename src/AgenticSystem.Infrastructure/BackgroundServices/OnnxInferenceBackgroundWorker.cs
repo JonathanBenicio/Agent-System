@@ -138,6 +138,13 @@ public class OnnxInferenceBackgroundWorker : BackgroundService
             return;
         }
 
+        var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+        using var tenantScope = tenantContextAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext
+        {
+            TenantId = request.TenantId,
+            IsAuthenticated = true
+        });
+
         try
         {
             // Atualiza status para Processing
