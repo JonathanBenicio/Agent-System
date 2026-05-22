@@ -17,6 +17,7 @@ Documento canônico de arquitetura atual:
 | [USER-STORIES.md](USER-STORIES.md) | Catálogo funcional consolidado de MLs, épicos e user stories |
 | [user-stories/us-multi-provider-api-keys.md](user-stories/us-multi-provider-api-keys.md) | US-42: Gerenciamento e Roteamento de Múltiplas API Keys |
 | [user-stories/unified-chat-integration.md](user-stories/unified-chat-integration.md) | US-021: Integração Unificada de Pilares Tecnológicos no Chat Principal |
+| [user-stories/us-async-onnx-processing.md](user-stories/us-async-onnx-processing.md) | US-43: Processamento Assíncrono de Inferência ONNX |
 | [issue-61-multi-provider-api-keys.md](issue-61-multi-provider-api-keys.md) | GitHub Issue #61: Multi-Provider API Keys Epic |
 | [agentic-design-manifesto.md](agentic-design-manifesto.md) | Princípios de design e filosofia do sistema |
 
@@ -61,6 +62,7 @@ Documento canônico de arquitetura atual:
 | [architecture/adr/019-agent-room-association.md](architecture/adr/019-agent-room-association.md) | ADR 019: Associação Granular Agente-Sala (Contexto Restrito) |
 | [architecture/adr/020-multi-provider-api-keys.md](architecture/adr/020-multi-provider-api-keys.md) | ADR 020: Arquitetura de Múltiplas API Keys por Provedor LLM |
 | [architecture/adr/022-unified-chat-integration-architecture.md](architecture/adr/022-unified-chat-integration-architecture.md) | ADR 022: Arquitetura de Integração Unificada do Chat (12 Pilares) |
+| [architecture/adr/023-async-onnx-processing.md](architecture/adr/023-async-onnx-processing.md) | ADR 023: Processamento Assíncrono de Inferência ONNX e Galeria |
 | [../plan/adr-020-protocol-hosting-standardization.md](../plan/adr-020-protocol-hosting-standardization.md) | ADR 020: Padronização e Exposição de Protocolos (A2A e AgUI) |
 | [../plan/adr-021-evaluation-framework.md](../plan/adr-021-evaluation-framework.md) | ADR 021: Framework de Avaliação Contínua e Golden Sets |
 
@@ -93,6 +95,7 @@ Ver [bdd/README.md](bdd/README.md) para o inventário completo e instruções de
 | [bdd/embedding-migration.feature](bdd/embedding-migration.feature) | Módulo administrativo ativo de migração de embeddings |
 | [bdd/api-key-masking-embedding.feature](bdd/api-key-masking-embedding.feature) | Mascaramento de segredos no módulo de embeddings |
 | [bdd/multi-provider-api-keys.feature](bdd/multi-provider-api-keys.feature) | BDD: Cenários executáveis para múltiplas API Keys |
+| [bdd/async-onnx-processing.feature](bdd/async-onnx-processing.feature) | Processamento Assíncrono de Inferência ONNX |
 
 ---
 
@@ -109,6 +112,7 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 | [plan/bug-chat-workflow.md](plan/bug-chat-workflow.md) | Bug Fix Plan: Resposta do chat não aparece no frontend |
 | [plan/multi-provider-api-keys.md](plan/multi-provider-api-keys.md) | Roadmap/Plan: Multi-Provider API Keys |
 | [plan/unified-chat-integration.md](plan/unified-chat-integration.md) | Roadmap/Plan: Integração Unificada do Chat (12 Pilares) |
+| [plan/async-onnx-processing-plan.md](plan/async-onnx-processing-plan.md) | Roadmap/Plan: Processamento Assíncrono de Inferência ONNX e Galeria |
 | [planejamento/AI_Capabilities_Gaps.md](planejamento/AI_Capabilities_Gaps.md) | Diagnóstico vivo de gaps e oportunidades arquiteturais |
 | [planejamento/AI_Advanced_Capabilities_Roadmap.md](planejamento/AI_Advanced_Capabilities_Roadmap.md) | Roadmap futuro para capacidades avançadas |
 | [planejamento/framework-first-migration-plan.md](planejamento/framework-first-migration-plan.md) | Resumo histórico da migração framework-first (concluída) |
