@@ -5,6 +5,8 @@ import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 import { AISelectorBar } from './AISelectorBar'
 
+import { useEffect } from 'react'
+
 export function AgentChatPage() {
   const { agentName } = useParams<{ agentName: string }>()
   const navigate = useNavigate()
@@ -18,7 +20,15 @@ export function AgentChatPage() {
     setSelectedProvider,
     setSelectedModel,
     sendMessage,
+    activeChannel,
+    setActiveChannel,
   } = useChat(agentName)
+
+  useEffect(() => {
+    if (agentName) {
+      setActiveChannel(agentName)
+    }
+  }, [agentName, setActiveChannel])
 
   return (
     <div className="flex flex-col h-full">
@@ -50,7 +60,7 @@ export function AgentChatPage() {
         onModelChange={setSelectedModel}
       />
 
-      <MessageList messages={messages} isProcessing={isProcessing} />
+      <MessageList messages={activeChannel === agentName ? messages : []} isProcessing={isProcessing} />
       <ChatInput
         onSend={sendMessage}
         disabled={!isConnected && messages.length > 0}

@@ -1236,27 +1236,6 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-#### ML40 — Smart Triage & Fast Path
-
-**Como** orquestrador de alta performance,
-**quero** uma pipeline de triage em 3 camadas (Regex → ML.NET → LLM),
-**para que** solicitações simples sejam resolvidas com latência ultra-baixa (Fast Path) e sem custo de LLM.
-
-| Item | Detalhe |
-|------|---------|
-| Serviços | `SmartRouter` · `MlFastPathInterceptor` · `RegexInterceptor` |
-| Responsabilidade | Classificação de intenção em multi-camadas e curto-circuito de execução |
-| Testes | Unitários (xUnit) + Benchmarking de latência |
-| Status | ✅ Implementado |
-
-**Critérios de Aceite:**
-- [x] Camada 1 (Regex): Intercepta saudações e comandos fixos em < 1ms
-- [x] Camada 2 (ML.NET): Classifica intenções comuns via modelo local em < 10ms
-- [x] Camada 3 (LLM): Somente ativada se as camadas anteriores não atingirem confiança mínima
-- [x] Fast Path: Retorna resposta pré-definida ou via template sem invocar agentes pesados
-- [x] Otimização: Redução de ~40% no consumo de tokens em interações triviais
-
----
 
 ## Backend — Resumo de Cobertura
 
@@ -1360,6 +1339,66 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 - [x] ID de sessão gerado com `crypto.randomUUID()` (fallback seguro)
 - [x] Sessão persistida via API `/api/sessions`
 - [x] Histórico de mensagens por sessão
+
+---
+
+#### US-11 — Ingestão RAG via Drag and Drop de arquivos
+
+**Como** analista de conhecimento,
+**quero** arrastar e soltar arquivos na área de chat,
+**para que** eles sejam processados e indexados instantaneamente no Vector Store (da sessão ou de uma sala ativa).
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `ChatPage` · `ragApi` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Overlay visual (backdrop blur) com mensagem "Ingestão RAG Contextual" ao arrastar arquivos sobre o chat.
+- [x] Spinner "Processando Documentos" bloqueia interações temporariamente durante a ingestão.
+- [x] Roteamento de contexto de destino para a Sala de Conhecimento ativa ou para a Sessão temporária.
+- [x] Exibe feedback visual via Toast de sucesso/erro e adiciona mensagem especial de sistema informando o status da indexação.
+
+---
+
+#### US-12 — Rastreabilidade e Citações de Fontes RAG
+
+**Como** usuário exigente,
+**quero** auditar as fontes e trechos de documentos que embasaram a resposta do agente,
+**para que** eu possa evitar alucinações e verificar a exatidão das respostas.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `MessageBubble` (citations) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Seção "Fontes (n)" com ícone de livro em respostas baseadas em RAG.
+- [x] Exibição de pílulas bibliográficas resumindo o nome do documento.
+- [x] Popover interativo exibido ao clicar na pílula da citação.
+- [x] Popup contendo o trecho exato citado (`relevantExcerpt`), porcentagem de confiança e página do documento original.
+
+---
+
+#### US-13 — Visualização de Workflows, Ações e Metadados
+
+**Como** operador de sistema,
+**quero** monitorar a execução de fluxos, ferramentas e metadados diretamente no fluxo do chat,
+**para que** eu compreenda a tomada de decisões e a orquestração do agente.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `MessageBubble` · `WorkflowExecutionCard` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Renderização inteligente do cartão interativo `WorkflowExecutionCard` quando a resposta do agente contiver `workflowExecutionId`.
+- [x] Badges visuais identificadores para ferramentas (`🔧 tool`) e ações executadas (`⚡ action`).
+- [x] Badge indicador de "Memória Recuperada" nas mensagens enviadas do usuário quando contextualizadas via memória episódica.
+- [x] Mensagens de sistema (erros/conexão) formatadas com borda avermelhada e ícone de perigo `AlertTriangle`.
+
+---
+
 
 ---
 

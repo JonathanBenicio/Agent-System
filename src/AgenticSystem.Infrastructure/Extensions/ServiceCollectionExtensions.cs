@@ -201,7 +201,8 @@ public static class ServiceCollectionExtensions
                     sp.GetService<IContextBudgetManager>(),
                     sp.GetRequiredService<ILogger<RAGContextProvider>>(),
                     sp,
-                    sp.GetRequiredService<ITenantContextAccessor>());
+                    sp.GetRequiredService<ITenantContextAccessor>(),
+                    sp.GetRequiredService<ILLMRuntimeContextAccessor>());
             });
 
             services.AddSingleton<OrchestratorHostBuilder>(sp =>

@@ -1,4 +1,4 @@
-# adr-021: Arquitetura de Integração Unificada do Chat (12 Pilares)
+# ADR-022: Arquitetura de Integração Unificada do Chat (12 Pilares)
 
 **Status:** Proposed  
 **Data:** 21 de Maio de 2026  

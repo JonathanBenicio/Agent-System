@@ -34,4 +34,23 @@ coverage/
 .gemini/**
 
 ## ONNX Local Models
-/onnx/
+/onnx/
+
+## Node & Frontend
+**/node_modules/
+**/dist/
+**/build/
+.svelte-kit/
+.next/
+.serverless/
+*.log
+
+## Cypress
+**/cypress/screenshots/
+**/cypress/videos/
+
+## Playwright / QA Tests
+**/playwright-report/
+**/test-results/
+**/playwright/.cache/
+

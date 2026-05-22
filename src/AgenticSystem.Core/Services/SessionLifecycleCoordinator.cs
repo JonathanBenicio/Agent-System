@@ -39,17 +39,17 @@ public class SessionLifecycleCoordinator : ISessionLifecycleCoordinator
         return await _isolationEnforcer.CanStartSessionAsync(tenantId);
     }
 
-    public async Task<string> StartSessionAsync(UserContext context, CancellationToken ct = default)
+    public async Task<string> StartSessionAsync(UserContext context, string? sessionId = null, CancellationToken ct = default)
     {
-        var sessionId = await _sessionManager.StartSessionAsync(context);
-        context.Preferences["sessionId"] = sessionId;
+        var resolvedSessionId = await _sessionManager.StartSessionAsync(context, sessionId);
+        context.Preferences["sessionId"] = resolvedSessionId;
 
         if (_eventPublisher != null)
         {
-            await _eventPublisher.PublishAsync(new SessionCreatedEvent(sessionId, context.UserId, context.TenantId), ct);
+            await _eventPublisher.PublishAsync(new SessionCreatedEvent(resolvedSessionId, context.UserId, context.TenantId), ct);
         }
 
-        return sessionId;
+        return resolvedSessionId;
     }
 
     public IDisposable BeginExecutionScope(string sessionId, UserContext context)

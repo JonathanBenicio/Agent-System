@@ -19,6 +19,7 @@ public class RAGContextProvider : MessageAIContextProvider
     private readonly ILogger<RAGContextProvider> _logger;
     private readonly IServiceProvider _serviceProvider;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ILLMRuntimeContextAccessor _llmRuntimeContextAccessor;
 
     internal const string ContextMarker = "[Contexto Relevante da Base de Conhecimento]";
 
@@ -27,13 +28,15 @@ public class RAGContextProvider : MessageAIContextProvider
         IContextBudgetManager? budgetManager,
         ILogger<RAGContextProvider> logger,
         IServiceProvider serviceProvider,
-        ITenantContextAccessor tenantContextAccessor)
+        ITenantContextAccessor tenantContextAccessor,
+        ILLMRuntimeContextAccessor llmRuntimeContextAccessor)
     {
         _ragService = ragService ?? throw new ArgumentNullException(nameof(ragService));
         _budgetManager = budgetManager;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _tenantContextAccessor = tenantContextAccessor ?? throw new ArgumentNullException(nameof(tenantContextAccessor));
+        _llmRuntimeContextAccessor = llmRuntimeContextAccessor ?? throw new ArgumentNullException(nameof(llmRuntimeContextAccessor));
     }
 
     protected override async ValueTask<IEnumerable<ChatMessage>> ProvideMessagesAsync(
@@ -54,33 +57,67 @@ public class RAGContextProvider : MessageAIContextProvider
         if (string.IsNullOrWhiteSpace(query)) return [];
 
         var agentName = context.Agent?.Name;
-        var tenantId = _tenantContextAccessor.Current?.TenantId ?? Tenant.DefaultTenantId;
+        var runtimeContext = _llmRuntimeContextAccessor.Current;
+        var tenantId = runtimeContext?.TenantId 
+            ?? _tenantContextAccessor.Current?.TenantId 
+            ?? Tenant.DefaultTenantId;
+        var userId = runtimeContext?.UserId;
 
-        // Buscar as salas vinculadas a este especialista
+        var specifiedRoomId = runtimeContext?.KnowledgeRoomId;
+        var sessionId = runtimeContext?.SessionId;
+
         List<string> allowedRoomIds = [];
-        if (!string.IsNullOrWhiteSpace(agentName))
-        {
-            using var scope = _serviceProvider.CreateScope();
-            var agentRoomStore = scope.ServiceProvider.GetRequiredService<IAgentKnowledgeRoomStore>();
-            var roomIds = await agentRoomStore.GetRoomIdsForAgentAsync(agentName, tenantId, ct);
-            allowedRoomIds = roomIds.ToList();
-        }
+        Dictionary<string, string> filters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // Política de Zero Trust: Se o agente não possui associação a nenhuma sala de conhecimento no tenant,
-        // o RAG é expressamente impedido de pesquisar e retorna vazio.
-        if (allowedRoomIds.Count == 0)
+        if (!string.IsNullOrWhiteSpace(specifiedRoomId))
         {
-            _logger.LogWarning("Zero Trust: Agent '{AgentName}' does not have any assigned knowledge rooms. RAG search bypassed.", agentName ?? "Unknown");
-            return [];
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                _logger.LogWarning("Zero Trust: KnowledgeRoomId '{RoomId}' is specified but UserId is missing from context. RAG search bypassed.", specifiedRoomId);
+                return [];
+            }
+
+            using var scope = _serviceProvider.CreateScope();
+            var roomService = scope.ServiceProvider.GetRequiredService<IKnowledgeRoomService>();
+            var room = await roomService.GetRoomAsync(specifiedRoomId, tenantId, userId, ct);
+            if (room is null)
+            {
+                _logger.LogWarning("Zero Trust Check Failed: User '{UserId}' does not have access to KnowledgeRoom '{RoomId}' in Tenant '{TenantId}'. RAG search bypassed.", userId, specifiedRoomId, tenantId);
+                return [];
+            }
+
+            allowedRoomIds = [specifiedRoomId];
+            filters["room_ids"] = specifiedRoomId;
+        }
+        else if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            // Chat livre isolado por sessão
+            filters["collection"] = sessionId;
+        }
+        else
+        {
+            // Comportamento padrão: Salas vinculadas ao agente especialista
+            if (!string.IsNullOrWhiteSpace(agentName))
+            {
+                using var scope = _serviceProvider.CreateScope();
+                var agentRoomStore = scope.ServiceProvider.GetRequiredService<IAgentKnowledgeRoomStore>();
+                var roomIds = await agentRoomStore.GetRoomIdsForAgentAsync(agentName, tenantId, ct);
+                allowedRoomIds = roomIds.ToList();
+            }
+
+            // Política de Zero Trust: Se o agente não possui associação a nenhuma sala de conhecimento no tenant,
+            // o RAG é expressamente impedido de pesquisar e retorna vazio.
+            if (allowedRoomIds.Count == 0)
+            {
+                _logger.LogWarning("Zero Trust: Agent '{AgentName}' does not have any assigned knowledge rooms. RAG search bypassed.", agentName ?? "Unknown");
+                return [];
+            }
+
+            filters["room_ids"] = string.Join(",", allowedRoomIds);
         }
 
         try
         {
-            var filters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "room_ids", string.Join(",", allowedRoomIds) }
-            };
-
             var ragContext = await _ragService.RetrieveContextAsync(new RAGQuery
             {
                 Query = query,

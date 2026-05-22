@@ -72,7 +72,7 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(System.Text.Json.JsonNamingPolicy.CamelCase));
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
 
@@ -80,6 +80,7 @@ builder.Services.AddSignalR(options =>
 {
     options.AddFilter<AgenticSystem.Api.SignalR.TenantHubFilter>();
 });
+builder.Services.AddSingleton<Microsoft.AspNetCore.SignalR.IUserIdProvider, AgenticSystem.Api.SignalR.AgenticUserIdProvider>();
 
 builder.Services.AddApiSecurity(builder.Configuration, builder.Environment);
 builder.Services.AddApiSwagger();

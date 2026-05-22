@@ -26,12 +26,26 @@ public class SessionManager : ISessionManager
         _semanticCompressor = semanticCompressor;
     }
 
-    public async Task<string> StartSessionAsync(UserContext userContext)
+    public async Task<string> StartSessionAsync(UserContext userContext, string? sessionId = null)
     {
-        var sessionId = $"session-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}";
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            var existingSession = await _store.GetAsync(sessionId);
+            if (existingSession is not null)
+            {
+                var userTenantId = string.IsNullOrWhiteSpace(userContext.TenantId) ? Tenant.DefaultTenantId : userContext.TenantId;
+                if (existingSession.UserId == userContext.UserId && existingSession.TenantId == userTenantId)
+                {
+                    _logger.LogInformation("📂 Reusing existing session: {SessionId}", sessionId);
+                    return sessionId;
+                }
+            }
+        }
+
+        var newSessionId = $"session-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}";
         var session = new SessionData
         {
-            Id = sessionId,
+            Id = newSessionId,
             UserId = userContext.UserId,
             TenantId = string.IsNullOrWhiteSpace(userContext.TenantId) ? Tenant.DefaultTenantId : userContext.TenantId,
             StartedAt = DateTime.UtcNow,
@@ -40,8 +54,8 @@ public class SessionManager : ISessionManager
         };
 
         await _store.SaveAsync(session);
-        _logger.LogInformation("📂 Session started: {SessionId}", sessionId);
-        return sessionId;
+        _logger.LogInformation("📂 Session started: {SessionId}", newSessionId);
+        return newSessionId;
     }
 
     public async Task AddEventAsync(string sessionId, AgentEvent agentEvent)

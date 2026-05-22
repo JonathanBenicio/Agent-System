@@ -525,4 +525,24 @@ public class PostgresVectorStore : IVectorStore
         SearchScope.Domain => "domain",
         _ => ""
     };
+
+    public async Task DeleteCollectionAsync(string collection)
+    {
+        if (string.IsNullOrWhiteSpace(collection))
+            return;
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var entities = await db.VectorDocuments.Where(item => item.Collection == collection).ToListAsync();
+        
+        if (entities.Count > 0)
+        {
+            db.VectorDocuments.RemoveRange(entities);
+            await db.SaveChangesAsync();
+            _logger.LogInformation("🗑️ Deleted collection {Collection} from PostgresVectorStore. Removed {Count} chunks.", collection, entities.Count);
+        }
+        else
+        {
+            _logger.LogDebug("⚠️ Collection {Collection} not found or empty in PostgresVectorStore", collection);
+        }
+    }
 }

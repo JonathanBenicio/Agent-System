@@ -9,9 +9,9 @@ namespace AgenticSystem.Core.Interfaces;
 public interface ISessionManager
 {
     /// <summary>
-    /// Inicia nova sessão de usuário
+    /// Inicia nova sessão de usuário ou recupera uma existente
     /// </summary>
-    Task<string> StartSessionAsync(UserContext userContext);
+    Task<string> StartSessionAsync(UserContext userContext, string? sessionId = null);
     
     /// <summary>
     /// Adiciona evento à sessão atual

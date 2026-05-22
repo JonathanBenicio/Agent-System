@@ -249,6 +249,7 @@ export const pluginApi = {
   list: () => get<PluginSummary[]>('/api/admin/plugins'),
   get: (id: string) => get<PluginSummary>(`/api/admin/plugins/${encodeURIComponent(id)}`),
   load: (req: LoadPluginRequest) => post<PluginSummary>('/api/admin/plugins/load', req),
+  update: (id: string, req: LoadPluginRequest) => put<{ success: boolean; message: string }>(`/api/admin/plugins/${encodeURIComponent(id)}`, req),
   delete: (id: string) => del(`/api/admin/plugins/${encodeURIComponent(id)}`),
   tools: () => get<MCPToolInfo[]>('/api/admin/plugins/tools'),
   executeTool: (pluginId: string, toolName: string, params: Record<string, unknown>) =>

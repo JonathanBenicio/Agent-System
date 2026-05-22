@@ -24,6 +24,8 @@ export interface ChatMessage {
   isHistory?: boolean
   memoryInjected?: boolean
   citations?: Citation[]
+  workflowExecutionId?: string
+  workflowName?: string
 }
 
 export interface ChatSession {

@@ -6,6 +6,7 @@ import type { AgentVersion, AgentInfo } from '@/types/api'
 import { agentApi } from '@/lib/api'
 import { useToast } from '@/components/shared/Toast'
 import { cn } from '@/lib/utils'
+import { getCapabilityDescription } from '@/lib/constants'
 
 interface Props {
   agent: AgentInfo
@@ -263,11 +264,21 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
               {agent.capabilities && agent.capabilities.length > 0 && (
                 <Section title="Capabilities Autorizadas">
                   <div className="flex flex-wrap gap-1.5">
-                    {agent.capabilities.map(c => (
-                      <span key={c} className="px-2.5 py-1 text-xs bg-zinc-900 border border-zinc-850 rounded-lg text-zinc-300 font-medium">
-                        {c}
-                      </span>
-                    ))}
+                    {agent.capabilities.map(c => {
+                      const description = getCapabilityDescription(c)
+                      return (
+                        <span 
+                          key={c} 
+                          title={description}
+                          className={cn(
+                            "px-2.5 py-1 text-xs bg-zinc-900 border border-zinc-850 rounded-lg text-zinc-300 font-medium cursor-help transition-colors hover:border-zinc-700",
+                            description && "hover:text-teal-300"
+                          )}
+                        >
+                          {c}
+                        </span>
+                      )
+                    })}
                   </div>
                 </Section>
               )}

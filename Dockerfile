@@ -18,7 +18,12 @@ ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV DOTNET_EnableDiagnostics=0
 
-RUN apt-get update && apt-get install -y wget libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
+# Install Node.js (required for running npx-based MCP servers) and basic utilities
+RUN apt-get update && \
+    apt-get install -y wget libgssapi-krb5-2 curl && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY --from=build /app/publish .
 

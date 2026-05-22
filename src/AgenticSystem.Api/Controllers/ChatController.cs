@@ -43,11 +43,11 @@ public class ChatController : ControllerBase
         AgentResponse response;
         if (!string.IsNullOrWhiteSpace(request.TargetAgent))
         {
-            response = await _metaAgent.ProcessDirectRequestAsync(request.Message, userContext, request.TargetAgent);
+            response = await _metaAgent.ProcessDirectRequestAsync(request.Message, userContext, request.TargetAgent, request.SessionId);
         }
         else
         {
-            response = await _metaAgent.ProcessRequestAsync(request.Message, userContext);
+            response = await _metaAgent.ProcessRequestAsync(request.Message, userContext, request.SessionId);
         }
 
         return Ok(response);
@@ -73,8 +73,8 @@ public class ChatController : ControllerBase
         HttpContext.Response.ContentType = "text/event-stream";
 
         var stream = !string.IsNullOrWhiteSpace(request.TargetAgent)
-            ? _metaAgent.ProcessDirectRequestStreamAsync(request.Message, userContext, request.TargetAgent, HttpContext.RequestAborted)
-            : _metaAgent.ProcessRequestStreamAsync(request.Message, userContext, HttpContext.RequestAborted);
+            ? _metaAgent.ProcessDirectRequestStreamAsync(request.Message, userContext, request.TargetAgent, request.SessionId, HttpContext.RequestAborted)
+            : _metaAgent.ProcessRequestStreamAsync(request.Message, userContext, request.SessionId, HttpContext.RequestAborted);
 
         await foreach (var streamEvent in stream.WithCancellation(HttpContext.RequestAborted))
         {

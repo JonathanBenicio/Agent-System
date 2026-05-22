@@ -309,21 +309,25 @@ export interface PluginSummary {
   description: string
   version: string
   isEnabled: boolean
+  status?: string
   isConnected?: boolean
   transport?: string
   toolCount?: number
   providedTools: string[]
   providedResources: string[]
   tools?: { name: string; description?: string }[]
+  config?: LoadPluginRequest
 }
 
 export interface LoadPluginRequest {
   pluginPath?: string
   name?: string
   command?: string
-  args?: string[]
-  transport?: 'stdio' | 'sse'
-  url?: string
+  arguments?: string[]
+  transportType?: 'stdio' | 'sse'
+  endpoint?: string
+  environmentVariables?: Record<string, string>
+  headers?: Record<string, string>
 }
 
 export interface MCPToolInfo {

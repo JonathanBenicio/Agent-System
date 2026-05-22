@@ -23,6 +23,7 @@ public class AgentController : ControllerBase
     private readonly IRuntimeEvaluator? _runtimeEvaluator;
     private readonly IAgentVersioningService? _versioningService;
     private readonly IAgentKnowledgeRoomStore? _agentRoomStore;
+    private readonly IMCPPluginManager? _pluginManager;
     private readonly ILogger<AgentController> _logger;
 
     public AgentController(
@@ -38,7 +39,8 @@ public class AgentController : ControllerBase
         IOperationalStore? operationalStore = null,
         IRuntimeEvaluator? runtimeEvaluator = null,
         IAgentVersioningService? versioningService = null,
-        IAgentKnowledgeRoomStore? agentRoomStore = null)
+        IAgentKnowledgeRoomStore? agentRoomStore = null,
+        IMCPPluginManager? pluginManager = null)
     {
         _metaAgent = metaAgent;
         _agentFactory = agentFactory;
@@ -52,6 +54,7 @@ public class AgentController : ControllerBase
         _runtimeEvaluator = runtimeEvaluator;
         _versioningService = versioningService;
         _agentRoomStore = agentRoomStore;
+        _pluginManager = pluginManager;
         _logger = logger;
     }
 
@@ -170,15 +173,33 @@ public class AgentController : ControllerBase
     [HttpGet("tools")]
     public async Task<IActionResult> GetTools([FromQuery] string? category = null)
     {
-        var tools = await _toolManager.GetAvailableToolsAsync(category);
-        return Ok(tools.Select(t => new
+        var tools = (await _toolManager.GetAvailableToolsAsync(category)).Select(t => new
         {
             t.Id,
             t.Name,
             t.Description,
             category = t.Category.ToString(),
             t.RequiresAuth
-        }));
+        }).ToList();
+
+        if (_pluginManager is not null)
+        {
+            // Se nenhuma categoria foi passada ou se for "MCP"
+            if (string.IsNullOrEmpty(category) || category.Equals("MCP", StringComparison.OrdinalIgnoreCase))
+            {
+                var mcpTools = await _pluginManager.GetAllToolsAsync();
+                tools.AddRange(mcpTools.Select(mcp => new
+                {
+                    Id = $"{mcp.PluginName}_{mcp.ToolName}",
+                    Name = $"{mcp.PluginName}_{mcp.ToolName}",
+                    Description = $"[MCP {mcp.PluginName}] {mcp.Description}",
+                    category = "MCP",
+                    RequiresAuth = false
+                }));
+            }
+        }
+
+        return Ok(tools);
     }
 
     /// <summary>
@@ -607,6 +628,7 @@ public class AgentController : ControllerBase
     /// Define as salas de conhecimento associadas ao agente
     /// </summary>
     [HttpPut("agents/{name}/rooms")]
+    [HttpPost("agents/{name}/rooms")]
     public async Task<IActionResult> SetAgentRooms(string name, [FromBody] List<string> roomIds, CancellationToken ct)
     {
         if (_agentRoomStore is null)

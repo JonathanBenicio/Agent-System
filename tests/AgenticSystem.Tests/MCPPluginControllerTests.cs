@@ -48,23 +48,42 @@ public class MCPPluginControllerTests
         result.Should().BeOfType<OkObjectResult>();
     }
 
-    [Fact]
-    public void GetPlugin_WhenExists_ReturnsOk()
+    private async Task<AgenticDbContext> SetupInMemoryDbContextAsync()
     {
+        var tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
+        tenantContextAccessor.Current.Returns(new TenantContext { TenantId = Tenant.DefaultTenantId });
+
+        var options = new DbContextOptionsBuilder<AgenticDbContext>()
+            .UseInMemoryDatabase("test-mcp-db-" + Guid.NewGuid())
+            .EnableServiceProviderCaching(false)
+            .Options;
+        
+        var db = new AgenticDbContext(options, tenantContextAccessor);
+        await db.Database.EnsureCreatedAsync();
+        
+        _dbContextFactory.CreateDbContextAsync(Arg.Any<CancellationToken>()).Returns(db);
+        return db;
+    }
+
+    [Fact]
+    public async Task GetPlugin_WhenExists_ReturnsOk()
+    {
+        var db = await SetupInMemoryDbContextAsync();
         var plugin = CreateMockPlugin("p1", "Plugin 1");
         _pluginManager.GetPlugin("p1").Returns(plugin);
 
-        var result = _sut.GetPlugin("p1");
+        var result = await _sut.GetPlugin("p1");
 
         result.Should().BeOfType<OkObjectResult>();
     }
 
     [Fact]
-    public void GetPlugin_WhenNotExists_ReturnsNotFound()
+    public async Task GetPlugin_WhenNotExists_ReturnsNotFound()
     {
+        var db = await SetupInMemoryDbContextAsync();
         _pluginManager.GetPlugin("nonexistent").Returns((IMCPPlugin?)null);
 
-        var result = _sut.GetPlugin("nonexistent");
+        var result = await _sut.GetPlugin("nonexistent");
 
         result.Should().BeOfType<NotFoundObjectResult>();
     }
@@ -94,6 +113,7 @@ public class MCPPluginControllerTests
     [Fact]
     public async Task UnloadPlugin_WhenExists_ReturnsNoContent()
     {
+        var db = await SetupInMemoryDbContextAsync();
         var plugin = CreateMockPlugin("p1", "Plugin 1");
         _pluginManager.GetPlugin("p1").Returns(plugin);
 
@@ -103,13 +123,14 @@ public class MCPPluginControllerTests
     }
 
     [Fact]
-    public async Task UnloadPlugin_WhenNotExists_ReturnsNotFound()
+    public async Task UnloadPlugin_WhenNotExists_ReturnsNoContent()
     {
+        var db = await SetupInMemoryDbContextAsync();
         _pluginManager.GetPlugin("nonexistent").Returns((IMCPPlugin?)null);
 
         var result = await _sut.UnloadPlugin("nonexistent", CancellationToken.None);
 
-        result.Should().BeOfType<NotFoundObjectResult>();
+        result.Should().BeOfType<NoContentResult>();
     }
 
     [Fact]

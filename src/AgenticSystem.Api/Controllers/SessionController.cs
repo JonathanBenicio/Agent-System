@@ -16,12 +16,14 @@ public class SessionController : ControllerBase
     private readonly ISessionStore _sessionStore;
     private readonly IHubContext<ChatHub> _hubContext;
     private readonly ILogger<SessionController> _logger;
+    private readonly IVectorStore _vectorStore;
 
-    public SessionController(ISessionStore sessionStore, IHubContext<ChatHub> hubContext, ILogger<SessionController> logger)
+    public SessionController(ISessionStore sessionStore, IHubContext<ChatHub> hubContext, ILogger<SessionController> logger, IVectorStore vectorStore)
     {
         _sessionStore = sessionStore;
         _hubContext = hubContext;
         _logger = logger;
+        _vectorStore = vectorStore;
     }
 
     [HttpGet]
@@ -78,6 +80,15 @@ public class SessionController : ControllerBase
 
         await _sessionStore.DeleteAsync(id, ct);
         _logger.LogInformation("Session {SessionId} deleted by user {UserId}", id, userId);
+
+        try
+        {
+            await _vectorStore.DeleteCollectionAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to purge session documents from vector store for session {SessionId}", id);
+        }
 
         await _hubContext.Clients.User(userId).SendAsync("SessionDeleted", id, ct);
 

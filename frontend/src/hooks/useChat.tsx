@@ -27,12 +27,21 @@ interface ChatContextValue {
   providers: LLMProviderInfo[]
   selectedProvider: string
   selectedModel: string
+  selectedRoomId: string
+  selectedAgentId: string
+  associateToRoom: boolean
+  activeChannel: string
+  setActiveChannel: (channel: string) => void
   setSelectedProvider: (providerName: string) => void
   setSelectedModel: (modelName: string) => void
+  setSelectedRoomId: (roomId: string) => void
+  setSelectedAgentId: (agentId: string) => void
+  setAssociateToRoom: (associate: boolean) => void
   refreshAiConfiguration: () => Promise<void>
   sendMessage: (text: string, targetAgent?: string) => Promise<void>
-  clearMessages: () => void
+  clearMessages: () => Promise<void>
   loadHistory: (sessionId: string) => Promise<void>
+  addLocalMessage: (message: ChatMessage) => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
@@ -42,17 +51,72 @@ const ChatContext = createContext<ChatContextValue | null>(null)
  * Mount once at the app root — all consumers share the same state.
  */
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>({ general: [] })
+  const [activeChannel, setActiveChannel] = useState<string>('general')
   const [isConnected, setIsConnected] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
   const [connectionState, setConnectionState] = useState<string>('Disconnected')
-  const [sessionId, setSessionId] = useState<string>('')
+  const [sessionId, setSessionId] = useState<string>(() => generateId())
   const [providers, setProviders] = useState<LLMProviderInfo[]>([])
   const [selectedProvider, setSelectedProviderState] = useState('')
   const [selectedModel, setSelectedModelState] = useState('')
+  const [selectedRoomId, setSelectedRoomId] = useState<string>('')
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('')
+  const [associateToRoom, setAssociateToRoom] = useState<boolean>(true)
   const [activeSessionSummary, setActiveSessionSummary] = useState<SessionSummaryDto | undefined>()
   const [activeSessionInsights, setActiveSessionInsights] = useState<SessionInsightsDto | undefined>()
   const sendingRef = useRef(false)
+
+  const activeChannelRef = useRef(activeChannel)
+  useEffect(() => {
+    activeChannelRef.current = activeChannel
+  }, [activeChannel])
+
+  const messages = messagesMap[activeChannel] || []
+
+  const setMessages = useCallback((newMessages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => {
+    setMessagesMap(prev => {
+      const channel = activeChannelRef.current
+      const currentList = prev[channel] || []
+      const updatedList = typeof newMessages === 'function' ? newMessages(currentList) : newMessages
+      return {
+        ...prev,
+        [channel]: updatedList
+      }
+    })
+  }, [])
+
+  // Temporizador para limpar automaticamente o estado isProcessing (Autocleanup / Timeout de segurança - US-25)
+  useEffect(() => {
+    let timeoutId: any = null
+
+    if (isProcessing) {
+      timeoutId = setTimeout(() => {
+        setIsProcessing(false)
+        console.warn('⚠️ Timeout de processamento atingido: Forçando reset do estado isProcessing.')
+        setMessages(prev => {
+          if (prev.length > 0 && prev[prev.length - 1].content === 'Aviso do Sistema: Tempo limite excedido ao aguardar resposta do agente.') {
+            return prev
+          }
+          return [
+            ...prev,
+            {
+              id: generateId(),
+              role: 'system',
+              content: 'Aviso do Sistema: Tempo limite excedido ao aguardar resposta do agente.',
+              timestamp: new Date().toISOString(),
+            }
+          ]
+        })
+      }, 10000) // 10 segundos de timeout de segurança conforme especificado na US-25 e Gap 2
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+    }
+  }, [isProcessing])
 
   const loadHistory = useCallback(async (id: string) => {
     setIsProcessing(true)
@@ -68,6 +132,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         tools: m.tools,
         timestamp: m.timestamp,
         isHistory: true,
+        memoryInjected: (m as any).memoryInjected,
+        citations: (m as any).citations,
       }))
       setMessages(mapped)
       setSessionId(id)
@@ -258,7 +324,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshAiConfiguration()
 
     const handleRefresh = () => {
@@ -287,14 +353,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const sendViaRest = useCallback(async (text: string, targetAgent?: string) => {
     setIsProcessing(true)
     try {
+      const activeAgent = targetAgent ?? selectedAgentId
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           message: text,
-          targetAgent: targetAgent ?? null,
+          targetAgent: activeAgent || null,
           provider: selectedProvider || null,
           model: selectedModel || null,
+          sessionId: sessionId || null,
+          context: selectedRoomId ? { 'rag.knowledgeRoomId': selectedRoomId } : null,
         }),
       })
       const data = await res.json()
@@ -304,7 +373,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         content: data.response,
         agentName: data.agentUsed,
         agentTier: data.agentTier,
-        actions: data.actionsPerformed,
+        actions: data.actionsPerformed ?? data.actions,
+        tools: data.toolsPerformed ?? data.tools,
+        success: data.success,
+        citations: data.citations,
+        memoryInjected: data.memoryInjected,
         timestamp: new Date().toISOString(),
       }])
     } catch (err) {
@@ -317,7 +390,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       }])
     }
     setIsProcessing(false)
-  }, [selectedModel, selectedProvider])
+  }, [selectedModel, selectedProvider, selectedAgentId, selectedRoomId, sessionId])
 
   const sendMessage = useCallback(async (text: string, targetAgent?: string) => {
     if (!text.trim() || sendingRef.current) return
@@ -331,23 +404,42 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }])
 
     const conn = getConnection()
+    const activeAgent = targetAgent ?? selectedAgentId
     if (conn.state === signalR.HubConnectionState.Connected) {
       setIsProcessing(true)
       try {
-        await conn.invoke('SendMessage', text, targetAgent ?? null, selectedProvider || null, selectedModel || null, null)
+        await conn.invoke(
+          'SendMessage',
+          text,
+          activeAgent || null,
+          selectedProvider || null,
+          selectedModel || null,
+          null,
+          sessionId || null,
+          selectedRoomId || null
+        )
       } catch (err) {
         console.error('SendMessage error:', err)
-        await sendViaRest(text, targetAgent)
+        await sendViaRest(text, activeAgent)
       }
     } else {
-      await sendViaRest(text, targetAgent)
+      await sendViaRest(text, activeAgent)
     }
     sendingRef.current = false
-  }, [selectedModel, selectedProvider, sendViaRest])
+  }, [selectedModel, selectedProvider, selectedAgentId, selectedRoomId, sessionId, sendViaRest])
 
-  const clearMessages = useCallback(() => {
-    setMessages([])
-    setSessionId('')
+  const clearMessages = useCallback(async () => {
+    setMessagesMap(prev => ({ ...prev, [activeChannel]: [] }))
+    setSessionId(generateId())
+    setActiveSessionSummary(undefined)
+    setActiveSessionInsights(undefined)
+    setSelectedRoomId('')
+    setSelectedAgentId('')
+    setAssociateToRoom(true)
+  }, [activeChannel])
+
+  const addLocalMessage = useCallback((message: ChatMessage) => {
+    setMessages(prev => [...prev, message])
   }, [])
 
   return (
@@ -363,12 +455,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         providers,
         selectedProvider,
         selectedModel,
+        selectedRoomId,
+        selectedAgentId,
+        associateToRoom,
+        activeChannel,
+        setActiveChannel,
         setSelectedProvider,
         setSelectedModel,
+        setSelectedRoomId,
+        setSelectedAgentId,
+        setAssociateToRoom,
         refreshAiConfiguration,
         sendMessage,
         clearMessages,
         loadHistory,
+        addLocalMessage,
       }}
     >
       {children}
@@ -401,12 +502,21 @@ export function useChat(targetAgent?: string) {
     providers: ctx.providers,
     selectedProvider: ctx.selectedProvider,
     selectedModel: ctx.selectedModel,
+    selectedRoomId: ctx.selectedRoomId,
+    selectedAgentId: ctx.selectedAgentId,
+    associateToRoom: ctx.associateToRoom,
+    activeChannel: ctx.activeChannel,
+    setActiveChannel: ctx.setActiveChannel,
     setSelectedProvider: ctx.setSelectedProvider,
     setSelectedModel: ctx.setSelectedModel,
+    setSelectedRoomId: ctx.setSelectedRoomId,
+    setSelectedAgentId: ctx.setSelectedAgentId,
+    setAssociateToRoom: ctx.setAssociateToRoom,
     refreshAiConfiguration: ctx.refreshAiConfiguration,
     sendMessage: boundSend,
     clearMessages: ctx.clearMessages,
     loadHistory: ctx.loadHistory,
+    addLocalMessage: ctx.addLocalMessage,
   }
 }
 

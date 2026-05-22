@@ -331,4 +331,21 @@ public class InMemoryVectorStore : IVectorStore
 
         return snippet;
     }
+
+    public Task DeleteCollectionAsync(string collection)
+    {
+        if (string.IsNullOrWhiteSpace(collection))
+            return Task.CompletedTask;
+
+        if (_collections.TryRemove(collection, out _))
+        {
+            _logger.LogInformation("🗑️ Deleted collection {Collection} from in-memory store", collection);
+        }
+        else
+        {
+            _logger.LogDebug("⚠️ Collection {Collection} not found in in-memory store to delete", collection);
+        }
+
+        return Task.CompletedTask;
+    }
 }

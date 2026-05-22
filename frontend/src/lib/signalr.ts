@@ -120,4 +120,62 @@ export function getOnnxConnectionState(): signalR.HubConnectionState {
   return onnxConnection?.state ?? signalR.HubConnectionState.Disconnected
 }
 
+// ==========================================
+// 🔌 Workflow Hub Connection Helpers
+// ==========================================
+let workflowConnection: signalR.HubConnection | null = null
+let lastWorkflowTenantId: string | null = null
+const WORKFLOW_HUB_URL = '/hubs/workflow'
+
+export function getWorkflowConnection(): signalR.HubConnection {
+  const currentTenantId = useKnowledgeStore.getState().activeWorkspaceId
+
+  if (workflowConnection && lastWorkflowTenantId !== currentTenantId) {
+    const oldConn = workflowConnection
+    workflowConnection = null
+    oldConn.stop().catch(err => console.warn('Failed to stop old workflow hub connection on tenant switch:', err))
+  }
+
+  if (!workflowConnection) {
+    lastWorkflowTenantId = currentTenantId
+    const url = currentTenantId ? `${WORKFLOW_HUB_URL}?X-Tenant-Id=${encodeURIComponent(currentTenantId)}` : WORKFLOW_HUB_URL
+    workflowConnection = new signalR.HubConnectionBuilder()
+      .withUrl(url, {
+        accessTokenFactory: () => getAuthToken() ?? '',
+        headers: {
+          ...(getApiKey() && !getAuthToken() ? { 'X-Api-Key': getApiKey()! } : {}),
+          ...(currentTenantId ? { 'X-Tenant-Id': currentTenantId } : {}),
+        },
+      })
+      .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
+      .configureLogging(signalR.LogLevel.Information)
+      .build()
+  }
+  return workflowConnection
+}
+
+let startWorkflowPromise: Promise<void> | null = null
+
+export async function startWorkflowConnection(): Promise<void> {
+  const conn = getWorkflowConnection()
+  if (conn.state === signalR.HubConnectionState.Disconnected) {
+    startWorkflowPromise = conn.start()
+    await startWorkflowPromise
+    startWorkflowPromise = null
+  }
+}
+
+export async function stopWorkflowConnection(): Promise<void> {
+  if (startWorkflowPromise) {
+    await startWorkflowPromise.catch(() => {})
+  }
+  if (workflowConnection && workflowConnection.state !== signalR.HubConnectionState.Disconnected) {
+    await workflowConnection.stop()
+  }
+}
+
+export function getWorkflowConnectionState(): signalR.HubConnectionState {
+  return workflowConnection?.state ?? signalR.HubConnectionState.Disconnected
+}
+
 export { signalR }

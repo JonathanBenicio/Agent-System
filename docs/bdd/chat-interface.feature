@@ -136,3 +136,66 @@ Funcionalidade: Chat Interface
     Quando o SessionConsolidator é acionado em background
     Então as mensagens antigas são compactadas em um resumo semântico gerado por LLM
     E o contexto essencial da conversa é preservado sem estourar a janela de tokens
+
+  # ──────────────────────────────────────────────
+  # US-11 — Ingestão RAG via Drag and Drop
+  # ──────────────────────────────────────────────
+
+  Cenário: Exibir overlay visual ao arrastar arquivo sobre o chat
+    Dado que estou na página "/"
+    Quando arrasto um arquivo válido para a área de chat
+    Então o overlay de "Ingestão RAG Contextual" é exibido com desfoque de fundo e borda tracejada
+    E exibe o modo atual de indexação (Sala ou Sessão)
+
+  Cenário: Realizar ingestão bem-sucedida de documentos
+    Dado que estou na página "/"
+    Quando solto os arquivos "documento.pdf" na área de chat
+    Então exibe um spinner com o texto "Processando Documentos"
+    E os arquivos são ingeridos via API POST /api/document/ingest
+    E uma notificação de sucesso em Toast é exibida
+    E uma mensagem de sistema é adicionada informando que os arquivos foram indexados com sucesso
+
+  # ──────────────────────────────────────────────
+  # US-12 — Rastreabilidade e Citações de Fontes RAG
+  # ──────────────────────────────────────────────
+
+  Cenário: Visualizar fontes de RAG na mensagem de resposta
+    Dado que o agente responde a uma pergunta baseada em documentos
+    Quando a resposta do agente contendo citações é renderizada
+    Então exibe uma seção de "Fontes" com a contagem de referências utilizadas
+    E cada fonte exibe o nome abreviado do documento de origem
+
+  Cenário: Interagir com o popover de citação
+    Dado que a resposta exibe fontes de RAG
+    Quando clico na pílula da primeira fonte bibliográfica
+    Então exibe um painel popup contendo o trecho exato do texto citado
+    E exibe a porcentagem de confiança da citação
+    E exibe o número da página se disponível
+
+  # ──────────────────────────────────────────────
+  # US-13 — Visualização de Workflows, Ações e Metadados
+  # ──────────────────────────────────────────────
+
+  Cenário: Exibição de card interativo de execução de Workflow
+    Dado que o agente dispara um fluxo operacional em background
+    Quando a mensagem recebida possui um ID de execução de workflow
+    Então exibe um cartão interativo de execução do Workflow na linha do tempo
+    E oculta a mensagem padrão de texto do agente
+
+  Cenário: Visualizar badges de ferramentas e ações executadas
+    Dado que o agente utilizou recursos externos para responder
+    Quando a mensagem de resposta é renderizada
+    Então exibe um badge identificador "⚡ [Nome da Ação]" para cada ação acionada
+    E exibe um badge identificador "🔧 [Nome da Ferramenta]" para cada ferramenta utilizada
+
+  Cenário: Exibição de indicador de memória recuperada
+    Dado que o usuário envia um prompt que altera/ativa memórias anteriores
+    Quando a mensagem do usuário é renderizada na timeline
+    Então exibe um badge verde sutil de "Memória Recuperada" com ícone de robô acima do texto
+
+  Cenário: Exibição de mensagem de alerta do sistema
+    Dado que ocorre uma falha sistêmica ou de conexão na comunicação
+    Quando uma mensagem com o papel (role) de "system" é inserida na timeline
+    Então ela é formatada com borda avermelhada e ícone de triângulo de alerta
+    E exibe a descrição do erro de forma amigável
+

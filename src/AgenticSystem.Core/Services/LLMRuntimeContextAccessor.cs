@@ -30,7 +30,8 @@ public sealed class LLMRuntimeContextAccessor : ILLMRuntimeContextAccessor
             RequestApiKeyId = ReadPreference(userContext.Preferences, "llm.request.apiKeyId"),
             SessionProvider = ReadPreference(userContext.Preferences, "llm.session.provider") ?? ReadPreference(userContext.Preferences, "llm.provider"),
             SessionModel = ReadPreference(userContext.Preferences, "llm.session.model") ?? ReadPreference(userContext.Preferences, "llm.model"),
-            SessionApiKey = ReadPreference(userContext.Preferences, "llm.session.apiKey") ?? ReadPreference(userContext.Preferences, "llm.apiKey")
+            SessionApiKey = ReadPreference(userContext.Preferences, "llm.session.apiKey") ?? ReadPreference(userContext.Preferences, "llm.apiKey"),
+            KnowledgeRoomId = ReadPreference(userContext.Preferences, "rag.knowledgeRoomId")
         };
     }
 

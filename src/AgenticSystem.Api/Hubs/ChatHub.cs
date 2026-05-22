@@ -35,7 +35,9 @@ public class ChatHub : Hub
         string? targetAgent = null,
         string? provider = null,
         string? model = null,
-        string? apiKey = null)
+        string? apiKey = null,
+        string? sessionId = null,
+        string? selectedRoomId = null)
     {
         // Identity from authenticated principal — never trust client-supplied userId
         var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -43,7 +45,13 @@ public class ChatHub : Hub
             ?? Context.User?.Identity?.Name
             ?? "authenticated-user";
 
-        _logger.LogInformation("💬 Message from {UserId}: {Message} (target: {Target})", userId, message[..Math.Min(50, message.Length)], targetAgent ?? "auto");
+        _logger.LogInformation("💬 Message from {UserId}: {Message} (target: {Target}, session: {SessionId}, room: {RoomId})", userId, message[..Math.Min(50, message.Length)], targetAgent ?? "auto", sessionId ?? "new", selectedRoomId ?? "none");
+
+        var preferences = BuildLlmPreferences(provider, model, apiKey);
+        if (!string.IsNullOrWhiteSpace(selectedRoomId))
+        {
+            preferences["rag.knowledgeRoomId"] = selectedRoomId;
+        }
 
         var userContext = new UserContext
         {
@@ -51,7 +59,7 @@ public class ChatHub : Hub
             Name = userId,
             TenantId = _tenantContextAccessor.Current.TenantId ?? Tenant.DefaultTenantId,
             Language = "pt-BR",
-            Preferences = BuildLlmPreferences(provider, model, apiKey)
+            Preferences = preferences
         };
 
         // Notify client that processing started
@@ -59,7 +67,7 @@ public class ChatHub : Hub
 
         try
         {
-            await foreach (var streamEvent in ResolveStream(message, userContext, targetAgent, Context.ConnectionAborted))
+            await foreach (var streamEvent in ResolveStream(message, userContext, targetAgent, sessionId, Context.ConnectionAborted))
             {
                 await Clients.Caller.SendAsync("StreamEvent", streamEvent, Context.ConnectionAborted);
 
@@ -128,8 +136,10 @@ public class ChatHub : Hub
         string? targetAgent = null,
         string? provider = null,
         string? model = null,
-        string? apiKey = null)
-        => SendMessage(message, targetAgent, provider, model, apiKey);
+        string? apiKey = null,
+        string? sessionId = null,
+        string? selectedRoomId = null)
+        => SendMessage(message, targetAgent, provider, model, apiKey, sessionId, selectedRoomId);
 
     public override async Task OnConnectedAsync()
     {
@@ -176,10 +186,10 @@ public class ChatHub : Hub
         return preferences;
     }
 
-    private IAsyncEnumerable<AgentStreamEvent> ResolveStream(string message, UserContext userContext, string? targetAgent, CancellationToken ct)
+    private IAsyncEnumerable<AgentStreamEvent> ResolveStream(string message, UserContext userContext, string? targetAgent, string? sessionId, CancellationToken ct)
     {
         return !string.IsNullOrWhiteSpace(targetAgent)
-            ? _metaAgent.ProcessDirectRequestStreamAsync(message, userContext, targetAgent, ct)
-            : _metaAgent.ProcessRequestStreamAsync(message, userContext, ct);
+            ? _metaAgent.ProcessDirectRequestStreamAsync(message, userContext, targetAgent, sessionId, ct)
+            : _metaAgent.ProcessRequestStreamAsync(message, userContext, sessionId, ct);
     }
 }

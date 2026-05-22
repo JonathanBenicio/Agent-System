@@ -11,10 +11,10 @@ namespace AgenticSystem.Core.Interfaces;
 public interface ISessionLifecycleCoordinator
 {
     /// <summary>
-    /// Starts a new session, checking tenant quotas and publishing creation events.
+    /// Starts a new session or reuses an existing one, checking tenant quotas and publishing creation events.
     /// </summary>
-    /// <returns>The session ID for the newly created session.</returns>
-    Task<string> StartSessionAsync(UserContext context, CancellationToken ct = default);
+    /// <returns>The session ID for the session.</returns>
+    Task<string> StartSessionAsync(UserContext context, string? sessionId = null, CancellationToken ct = default);
 
     /// <summary>
     /// Creates a runtime execution scope for the given session.

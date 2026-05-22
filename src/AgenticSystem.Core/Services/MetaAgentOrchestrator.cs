@@ -106,19 +106,19 @@ public class MetaAgentOrchestrator : IMetaAgent
             Task.FromResult(false);
     }
 
-    public async Task<AgentResponse> ProcessRequestAsync(string input, UserContext context)
+    public async Task<AgentResponse> ProcessRequestAsync(string input, UserContext context, string? sessionId = null)
     {
         if (!string.IsNullOrEmpty(context.TenantId) && !await _sessionCoordinator.CanStartSessionAsync(context.TenantId))
         {
             return AgentResponse.Error("🚫 Limite de sessões simultâneas atingido para o seu tenant.");
         }
 
-        var sessionId = await _sessionCoordinator.StartSessionAsync(context);
-        using var scope = _sessionCoordinator.BeginExecutionScope(sessionId, context);
+        var resolvedSessionId = await _sessionCoordinator.StartSessionAsync(context, sessionId);
+        using var scope = _sessionCoordinator.BeginExecutionScope(resolvedSessionId, context);
         try
         {
-            var response = await ProcessRequestCoreAsync(sessionId, input, context, CancellationToken.None);
-            await _sessionCoordinator.EndSessionAsync(sessionId, context);
+            var response = await ProcessRequestCoreAsync(resolvedSessionId, input, context, CancellationToken.None);
+            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context);
             return response;
         }
         catch (Exception)
@@ -130,16 +130,17 @@ public class MetaAgentOrchestrator : IMetaAgent
     public async IAsyncEnumerable<AgentStreamEvent> ProcessRequestStreamAsync(
         string input,
         UserContext context,
+        string? sessionId = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var sessionId = await _sessionCoordinator.StartSessionAsync(context, ct);
+        var resolvedSessionId = await _sessionCoordinator.StartSessionAsync(context, sessionId, ct);
 
         try
         {
             await foreach (var streamEvent in _sessionCoordinator.StreamAsync(
-                sessionId,
+                resolvedSessionId,
                 context,
-                token => ProcessRequestCoreAsync(sessionId, input, context, token),
+                token => ProcessRequestCoreAsync(resolvedSessionId, input, context, token),
                 ct))
             {
                 yield return streamEvent;
@@ -147,7 +148,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         }
         finally
         {
-            await _sessionCoordinator.EndSessionAsync(sessionId, context, ct);
+            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context, ct);
         }
     }
 
@@ -155,16 +156,17 @@ public class MetaAgentOrchestrator : IMetaAgent
         string input,
         UserContext context,
         string targetAgent,
+        string? sessionId = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var sessionId = await _sessionCoordinator.StartSessionAsync(context, ct);
+        var resolvedSessionId = await _sessionCoordinator.StartSessionAsync(context, sessionId, ct);
 
         try
         {
             await foreach (var streamEvent in _sessionCoordinator.StreamAsync(
-                sessionId,
+                resolvedSessionId,
                 context,
-                token => ProcessDirectRequestCoreAsync(sessionId, input, context, targetAgent, token),
+                token => ProcessDirectRequestCoreAsync(resolvedSessionId, input, context, targetAgent, token),
                 ct))
             {
                 yield return streamEvent;
@@ -172,7 +174,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         }
         finally
         {
-            await _sessionCoordinator.EndSessionAsync(sessionId, context, ct);
+            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context, ct);
         }
     }
 
@@ -284,19 +286,19 @@ public class MetaAgentOrchestrator : IMetaAgent
         _logger.LogInformation("🧹 Cleanup concluído: {Count} agents inativos removidos", totalCleaned);
     }
 
-    public async Task<AgentResponse> ProcessDirectRequestAsync(string input, UserContext context, string targetAgent)
+    public async Task<AgentResponse> ProcessDirectRequestAsync(string input, UserContext context, string targetAgent, string? sessionId = null)
     {
-        var sessionId = await _sessionCoordinator.StartSessionAsync(context);
-        using var scope = _sessionCoordinator.BeginExecutionScope(sessionId, context);
+        var resolvedSessionId = await _sessionCoordinator.StartSessionAsync(context, sessionId);
+        using var scope = _sessionCoordinator.BeginExecutionScope(resolvedSessionId, context);
         try
         {
-            var response = await ProcessDirectRequestCoreAsync(sessionId, input, context, targetAgent, CancellationToken.None);
-            await _sessionCoordinator.EndSessionAsync(sessionId, context);
+            var response = await ProcessDirectRequestCoreAsync(resolvedSessionId, input, context, targetAgent, CancellationToken.None);
+            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context);
             return response;
         }
         catch (Exception)
         {
-            await _sessionCoordinator.EndSessionAsync(sessionId, context);
+            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context);
             throw;
         }
     }

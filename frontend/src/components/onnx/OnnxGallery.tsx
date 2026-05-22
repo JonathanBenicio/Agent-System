@@ -89,6 +89,7 @@ function BeforeAfterSliderModal({ job, onClose }: BeforeAfterModalProps) {
             </button>
             <button
               onClick={onClose}
+              aria-label="Fechar comparação"
               className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
             >
               <X className="w-5 h-5" />

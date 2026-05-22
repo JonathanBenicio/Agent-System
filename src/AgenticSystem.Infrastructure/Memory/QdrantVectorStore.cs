@@ -104,6 +104,22 @@ public class QdrantVectorStore : IVectorStore
         return Task.FromResult(new VectorStoreStats { TenantId = tenantId, DocumentCount = 0, TotalBytes = 0 });
     }
 
+    public async Task DeleteCollectionAsync(string collection)
+    {
+        if (string.IsNullOrWhiteSpace(collection))
+            return;
+
+        var response = await _httpClient.DeleteAsync($"{_settings.Qdrant.Url}/collections/{collection}");
+        if (response.IsSuccessStatusCode || response.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _logger.LogInformation("🗑️ Deleted Qdrant collection: {Collection}", collection);
+        }
+        else
+        {
+            response.EnsureSuccessStatusCode();
+        }
+    }
+
     private class QdrantCollectionsResponse
     {
         public QdrantCollectionsResult? Result { get; set; }

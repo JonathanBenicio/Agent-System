@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { MessageSquare, Plus, MoreHorizontal, Pencil, Trash2, Loader2 } from 'lucide-react'
 import { useSessions } from '@/hooks/useSessions'
 import { cn } from '@/lib/utils'
@@ -17,10 +17,17 @@ export function SessionSidebar({
   onNewSession,
   onClearMessages,
 }: SessionSidebarProps) {
-  const { sessions, isLoading, error, deleteSession, renameSession } = useSessions()
+  const { sessions, isLoading, error, deleteSession, renameSession, refresh } = useSessions()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [menuId, setMenuId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (activeSessionId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void refresh()
+    }
+  }, [activeSessionId, refresh])
 
   const handleNewSession = () => {
     onClearMessages()
@@ -48,6 +55,9 @@ export function SessionSidebar({
   const handleDelete = async (id: string) => {
     await deleteSession(id)
     setMenuId(null)
+    if (id === activeSessionId) {
+      handleNewSession()
+    }
   }
 
   if (isLoading && sessions.length === 0) {

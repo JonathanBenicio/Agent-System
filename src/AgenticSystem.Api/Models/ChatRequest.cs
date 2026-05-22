@@ -14,7 +14,8 @@ public record ChatRequest(
     string? Provider = null,
     string? Model = null,
     string? ApiKey = null,
-    Dictionary<string, object>? Context = null);
+    Dictionary<string, object>? Context = null,
+    string? SessionId = null);
 
 /// <summary>
 /// Response payload for the synchronous chat endpoint.

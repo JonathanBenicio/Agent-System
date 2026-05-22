@@ -24,11 +24,14 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
 
   setUser: (user, token) => {
-    set({ 
-      user, 
-      token, 
-      isAuthenticated: !!user,
-      isLoading: false 
+    set((state) => {
+      const hasApiKey = !!state.apiKey || !!localStorage.getItem('agentic_api_key')
+      return { 
+        user, 
+        token, 
+        isAuthenticated: !!user || hasApiKey,
+        isLoading: false 
+      }
     })
   },
 
@@ -44,6 +47,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         body: JSON.stringify({ apiKey }),
       })
       if (!res.ok) return false
+      localStorage.setItem('agentic_api_key', apiKey)
       set({ apiKey, isAuthenticated: true, isLoading: false })
       return true
     } catch {
@@ -62,11 +66,21 @@ export const useAuthStore = create<AuthState>((set) => ({
           isAuthenticated: true 
         })
       } else {
-        set({ user: null, token: null, isAuthenticated: false })
+        const savedApiKey = localStorage.getItem('agentic_api_key')
+        if (savedApiKey) {
+          set({ apiKey: savedApiKey, isAuthenticated: true })
+        } else {
+          set({ user: null, token: null, isAuthenticated: false })
+        }
       }
     } catch (error) {
       console.error('Error checking auth:', error)
-      set({ user: null, token: null, isAuthenticated: false })
+      const savedApiKey = localStorage.getItem('agentic_api_key')
+      if (savedApiKey) {
+        set({ apiKey: savedApiKey, isAuthenticated: true })
+      } else {
+        set({ user: null, token: null, isAuthenticated: false })
+      }
     } finally {
       set({ isLoading: false })
     }
@@ -78,6 +92,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await supabase.auth.signOut()
+    localStorage.removeItem('agentic_api_key')
     set({ user: null, token: null, apiKey: null, isAuthenticated: false })
   },
 }))

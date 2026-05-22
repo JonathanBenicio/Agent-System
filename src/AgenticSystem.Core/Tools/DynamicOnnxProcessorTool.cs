@@ -521,7 +521,7 @@ public class DynamicOnnxProcessorTool : ITool
                     var collectionEntry = collectionMethod?.Invoke(entry, new[] { "AssociatedFiles" });
                     if (collectionEntry != null)
                     {
-                        var loadMethod = collectionEntry.GetType().GetMethod("Load");
+                        var loadMethod = collectionEntry.GetType().GetMethod("Load", Type.EmptyTypes);
                         loadMethod?.Invoke(collectionEntry, null);
                     }
                 }

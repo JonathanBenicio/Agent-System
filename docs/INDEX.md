@@ -18,7 +18,9 @@ Documento canônico de arquitetura atual:
 | [user-stories/us-multi-provider-api-keys.md](user-stories/us-multi-provider-api-keys.md) | US-42: Gerenciamento e Roteamento de Múltiplas API Keys |
 | [user-stories/unified-chat-integration.md](user-stories/unified-chat-integration.md) | US-021: Integração Unificada de Pilares Tecnológicos no Chat Principal |
 | [user-stories/us-async-onnx-processing.md](user-stories/us-async-onnx-processing.md) | US-43: Processamento Assíncrono de Inferência ONNX |
+| [user-stories/us-advanced-chat-session-management.md](user-stories/us-advanced-chat-session-management.md) | US-44: Chat Avançado e Gerenciamento Unificado de Sessões |
 | [issue-61-multi-provider-api-keys.md](issue-61-multi-provider-api-keys.md) | GitHub Issue #61: Multi-Provider API Keys Epic |
+| [issue-chat-enhancements.md](issue-chat-enhancements.md) | GitHub Issue #93: Chat Avançado Epic |
 | [agentic-design-manifesto.md](agentic-design-manifesto.md) | Princípios de design e filosofia do sistema |
 
 ### Arquitetura Corrente
@@ -66,6 +68,7 @@ Documento canônico de arquitetura atual:
 | [architecture/adr/024-backend-architectural-refactoring.md](architecture/adr/024-backend-architectural-refactoring.md) | ADR 024: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
 | [../plan/adr-020-protocol-hosting-standardization.md](../plan/adr-020-protocol-hosting-standardization.md) | ADR 020: Padronização e Exposição de Protocolos (A2A e AgUI) |
 | [../plan/adr-021-evaluation-framework.md](../plan/adr-021-evaluation-framework.md) | ADR 021: Framework de Avaliação Contínua e Golden Sets |
+| [architecture/adr/025-advanced-chat-session-management.md](architecture/adr/025-advanced-chat-session-management.md) | ADR 025: Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) |
 
 ### Glossários
 
@@ -97,6 +100,7 @@ Ver [bdd/README.md](bdd/README.md) para o inventário completo e instruções de
 | [bdd/api-key-masking-embedding.feature](bdd/api-key-masking-embedding.feature) | Mascaramento de segredos no módulo de embeddings |
 | [bdd/multi-provider-api-keys.feature](bdd/multi-provider-api-keys.feature) | BDD: Cenários executáveis para múltiplas API Keys |
 | [bdd/async-onnx-processing.feature](bdd/async-onnx-processing.feature) | Processamento Assíncrono de Inferência ONNX |
+| [bdd/advanced-chat-session-management.feature](bdd/advanced-chat-session-management.feature) | Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) |
 
 ---
 
@@ -116,6 +120,7 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 | [plan/async-onnx-processing-plan.md](plan/async-onnx-processing-plan.md) | Roadmap/Plan: Processamento Assíncrono de Inferência ONNX e Galeria |
 | [plan/backend-testing-roadmap.md](plan/backend-testing-roadmap.md) | Roadmap/Plan: Plano e Roteiro de Testes do Backend (.NET 10) |
 | [plan/architectural-refactoring-plan.md](plan/architectural-refactoring-plan.md) | Roadmap/Plan: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
+| [plan/chat-enhancements.md](plan/chat-enhancements.md) | Roadmap/Plan: Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) (Issue #93) |
 | [planejamento/AI_Capabilities_Gaps.md](planejamento/AI_Capabilities_Gaps.md) | Diagnóstico vivo de gaps e oportunidades arquiteturais |
 | [planejamento/AI_Advanced_Capabilities_Roadmap.md](planejamento/AI_Advanced_Capabilities_Roadmap.md) | Roadmap futuro para capacidades avançadas |
 | [planejamento/framework-first-migration-plan.md](planejamento/framework-first-migration-plan.md) | Resumo histórico da migração framework-first (concluída) |

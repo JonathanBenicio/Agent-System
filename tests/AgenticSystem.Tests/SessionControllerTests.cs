@@ -18,6 +18,7 @@ public class SessionControllerTests
     private readonly ISessionStore _sessionStore;
     private readonly IHubContext<ChatHub> _hubContext;
     private readonly ILogger<SessionController> _logger;
+    private readonly IVectorStore _vectorStore;
     private readonly SessionController _sut;
     private const string UserId = "user-123";
 
@@ -26,7 +27,8 @@ public class SessionControllerTests
         _sessionStore = Substitute.For<ISessionStore>();
         _hubContext = Substitute.For<IHubContext<ChatHub>>();
         _logger = Substitute.For<ILogger<SessionController>>();
-        _sut = new SessionController(_sessionStore, _hubContext, _logger);
+        _vectorStore = Substitute.For<IVectorStore>();
+        _sut = new SessionController(_sessionStore, _hubContext, _logger, _vectorStore);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
