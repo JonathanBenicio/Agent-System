@@ -14,7 +14,7 @@ public class TenantResolverTests
 
     public TenantResolverTests()
     {
-        _resolver = new TenantResolver(_store, _logger);
+        _resolver = new TenantResolver(_store, _logger, isDevelopment: false);
     }
 
     [Fact]

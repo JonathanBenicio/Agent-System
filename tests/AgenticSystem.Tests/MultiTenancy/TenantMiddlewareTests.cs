@@ -19,7 +19,7 @@ public class TenantMiddlewareTests
     public TenantMiddlewareTests()
     {
         _store = new InMemoryTenantStore();
-        _resolver = new TenantResolver(_store, Substitute.For<ILogger<TenantResolver>>());
+        _resolver = new TenantResolver(_store, Substitute.For<ILogger<TenantResolver>>(), isDevelopment: false);
         _tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
         _tenantContextAccessor.BeginScope(Arg.Any<TenantContext>()).Returns(Substitute.For<IDisposable>());
         _logger = Substitute.For<ILogger<TenantMiddleware>>();
