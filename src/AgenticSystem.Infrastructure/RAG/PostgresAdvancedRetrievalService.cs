@@ -138,7 +138,7 @@ public class PostgresAdvancedRetrievalService : IAdvancedRetrievalService
         if (!string.IsNullOrWhiteSpace(tsQueryString))
         {
             // Use raw SQL for ts_rank_cd which isn't directly exposed via EF Core LINQ
-            ftsResults = await db.VectorDocuments
+            var rawResults = await db.VectorDocuments
                 .FromSqlInterpolated($"""
                     SELECT *, ts_rank_cd("SearchVector", plainto_tsquery('english', {query.Query})) AS rank_score
                     FROM vector_documents
@@ -148,8 +148,9 @@ public class PostgresAdvancedRetrievalService : IAdvancedRetrievalService
                 """)
                 .AsNoTracking()
                 .Select(x => new { Doc = x, Rank = 0f })
-                .ToListAsync(ct)
-                .ContinueWith(t => t.Result.Select(r => (r.Doc, r.Rank)).ToList(), ct);
+                .ToListAsync(ct);
+
+            ftsResults = rawResults.Select(r => (r.Doc, r.Rank)).ToList();
 
             // If FTS returns no results, fallback to ILIKE for resilience
             if (ftsResults.Count == 0)

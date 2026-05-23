@@ -247,7 +247,7 @@ public class TriggerEngine : ITriggerEngine
             var actualValue = current.ToString();
             return condition.ExpectedValue != null && actualValue == condition.ExpectedValue;
         }
-        catch
+        catch (JsonException)
         {
             return false;
         }
@@ -266,7 +266,7 @@ public class TriggerEngine : ITriggerEngine
             if (doc.RootElement.ValueKind == JsonValueKind.Number)
                 return doc.RootElement.GetDouble().ToString();
         }
-        catch { }
+        catch (JsonException) { }
 
         // Extract first number from string
         var match = Regex.Match(input, @"-?\d+\.?\d*");

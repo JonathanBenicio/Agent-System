@@ -176,6 +176,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAgentCollaborationWorkflow, AgentCollaborationWorkflow>();
         services.AddSingleton<AgenticVectorStoreAdapter>();
         services.AddSingleton<IAgentChannelService, FrameworkAgentChannelService>();
+        services.AddSingleton<AgenticSystem.Core.Interfaces.IAgentYamlValidator, AgenticSystem.Infrastructure.AgentFramework.AgentYamlValidator>();
 
         var ollamaEnabled = configuration.GetValue<bool>("AgenticSystem:Ollama:Enabled");
         var enableStreaming = configuration.GetValue<bool>("AgenticSystem:Ollama:EnableStreaming");

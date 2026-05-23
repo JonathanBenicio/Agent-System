@@ -45,6 +45,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuditLog, InMemoryAuditLog>();
         services.AddSingleton<IPermissionService, InMemoryPermissionService>();
         services.AddSingleton<IPolicyStore, InMemoryPolicyStore>();
+        services.AddSingleton<IAgentConfigurationService, AgentConfigurationService>();
 
         // Triage & FastPath (ML14 Expansion)
         services.AddSingleton<ITriageService, TriageService>();

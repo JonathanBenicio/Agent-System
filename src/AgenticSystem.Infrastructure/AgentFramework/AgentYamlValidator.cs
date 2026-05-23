@@ -50,31 +50,9 @@ public class AgentYamlAbilitiesDto
 }
 
 /// <summary>
-/// Modelo contendo detalhes sobre eventuais erros de validação sintática ou semântica do YAML.
-/// </summary>
-public class YamlValidationError
-{
-    public int Line { get; set; }
-    public int Column { get; set; }
-    public string ErrorCode { get; set; } = string.Empty;
-    public string Message { get; set; } = string.Empty;
-    public string Severity { get; set; } = "Error"; // "Error" ou "Warning"
-}
-
-/// <summary>
-/// Resultado da operação de validação de YAML.
-/// </summary>
-public class YamlValidationResult
-{
-    public bool IsValid { get; set; }
-    public List<YamlValidationError> Errors { get; set; } = new();
-    public AgentSpecification? Specification { get; set; }
-}
-
-/// <summary>
 /// Validador declarativo de agentes para carregar e inspecionar YAMLs de configuração.
 /// </summary>
-public class AgentYamlValidator
+public class AgentYamlValidator : IAgentYamlValidator
 {
     private readonly IToolManager? _toolManager;
 

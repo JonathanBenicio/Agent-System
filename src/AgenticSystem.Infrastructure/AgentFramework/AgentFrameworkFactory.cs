@@ -117,12 +117,7 @@ public class AgentFrameworkFactory
             .Build(_serviceProvider);
     }
 
-    // Backward-compatible sync wrappers used by tests and older callers.
-    public FrameworkAgent CreateFromAgent(IAgent agent)
-        => CreateFromAgentAsync(agent).GetAwaiter().GetResult();
 
-    public FrameworkAgent CreateFromSpecification(AgentSpecification spec)
-        => CreateFromSpecificationAsync(spec).GetAwaiter().GetResult();
 
     public async Task<AgentToolBinding?> CreateToolBindingAsync(IAgent agent, string sessionId, CancellationToken ct = default)
     {
