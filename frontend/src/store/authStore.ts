@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
+import { useKnowledgeStore } from './useKnowledgeStore'
 
 interface AuthState {
   user: User | null
@@ -16,6 +17,22 @@ interface AuthState {
   setUser: (user: User | null, token: string | null) => void
 }
 
+function parseJwt(token: string) {
+  try {
+    const base64Url = token.split('.')[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload)
+  } catch {
+    return null
+  }
+}
+
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   token: null,
@@ -24,6 +41,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   isLoading: true,
 
   setUser: (user, token) => {
+    if (token) {
+      const decoded = parseJwt(token)
+      const tenantId = decoded?.tenant_id || decoded?.app_metadata?.tenant_id
+      if (tenantId) {
+        useKnowledgeStore.getState().setActiveWorkspace(tenantId)
+      }
+    }
     set((state) => {
       const hasApiKey = !!state.apiKey || !!localStorage.getItem('agentic_api_key')
       return { 
@@ -36,6 +60,13 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   loginWithToken: (token) => {
+    if (token) {
+      const decoded = parseJwt(token)
+      const tenantId = decoded?.tenant_id || decoded?.app_metadata?.tenant_id
+      if (tenantId) {
+        useKnowledgeStore.getState().setActiveWorkspace(tenantId)
+      }
+    }
     set({ token, isAuthenticated: true, isLoading: false })
   },
 
@@ -47,6 +78,11 @@ export const useAuthStore = create<AuthState>((set) => ({
         body: JSON.stringify({ apiKey }),
       })
       if (!res.ok) return false
+      const data = await res.json()
+      const tenantId = data.tenantId
+      if (tenantId) {
+        useKnowledgeStore.getState().setActiveWorkspace(tenantId)
+      }
       localStorage.setItem('agentic_api_key', apiKey)
       set({ apiKey, isAuthenticated: true, isLoading: false })
       return true
@@ -65,6 +101,11 @@ export const useAuthStore = create<AuthState>((set) => ({
           token: session.access_token, 
           isAuthenticated: true 
         })
+        const decoded = parseJwt(session.access_token)
+        const tenantId = decoded?.tenant_id || decoded?.app_metadata?.tenant_id
+        if (tenantId) {
+          useKnowledgeStore.getState().setActiveWorkspace(tenantId)
+        }
       } else {
         const savedApiKey = localStorage.getItem('agentic_api_key')
         if (savedApiKey) {
@@ -93,6 +134,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   logout: async () => {
     await supabase.auth.signOut()
     localStorage.removeItem('agentic_api_key')
+    useKnowledgeStore.getState().setActiveWorkspace('')
     set({ user: null, token: null, apiKey: null, isAuthenticated: false })
   },
 }))

@@ -9,7 +9,7 @@ interface KnowledgeState {
 export const useKnowledgeStore = create<KnowledgeState>()(
   persist(
     (set) => ({
-      activeWorkspaceId: 'admin',
+      activeWorkspaceId: '',
       setActiveWorkspace: (id) => set({ activeWorkspaceId: id }),
     }),
     {

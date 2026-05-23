@@ -218,7 +218,7 @@ public class AuthController : ControllerBase
             }
         });
 
-        return Ok(new { success = true, role = "Admin" });
+        return Ok(new { success = true, role = "Admin", tenantId = accessKey.TenantId });
     }
 
     [HttpPost("logout")]
