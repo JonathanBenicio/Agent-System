@@ -193,10 +193,19 @@ using (var scope = app.Services.CreateScope())
             Serilog.Log.Information("Executando migrações do PostgreSQL/Supabase no startup...");
             await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.MigrateAsync(dbContext.Database);
             Serilog.Log.Information("Migrações concluídas com sucesso.");
+
+            // Executa o auto-bootstrap do sistema
+            var bootstrapService = scope.ServiceProvider.GetService<AgenticSystem.Core.Interfaces.ISystemBootstrapService>();
+            if (bootstrapService is not null)
+            {
+                Serilog.Log.Information("Executando auto-bootstrap do banco de dados...");
+                await bootstrapService.BootstrapAsync();
+                Serilog.Log.Information("Auto-bootstrap finalizado.");
+            }
         }
         catch (Exception ex)
         {
-            Serilog.Log.Error(ex, "Erro fatal ao aplicar migrações do PostgreSQL no startup.");
+            Serilog.Log.Error(ex, "Erro fatal ao aplicar migrações ou auto-bootstrap no startup.");
         }
     }
 }

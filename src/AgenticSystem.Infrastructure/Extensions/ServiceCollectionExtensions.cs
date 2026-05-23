@@ -18,6 +18,7 @@ using AgenticSystem.Infrastructure.Sync;
 using AgenticSystem.Infrastructure.BackgroundServices;
 using AgenticSystem.Infrastructure.LLM.BackgroundServices;
 using AgenticSystem.Infrastructure.LLM.Services;
+using AgenticSystem.Infrastructure.Services;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
@@ -348,6 +349,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<TenantContext>();
         services.AddSingleton<ITenantContextAccessor, TenantContextAccessor>();
         services.AddScoped<ITenantResolver, TenantResolver>();
+        services.AddScoped<ISystemBootstrapService, SystemBootstrapService>();
         // ITenantStore implementation should be registered by the storage mode
         return services;
     }
