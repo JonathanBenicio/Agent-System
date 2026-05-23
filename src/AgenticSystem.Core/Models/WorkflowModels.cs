@@ -52,7 +52,7 @@ public class WorkflowStep
 public class WorkflowExecution
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
-    public string TenantId { get; set; } = "default";
+    public string TenantId { get; set; } = string.Empty;
     public string WorkflowId { get; init; } = string.Empty;
     public string WorkflowName { get; init; } = string.Empty;
     public WorkflowExecutionStatus Status { get; set; } = WorkflowExecutionStatus.Pending;

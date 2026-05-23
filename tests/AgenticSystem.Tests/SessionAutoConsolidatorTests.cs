@@ -41,18 +41,18 @@ public class SessionAutoConsolidatorTests
         // Arrange
         var sessions = new List<SessionData>
         {
-            new() { Id = "session-001", EndedAt = DateTime.UtcNow, IsConsolidated = false, UserId = "u1", TenantId = "default" },
-            new() { Id = "session-002", EndedAt = null, IsConsolidated = false, UserId = "u1", TenantId = "default" }
+            new() { Id = "session-001", EndedAt = DateTime.UtcNow, IsConsolidated = false, UserId = "u1", TenantId = "admin" },
+            new() { Id = "session-002", EndedAt = null, IsConsolidated = false, UserId = "u1", TenantId = "admin" }
         };
-        _sessionStore.GetByTenantAsync("default", null, Arg.Any<int>()).Returns(sessions);
+        _sessionStore.GetByTenantAsync("admin", null, Arg.Any<int>()).Returns(sessions);
         
         // Act
         var method = typeof(SessionAutoConsolidator).GetMethod("ProcessPendingSessionsAsync", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
         await (Task)method!.Invoke(_sut, new object[] { CancellationToken.None })!;
-
+ 
         // Assert
-        await _consolidator.Received(1).SummarizeSessionAsync("session-001", Arg.Any<List<AgentEvent>>(), "u1", "default");
-        await _consolidator.DidNotReceive().SummarizeSessionAsync("session-002", Arg.Any<List<AgentEvent>>(), "u1", "default");
+        await _consolidator.Received(1).SummarizeSessionAsync("session-001", Arg.Any<List<AgentEvent>>(), "u1", "admin");
+        await _consolidator.DidNotReceive().SummarizeSessionAsync("session-002", Arg.Any<List<AgentEvent>>(), "u1", "admin");
         await _sessionStore.Received(1).SaveAsync(Arg.Is<SessionData>(s => s.Id == "session-001" && s.IsConsolidated));
     }
 }

@@ -63,7 +63,7 @@ public class SessionAutoConsolidator : BackgroundService
         var memoryInjection = scope.ServiceProvider.GetService<IMemoryInjectionService>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<SessionAutoConsolidator>>();
 
-        var tenants = new List<string> { "default" };
+        var tenants = new List<string> { "admin" };
         if (_tenantStore != null)
         {
             try
@@ -76,7 +76,7 @@ public class SessionAutoConsolidator : BackgroundService
             }
             catch (Exception ex)
             {
-                logger.LogWarning(ex, "Failed to load tenants from TenantStore, falling back to default tenant.");
+                logger.LogWarning(ex, "Failed to load tenants from TenantStore, falling back to admin tenant.");
             }
         }
 

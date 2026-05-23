@@ -3,7 +3,7 @@ namespace AgenticSystem.Core.Models;
 public class TokenUsageRecord
 {
     public string SessionId { get; set; } = string.Empty;
-    public string TenantId { get; set; } = "default";
+    public string TenantId { get; set; } = string.Empty;
     public string AgentName { get; set; } = string.Empty;
     public string Provider { get; set; } = string.Empty;
     public string ModelId { get; set; } = string.Empty;
