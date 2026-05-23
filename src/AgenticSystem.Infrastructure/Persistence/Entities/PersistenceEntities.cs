@@ -711,4 +711,19 @@ public class CustomOnnxInferenceJobEntity : ITenantEntity
     public CustomOnnxModelEntity? Model { get; set; }
 }
 
+/// <summary>
+/// Entidade de chave de acesso à API por Tenant para autenticação e isolamento estrito.
+/// </summary>
+public class AccessApiKeyEntity : ITenantEntity
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string TenantId { get; set; } = string.Empty;
+    public string KeyHash { get; set; } = string.Empty; // Hash SHA-256 da chave de API
+    public string Name { get; set; } = string.Empty;
+    public bool IsEnabled { get; set; } = true;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DateTime? LastUsedAt { get; set; }
+}
+
+
 

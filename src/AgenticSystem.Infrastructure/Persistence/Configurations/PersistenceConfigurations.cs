@@ -948,3 +948,24 @@ public class CustomOnnxInferenceJobConfiguration : IEntityTypeConfiguration<Cust
     }
 }
 
+public class AccessApiKeyConfiguration : IEntityTypeConfiguration<AccessApiKeyEntity>
+{
+    public void Configure(EntityTypeBuilder<AccessApiKeyEntity> builder)
+    {
+        builder.ToTable("access_api_keys");
+
+        builder.HasKey(k => k.Id);
+        builder.Property(k => k.Id).HasColumnName("id");
+        builder.Property(k => k.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(k => k.KeyHash).HasColumnName("key_hash").HasMaxLength(256).IsRequired();
+        builder.Property(k => k.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(k => k.IsEnabled).HasColumnName("is_enabled").HasDefaultValue(true);
+        builder.Property(k => k.CreatedAt).HasColumnName("created_at");
+        builder.Property(k => k.LastUsedAt).HasColumnName("last_used_at");
+
+        builder.HasIndex(k => k.KeyHash).IsUnique().HasDatabaseName("ix_access_api_keys_hash");
+        builder.HasIndex(k => k.TenantId).HasDatabaseName("ix_access_api_keys_tenant_id");
+    }
+}
+
+

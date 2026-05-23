@@ -68,6 +68,8 @@ public class AgenticDbContext : DbContext
     public DbSet<CustomOnnxModelEntity> CustomOnnxModels => Set<CustomOnnxModelEntity>();
     public DbSet<CustomOnnxModelFileEntity> CustomOnnxModelFiles => Set<CustomOnnxModelFileEntity>();
     public DbSet<CustomOnnxInferenceJobEntity> CustomOnnxInferenceJobs => Set<CustomOnnxInferenceJobEntity>();
+    public DbSet<AccessApiKeyEntity> AccessApiKeys => Set<AccessApiKeyEntity>();
+
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -132,7 +134,7 @@ public class AgenticDbContext : DbContext
             switch (entry.State)
             {
                 case EntityState.Added:
-                    if (string.IsNullOrEmpty(entry.Entity.TenantId) || entry.Entity.TenantId == "default")
+                    if (string.IsNullOrEmpty(entry.Entity.TenantId))
                     {
                         entry.Entity.TenantId = tenantId;
                     }
