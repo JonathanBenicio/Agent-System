@@ -63,12 +63,13 @@ public class SessionAutoConsolidator : BackgroundService
         var memoryInjection = scope.ServiceProvider.GetService<IMemoryInjectionService>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<SessionAutoConsolidator>>();
 
+        var tenantStore = scope.ServiceProvider.GetService<ITenantStore>() ?? _tenantStore;
         var tenants = new List<string> { "admin" };
-        if (_tenantStore != null)
+        if (tenantStore != null)
         {
             try
             {
-                var allTenants = await _tenantStore.GetAllAsync(ct);
+                var allTenants = await tenantStore.GetAllAsync(ct);
                 if (allTenants != null && allTenants.Count > 0)
                 {
                     tenants = allTenants.Select(t => t.Id).ToList();
