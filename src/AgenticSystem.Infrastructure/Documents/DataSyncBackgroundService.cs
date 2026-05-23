@@ -1,5 +1,6 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -7,15 +8,15 @@ namespace AgenticSystem.Infrastructure.Documents;
 
 public class DataSyncBackgroundService : BackgroundService
 {
-    private readonly IDataConnectorManager _manager;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DataSyncBackgroundService> _logger;
     private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(5);
 
     public DataSyncBackgroundService(
-        IDataConnectorManager manager,
+        IServiceProvider serviceProvider,
         ILogger<DataSyncBackgroundService> logger)
     {
-        _manager = manager;
+        _serviceProvider = serviceProvider;
         _logger = logger;
     }
 
@@ -27,7 +28,10 @@ public class DataSyncBackgroundService : BackgroundService
         {
             try
             {
-                var connectors = await _manager.ListConnectorsAsync(ct: stoppingToken);
+                using var scope = _serviceProvider.CreateScope();
+                var manager = scope.ServiceProvider.GetRequiredService<IDataConnectorManager>();
+
+                var connectors = await manager.ListConnectorsAsync(ct: stoppingToken);
                 var activeConnectors = connectors.Where(c => c.IsActive && ShouldSync(c)).ToList();
 
                 if (activeConnectors.Any())
@@ -36,7 +40,7 @@ public class DataSyncBackgroundService : BackgroundService
                     foreach (var connector in activeConnectors)
                     {
                         if (stoppingToken.IsCancellationRequested) break;
-                        await _manager.SyncConnectorAsync(connector.Id, fullSync: false, ct: stoppingToken);
+                        await manager.SyncConnectorAsync(connector.Id, fullSync: false, ct: stoppingToken);
                     }
                 }
             }

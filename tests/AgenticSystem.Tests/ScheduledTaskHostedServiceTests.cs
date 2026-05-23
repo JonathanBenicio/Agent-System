@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using AgenticSystem.Core.Interfaces;
@@ -14,7 +15,13 @@ public class ScheduledTaskHostedServiceTests
     private readonly ILogger<ScheduledTaskHostedService> _logger = Substitute.For<ILogger<ScheduledTaskHostedService>>();
 
     private ScheduledTaskHostedService CreateService()
-        => new(_taskManager, _triggerEngine, _logger);
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton(_taskManager);
+        services.AddSingleton(_triggerEngine);
+        var provider = services.BuildServiceProvider();
+        return new(provider, _logger);
+    }
 
     [Fact]
     public async Task StartAsync_DoesNotThrow()

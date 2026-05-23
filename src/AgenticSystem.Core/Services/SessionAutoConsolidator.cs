@@ -14,24 +14,15 @@ public class SessionAutoConsolidator : BackgroundService
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<SessionAutoConsolidator> _logger;
     private readonly TimeSpan _interval;
-    private readonly ISemanticCompressor? _semanticCompressor;
-    private readonly ITenantStore? _tenantStore;
-    private readonly ITenantContextAccessor _tenantContextAccessor;
 
     public SessionAutoConsolidator(
         IServiceProvider serviceProvider,
         ILogger<SessionAutoConsolidator> logger,
-        ITenantContextAccessor tenantContextAccessor,
-        IOptions<SessionConsolidationOptions>? options = null,
-        ISemanticCompressor? semanticCompressor = null,
-        ITenantStore? tenantStore = null)
+        IOptions<SessionConsolidationOptions>? options = null)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
-        _tenantContextAccessor = tenantContextAccessor;
         _interval = options?.Value?.ConsolidationInterval ?? TimeSpan.FromMinutes(5);
-        _semanticCompressor = semanticCompressor;
-        _tenantStore = tenantStore;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -62,8 +53,10 @@ public class SessionAutoConsolidator : BackgroundService
         var consolidator = scope.ServiceProvider.GetRequiredService<ISessionConsolidator>();
         var memoryInjection = scope.ServiceProvider.GetService<IMemoryInjectionService>();
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<SessionAutoConsolidator>>();
+        var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+        var semanticCompressor = scope.ServiceProvider.GetService<ISemanticCompressor>();
+        var tenantStore = scope.ServiceProvider.GetService<ITenantStore>();
 
-        var tenantStore = scope.ServiceProvider.GetService<ITenantStore>() ?? _tenantStore;
         var tenants = new List<string> { "admin" };
         if (tenantStore != null)
         {
@@ -83,7 +76,7 @@ public class SessionAutoConsolidator : BackgroundService
 
         foreach (var tenantId in tenants)
         {
-            using var tenantScope = _tenantContextAccessor.BeginScope(new Core.Models.TenantContext { TenantId = tenantId });
+            using var tenantScope = tenantContextAccessor.BeginScope(new Core.Models.TenantContext { TenantId = tenantId });
 
             var sessions = await sessionStore.GetByTenantAsync(tenantId, maxResults: 50, ct: ct);
             var pending = sessions.Where(s => s.EndedAt.HasValue && !s.IsConsolidated).ToList();
@@ -114,11 +107,11 @@ public class SessionAutoConsolidator : BackgroundService
 
                     logger.LogInformation("✅ Session {SessionId} consolidated successfully", session.Id);
 
-                    if (_semanticCompressor != null)
+                    if (semanticCompressor != null)
                     {
                         try
                         {
-                            await _semanticCompressor.CompressSessionAsync(session.Id);
+                            await semanticCompressor.CompressSessionAsync(session.Id);
                             logger.LogInformation("🗜️ Session {SessionId} semantically compressed in background", session.Id);
                         }
                         catch (Exception ex)

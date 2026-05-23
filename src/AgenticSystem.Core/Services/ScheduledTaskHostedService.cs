@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
@@ -10,18 +11,15 @@ namespace AgenticSystem.Core.Services;
 /// </summary>
 public class ScheduledTaskHostedService : BackgroundService
 {
-    private readonly IScheduledTaskManager _taskManager;
-    private readonly ITriggerEngine _triggerEngine;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<ScheduledTaskHostedService> _logger;
     private static readonly TimeSpan TickInterval = TimeSpan.FromSeconds(30);
 
     public ScheduledTaskHostedService(
-        IScheduledTaskManager taskManager,
-        ITriggerEngine triggerEngine,
+        IServiceProvider serviceProvider,
         ILogger<ScheduledTaskHostedService> logger)
     {
-        _taskManager = taskManager;
-        _triggerEngine = triggerEngine;
+        _serviceProvider = serviceProvider;
         _logger = logger;
     }
 
@@ -52,7 +50,10 @@ public class ScheduledTaskHostedService : BackgroundService
 
     private async Task TickAsync(CancellationToken ct)
     {
-        var activeTasks = await _taskManager.GetActiveAsync(ct);
+        using var scope = _serviceProvider.CreateScope();
+        var taskManager = scope.ServiceProvider.GetRequiredService<IScheduledTaskManager>();
+
+        var activeTasks = await taskManager.GetActiveAsync(ct);
         var now = DateTime.UtcNow;
 
         foreach (var task in activeTasks)
@@ -63,7 +64,7 @@ public class ScheduledTaskHostedService : BackgroundService
 
                 try
                 {
-                    await _taskManager.ExecuteAsync(task.Id, ct);
+                    await taskManager.ExecuteAsync(task.Id, ct);
                 }
                 catch (Exception ex)
                 {

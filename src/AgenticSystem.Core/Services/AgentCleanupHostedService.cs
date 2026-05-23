@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
@@ -9,15 +10,15 @@ namespace AgenticSystem.Core.Services;
 /// </summary>
 public class AgentCleanupHostedService : BackgroundService
 {
-    private readonly IMetaAgent _metaAgent;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<AgentCleanupHostedService> _logger;
     private static readonly TimeSpan CleanupInterval = TimeSpan.FromMinutes(5);
 
     public AgentCleanupHostedService(
-        IMetaAgent metaAgent,
+        IServiceProvider serviceProvider,
         ILogger<AgentCleanupHostedService> logger)
     {
-        _metaAgent = metaAgent;
+        _serviceProvider = serviceProvider;
         _logger = logger;
     }
 
@@ -29,7 +30,10 @@ public class AgentCleanupHostedService : BackgroundService
         {
             try
             {
-                await _metaAgent.CleanupInactiveAgentsAsync();
+                using var scope = _serviceProvider.CreateScope();
+                var metaAgent = scope.ServiceProvider.GetRequiredService<IMetaAgent>();
+
+                await metaAgent.CleanupInactiveAgentsAsync();
                 _logger.LogDebug("🧹 Agent cleanup tick completed");
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
