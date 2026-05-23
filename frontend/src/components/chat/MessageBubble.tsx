@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import Markdown from 'react-markdown'
 import { Bot, User, AlertTriangle, BookOpen, FileText, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -23,7 +23,7 @@ interface MessageBubbleProps {
   message: ChatMessage
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const isSystem = message.role === 'system'
   const [expandedCitation, setExpandedCitation] = useState<number | null>(null)
@@ -198,4 +198,4 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       )}
     </div>
   )
-}
+})

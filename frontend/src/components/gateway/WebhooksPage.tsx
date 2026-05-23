@@ -15,7 +15,8 @@ import {
 import { Badge } from '@/components/shared/Badge';
 import { useToast } from '@/components/shared/Toast';
 
-import { webhookApi, type InboundWebhook } from '@/lib/api';
+import { webhookApi } from '@/lib/api'
+import type { InboundWebhook } from '@/types/api'
 
 export function WebhooksPage() {
   const [webhooks, setWebhooks] = useState<InboundWebhook[]>([]);

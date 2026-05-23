@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useActionState } from 'react'
 import { X, Bot, Shield, Wrench, FileCode, CheckCircle2, AlertTriangle, Search, Info } from 'lucide-react'
 import type { AgentInfo, AgentSpecification, ToolSummary, YamlValidationError, KnowledgeRoom } from '@/types/api'
 import { TierLabels, AutonomyLevel, AutonomyLabels, AutonomyColors } from '@/types/api'
@@ -30,13 +30,12 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
   })
 
   const [capInput, setCapInput] = useState('')
-  const [saving, setSaving] = useState(false)
 
-  // --- Estado das Ferramentas (Tools) ---
-  const [availableTools, setAvailableTools] = useState<ToolSummary[]>([])
-  const [toolSearch, setToolSearch] = useState('')
-  const [toolDropdownOpen, setToolDropdownOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  // --- Estado do Editor YAML ---
+  const [yamlText, setYamlText] = useState('')
+  const [yamlValid, setYamlValid] = useState(true)
+  const [yamlErrors, setYamlErrors] = useState<YamlValidationError[]>([])
+  const [validatingYaml, setValidatingYaml] = useState(false)
 
   // --- Estado das Salas de Conhecimento (Knowledge Rooms) ---
   const [availableRooms, setAvailableRooms] = useState<KnowledgeRoom[]>([])
@@ -46,12 +45,35 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
   const [roomsDropdownOpen, setRoomsDropdownOpen] = useState(false)
   const roomsDropdownRef = useRef<HTMLDivElement>(null)
 
-  // --- Estado do Editor YAML ---
-  const [yamlText, setYamlText] = useState('')
-  const [yamlValid, setYamlValid] = useState(true)
-  const [yamlErrors, setYamlErrors] = useState<YamlValidationError[]>([])
-  const [validatingYaml, setValidatingYaml] = useState(false)
-  
+  // --- Estado das Ferramentas (Tools) ---
+  const [availableTools, setAvailableTools] = useState<ToolSummary[]>([])
+  const [toolSearch, setToolSearch] = useState('')
+  const [toolDropdownOpen, setToolDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // --- React 19 Action State ---
+  const [actionState, formAction, isSaving] = useActionState(
+    async () => {
+      try {
+        if (activeTab === 'yaml') {
+          await onSave(form, yamlText)
+        } else {
+          await onSave(form)
+        }
+
+        const agentName = form.name || agent?.name
+        if (agentName) {
+          await agentApi.setRooms(agentName, selectedRooms)
+        }
+        return { success: true }
+      } catch (err) {
+        console.error('Erro ao salvar agente:', err)
+        return { success: false, error: err instanceof Error ? err.message : 'Falha ao salvar' }
+      }
+    },
+    null
+  )
+
   // Ref para controlar chamadas de validação concorrentes
   const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -224,30 +246,6 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
     }, 500)
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      if (activeTab === 'yaml') {
-        // Salva diretamente usando a string YAML para gerar versão histórica no banco
-        await onSave(form, yamlText)
-      } else {
-        // Salva passando a especificação visual tradicional
-        await onSave(form)
-      }
-
-      // Persistir as salas selecionadas após salvar o agente com sucesso
-      const agentName = form.name || agent?.name
-      if (agentName) {
-        await agentApi.setRooms(agentName, selectedRooms)
-      }
-    } catch (err) {
-      console.error('Erro ao salvar agente ou associar salas de conhecimento:', err)
-    } finally {
-      setSaving(false)
-    }
-  }
-
   // Adicionar/Remover capabilities
   const addCapability = () => {
     const cap = capInput.trim()
@@ -354,8 +352,15 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
         </div>
 
         {/* Corpo do Modal */}
-        <form onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto space-y-6">
+        <form action={formAction} className="p-6 flex-1 overflow-y-auto space-y-6">
           
+          {actionState?.error && (
+            <div className="p-3 text-xs text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              {actionState.error}
+            </div>
+          )}
+
           {activeTab === 'visual' ? (
             /* =========================================================================
                ABA FORMULÁRIO VISUAL
@@ -832,7 +837,7 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
             </button>
             <button 
               type="submit" 
-              disabled={saving || (activeTab === 'yaml' && !yamlValid) || validatingYaml} 
+              disabled={isSaving || (activeTab === 'yaml' && !yamlValid) || validatingYaml} 
               className={cn(
                 'px-4 py-2 text-xs font-semibold rounded-lg text-white transition-all duration-200 flex items-center gap-1.5 shadow-md shadow-teal-500/10',
                 (activeTab === 'yaml' && !yamlValid) || validatingYaml
@@ -840,7 +845,7 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
                   : 'bg-teal-600 hover:bg-teal-500 active:scale-[0.98]'
               )}
             >
-              {saving ? 'Gravando Alterações...' : agent ? 'Gravar Alterações' : 'Criar Novo Agente'}
+              {isSaving ? 'Gravando Alterações...' : agent ? 'Gravar Alterações' : 'Criar Novo Agente'}
             </button>
           </div>
         </form>

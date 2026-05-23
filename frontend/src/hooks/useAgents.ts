@@ -1,44 +1,38 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { agentApi } from '@/lib/api'
-import type { AgentInfo, AgentSpecification } from '@/types/api'
+import type { AgentSpecification } from '@/types/api'
 
 export function useAgents() {
-  const [agents, setAgents] = useState<AgentInfo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
 
-  const refresh = useCallback(async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      const data = await agentApi.listAll()
-      setAgents(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar agents')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const { data: agents = [], isLoading: loading, error } = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => agentApi.listAll()
+  })
 
+  const createAgentMutation = useMutation({
+    mutationFn: (spec: AgentSpecification) => agentApi.create(spec),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] })
+  })
 
-  useEffect(() => { refresh() }, [refresh])
+  const updateAgentMutation = useMutation({
+    mutationFn: ({ name, spec }: { name: string; spec: AgentSpecification }) => 
+      agentApi.update(name, spec),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] })
+  })
 
-  const createAgent = useCallback(async (spec: AgentSpecification) => {
-    const created = await agentApi.create(spec)
-    setAgents(prev => [...prev, created])
-    return created
-  }, [])
+  const deleteAgentMutation = useMutation({
+    mutationFn: (name: string) => agentApi.delete(name),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['agents'] })
+  })
 
-  const updateAgent = useCallback(async (name: string, spec: AgentSpecification) => {
-    const updated = await agentApi.update(name, spec)
-    setAgents(prev => prev.map(a => a.name === name ? updated : a))
-    return updated
-  }, [])
-
-  const deleteAgent = useCallback(async (name: string) => {
-    await agentApi.delete(name)
-    setAgents(prev => prev.filter(a => a.name !== name))
-  }, [])
-
-  return { agents, loading, error, refresh, createAgent, updateAgent, deleteAgent }
+  return { 
+    agents, 
+    loading, 
+    error: error ? (error as Error).message : null, 
+    refresh: () => queryClient.invalidateQueries({ queryKey: ['agents'] }), 
+    createAgent: createAgentMutation.mutateAsync, 
+    updateAgent: (name: string, spec: AgentSpecification) => updateAgentMutation.mutateAsync({ name, spec }), 
+    deleteAgent: deleteAgentMutation.mutateAsync 
+  }
 }

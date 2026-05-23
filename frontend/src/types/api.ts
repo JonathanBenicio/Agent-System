@@ -900,3 +900,27 @@ export interface OnnxJobsPagedResponse {
   totalItems: number
   totalPages: number
 }
+
+// ══════════════════════════════════════
+// Webhook & Hot-Swap Models
+// ══════════════════════════════════════
+
+export interface InboundWebhook {
+  id: string;
+  name: string;
+  secret: string;
+  targetWorkflowId?: string;
+  targetAgentName?: string;
+  isActive: boolean;
+  createdAt: string;
+  lastTriggeredAt?: string;
+}
+
+export type HotSwapSubsystem = 'vectorstore' | 'llm' | 'embedding' | 'all'
+
+export interface HotSwapResult {
+  subsystem: string
+  status: string
+  message: string
+  timestamp: string
+}

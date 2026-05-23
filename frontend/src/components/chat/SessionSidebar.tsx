@@ -26,7 +26,7 @@ export function SessionSidebar({
   // Debounced search trigger
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
-      void refresh(searchQuery)
+      void refresh()
     }, 300)
 
     return () => clearTimeout(delayDebounceFn)

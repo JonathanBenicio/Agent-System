@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Zap, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react'
-import { configApi, type HotSwapSubsystem, type HotSwapResult } from '@/lib/api'
+import { configApi } from '@/lib/api'
+import type { HotSwapSubsystem, HotSwapResult } from '@/types/api'
 
 type SubsystemConfig = {
   label: string
