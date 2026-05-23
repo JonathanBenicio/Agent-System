@@ -119,12 +119,23 @@ public class PostgresSessionStore : ISessionStore
         }
     }
 
-    public async Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, string? search = null, CancellationToken ct = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        var jsonRows = await db.SessionRecords
+        var query = db.SessionRecords
             .AsNoTracking()
-            .Where(record => record.UserId == userId)
+            .Where(record => record.UserId == userId);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = $"%{search.Trim().ToLower()}%";
+            query = query.Where(record =>
+                EF.Functions.ILike(record.DataJson, searchLower) ||
+                db.SessionSummaries.Any(s => s.SessionId == record.Id && EF.Functions.ILike(s.Summary, searchLower))
+            );
+        }
+
+        var jsonRows = await query
             .OrderByDescending(record => record.StartedAt)
             .Take(maxResults)
             .Select(record => record.DataJson)

@@ -175,8 +175,13 @@ export const skillApi = {
 }
 
 export const sessionApi = {
-  list: (limit?: number) =>
-    get<SessionListItem[]>(`/api/session${limit ? `?limit=${limit}` : ''}`),
+  list: (limit?: number, search?: string) => {
+    const params = new URLSearchParams()
+    if (limit) params.set('limit', limit.toString())
+    if (search) params.set('search', search)
+    const qs = params.toString()
+    return get<SessionListItem[]>(`/api/session${qs ? `?${qs}` : ''}`)
+  },
   get: (id: string) => get<SessionDetail>(`/api/session/${encodeURIComponent(id)}`),
   messages: (id: string) => get<ChatMessageDto[]>(`/api/session/${encodeURIComponent(id)}/messages`),
   delete: (id: string) => del(`/api/session/${encodeURIComponent(id)}`),

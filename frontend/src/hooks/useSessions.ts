@@ -10,11 +10,11 @@ export function useSessions() {
   const [error, setError] = useState<string | null>(null)
   const handlersRegistered = useRef(false)
 
-  const loadSessions = useCallback(async () => {
+  const loadSessions = useCallback(async (search?: string) => {
     setIsLoading(true)
     setError(null)
     try {
-      const data = await sessionApi.list(50)
+      const data = await sessionApi.list(50, search)
       setSessions(data)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load sessions'
@@ -49,7 +49,7 @@ export function useSessions() {
   }, [])
 
   useEffect(() => {
-
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void loadSessions()
   }, [loadSessions])
 
@@ -83,6 +83,7 @@ export function useSessions() {
     isLoading,
     error,
     refresh: loadSessions,
+    loadSessions,
     loadSessionMessages,
     deleteSession,
     renameSession,

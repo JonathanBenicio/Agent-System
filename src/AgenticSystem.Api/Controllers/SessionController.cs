@@ -27,12 +27,12 @@ public class SessionController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetSessions([FromQuery] int limit = 50, CancellationToken ct = default)
+    public async Task<IActionResult> GetSessions([FromQuery] int limit = 50, [FromQuery] string? search = null, CancellationToken ct = default)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
 
-        var sessions = await _sessionStore.GetByUserAsync(userId, limit, ct);
+        var sessions = await _sessionStore.GetByUserAsync(userId, limit, search, ct);
 
         var items = sessions
             .OrderByDescending(s => s.EndedAt ?? s.StartedAt)

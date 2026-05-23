@@ -28,10 +28,20 @@ public class InMemorySessionStore : ISessionStore
         return Task.FromResult(session);
     }
 
-    public Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, CancellationToken ct = default)
+    public Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, string? search = null, CancellationToken ct = default)
     {
-        var sessions = _store.Values
-            .Where(s => s.UserId == userId)
+        var query = _store.Values.Where(s => s.UserId == userId);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(s => 
+                (s.RuntimeSettings.TryGetValue("title", out var title) && title.ToLower().Contains(term)) ||
+                (s.Summary?.Summary?.ToLower().Contains(term) == true)
+            );
+        }
+
+        var sessions = query
             .OrderByDescending(s => s.StartedAt)
             .Take(maxResults)
             .ToList();
