@@ -60,7 +60,7 @@ public class RAGContextProvider : MessageAIContextProvider
         var runtimeContext = _llmRuntimeContextAccessor.Current;
         var tenantId = runtimeContext?.TenantId 
             ?? _tenantContextAccessor.Current?.TenantId 
-            ?? Tenant.DefaultTenantId;
+            ?? throw new InvalidOperationException("Zero Trust: Tenant ID must be resolved for RAG context extraction.");
         var userId = runtimeContext?.UserId;
 
         var specifiedRoomId = runtimeContext?.KnowledgeRoomId;

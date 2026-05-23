@@ -31,7 +31,7 @@ public class ChatWorkflowCommandHandler : IChatWorkflowCommandHandler
 
         var inputTrimmed = input.Trim();
         var inputLower = inputTrimmed.ToLowerInvariant();
-        var tenantId = string.IsNullOrWhiteSpace(context.TenantId) ? Tenant.DefaultTenantId : context.TenantId;
+        var tenantId = context.TenantId;
 
         // 1. Start Workflow
         if (inputLower.StartsWith("iniciar workflow ") || inputLower.StartsWith("executar workflow ") || inputLower.StartsWith("rodar workflow "))

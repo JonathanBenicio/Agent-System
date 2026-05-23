@@ -22,7 +22,7 @@ public sealed class LLMRuntimeContextAccessor : ILLMRuntimeContextAccessor
         return new LLMRuntimeContext
         {
             UserId = userContext.UserId,
-            TenantId = string.IsNullOrWhiteSpace(userContext.TenantId) ? Tenant.DefaultTenantId : userContext.TenantId,
+            TenantId = userContext.TenantId,
             SessionId = sessionId,
             RequestProvider = ReadPreference(userContext.Preferences, "llm.request.provider") ?? ReadPreference(userContext.Preferences, "llm.provider"),
             RequestModel = ReadPreference(userContext.Preferences, "llm.request.model") ?? ReadPreference(userContext.Preferences, "llm.model"),

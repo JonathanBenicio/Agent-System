@@ -19,14 +19,10 @@ public class InMemoryTenantStoreTests
     };
 
     [Fact]
-    public async Task DefaultTenant_ExistsOnConstruction()
+    public async Task Store_IsEmptyOnConstruction()
     {
-        var exists = await _store.ExistsAsync(Tenant.DefaultTenantId);
-        exists.Should().BeTrue();
-
-        var tenant = await _store.GetByIdAsync(Tenant.DefaultTenantId);
-        tenant.Should().NotBeNull();
-        tenant!.Name.Should().Be("Default");
+        var all = await _store.GetAllAsync();
+        all.Should().BeEmpty();
     }
 
     [Fact]
@@ -68,7 +64,7 @@ public class InMemoryTenantStoreTests
         await _store.SaveAsync(t2);
 
         var all = await _store.GetAllAsync();
-        all.Should().HaveCountGreaterThanOrEqualTo(3); // default + t1 + t2
+        all.Should().HaveCount(2); // t1 + t2
     }
 
     [Fact]

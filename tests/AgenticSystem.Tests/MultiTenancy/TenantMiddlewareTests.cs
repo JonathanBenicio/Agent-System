@@ -36,11 +36,11 @@ public class TenantMiddlewareTests
         var middleware = CreateMiddleware();
         var tenantContext = new TenantContext();
         var httpContext = new DefaultHttpContext();
-        httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = Tenant.DefaultTenantId;
+        httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = "test-tenant";
 
         await middleware.InvokeAsync(httpContext, tenantContext, _resolver, _tenantContextAccessor);
 
-        tenantContext.TenantId.Should().Be(Tenant.DefaultTenantId);
+        tenantContext.TenantId.Should().Be("test-tenant");
         tenantContext.IsAuthenticated.Should().BeTrue();
     }
 
@@ -118,9 +118,9 @@ public class TenantMiddlewareTests
 
         await middleware.InvokeAsync(httpContext, tenantContext, _resolver, _tenantContextAccessor);
 
-        // Default values from TenantContext constructor
-        tenantContext.TenantId.Should().Be(Tenant.DefaultTenantId);
-        tenantContext.TenantName.Should().Be("Default");
+        // Default values from TenantContext are empty/unresolved
+        tenantContext.TenantId.Should().BeEmpty();
+        tenantContext.TenantName.Should().BeEmpty();
     }
 
     [Fact]

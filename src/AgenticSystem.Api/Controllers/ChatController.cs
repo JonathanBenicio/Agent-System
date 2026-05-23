@@ -96,7 +96,9 @@ public class ChatController : ControllerBase
         {
             UserId = authenticatedUserId,
             Name = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? request.UserName ?? "User",
-            TenantId = tenantContext.TenantId ?? Tenant.DefaultTenantId,
+            TenantId = string.IsNullOrWhiteSpace(tenantContext.TenantId)
+                ? throw new InvalidOperationException("Zero Trust: Tenant ID must be resolved for chat requests.")
+                : tenantContext.TenantId,
             Language = "pt-BR",
             Preferences = ChatRequestPreferencesBuilder.BuildLlmPreferences(request)
         };

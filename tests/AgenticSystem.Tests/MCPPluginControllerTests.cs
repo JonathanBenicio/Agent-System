@@ -31,7 +31,7 @@ public class MCPPluginControllerTests
         _pluginManager.GetLoadedPlugins().Returns(new[] { plugin });
 
         var tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantContextAccessor.Current.Returns(new TenantContext { TenantId = Tenant.DefaultTenantId });
+        tenantContextAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
 
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
             .UseInMemoryDatabase("test-getplugins-" + Guid.NewGuid())
@@ -51,7 +51,7 @@ public class MCPPluginControllerTests
     private async Task<AgenticDbContext> SetupInMemoryDbContextAsync()
     {
         var tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantContextAccessor.Current.Returns(new TenantContext { TenantId = Tenant.DefaultTenantId });
+        tenantContextAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
 
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
             .UseInMemoryDatabase("test-mcp-db-" + Guid.NewGuid())

@@ -154,7 +154,7 @@ public sealed class AgenticMcpTools
                 ?? user.Identity?.Name
                 ?? "MCP User",
             TenantId = string.IsNullOrWhiteSpace(tenantContext.TenantId)
-                ? Tenant.DefaultTenantId
+                ? throw new ArgumentException("Zero Trust: TenantId is required in TenantContext for agent execution.", nameof(tenantContext))
                 : tenantContext.TenantId,
             Language = "pt-BR"
         };

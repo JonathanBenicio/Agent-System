@@ -483,6 +483,29 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 
 ---
 
+#### ML19.1 — Auto-Bootstrap e Remoção do Tenant Default
+
+**Como** arquiteto do sistema,  
+**quero** que a plataforma gerencie credenciais dinamicamente via banco de dados e auto-provisione o tenant inicial admin,  
+**para que** o fallback inseguro "default" seja eliminado e haja isolamento multi-tenant real e estrito.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `SystemBootstrapService` · `ApiKeyAuthenticationHandler` · `TenantMiddleware` |
+| Responsabilidade | Auto-bootstrap de tenant/chaves no startup, validação de chaves hashed SHA-256 e remoção de referências hardcoded a "default" |
+| Testes | Unitários (xUnit) e Integração/E2E |
+| Status | ⏳ Proposto |
+
+**Critérios de Aceite:**
+- [ ] O banco de dados reflete o tenant `admin` e `access_api_keys` populados automaticamente no primeiro boot se a tabela estiver vazia.
+- [ ] Chaves de API são armazenadas exclusivamente como hash SHA-256 de via única, protegendo as chaves contra vazamento físico de banco.
+- [ ] Requisições com chaves válidas (enviadas por cookie ou header) são resolvidas para o `tenant_id` correto associado no banco.
+- [ ] Requisições autenticadas sem um `tenant_id` final explícito são rejeitadas pelo `TenantMiddleware` com HTTP 403 Forbidden.
+- [ ] Nenhuma constante estática ou string `"default"` permanece como fallback implícito no Core ou Api do sistema.
+
+---
+
+
 ### Infraestrutura Transversal (Backend)
 
 > 10 componentes cross-cutting que sustentam toda a stack do AgenticSystem.

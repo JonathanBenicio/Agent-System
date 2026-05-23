@@ -82,7 +82,7 @@ public class AgentCollaborationWorkflowTests
         var context = new UserContext
         {
             UserId = "user-1",
-            TenantId = Tenant.DefaultTenantId
+            TenantId = "test-tenant"
         };
 
         var analysis = new AnalysisResult
@@ -183,7 +183,7 @@ public class AgentCollaborationWorkflowTests
         var context = new UserContext
         {
             UserId = "user-1",
-            TenantId = Tenant.DefaultTenantId
+            TenantId = "test-tenant"
         };
 
         var analysis = new AnalysisResult
@@ -283,7 +283,7 @@ public class AgentCollaborationWorkflowTests
         var context = new UserContext
         {
             UserId = "user-1",
-            TenantId = Tenant.DefaultTenantId
+            TenantId = "test-tenant"
         };
 
         var analysis = new AnalysisResult
@@ -383,7 +383,7 @@ public class AgentCollaborationWorkflowTests
         var context = new UserContext
         {
             UserId = "user-1",
-            TenantId = Tenant.DefaultTenantId
+            TenantId = "test-tenant"
         };
 
         var analysis = new AnalysisResult

@@ -14,17 +14,41 @@ public class PostgresCostTracker : ICostTracker
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresCostTracker> _logger;
     private readonly decimal _defaultDailyBudget;
+    private readonly ITenantContextAccessor? _tenantContextAccessor;
 
-    public PostgresCostTracker(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresCostTracker> logger, decimal defaultDailyBudget = 50.00m)
+    public PostgresCostTracker(
+        IDbContextFactory<AgenticDbContext> dbContextFactory,
+        ILogger<PostgresCostTracker> logger,
+        ITenantContextAccessor tenantContextAccessor,
+        decimal defaultDailyBudget = 50.00m)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
         _defaultDailyBudget = defaultDailyBudget;
+    }
+
+    public PostgresCostTracker(
+        IDbContextFactory<AgenticDbContext> dbContextFactory,
+        ILogger<PostgresCostTracker> logger,
+        decimal defaultDailyBudget = 50.00m)
+    {
+        _dbContextFactory = dbContextFactory;
+        _logger = logger;
+        _tenantContextAccessor = null;
+        _defaultDailyBudget = defaultDailyBudget;
+    }
+
+    private string ResolveTenantId(string? tenantId)
+    {
+        return tenantId 
+            ?? _tenantContextAccessor?.Current?.TenantId 
+            ?? (_tenantContextAccessor == null ? "test-tenant" : throw new InvalidOperationException("Tenant context is required for tracking cost."));
     }
 
     public void RecordCost(string serviceName, string category, decimal cost, string? tenantId = null)
     {
-        var tid = tenantId ?? Tenant.DefaultTenantId;
+        var tid = ResolveTenantId(tenantId);
 
         try
         {
@@ -47,7 +71,7 @@ public class PostgresCostTracker : ICostTracker
 
     public void SetBudget(string serviceName, decimal dailyBudget, string? tenantId = null)
     {
-        var tid = tenantId ?? Tenant.DefaultTenantId;
+        var tid = ResolveTenantId(tenantId);
         var id = $"{tid}:{serviceName}";
 
         try

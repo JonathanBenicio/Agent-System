@@ -1072,7 +1072,18 @@ public class LLMManager : ILLMAdministrationService
 
     private async Task<Tenant?> ResolveTenantAsync(string? tenantId, CancellationToken ct)
     {
-        var normalizedTenantId = string.IsNullOrWhiteSpace(tenantId) ? Tenant.DefaultTenantId : tenantId;
+        var normalizedTenantId = tenantId;
+        if (string.IsNullOrWhiteSpace(normalizedTenantId))
+        {
+            var tenantAccessor = (ITenantContextAccessor?)_serviceProvider.GetService(typeof(ITenantContextAccessor));
+            normalizedTenantId = tenantAccessor?.Current?.TenantId;
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedTenantId))
+        {
+            throw new InvalidOperationException("Zero Trust: Tenant ID must be resolved for LLM selection.");
+        }
+
         return await _tenantStore.GetByIdAsync(normalizedTenantId, ct);
     }
 

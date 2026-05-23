@@ -6,7 +6,7 @@ namespace AgenticSystem.Core.Models;
 public sealed class LLMRuntimeContext
 {
     public string UserId { get; init; } = string.Empty;
-    public string TenantId { get; init; } = Tenant.DefaultTenantId;
+    public string TenantId { get; init; } = string.Empty;
     public string? SessionId { get; init; }
 
     public string? RequestProvider { get; init; }

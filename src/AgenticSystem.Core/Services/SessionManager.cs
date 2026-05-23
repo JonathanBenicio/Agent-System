@@ -33,7 +33,7 @@ public class SessionManager : ISessionManager
             var existingSession = await _store.GetAsync(sessionId);
             if (existingSession is not null)
             {
-                var userTenantId = string.IsNullOrWhiteSpace(userContext.TenantId) ? Tenant.DefaultTenantId : userContext.TenantId;
+                var userTenantId = userContext.TenantId;
                 if (existingSession.UserId == userContext.UserId && existingSession.TenantId == userTenantId)
                 {
                     _logger.LogInformation("📂 Reusing existing session: {SessionId}", sessionId);
@@ -47,7 +47,7 @@ public class SessionManager : ISessionManager
         {
             Id = newSessionId,
             UserId = userContext.UserId,
-            TenantId = string.IsNullOrWhiteSpace(userContext.TenantId) ? Tenant.DefaultTenantId : userContext.TenantId,
+            TenantId = userContext.TenantId,
             StartedAt = DateTime.UtcNow,
             RuntimeSettings = BuildRuntimeSettings(userContext),
             Events = new List<AgentEvent>()

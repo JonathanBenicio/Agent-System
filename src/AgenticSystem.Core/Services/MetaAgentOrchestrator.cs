@@ -312,7 +312,7 @@ public class MetaAgentOrchestrator : IMetaAgent
 
     private async Task<string> InjectMemoryContextAsync(string input, UserContext context, CancellationToken ct)
     {
-        var tenantId = string.IsNullOrWhiteSpace(context.TenantId) ? Tenant.DefaultTenantId : context.TenantId;
+        var tenantId = context.TenantId;
         var memoryContext = await _sessionManager.GetMemoryContextAsync(input, context.UserId, tenantId, ct);
 
         if (string.IsNullOrEmpty(memoryContext))

@@ -18,12 +18,23 @@ public class TenantResolverTests
     }
 
     [Fact]
-    public async Task ResolveAsync_DefaultTenant_ReturnsTenantContext()
+    public async Task ResolveAsync_ValidTenant_ReturnsTenantContext()
     {
-        var ctx = await _resolver.ResolveAsync(Tenant.DefaultTenantId);
+        var tenant = new Tenant
+        {
+            Id = "admin",
+            Name = "Admin Corp",
+            Slug = "admin-corp",
+            Plan = TenantPlan.Pro,
+            Limits = TenantLimits.ProTier(),
+            IsActive = true
+        };
+        await _store.SaveAsync(tenant);
+
+        var ctx = await _resolver.ResolveAsync("admin");
 
         ctx.Should().NotBeNull();
-        ctx!.TenantId.Should().Be(Tenant.DefaultTenantId);
+        ctx!.TenantId.Should().Be("admin");
         ctx.IsAuthenticated.Should().BeTrue();
     }
 

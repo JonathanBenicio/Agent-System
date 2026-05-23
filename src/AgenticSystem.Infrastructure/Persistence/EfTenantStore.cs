@@ -21,7 +21,6 @@ public sealed class EfTenantStore : ITenantStore
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
-        await EnsureDefaultTenantAsync(db, ct);
         return await db.Tenants.AsNoTracking().FirstOrDefaultAsync(tenant => tenant.Id == tenantId, ct);
     }
 
@@ -29,7 +28,6 @@ public sealed class EfTenantStore : ITenantStore
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
-        await EnsureDefaultTenantAsync(db, ct);
         return await db.Tenants.AsNoTracking().FirstOrDefaultAsync(tenant => tenant.Slug == slug, ct);
     }
 
@@ -37,7 +35,6 @@ public sealed class EfTenantStore : ITenantStore
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
-        await EnsureDefaultTenantAsync(db, ct);
         return await db.Tenants.AsNoTracking().OrderBy(tenant => tenant.Name).ToListAsync(ct);
     }
 
@@ -85,36 +82,6 @@ public sealed class EfTenantStore : ITenantStore
     {
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
-        await EnsureDefaultTenantAsync(db, ct);
         return await db.Tenants.AnyAsync(tenant => tenant.Id == tenantId, ct);
-    }
-
-    private async Task EnsureDefaultTenantAsync(AgenticDbContext db, CancellationToken ct)
-    {
-        if (await db.Tenants.AnyAsync(tenant => tenant.Id == Tenant.DefaultTenantId, ct))
-        {
-            return;
-        }
-
-        db.Tenants.Add(new Tenant
-        {
-            Id = Tenant.DefaultTenantId,
-            Name = "Default",
-            Slug = "default",
-            Plan = TenantPlan.Pro,
-            Limits = TenantLimits.ProTier(),
-            IsActive = true,
-            UpdatedAt = DateTime.UtcNow
-        });
-
-        try
-        {
-            await db.SaveChangesAsync(ct);
-            _logger.LogInformation("Default tenant created in PostgreSQL tenant store");
-        }
-        catch (DbUpdateException ex)
-        {
-            _logger.LogWarning(ex, "Default tenant was already created concurrently.");
-        }
     }
 }
