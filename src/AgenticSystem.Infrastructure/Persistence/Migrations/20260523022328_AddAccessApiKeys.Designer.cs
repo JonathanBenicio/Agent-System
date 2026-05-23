@@ -15,7 +15,7 @@ using Pgvector;
 namespace AgenticSystem.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AgenticDbContext))]
-    [Migration("20260523002411_AddAccessApiKeys")]
+    [Migration("20260523022328_AddAccessApiKeys")]
     partial class AddAccessApiKeys
     {
         /// <inheritdoc />
@@ -124,6 +124,14 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("name");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("Admin")
+                        .HasColumnName("role");
 
                     b.Property<string>("TenantId")
                         .IsRequired()

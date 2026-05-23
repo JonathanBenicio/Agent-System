@@ -959,6 +959,7 @@ public class AccessApiKeyConfiguration : IEntityTypeConfiguration<AccessApiKeyEn
         builder.Property(k => k.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
         builder.Property(k => k.KeyHash).HasColumnName("key_hash").HasMaxLength(256).IsRequired();
         builder.Property(k => k.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(k => k.Role).HasColumnName("role").HasMaxLength(64).HasDefaultValue("Admin").IsRequired();
         builder.Property(k => k.IsEnabled).HasColumnName("is_enabled").HasDefaultValue(true);
         builder.Property(k => k.CreatedAt).HasColumnName("created_at");
         builder.Property(k => k.LastUsedAt).HasColumnName("last_used_at");

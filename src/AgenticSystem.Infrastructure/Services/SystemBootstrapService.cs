@@ -77,6 +77,7 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                     TenantId = adminTenant.Id,
                     KeyHash = keyHash,
                     Name = "Default Legacy Admin API Key",
+                    Role = "Admin",
                     IsEnabled = true,
                     CreatedAt = DateTime.UtcNow
                 };

@@ -122,6 +122,14 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("name");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("Admin")
+                        .HasColumnName("role");
+
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(128)

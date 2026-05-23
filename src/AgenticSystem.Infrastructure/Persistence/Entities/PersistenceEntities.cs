@@ -720,6 +720,7 @@ public class AccessApiKeyEntity : ITenantEntity
     public string TenantId { get; set; } = string.Empty;
     public string KeyHash { get; set; } = string.Empty; // Hash SHA-256 da chave de API
     public string Name { get; set; } = string.Empty;
+    public string Role { get; set; } = "Admin"; // Ex: Admin, Member, ServiceAccount
     public bool IsEnabled { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? LastUsedAt { get; set; }
