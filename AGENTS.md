@@ -83,7 +83,7 @@ await dbContext.Database.MigrateAsync();
 
 ### Authentication & Authorization
 - **MultiAuth**: API Key OR JWT via `PolicyScheme`
-- **Tenant Context**: `TenantMiddleware` extracts tenant from `X-Tenant-Id` header (priority) or JWT `tenant_id` claim (fallback). Unknown tenants are accepted for dev/test scenarios.
+- **Tenant Context**: `TenantMiddleware` extracts tenant from `X-Tenant-Id` header (priority) or JWT `tenant_id` claim (fallback). Unknown tenants are strictly rejected for all authenticated routes, enforcing strict dynamic database boundary isolation.
 - **Rate Limiting**: Per-tenant sliding window (`/api/chat`: 30 req/min default)
 
 ### Configuration Sections
