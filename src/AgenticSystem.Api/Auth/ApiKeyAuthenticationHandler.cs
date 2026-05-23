@@ -2,7 +2,9 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
+using AgenticSystem.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 
 namespace AgenticSystem.Api.Auth;
@@ -11,19 +13,19 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
 {
     public const string SchemeName = "ApiKey";
     public const string HeaderName = "X-Api-Key";
-    private readonly IConfiguration _configuration;
+    private readonly AgenticDbContext _dbContext;
 
     public ApiKeyAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        IConfiguration configuration)
+        AgenticDbContext dbContext)
         : base(options, logger, encoder)
     {
-        _configuration = configuration;
+        _dbContext = dbContext;
     }
 
-    protected override Task<AuthenticateResult> HandleAuthenticateAsync()
+    protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         string? providedKey = null;
 
@@ -49,32 +51,49 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         {
             if (Context.Request.Path.StartsWithSegments("/health"))
             {
-                return Task.FromResult(AuthenticateResult.NoResult());
+                return AuthenticateResult.NoResult();
             }
-            return Task.FromResult(AuthenticateResult.Fail("Missing X-Api-Key header or query parameter."));
+            return AuthenticateResult.Fail("Missing X-Api-Key header or query parameter.");
         }
-        var configuredKey = _configuration["AgenticSystem:AdminApiKey"];
 
-        if (string.IsNullOrWhiteSpace(configuredKey))
-            return Task.FromResult(AuthenticateResult.Fail("Admin API key not configured on server."));
+        // 1. Calcula o Hash SHA-256 da chave fornecida
+        var keyBytes = Encoding.UTF8.GetBytes(providedKey.Trim());
+        var hashBytes = SHA256.HashData(keyBytes);
+        var keyHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
 
-        if (string.IsNullOrWhiteSpace(providedKey) ||
-            !CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(providedKey),
-                Encoding.UTF8.GetBytes(configuredKey)))
-            return Task.FromResult(AuthenticateResult.Fail("Invalid API key."));
+        // 2. Consulta no banco de dados se o hash corresponde a uma chave ativa
+        var accessKey = await _dbContext.AccessApiKeys
+            .IgnoreQueryFilters() // Ignora o filtro de tenant para permitir autenticação global cruzada
+            .FirstOrDefaultAsync(k => k.KeyHash == keyHash && k.IsEnabled);
+
+        if (accessKey is null)
+        {
+            return AuthenticateResult.Fail("Invalid API key.");
+        }
+
+        // 3. Atualiza o timestamp de último uso de forma assíncrona
+        try
+        {
+            accessKey.LastUsedAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync();
+        }
+        catch
+        {
+            // Abafa erros de gravação de estatística para não interromper a autenticação principal
+        }
 
         var claims = new[]
         {
-            new Claim(ClaimTypes.Name, "admin"),
-            new Claim(ClaimTypes.NameIdentifier, "admin"),
+            new Claim(ClaimTypes.Name, accessKey.Name),
+            new Claim(ClaimTypes.NameIdentifier, accessKey.Id.ToString()),
             new Claim(ClaimTypes.Role, "Admin"),
-            new Claim("tenant_id", Core.Models.Tenant.DefaultTenantId)
+            new Claim("tenant_id", accessKey.TenantId)
         };
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);
         var ticket = new AuthenticationTicket(principal, SchemeName);
 
-        return Task.FromResult(AuthenticateResult.Success(ticket));
+        return AuthenticateResult.Success(ticket);
     }
 }
+

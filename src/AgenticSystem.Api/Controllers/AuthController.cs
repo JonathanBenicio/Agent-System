@@ -27,40 +27,53 @@ public class AuthController : ControllerBase
     private readonly IConfiguration _configuration;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TenantContext _tenantContext;
+    private readonly AgenticDbContext _dbContext;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         IConfiguration configuration,
         IServiceScopeFactory scopeFactory,
         TenantContext tenantContext,
+        AgenticDbContext dbContext,
         ILogger<AuthController> logger)
     {
         _configuration = configuration;
         _scopeFactory = scopeFactory;
         _tenantContext = tenantContext;
+        _dbContext = dbContext;
         _logger = logger;
     }
 
     [HttpPost("login")]
-    public IActionResult Login([FromBody] LoginRequest request)
+    public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.ApiKey))
         {
             return BadRequest(new { error = "A chave de API é obrigatória." });
         }
 
-        var configuredKey = _configuration["AgenticSystem:AdminApiKey"];
-        if (string.IsNullOrWhiteSpace(configuredKey))
-        {
-            return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Admin API key não configurada no servidor." });
-        }
+        // 1. Calcula o Hash SHA-256 da chave fornecida
+        var keyBytes = Encoding.UTF8.GetBytes(request.ApiKey.Trim());
+        var hashBytes = SHA256.HashData(keyBytes);
+        var keyHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
 
-        if (!CryptographicOperations.FixedTimeEquals(
-                Encoding.UTF8.GetBytes(request.ApiKey.Trim()),
-                Encoding.UTF8.GetBytes(configuredKey)))
+        // 2. Consulta no banco de dados se o hash corresponde a uma chave ativa
+        var accessKey = await _dbContext.AccessApiKeys
+            .IgnoreQueryFilters() // Ignora o filtro de tenant no login
+            .FirstOrDefaultAsync(k => k.KeyHash == keyHash && k.IsEnabled);
+
+        if (accessKey is null)
         {
             return Unauthorized(new { error = "Chave de API inválida." });
         }
+
+        // 3. Atualiza o timestamp de último uso
+        try
+        {
+            accessKey.LastUsedAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync();
+        }
+        catch { /* Abafa erros de gravação de estatística */ }
 
         Response.Cookies.Append("agentic_api_key", request.ApiKey.Trim(), new CookieOptions
         {
@@ -71,7 +84,7 @@ public class AuthController : ControllerBase
         });
 
         // Trigger LLM model discovery and update in the background asynchronously
-        var tenantId = _tenantContext.TenantId ?? Tenant.DefaultTenantId;
+        var tenantId = accessKey.TenantId;
         var scopeFactory = _scopeFactory;
         var logger = _logger;
 
@@ -83,6 +96,7 @@ public class AuthController : ControllerBase
                 var dbContext = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
                 var encryptionService = scope.ServiceProvider.GetRequiredService<IConfigEncryptionService>();
                 var llmAdminService = scope.ServiceProvider.GetRequiredService<ILLMAdministrationService>();
+
                 var settings = scope.ServiceProvider.GetRequiredService<IOptions<AgenticSystemSettings>>().Value;
                 var chatHubContext = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
 

@@ -44,16 +44,22 @@ public class TenantMiddleware
 
                 _logger.LogInformation("Tenant resolved: {TenantId} ({TenantName})", tenantContext.TenantId, tenantContext.TenantName);
             }
+            else if (hasAuthorize && !allowAnonymous)
+            {
+                _logger.LogWarning("Tenant '{TenantId}' not found in store for authorized request.", tenantId);
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new { error = "Tenant not found or inactive." });
+                return;
+            }
             else
             {
-                // Fallback: use the provided tenantId even if not in the store (dev/test scenario)
-                _logger.LogInformation("Tenant not in store, using provided ID: {TenantId}", tenantId);
+                // Fallback de desenvolvimento para rotas não protegidas
                 tenantContext.TenantId = tenantId;
                 tenantContext.TenantName = tenantId;
                 tenantContext.IsAuthenticated = true;
             }
         }
-        else if (hasAuthorize && !allowAnonymous && context.User?.Identity?.IsAuthenticated == true)
+        else if (hasAuthorize && !allowAnonymous)
         {
             _logger.LogWarning("Authenticated request without tenant context.");
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
