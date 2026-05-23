@@ -109,7 +109,7 @@ export function KnowledgeRooms() {
                 onChange={(e) => setActiveWorkspace(e.target.value)}
                 className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-teal-500/50"
               >
-                <option value="tenant-default">Default Workspace</option>
+                <option value="admin">Default Workspace</option>
                 <option value="tenant-engineering">Engineering</option>
                 <option value="tenant-legal">Legal</option>
                 <option value="tenant-hr">HR</option>
