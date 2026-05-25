@@ -51,25 +51,53 @@ public class ScheduledTaskHostedService : BackgroundService
     private async Task TickAsync(CancellationToken ct)
     {
         using var scope = _serviceProvider.CreateScope();
+        var tenantStore = scope.ServiceProvider.GetService<ITenantStore>();
+        var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
         var taskManager = scope.ServiceProvider.GetRequiredService<IScheduledTaskManager>();
 
-        var activeTasks = await taskManager.GetActiveAsync(ct);
-        var now = DateTime.UtcNow;
-
-        foreach (var task in activeTasks)
+        var tenants = new List<string> { "admin" };
+        if (tenantStore != null)
         {
-            if (task.NextRunAt.HasValue && task.NextRunAt.Value <= now)
+            try
             {
-                _logger.LogDebug("Executing due task {TaskId} ({TaskName})", task.Id, task.Name);
+                var allTenants = await tenantStore.GetAllAsync(ct);
+                if (allTenants != null && allTenants.Count > 0)
+                    tenants = allTenants.Select(t => t.Id).ToList();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load tenants for scheduled task execution, falling back to admin");
+            }
+        }
 
-                try
+        foreach (var tenantId in tenants)
+        {
+            using var tenantScope = tenantContextAccessor.BeginScope(new TenantContext { TenantId = tenantId });
+            try
+            {
+                var activeTasks = await taskManager.GetActiveAsync(ct);
+                var now = DateTime.UtcNow;
+
+                foreach (var task in activeTasks)
                 {
-                    await taskManager.ExecuteAsync(task.Id, ct);
+                    if (task.NextRunAt.HasValue && task.NextRunAt.Value <= now)
+                    {
+                        _logger.LogDebug("Executing due task {TaskId} ({TaskName}) for tenant {TenantId}", task.Id, task.Name, tenantId);
+
+                        try
+                        {
+                            await taskManager.ExecuteAsync(task.Id, ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Task {TaskId} execution failed for tenant {TenantId}", task.Id, tenantId);
+                        }
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Task {TaskId} execution failed", task.Id);
-                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing scheduled tasks for tenant {TenantId}", tenantId);
             }
         }
     }

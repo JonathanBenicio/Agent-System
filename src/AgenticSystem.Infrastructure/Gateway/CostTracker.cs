@@ -28,7 +28,7 @@ public class CostTracker : ICostTracker
     private string ResolveTenantId(string? tenantId)
     {
         return tenantId 
-            ?? _tenantContextAccessor?.Current?.TenantId 
+            ?? _tenantContextAccessor?.CurrentTenantId 
             ?? (_tenantContextAccessor == null ? "test-tenant" : throw new InvalidOperationException("Tenant context is required for tracking cost."));
     }
 

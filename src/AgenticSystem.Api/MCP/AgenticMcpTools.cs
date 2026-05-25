@@ -137,7 +137,7 @@ public sealed class AgenticMcpTools
         [Description("Mensagem ou tarefa a ser processada pelo sistema agentic.")] string input,
         [Description("Nome opcional do agent alvo para execução direta.")] string? targetAgent,
         ClaimsPrincipal user,
-        TenantContext tenantContext)
+        ITenantContextAccessor tenantContextAccessor)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
@@ -153,9 +153,7 @@ public sealed class AgenticMcpTools
             Name = user.FindFirst(ClaimTypes.Name)?.Value
                 ?? user.Identity?.Name
                 ?? "MCP User",
-            TenantId = string.IsNullOrWhiteSpace(tenantContext.TenantId)
-                ? throw new ArgumentException("Zero Trust: TenantId is required in TenantContext for agent execution.", nameof(tenantContext))
-                : tenantContext.TenantId,
+            TenantId = tenantContextAccessor.CurrentTenantId,
             Language = "pt-BR"
         };
 

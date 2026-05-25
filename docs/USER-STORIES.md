@@ -62,24 +62,22 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 
 ### Intelligence (ML3–ML5)
 
-#### ML3 — Task Planning
+#### ML3 — Task Planning & Native Workflow Orchestration
 
 **Como** usuário que faz solicitações complexas,
-**quero** que o sistema decomponha minha tarefa em etapas executáveis,
-**para que** tarefas multi-step sejam rastreadas e executadas com controle.
+**quero** que o sistema orquestre tarefas usando os workflows nativos do MAF 1.6+,
+**para que** tarefas multi-step sejam executadas de forma padrão e observável.
 
 | Item | Detalhe |
 |------|---------|
-| Serviço | `ITaskPlanManager` |
-| Responsabilidade | Criação de planos com steps, avanço/falha de etapas, pausa e cancelamento |
+| Serviço | `ITaskPlanManager` / `WorkflowBuilder` Nativo |
+| Responsabilidade | Criação de planos e roteamento entre agentes usando primitivas nativas (`Microsoft.Agents.AI.Workflows`) |
 | Testes | Unitários (xUnit) |
-| Status | ✅ Implementado |
+| Status | ✅ Em Migração (MAF Nativo) |
 
 **Critérios de Aceite:**
-- [x] Plano é criado com N steps ordenados
-- [x] Cada step pode ser avançado, pausado ou falhado individualmente
-- [x] Status do plano reflete progresso (InProgress, Completed, Failed, Cancelled)
-- [x] Histórico de execução é persistido por sessão
+- [x] O workflow deve ser instanciado via `Microsoft.Agents.AI.Workflows.WorkflowBuilder`.
+- [x] Estados de transição e roteamento são manipulados via `RouteBuilder` e `WorkflowSession`.
 
 ---
 
@@ -410,20 +408,21 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 
 ---
 
-#### ML17 — IChatClient Compatibility Layer
+#### ML17 — IChatClient Compatibility & Native MAF Integration
 
 **Como** integrador de LLM providers,
-**quero** bridge automático entre `IChatClient` (M.E.AI) e `ILLMProvider`,
-**para que** qualquer `IChatClient` seja utilizável sem código adicional.
+**quero** utilizar os clientes nativos do Microsoft Agent Framework (`Microsoft.Agents.AI.OpenAI`),
+**para que** a comunicação com o LLM possua telemetria oficial e binding otimizado de ferramentas.
 
 | Item | Detalhe |
 |------|---------|
-| Serviço | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` |
-| Responsabilidade | Seleção dinâmica de provider/modelo no runtime e compatibilidade entre `IChatClient` e `ILLMProvider` quando necessária |
+| Serviço | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` (Legado) / Clientes MAF Nativos |
+| Responsabilidade | Seleção dinâmica de provider/modelo no runtime e interoperabilidade nativa com MAF 1.6+ |
 | Testes | Unitários (xUnit) |
-| Status | ✅ Implementado |
+| Status | ✅ Em Migração (MAF Nativo) |
 
 **Critérios de Aceite:**
+- [x] O pipeline principal deve instanciar LLMs utilizando bibliotecas oficiais (`Microsoft.Agents.AI.OpenAI`).
 - [x] `ContextAwareChatClient` resolve provider/modelo a partir do contexto runtime atual
 - [x] `LLMManager` mantém catálogo administrativo e registro de chat clients por provider
 - [x] `ProviderBackedChatClient` oferece compatibilidade reversa quando um fluxo precisa expor `ILLMProvider` como `IChatClient`

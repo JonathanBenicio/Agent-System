@@ -217,15 +217,7 @@ public sealed class RerankingSettingsAccessor : IRerankingSettingsAccessor
         }
     }
 
-    private string ResolveTenantId()
-    {
-        var tenantId = _tenantContextAccessor.Current?.TenantId;
-        if (string.IsNullOrWhiteSpace(tenantId))
-        {
-            throw new InvalidOperationException("Zero Trust: Tenant ID must be resolved for accessing reranking settings.");
-        }
-        return tenantId;
-    }
+    private string ResolveTenantId() => _tenantContextAccessor.CurrentTenantId;
 
     private static string BuildTenantConfigKey(string tenantId, string suffix)
         => $"tenants.{tenantId}.{suffix}";

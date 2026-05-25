@@ -88,7 +88,7 @@ public class AgentConfigurationService : IAgentConfigurationService
         var rollbackResult = await _versioningService.RollbackAsync(name, versionId, rolledBackBy, ct);
         if (!rollbackResult.Success || rollbackResult.Version is null)
         {
-            return new AgentConfigurationResult(false, rollbackResult.Message);
+            return new AgentConfigurationResult(false, rollbackResult.Message ?? "Erro desconhecido");
         }
 
         var targetVersion = rollbackResult.Version;
@@ -133,6 +133,6 @@ public class AgentConfigurationService : IAgentConfigurationService
             CreatedAt = restoredAgent.CreatedAt
         };
 
-        return new AgentConfigurationResult(true, rollbackResult.Message, agentInfo, targetVersion);
+        return new AgentConfigurationResult(true, rollbackResult.Message ?? "Rollback com sucesso", agentInfo, targetVersion);
     }
 }

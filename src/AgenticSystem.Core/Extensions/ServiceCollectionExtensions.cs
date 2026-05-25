@@ -66,11 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuditLog, InMemoryAuditLog>();
         services.AddSingleton<IToolGateway, ToolGateway>();
 
-        // Multi-Tenant
-        services.AddSingleton<ITenantStore, InMemoryTenantStore>();
-        services.AddSingleton<ITenantResolver, TenantResolver>();
-        services.AddSingleton<ITenantContextAccessor, TenantContextAccessor>();
-        services.AddScoped<TenantContext>();
+        // Multi-Tenant — registered by Infrastructure layer (AddAgenticMultiTenancy)
 
         // Maturity Level Services
         services.AddSingleton<IChunkLifecycleManager, ChunkLifecycleManager>();

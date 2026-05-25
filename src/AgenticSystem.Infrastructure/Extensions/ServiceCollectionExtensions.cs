@@ -194,6 +194,10 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<OrchestratorInstructionService>();
             services.AddSingleton<OrchestratorToolBindingService>();
 
+            services.AddSingleton<DbAgentSkillsSource>();
+            services.AddSingleton<AgentSkillsProvider>();
+            services.AddSingleton<Security.HyperlightSandboxedExecutor>();
+
             services.AddSingleton<RAGContextProvider>(sp =>
             {
                 var ragService = sp.GetService<IRAGService>();
@@ -221,7 +225,8 @@ public static class ServiceCollectionExtensions
                     sp.GetRequiredService<ILogger<OrchestratorHostBuilder>>(),
                     sp.GetRequiredService<ISkillManager>(),
                     sp.GetService<RAGContextProvider>(),
-                    sp.GetService<IQualityGateService>()));
+                    sp.GetService<IQualityGateService>(),
+                    sp.GetService<AgentSkillsProvider>()));
 
             services.AddSingleton<OrchestratorContextFactory>();
             services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
@@ -347,11 +352,10 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAgenticMultiTenancy(this IServiceCollection services)
     {
-        services.AddScoped<TenantContext>();
         services.AddSingleton<ITenantContextAccessor, TenantContextAccessor>();
         services.AddScoped<ITenantResolver, TenantResolver>();
+        services.AddSingleton<ITenantStore, InMemoryTenantStore>(); // Default fallback, replaced by EfTenantStore in PostgreSQL mode
         services.AddScoped<ISystemBootstrapService, SystemBootstrapService>();
-        // ITenantStore implementation should be registered by the storage mode
         return services;
     }
 
@@ -643,6 +647,11 @@ public static class ServiceCollectionExtensions
         var logger = serviceProvider.GetRequiredService<ILogger<HttpTool>>();
         var httpClient = httpClientFactory.CreateClient("AgenticTools");
         toolManager.RegisterTool(new HttpTool(httpClient, logger));
+
+        // Registrar Hyperlight WASM Sandbox Tool (Fase 5)
+        var executor = serviceProvider.GetRequiredService<Security.HyperlightSandboxedExecutor>();
+        toolManager.RegisterTool(new Security.HyperlightExecuteCodeTool(executor));
+
         return serviceProvider;
     }
 }

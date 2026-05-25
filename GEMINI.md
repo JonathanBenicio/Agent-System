@@ -42,7 +42,7 @@ Todas as definições de agentes, skills e workflows estão centralizadas no dir
 2. **Orquestração Concorrente (Antigravity Swarm)**: O gerenciamento de subagentes paralelos é feito através da orquestração concurrente do Swarm, garantindo que as fronteiras de cada agente sejam rigorosamente respeitadas.
 3. **Barreira de Qualidade (Security Gate)**: Todo build, deploy ou finalização de tarefa deve passar pela validação de segurança da extensão `gemini-cli-extensions/security`, que bloqueia a conclusão em caso de vulnerabilidades críticas.
 
-### 📜 Governança de Documentação (Roadmap Q2 2026)
+### 📜 Governança de Documentação
 Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem e usar os templates da pasta `templates/`:
 1. **GitHub Issue**: Registro da necessidade. **Obrigatório atualizar a descrição da Issue com links para o ADR, Story e Plan assim que criados.**
 2. **ADR (Architectural Decision Record)**: Definição de padrões técnicos em `docs/architecture/adr/`. **Use o template em `templates/adr-template.md`.**

@@ -30,17 +30,46 @@ public class DataSyncBackgroundService : BackgroundService
             {
                 using var scope = _serviceProvider.CreateScope();
                 var manager = scope.ServiceProvider.GetRequiredService<IDataConnectorManager>();
+                var tenantStore = scope.ServiceProvider.GetService<ITenantStore>();
+                var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
 
-                var connectors = await manager.ListConnectorsAsync(ct: stoppingToken);
-                var activeConnectors = connectors.Where(c => c.IsActive && ShouldSync(c)).ToList();
-
-                if (activeConnectors.Any())
+                var tenants = new List<string> { "admin" };
+                if (tenantStore != null)
                 {
-                    _logger.LogInformation("🔄 Found {Count} active connectors for sync.", activeConnectors.Count);
-                    foreach (var connector in activeConnectors)
+                    try
                     {
-                        if (stoppingToken.IsCancellationRequested) break;
-                        await manager.SyncConnectorAsync(connector.Id, fullSync: false, ct: stoppingToken);
+                        var allTenants = await tenantStore.GetAllAsync(stoppingToken);
+                        if (allTenants != null && allTenants.Count > 0)
+                            tenants = allTenants.Select(t => t.Id).ToList();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to load tenants for data sync, falling back to admin");
+                    }
+                }
+
+                foreach (var tenantId in tenants)
+                {
+                    using var tenantScope = tenantContextAccessor.BeginScope(new TenantContext { TenantId = tenantId });
+                    
+                    try
+                    {
+                        var connectors = await manager.ListConnectorsAsync(ct: stoppingToken);
+                        var activeConnectors = connectors.Where(c => c.IsActive && ShouldSync(c)).ToList();
+
+                        if (activeConnectors.Any())
+                        {
+                            _logger.LogInformation("🔄 Found {Count} active connectors for sync for tenant {TenantId}.", activeConnectors.Count, tenantId);
+                            foreach (var connector in activeConnectors)
+                            {
+                                if (stoppingToken.IsCancellationRequested) break;
+                                await manager.SyncConnectorAsync(connector.Id, fullSync: false, ct: stoppingToken);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "🚨 Error syncing connectors for tenant {TenantId}", tenantId);
                     }
                 }
             }
