@@ -24,18 +24,18 @@ public class OpenAIChatCompletionController : ControllerBase
 {
     private readonly IFrameworkOrchestratorService _orchestrator;
     private readonly AgenticDbContext _dbContext;
-    private readonly TenantContext _tenantContext;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
     private readonly ILogger<OpenAIChatCompletionController> _logger;
 
     public OpenAIChatCompletionController(
         IFrameworkOrchestratorService orchestrator,
         AgenticDbContext dbContext,
-        TenantContext tenantContext,
+        ITenantContextAccessor tenantContextAccessor,
         ILogger<OpenAIChatCompletionController> logger)
     {
         _orchestrator = orchestrator;
         _dbContext = dbContext;
-        _tenantContext = tenantContext;
+        _tenantContextAccessor = tenantContextAccessor;
         _logger = logger;
     }
 
@@ -124,7 +124,7 @@ public class OpenAIChatCompletionController : ControllerBase
             agentResponse = await _orchestrator.ExecuteAsync(
                 sessionId,
                 lastUserMessage.Content,
-                new UserContext { UserId = sessionId, TenantId = _tenantContext.TenantId },
+                new UserContext { UserId = sessionId, TenantId = _tenantContextAccessor.CurrentTenantId },
                 ct);
         }
         catch (OperationCanceledException)
@@ -249,10 +249,13 @@ public class OpenAIChatCompletionController : ControllerBase
         if (accessKey is null)
             return false;
 
-        // Popula o TenantContext scoped
-        _tenantContext.TenantId = accessKey.TenantId;
-        _tenantContext.TenantName = accessKey.Name;
-        _tenantContext.IsAuthenticated = true;
+        // Estabelece o escopo do Tenant via ITenantContextAccessor (single source of truth)
+        _tenantContextAccessor.BeginScope(new TenantContext
+        {
+            TenantId = accessKey.TenantId,
+            TenantName = accessKey.Name,
+            IsAuthenticated = true
+        });
 
         return true;
     }

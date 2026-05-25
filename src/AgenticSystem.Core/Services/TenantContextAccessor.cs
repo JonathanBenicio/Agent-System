@@ -8,7 +8,9 @@ public sealed class TenantContextAccessor : ITenantContextAccessor
 {
     private static readonly AsyncLocal<TenantContext?> CurrentContext = new();
 
-    public TenantContext Current => CurrentContext.Value ?? new TenantContext();
+    public string CurrentTenantId => 
+        CurrentContext.Value?.TenantId 
+        ?? throw new InvalidOperationException("Strict Multi-Tenancy Violation: No active Tenant Context resolved in the current async flow.");
 
     public IDisposable BeginScope(TenantContext context)
     {

@@ -21,27 +21,28 @@ public class TenantMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, TenantContext tenantContext, ITenantResolver tenantResolver, ITenantContextAccessor tenantContextAccessor)
+    public async Task InvokeAsync(HttpContext context, ITenantResolver tenantResolver, ITenantContextAccessor tenantContextAccessor)
     {
-        using var tenantScope = tenantContextAccessor.BeginScope(tenantContext);
-
         var endpoint = context.GetEndpoint();
         var hasAuthorize = endpoint?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>() is not null;
         var allowAnonymous = endpoint?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute>() is not null;
 
         var tenantId = ResolveTenantId(context);
+        TenantContext? tenantContext = null;
 
         if (!string.IsNullOrWhiteSpace(tenantId))
         {
             var resolved = await tenantResolver.ResolveAsync(tenantId);
             if (resolved is not null)
             {
-                tenantContext.TenantId = resolved.TenantId;
-                tenantContext.TenantName = resolved.TenantName;
-                tenantContext.Plan = resolved.Plan;
-                tenantContext.Limits = resolved.Limits;
-                tenantContext.IsAuthenticated = resolved.IsAuthenticated;
-
+                tenantContext = new TenantContext
+                {
+                    TenantId = resolved.TenantId,
+                    TenantName = resolved.TenantName,
+                    Plan = resolved.Plan,
+                    Limits = resolved.Limits,
+                    IsAuthenticated = resolved.IsAuthenticated
+                };
                 _logger.LogInformation("Tenant resolved: {TenantId} ({TenantName})", tenantContext.TenantId, tenantContext.TenantName);
             }
             else if (hasAuthorize && !allowAnonymous)
@@ -54,9 +55,12 @@ public class TenantMiddleware
             else
             {
                 // Fallback de desenvolvimento para rotas não protegidas
-                tenantContext.TenantId = tenantId;
-                tenantContext.TenantName = tenantId;
-                tenantContext.IsAuthenticated = true;
+                tenantContext = new TenantContext
+                {
+                    TenantId = tenantId,
+                    TenantName = tenantId,
+                    IsAuthenticated = true
+                };
             }
         }
         else if (hasAuthorize && !allowAnonymous)
@@ -67,7 +71,15 @@ public class TenantMiddleware
             return;
         }
 
-        await _next(context);
+        if (tenantContext is not null)
+        {
+            using var tenantScope = tenantContextAccessor.BeginScope(tenantContext);
+            await _next(context);
+        }
+        else
+        {
+            await _next(context);
+        }
     }
 
     private static string? ResolveTenantId(HttpContext context)

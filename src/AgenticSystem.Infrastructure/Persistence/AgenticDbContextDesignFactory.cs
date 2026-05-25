@@ -24,7 +24,8 @@ public sealed class AgenticDbContextDesignFactory : IDesignTimeDbContextFactory<
 
     private class DummyTenantAccessor : AgenticSystem.Core.Interfaces.ITenantContextAccessor
     {
-        public AgenticSystem.Core.Models.TenantContext Current => new() { TenantId = "design-time" };
+        public AgenticSystem.Core.Models.TenantContext? Current => new() { TenantId = "design-time" };
+        public string CurrentTenantId => "design-time";
         public IDisposable BeginScope(AgenticSystem.Core.Models.TenantContext context) => null!;
     }
 }

@@ -43,7 +43,7 @@ public class PostgresAgentVersionStoreTests
             .Options;
 
         var tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        tenantAccessor.CurrentTenantId.Returns("test-tenant");
         var context = new AgenticDbContext(options, tenantAccessor);
         context.Database.EnsureCreated();
 
@@ -189,7 +189,7 @@ public class PostgresPromptTemplateStoreTests
             .Options;
 
         var tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        tenantAccessor.CurrentTenantId.Returns("test-tenant");
         var context = new AgenticDbContext(options, tenantAccessor);
         context.Database.EnsureCreated();
 
@@ -272,7 +272,7 @@ public class PostgresEvalResultStoreTests
             .Options;
 
         var tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        tenantAccessor.CurrentTenantId.Returns("test-tenant");
         var context = new AgenticDbContext(options, tenantAccessor);
         context.Database.EnsureCreated();
 

@@ -49,7 +49,7 @@ public class OnnxInferenceTests
             .Options;
 
         var tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantAccessor.Current.Returns(new TenantContext { TenantId = "tenant-1" });
+        tenantAccessor.CurrentTenantId.Returns("tenant-1");
 
         using var dbContext = new AgenticDbContext(options, tenantAccessor);
         dbContext.Database.EnsureCreated();

@@ -26,20 +26,20 @@ public class AuthController : ControllerBase
 {
     private readonly IConfiguration _configuration;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly TenantContext _tenantContext;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
     private readonly AgenticDbContext _dbContext;
     private readonly ILogger<AuthController> _logger;
 
     public AuthController(
         IConfiguration configuration,
         IServiceScopeFactory scopeFactory,
-        TenantContext tenantContext,
+        ITenantContextAccessor tenantContextAccessor,
         AgenticDbContext dbContext,
         ILogger<AuthController> logger)
     {
         _configuration = configuration;
         _scopeFactory = scopeFactory;
-        _tenantContext = tenantContext;
+        _tenantContextAccessor = tenantContextAccessor;
         _dbContext = dbContext;
         _logger = logger;
     }
@@ -86,6 +86,7 @@ public class AuthController : ControllerBase
         // Trigger LLM model discovery and update in the background asynchronously
         var tenantId = accessKey.TenantId;
         var scopeFactory = _scopeFactory;
+        var tenantContextAccessor = _tenantContextAccessor;
         var logger = _logger;
 
         _ = Task.Run(async () =>
@@ -100,9 +101,13 @@ public class AuthController : ControllerBase
                 var settings = scope.ServiceProvider.GetRequiredService<IOptions<AgenticSystemSettings>>().Value;
                 var chatHubContext = scope.ServiceProvider.GetRequiredService<IHubContext<ChatHub>>();
 
-                // Configure TenantContext in background thread scope to enforce tenant isolation in EF Core
-                var tenantContext = scope.ServiceProvider.GetRequiredService<TenantContext>();
-                tenantContext.TenantId = tenantId;
+                // Establish tenant context in background thread via AsyncLocal (single source of truth)
+                using var tenantScope = tenantContextAccessor.BeginScope(new TenantContext
+                {
+                    TenantId = tenantId,
+                    TenantName = tenantId,
+                    IsAuthenticated = true
+                });
 
                 logger.LogInformation("Background LLM model discovery started for tenant '{TenantId}' after successful admin login.", tenantId);
 

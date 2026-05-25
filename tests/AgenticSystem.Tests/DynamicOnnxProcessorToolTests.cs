@@ -36,7 +36,7 @@ public class DynamicOnnxProcessorToolTests
             .Options;
 
         var tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        tenantAccessor.CurrentTenantId.Returns("test-tenant");
 
         _dbContext = new AgenticDbContext(options, tenantAccessor);
         _dbContext.Database.EnsureCreated();

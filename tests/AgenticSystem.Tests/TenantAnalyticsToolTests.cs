@@ -32,7 +32,7 @@ public class TenantAnalyticsToolTests
             .Options;
 
         var tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        tenantAccessor.CurrentTenantId.Returns("test-tenant");
 
         _dbContext = new AgenticDbContext(options, tenantAccessor);
         _dbContext.Database.EnsureCreated();
@@ -85,7 +85,7 @@ public class TenantAnalyticsToolTests
         data.GetProperty("totalCost").GetDecimal().Should().Be(15.50m);
         data.GetProperty("days").GetInt32().Should().Be(30);
 
-        var byService = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(data.GetProperty("byService").GetRawText());
+        var byService = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, decimal>>(data.GetProperty("byService").GetRawText()) ?? new();
         byService["Ollama"].Should().Be(10.50m);
         byService["OpenAI"].Should().Be(5.00m);
         byService.ContainsKey("Postgres").Should().BeFalse();
@@ -171,7 +171,7 @@ public class TenantAnalyticsToolTests
         var data = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(json);
         data.GetProperty("totalWorkflows").GetInt32().Should().Be(4);
 
-        var byStatus = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(data.GetProperty("byStatus").GetRawText());
+        var byStatus = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, int>>(data.GetProperty("byStatus").GetRawText()) ?? new();
         byStatus["Completed"].Should().Be(2);
         byStatus["Running"].Should().Be(1);
         byStatus["Failed"].Should().Be(1);

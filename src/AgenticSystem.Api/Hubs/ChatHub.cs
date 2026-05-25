@@ -57,9 +57,7 @@ public class ChatHub : Hub
         {
             UserId = userId,
             Name = userId,
-            TenantId = string.IsNullOrWhiteSpace(_tenantContextAccessor.Current?.TenantId)
-                ? throw new InvalidOperationException("Zero Trust: Tenant ID must be resolved for hub requests.")
-                : _tenantContextAccessor.Current.TenantId,
+            TenantId = _tenantContextAccessor.CurrentTenantId,
             Language = "pt-BR",
             Preferences = preferences
         };
@@ -148,11 +146,7 @@ public class ChatHub : Hub
         _logger.LogInformation("🔌 Client connected: {ConnectionId}", Context.ConnectionId);
         
         // Add connection to tenant group for targeted notifications (like LlmCatalogUpdated)
-        var tenantId = _tenantContextAccessor.Current?.TenantId;
-        if (string.IsNullOrWhiteSpace(tenantId))
-        {
-            throw new InvalidOperationException("Zero Trust: Tenant ID must be resolved for SignalR connection.");
-        }
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}");
         
         await Clients.Caller.SendAsync("Connected", new

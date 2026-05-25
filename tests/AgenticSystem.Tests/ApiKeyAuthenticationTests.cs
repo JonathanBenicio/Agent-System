@@ -26,7 +26,7 @@ public class ApiKeyAuthenticationTests
             .Options;
 
         var tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantAccessor.Current.Returns(new TenantContext { TenantId = "admin" });
+        tenantAccessor.CurrentTenantId.Returns("admin");
 
         var dbContext = new AgenticDbContext(options, tenantAccessor);
         dbContext.Database.EnsureCreated();

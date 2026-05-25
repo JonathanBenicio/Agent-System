@@ -25,7 +25,7 @@ public class PostgresSessionSummaryStoreTests
             .Options;
 
         _tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        _tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        _tenantAccessor.CurrentTenantId.Returns("test-tenant");
 
         // Ensure database is created
         using (var ctx = new AgenticDbContext(_options, _tenantAccessor))

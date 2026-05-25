@@ -3,14 +3,16 @@ using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using FluentAssertions;
+using Xunit;
 
 namespace AgenticSystem.Tests.MultiTenancy;
 
 public class TenantResolverTests
 {
-    private readonly ITenantStore _store = new InMemoryTenantStore();
+    private readonly ITenantStore _store = Substitute.For<ITenantStore>();
     private readonly ILogger<TenantResolver> _logger = Substitute.For<ILogger<TenantResolver>>();
-    private ITenantResolver _resolver;
+    private readonly ITenantResolver _resolver;
 
     public TenantResolverTests()
     {
@@ -29,7 +31,7 @@ public class TenantResolverTests
             Limits = TenantLimits.ProTier(),
             IsActive = true
         };
-        await _store.SaveAsync(tenant);
+        _store.GetByIdAsync("admin", Arg.Any<CancellationToken>()).Returns(tenant);
 
         var ctx = await _resolver.ResolveAsync("admin");
 
@@ -41,6 +43,7 @@ public class TenantResolverTests
     [Fact]
     public async Task ResolveAsync_UnknownTenantId_ReturnsNull()
     {
+        _store.GetByIdAsync("nonexistent-tenant", Arg.Any<CancellationToken>()).Returns((Tenant?)null);
         var ctx = await _resolver.ResolveAsync("nonexistent-tenant");
         ctx.Should().BeNull();
     }
@@ -57,7 +60,7 @@ public class TenantResolverTests
             Limits = TenantLimits.ProTier(),
             IsActive = false
         };
-        await _store.SaveAsync(tenant);
+        _store.GetByIdAsync("inactive-1", Arg.Any<CancellationToken>()).Returns(tenant);
 
         var ctx = await _resolver.ResolveAsync("inactive-1");
         ctx.Should().BeNull();
@@ -75,7 +78,7 @@ public class TenantResolverTests
             Limits = TenantLimits.EnterpriseTier(),
             IsActive = true
         };
-        await _store.SaveAsync(tenant);
+        _store.GetByIdAsync("tenant-pro", Arg.Any<CancellationToken>()).Returns(tenant);
 
         var ctx = await _resolver.ResolveAsync("tenant-pro");
 

@@ -1076,7 +1076,7 @@ public class LLMManager : ILLMAdministrationService
         if (string.IsNullOrWhiteSpace(normalizedTenantId))
         {
             var tenantAccessor = (ITenantContextAccessor?)_serviceProvider.GetService(typeof(ITenantContextAccessor));
-            normalizedTenantId = tenantAccessor?.Current?.TenantId;
+            normalizedTenantId = tenantAccessor?.CurrentTenantId;
         }
 
         if (string.IsNullOrWhiteSpace(normalizedTenantId))

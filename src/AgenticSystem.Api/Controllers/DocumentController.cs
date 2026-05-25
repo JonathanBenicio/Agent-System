@@ -94,12 +94,13 @@ public class DocumentController : ControllerBase
         _logger.LogInformation("📄 Ingestão iniciada: {FileName} ({Size} bytes, type: {Type})",
             file.FileName, file.Length, documentType);
 
-        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() 
+            ?? throw new UnauthorizedAccessException("Header X-Tenant-Id é obrigatório.");
 
         var config = new ChunkingConfig 
         { 
             TenantId = tenantId,
-            Collection = source 
+            Collection = source ?? string.Empty 
         };
 
         var result = await _ingestionPipeline.IngestAsync(rawDocument, config: config, ct);
@@ -169,12 +170,13 @@ public class DocumentController : ControllerBase
 
         _logger.LogInformation("📄 Batch ingestão: {Count} documentos", rawDocuments.Count);
 
-        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() 
+            ?? throw new UnauthorizedAccessException("Header X-Tenant-Id é obrigatório.");
 
         var config = new ChunkingConfig 
         { 
             TenantId = tenantId,
-            Collection = source 
+            Collection = source ?? string.Empty 
         };
 
         var results = await _ingestionPipeline.IngestBatchAsync(rawDocuments, config: config, ct);

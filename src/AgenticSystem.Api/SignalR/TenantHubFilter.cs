@@ -30,6 +30,12 @@ public sealed class TenantHubFilter : IHubFilter
         Func<HubInvocationContext, Task<object?>> next)
     {
         var tenantContext = await ResolveTenantContextAsync(invocationContext.Context.GetHttpContext());
+        if (tenantContext is null)
+        {
+            _logger.LogWarning("Hub invocation rejected: No active tenant context. Method: {MethodName}", invocationContext.HubMethodName);
+            throw new HubException("Strict Multi-Tenancy Violation: No active Tenant Context resolved for this hub invocation.");
+        }
+
         using var scope = _tenantContextAccessor.BeginScope(tenantContext);
         return await next(invocationContext);
     }
@@ -39,6 +45,13 @@ public sealed class TenantHubFilter : IHubFilter
         Func<HubConnectionContext, Task> next)
     {
         var tenantContext = await ResolveTenantContextAsync(connectionContext.GetHttpContext());
+        if (tenantContext is null)
+        {
+            _logger.LogWarning("WebSocket connection attempt rejected: No valid tenant context resolved. Connection ID: {ConnectionId}", connectionContext.ConnectionId);
+            connectionContext.Abort();
+            throw new HubException("Strict Multi-Tenancy Violation: A valid Tenant Context is required to connect to this Hub.");
+        }
+
         using var scope = _tenantContextAccessor.BeginScope(tenantContext);
         await next(connectionContext);
     }
@@ -49,44 +62,57 @@ public sealed class TenantHubFilter : IHubFilter
         Func<HubConnectionContext, Exception?, Task> next)
     {
         var tenantContext = await ResolveTenantContextAsync(connectionContext.GetHttpContext());
+        if (tenantContext is null)
+        {
+            _logger.LogWarning("OnDisconnectedAsync called without resolved tenant context. Connection ID: {ConnectionId}", connectionContext.ConnectionId);
+            await next(connectionContext, exception);
+            return;
+        }
+
         using var scope = _tenantContextAccessor.BeginScope(tenantContext);
         await next(connectionContext, exception);
     }
 
-    private async Task<TenantContext> ResolveTenantContextAsync(Microsoft.AspNetCore.Http.HttpContext? httpContext)
+    private async Task<TenantContext?> ResolveTenantContextAsync(Microsoft.AspNetCore.Http.HttpContext? httpContext)
     {
         if (httpContext is null)
         {
-            return new TenantContext();
+            return null;
         }
 
         var tenantId = ResolveTenantId(httpContext);
-        var tenantContext = new TenantContext();
 
         if (!string.IsNullOrWhiteSpace(tenantId))
         {
             var resolved = await _tenantResolver.ResolveAsync(tenantId);
             if (resolved is not null)
             {
-                tenantContext.TenantId = resolved.TenantId;
-                tenantContext.TenantName = resolved.TenantName;
-                tenantContext.Plan = resolved.Plan;
-                tenantContext.Limits = resolved.Limits;
-                tenantContext.IsAuthenticated = resolved.IsAuthenticated;
-
+                var tenantContext = new TenantContext
+                {
+                    TenantId = resolved.TenantId,
+                    TenantName = resolved.TenantName,
+                    Plan = resolved.Plan,
+                    Limits = resolved.Limits,
+                    IsAuthenticated = resolved.IsAuthenticated
+                };
                 _logger.LogDebug("Tenant resolved in Hub pipeline: {TenantId} ({TenantName})", tenantContext.TenantId, tenantContext.TenantName);
+                return tenantContext;
             }
             else
             {
                 // Fallback para cenários dev/test
                 _logger.LogDebug("Tenant resolved in Hub pipeline (not in store, using provided ID): {TenantId}", tenantId);
-                tenantContext.TenantId = tenantId;
-                tenantContext.TenantName = tenantId;
-                tenantContext.IsAuthenticated = true;
+                var tenantContext = new TenantContext
+                {
+                    TenantId = tenantId,
+                    TenantName = tenantId,
+                    IsAuthenticated = true
+                };
+                return tenantContext;
             }
         }
 
-        return tenantContext;
+        return null;
     }
 
     private static string? ResolveTenantId(Microsoft.AspNetCore.Http.HttpContext httpContext)

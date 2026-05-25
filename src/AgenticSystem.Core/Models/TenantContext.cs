@@ -9,7 +9,7 @@ public class TenantContext
     /// <summary>
     /// Identificador único do tenant.
     /// </summary>
-    public string TenantId { get; set; } = string.Empty;
+    public required string TenantId { get; init; }
 
     /// <summary>
     /// Nome do tenant para exibição.
