@@ -25,6 +25,8 @@ public class AgentFrameworkFactory
     private readonly UnifiedAIToolProvider? _toolProvider;
     private readonly McpToolsAIFunctionAdapter? _mcpToolsAdapter;
     private readonly SimpleSessionStoreAdapter? _sessionStore;
+    private readonly RAGContextProvider? _ragContextProvider;
+    private readonly AgentSkillsProvider? _skillsProvider;
 
     // Exposed for OrchestratorContextFactory to create the orchestrator ChatClientAgent
     internal IChatClient ChatClient => _chatClient;
@@ -38,7 +40,9 @@ public class AgentFrameworkFactory
         ISkillManager? skillManager = null,
         UnifiedAIToolProvider? toolProvider = null,
         McpToolsAIFunctionAdapter? mcpToolsAdapter = null,
-        SimpleSessionStoreAdapter? sessionStore = null)
+        SimpleSessionStoreAdapter? sessionStore = null,
+        RAGContextProvider? ragContextProvider = null,
+        AgentSkillsProvider? skillsProvider = null)
     {
         _chatClient = chatClient;
         _loggerFactory = loggerFactory;
@@ -47,6 +51,8 @@ public class AgentFrameworkFactory
         _toolProvider = toolProvider;
         _mcpToolsAdapter = mcpToolsAdapter;
         _sessionStore = sessionStore;
+        _ragContextProvider = ragContextProvider;
+        _skillsProvider = skillsProvider;
     }
 
     /// <summary>
@@ -82,7 +88,22 @@ public class AgentFrameworkFactory
             _loggerFactory,
             _serviceProvider);
 
-        return chatAgent.AsBuilder()
+        var builder = chatAgent.AsBuilder();
+        var contextProviders = new List<MessageAIContextProvider>();
+        if (_ragContextProvider is not null)
+        {
+            contextProviders.Add(_ragContextProvider);
+        }
+        if (_skillsProvider is not null)
+        {
+            contextProviders.Add(_skillsProvider);
+        }
+        if (contextProviders.Count > 0)
+        {
+            builder = builder.UseAIContextProviders(contextProviders.ToArray());
+        }
+
+        return builder
             .UseLogging(_loggerFactory)
             .UseOpenTelemetry("AgenticSystem.Agents")
             .Build(_serviceProvider);
@@ -111,7 +132,22 @@ public class AgentFrameworkFactory
             _loggerFactory,
             _serviceProvider);
 
-        return chatAgent.AsBuilder()
+        var builder = chatAgent.AsBuilder();
+        var contextProviders = new List<MessageAIContextProvider>();
+        if (_ragContextProvider is not null)
+        {
+            contextProviders.Add(_ragContextProvider);
+        }
+        if (_skillsProvider is not null)
+        {
+            contextProviders.Add(_skillsProvider);
+        }
+        if (contextProviders.Count > 0)
+        {
+            builder = builder.UseAIContextProviders(contextProviders.ToArray());
+        }
+
+        return builder
             .UseLogging(_loggerFactory)
             .UseOpenTelemetry("AgenticSystem.Agents")
             .Build(_serviceProvider);

@@ -255,8 +255,28 @@ public class AgentCollaborationWorkflowTests
                     : stepAgent;
             });
 
+        var mockChatClient = Substitute.For<IChatClient>();
+        mockChatClient.GetResponseAsync(
+                Arg.Any<IEnumerable<ChatMessage>>(),
+                Arg.Any<ChatOptions?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                Task.FromResult(new AIChatResponse(new ChatMessage(ChatRole.Assistant, "Review completed via handoff workflow"))),
+                Task.FromResult(new AIChatResponse(new ChatMessage(ChatRole.Assistant, "Done"))));
+        
+        mockChatClient.GetStreamingResponseAsync(
+                Arg.Any<IEnumerable<ChatMessage>>(),
+                Arg.Any<ChatOptions?>(),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                CreateStreamingResponse("Review completed via handoff workflow"),
+                CreateStreamingResponse("Done"));
+
+        mockChatClient.GetService(Arg.Any<Type>(), Arg.Any<object?>())
+            .Returns(callInfo => callInfo.Arg<Type>() == typeof(IChatClient) ? mockChatClient : null);
+
         var frameworkFactory = new AgentFrameworkFactory(
-            CreateStaticChatClient("Review completed via handoff workflow"),
+            mockChatClient,
             LoggerFactory.Create(_ => { }),
             new ServiceCollection().BuildServiceProvider());
 
@@ -296,7 +316,8 @@ public class AgentCollaborationWorkflowTests
             RequiresDelegation = true
         };
 
-        var response = await sut.ExecuteAsync("session-handoff-1", "Implement migration", context, analysis, CancellationToken.None);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        var response = await sut.ExecuteAsync("session-handoff-1", "Implement migration", context, analysis, cts.Token);
 
         response.Success.Should().BeTrue();
         response.Metadata["nativeHandoffWorkflow"].Should().Be(true);

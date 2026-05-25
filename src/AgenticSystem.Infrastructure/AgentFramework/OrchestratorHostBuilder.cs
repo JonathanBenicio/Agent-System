@@ -25,6 +25,7 @@ public class OrchestratorHostBuilder
     private readonly ISkillManager _skillManager;
     private readonly RAGContextProvider? _ragContextProvider;
     private readonly IQualityGateService? _qualityGateService;
+    private readonly AgentSkillsProvider? _skillsProvider;
     private readonly ILogger<OrchestratorHostBuilder> _logger;
 
     public OrchestratorHostBuilder(
@@ -39,7 +40,8 @@ public class OrchestratorHostBuilder
         ILogger<OrchestratorHostBuilder> logger,
         ISkillManager skillManager,
         RAGContextProvider? ragContextProvider = null,
-        IQualityGateService? qualityGateService = null)
+        IQualityGateService? qualityGateService = null,
+        AgentSkillsProvider? skillsProvider = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
@@ -53,6 +55,7 @@ public class OrchestratorHostBuilder
         _skillManager = skillManager ?? throw new ArgumentNullException(nameof(skillManager));
         _ragContextProvider = ragContextProvider;
         _qualityGateService = qualityGateService;
+        _skillsProvider = skillsProvider;
     }
 
     /// <summary>
@@ -108,14 +111,22 @@ public class OrchestratorHostBuilder
             }
         }
 
-        // 3. Configurar o grafo de handoffs: Orquestrador pode enviar para qualquer especialista e vice-versa
-        var builder = AgentWorkflowBuilder.CreateHandoffBuilderWith(orchestratorAgent)
-            .WithHandoffs(orchestratorAgent, specialistAgents);
+        // 3. Configurar o grafo de handoffs usando WorkflowBuilder nativo do MAF 1.6.1
+        var builder = new WorkflowBuilder(orchestratorAgent);
 
-        // Especialistas podem devolver para o orquestrador ou passar entre si (Mesh Topology)
         foreach (var specialist in specialistAgents)
         {
-            builder = builder.WithHandoffs(specialist, specialistAgents.Where(a => a != specialist).Append(orchestratorAgent));
+            builder.BindExecutor(specialist);
+            
+            // Orquestrador <-> Especialista
+            builder.AddEdge(orchestratorAgent, specialist, idempotent: true);
+            builder.AddEdge(specialist, orchestratorAgent, idempotent: true);
+
+            // Especialista <-> Outros Especialistas (Mesh Topology)
+            foreach (var otherSpecialist in specialistAgents.Where(a => a != specialist))
+            {
+                builder.AddEdge(specialist, otherSpecialist, idempotent: true);
+            }
         }
 
         _logger.LogInformation(
@@ -156,9 +167,18 @@ public class OrchestratorHostBuilder
         var builder = chatAgent.AsBuilder();
 
         // Aplicar providers e middleware de forma declarativa
+        var contextProviders = new List<MessageAIContextProvider>();
         if (_ragContextProvider is not null)
         {
-            builder = builder.UseAIContextProviders(_ragContextProvider);
+            contextProviders.Add(_ragContextProvider);
+        }
+        if (_skillsProvider is not null)
+        {
+            contextProviders.Add(_skillsProvider);
+        }
+        if (contextProviders.Count > 0)
+        {
+            builder = builder.UseAIContextProviders(contextProviders.ToArray());
         }
 
         if (_qualityGateService is not null)

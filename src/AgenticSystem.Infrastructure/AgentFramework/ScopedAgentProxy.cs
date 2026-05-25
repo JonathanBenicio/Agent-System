@@ -20,6 +20,9 @@ public sealed class ScopedAgentProxy : AIAgent
         _rootServiceProvider = rootServiceProvider;
         _targetAgentKey = targetAgentKey;
     }
+
+    public override string Name => "AgenticSystem";
+    public override string Description => "Agentic System Protocol Proxy";
     protected override async Task<AgentResponse> RunCoreAsync(IEnumerable<ChatMessage> messages, AgentSession? session = null, AgentRunOptions? options = null, CancellationToken cancellationToken = default)
     {
         // Cria o escopo real apenas quando o framework tentar executar o agente

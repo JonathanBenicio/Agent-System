@@ -21,6 +21,7 @@ public class AgentYamlDto
     public AgentYamlGovernanceDto? Governance { get; set; }
     public AgentYamlAbilitiesDto? Abilities { get; set; }
     public string? Instructions { get; set; }
+    public Dictionary<string, string>? Rules { get; set; }
 }
 
 public class AgentYamlMetadataDto
@@ -265,6 +266,38 @@ public class AgentYamlValidator : IAgentYamlValidator
             }
         }
 
+        // ─── Validação Semântica de Fórmulas PowerFx (Fase 4) ───
+        if (dto.Rules is not null && dto.Rules.Count > 0)
+        {
+            foreach (var rule in dto.Rules)
+            {
+                var formula = rule.Value;
+                if (string.IsNullOrWhiteSpace(formula)) continue;
+
+                // Verificar parênteses balanceados como critério sintático básico do PowerFx
+                int balance = 0;
+                foreach (char ch in formula)
+                {
+                    if (ch == '(') balance++;
+                    else if (ch == ')') balance--;
+                    
+                    if (balance < 0) break;
+                }
+
+                if (balance != 0)
+                {
+                    errors.Add(new YamlValidationError
+                    {
+                        Line = 1,
+                        Column = 1,
+                        ErrorCode = "INVALID_POWERFX_SYNTAX",
+                        Message = $"A regra '{rule.Key}' contém expressão PowerFx com parênteses desbalanceados: '{formula}'.",
+                        Severity = "Error"
+                    });
+                }
+            }
+        }
+
         if (errors.Any(e => e.Severity == "Error"))
         {
             return new YamlValidationResult
@@ -289,6 +322,11 @@ public class AgentYamlValidator : IAgentYamlValidator
         if (dto.Metadata is not null && Enum.TryParse<AgentTier>(dto.Metadata.Tier, true, out var tierVal))
         {
             specification.Tier = tierVal;
+        }
+
+        if (dto.Rules is not null && dto.Rules.Count > 0)
+        {
+            specification.Configuration["rules"] = dto.Rules;
         }
 
         if (dto.Execution is not null)

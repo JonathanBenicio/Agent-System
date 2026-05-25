@@ -11,8 +11,15 @@ using Microsoft.Extensions.AI;
 using Serilog;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Agents.AI.DevUI;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Host.UseDefaultServiceProvider((context, options) =>
+{
+    options.ValidateScopes = false;
+    options.ValidateOnBuild = false;
+});
 
 // ============================================================================
 // 🤖 AGENTIC SYSTEM
@@ -86,6 +93,17 @@ builder.Services.AddApiSecurity(builder.Configuration, builder.Environment);
 builder.Services.AddApiSwagger();
 builder.Services.AddApiRateLimiting(builder.Configuration);
 
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddDevUI();
+    builder.Services.Configure<DevUIOptions>(options =>
+    {
+        options.AllowRemoteAccess = true;
+    });
+    builder.Services.AddOpenAIResponses();
+    builder.Services.AddOpenAIConversations();
+}
+
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -142,6 +160,12 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Agentic System API v1"));
+    
+    var agent = app.Services.GetRequiredKeyedService<Microsoft.Agents.AI.AIAgent>("AgenticSystem");
+    app.MapOpenAIResponses(agent);
+    app.MapOpenAIConversations();
+    
+    app.MapDevUI();
 }
 
 app.UseSerilogRequestLogging();

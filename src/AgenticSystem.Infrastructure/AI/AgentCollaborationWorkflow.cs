@@ -167,9 +167,17 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         if (reviewerAgent != null) agents.Add(reviewerAgent);
         else agents.Add(CreateWorkflowStageAgent("CollaborationReviewer", "Revisa os resultados do workflow colaborativo.", (_, cancellationToken) => ExecuteReviewerStageAsync(state, cancellationToken)));
 
-        return AgentWorkflowBuilder.BuildSequential(
-            ShouldUseConcurrentContextStage() ? "collaboration-workflow-advanced" : "collaboration-workflow",
-            agents);
+        var builder = new WorkflowBuilder(agents[0]);
+        for (int i = 1; i < agents.Count; i++)
+        {
+            builder.BindExecutor(agents[i]);
+            builder.AddEdge(agents[i - 1], agents[i]);
+        }
+        
+        var name = ShouldUseConcurrentContextStage() ? "collaboration-workflow-advanced" : "collaboration-workflow";
+        builder.WithName(name);
+
+        return builder.Build();
     }
 
     private bool ShouldUseConcurrentContextStage()
@@ -287,12 +295,24 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
                 (_, cancellationToken) => ExecuteRagContextStageAsync(state, cancellationToken)));
         }
 
-        return agents.Count == 0
-            ? null
-            : AgentWorkflowBuilder.BuildConcurrent(
-                "collaboration-context-workflow",
-                agents,
-                AggregateConcurrentContextMessages);
+        if (agents.Count == 0) return null;
+
+        var startNode = CreateWorkflowStageAgent("ContextStart", "Initiates context gathering", (_, _) => Task.FromResult("start"));
+        var endNode = CreateWorkflowStageAgent("ContextEnd", "Aggregates context", (_, _) => Task.FromResult("end"));
+
+        var builder = new WorkflowBuilder(startNode);
+        builder.BindExecutor(endNode);
+
+        foreach (var agent in agents)
+        {
+            builder.BindExecutor(agent);
+            builder.AddEdge(startNode, agent);
+        }
+
+        builder.AddFanInBarrierEdge(agents.Select(a => (ExecutorBinding)a).ToList(), endNode);
+        builder.WithName("collaboration-context-workflow");
+        
+        return builder.Build();
     }
 
     private async Task<string> ExecuteChannelContextStageAsync(
@@ -944,15 +964,13 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
                 frameworkHandoffAgents.Add(frameworkAgent);
             }
 
-            #pragma warning disable MAAIW001
-            var handoffWorkflowBuilder = AgentWorkflowBuilder.CreateHandoffBuilderWith(frameworkReviewer)
-                .EmitAgentResponseEvents(true)
-                .WithHandoffs(frameworkReviewer, frameworkHandoffAgents)
-                .WithHandoffs(
-                    frameworkHandoffAgents,
-                    frameworkReviewer,
-                    "Return findings to the review coordinator so the final recommendation can be produced.");
-            #pragma warning restore MAAIW001
+            var handoffWorkflowBuilder = new WorkflowBuilder(frameworkReviewer);
+            foreach (var frameworkHandoffAgent in frameworkHandoffAgents)
+            {
+                handoffWorkflowBuilder.BindExecutor(frameworkHandoffAgent);
+                handoffWorkflowBuilder.AddEdge(frameworkReviewer, frameworkHandoffAgent, idempotent: true);
+                handoffWorkflowBuilder.AddEdge(frameworkHandoffAgent, frameworkReviewer, "Return findings to the review coordinator so the final recommendation can be produced.", idempotent: true);
+            }
 
             var handoffWorkflow = handoffWorkflowBuilder.Build();
             var inputMessages = new List<ChatMessage>
