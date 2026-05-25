@@ -7,8 +7,7 @@ import type {
   ToolSummary,
   ToolInput,
   ToolResult,
-  SkillSummary,
-  SkillContent
+  SkillSummary
 } from '@/types/api'
 
 export const agentApi = {
@@ -39,12 +38,17 @@ export const toolApi = {
 
 export const skillApi = {
   listAll: () => get<SkillSummary[]>('/api/agent/skills/all'),
-  list: (agent?: string, domain?: string) => {
-    const params = new URLSearchParams()
-    if (agent) params.set('agent', agent)
-    if (domain) params.set('domain', domain)
-    const qs = params.toString()
-    return get<SkillContent[]>(`/api/agent/skills${qs ? `?${qs}` : ''}`)
-  },
+  get: (id: string) => get<SkillSummary & { systemPrompt?: string; examples?: string; metadata?: Record<string, string> }>(`/api/agent/skills/${encodeURIComponent(id)}`),
+  create: (data: { id: string; name: string; domain: string; type: string; systemPromptFragment: string; fewShotExamples?: string; metadata?: Record<string, string> }) => 
+    post<SkillSummary>('/api/agent/skills', data),
+  update: (id: string, data: { name?: string; domain?: string; systemPromptFragment?: string; fewShotExamples?: string; metadata?: Record<string, string> }) => 
+    put<SkillSummary>(`/api/agent/skills/${encodeURIComponent(id)}`, data),
   delete: (id: string) => del(`/api/agent/skills/${encodeURIComponent(id)}`),
+  upload: (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return post<{ message: string; id: string }>('/api/agent/skills/upload', formData)
+  },
+  brainstorm: (description: string) => 
+    post<{ suggestedId: string; suggestedName: string; systemPromptFragment: string; fewShotExamples?: string }>('/api/agent/skills/brainstorm', { description })
 }

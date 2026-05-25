@@ -154,6 +154,7 @@ export interface SkillSummary {
   domain?: string
   type: string
   agentName?: string
+  isSystem?: boolean
 }
 
 export interface SkillContent {

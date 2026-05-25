@@ -69,6 +69,7 @@ public class AgenticDbContext : DbContext
     public DbSet<CustomOnnxModelFileEntity> CustomOnnxModelFiles => Set<CustomOnnxModelFileEntity>();
     public DbSet<CustomOnnxInferenceJobEntity> CustomOnnxInferenceJobs => Set<CustomOnnxInferenceJobEntity>();
     public DbSet<AccessApiKeyEntity> AccessApiKeys => Set<AccessApiKeyEntity>();
+    public DbSet<DbSkillEntity> AgentSkills => Set<DbSkillEntity>();
 
 
 
@@ -98,7 +99,7 @@ public class AgenticDbContext : DbContext
         {
             modelBuilder.Entity<VectorDocumentEntity>()
                 .HasGeneratedTsVectorColumn(
-                    p => p.SearchVector,
+                    p => p.SearchVector!,
                     "english",
                     p => new { p.Content })
                 .HasIndex(p => p.SearchVector)
@@ -111,7 +112,7 @@ public class AgenticDbContext : DbContext
         modelBuilder.Entity<T>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
     }
 
-    public string CurrentTenantId => _tenantContext.Current.TenantId;
+    public string CurrentTenantId => _tenantContext.CurrentTenantId;
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -127,7 +128,7 @@ public class AgenticDbContext : DbContext
 
     private void OnBeforeSaving()
     {
-        var tenantId = _tenantContext.Current.TenantId;
+        var tenantId = _tenantContext.CurrentTenantId;
 
         foreach (var entry in ChangeTracker.Entries<ITenantEntity>())
         {
