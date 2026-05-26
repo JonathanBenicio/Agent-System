@@ -69,8 +69,6 @@ Documento canônico de arquitetura atual:
 | [architecture/adr/022-unified-chat-integration-architecture.md](architecture/adr/022-unified-chat-integration-architecture.md) | ADR 022: Arquitetura de Integração Unificada do Chat (12 Pilares) |
 | [architecture/adr/023-async-onnx-processing.md](architecture/adr/023-async-onnx-processing.md) | ADR 023: Processamento Assíncrono de Inferência ONNX e Galeria |
 | [architecture/adr/024-backend-architectural-refactoring.md](architecture/adr/024-backend-architectural-refactoring.md) | ADR 024: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
-| [../plan/adr-020-protocol-hosting-standardization.md](../plan/adr-020-protocol-hosting-standardization.md) | ADR 020: Padronização e Exposição de Protocolos (A2A e AgUI) |
-| [../plan/adr-021-evaluation-framework.md](../plan/adr-021-evaluation-framework.md) | ADR 021: Framework de Avaliação Contínua e Golden Sets |
 | [architecture/adr/025-advanced-chat-session-management.md](architecture/adr/025-advanced-chat-session-management.md) | ADR 025: Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) |
 | [architecture/adr/027-maf-1-6-1-migration-architecture.md](architecture/adr/027-maf-1-6-1-migration-architecture.md) | ADR 027: Migração Completa para o Microsoft Agent Framework (MAF) 1.6.1 |
 | [architecture/adr/028-db-skills-dynamic-system.md](architecture/adr/028-db-skills-dynamic-system.md) | ADR 028: Implementação do DbAgentSkillsSource e CRUD de Skills via Tela |
@@ -121,28 +119,45 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 
 | Documento | Descrição |
 |-----------|-----------|
-| [plan/opencode/onnx-in-process.md](plan/opencode/onnx-in-process.md) | Roadmap/Plan: Dynamic ONNX In-Process Inference Engine (Issue #74) |
-| [plan/automatic-llm-inspection-plan.md](plan/automatic-llm-inspection-plan.md) | Roadmap/Plan: Inspeção Automática de Modelos LLM no Login (Issue #94) |
+| [plan/completed/onnx-in-process.md](plan/completed/onnx-in-process.md) | Roadmap/Plan: Dynamic ONNX In-Process Inference Engine (Issue #74) |
+| [plan/completed/automatic-llm-inspection-plan.md](plan/completed/automatic-llm-inspection-plan.md) | Roadmap/Plan: Inspeção Automática de Modelos LLM no Login (Issue #94) |
 | [plan/gap-mitigation-plan.md](plan/gap-mitigation-plan.md) | Roadmap/Plan: Mitigação de Gaps Técnicos de Segurança e Performance (Issues #76, #77, #78, #79) |
 | [plan/bug-chat-workflow.md](plan/bug-chat-workflow.md) | Bug Fix Plan: Resposta do chat não aparece no frontend |
 | [plan/multi-provider-api-keys.md](plan/multi-provider-api-keys.md) | Roadmap/Plan: Multi-Provider API Keys |
-| [plan/unified-chat-integration.md](plan/unified-chat-integration.md) | Roadmap/Plan: Integração Unificada do Chat (12 Pilares) |
-| [plan/async-onnx-processing-plan.md](plan/async-onnx-processing-plan.md) | Roadmap/Plan: Processamento Assíncrono de Inferência ONNX e Galeria |
+| [plan/completed/unified-chat-integration.md](plan/completed/unified-chat-integration.md) | Roadmap/Plan: Integração Unificada do Chat (12 Pilares) |
+| [plan/completed/async-onnx-processing-plan.md](plan/completed/async-onnx-processing-plan.md) | Roadmap/Plan: Processamento Assíncrono de Inferência ONNX e Galeria |
 | [plan/backend-testing-roadmap.md](plan/backend-testing-roadmap.md) | Roadmap/Plan: Plano e Roteiro de Testes do Backend (.NET 10) |
-| [plan/architectural-refactoring-plan.md](plan/architectural-refactoring-plan.md) | Roadmap/Plan: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
-| [plan/chat-enhancements.md](plan/chat-enhancements.md) | Roadmap/Plan: Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) (Issue #93) |
-| [plan/db-skills-dynamic-system.md](plan/db-skills-dynamic-system.md) | Roadmap/Plan: Implementação do DbAgentSkillsSource e Dynamic Skills System |
+| [plan/completed/architectural-refactoring-plan.md](plan/completed/architectural-refactoring-plan.md) | Roadmap/Plan: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
+| [plan/completed/chat-enhancements.md](plan/completed/chat-enhancements.md) | Roadmap/Plan: Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) (Issue #93) |
+| [plan/completed/db-skills-dynamic-system.md](plan/completed/db-skills-dynamic-system.md) | Roadmap/Plan: Implementação do DbAgentSkillsSource e Dynamic Skills System |
 | [plan/dynamic-maf-workflows-engine.md](plan/dynamic-maf-workflows-engine.md) | Roadmap/Plan: Orquestração Dinâmica de Grafos de Agentes (Abordagem B) |
-| [plan/backend-dependency-injection-refactoring.md](plan/backend-dependency-injection-refactoring.md) | Roadmap/Plan: Refatoração de Injeção de Dependência no Backend (Issue #101) |
+| [plan/ci-pipelines.md](plan/ci-pipelines.md) | Roadmap/Plan: Configuração de Pipelines de CI (GitHub Actions) |
+| [plan/frontend-refactoring-plan.md](plan/frontend-refactoring-plan.md) | Roadmap/Plan: Refatoração do Frontend (React Query, useChat decomposition) |
+| [plan/master-roadmap-2026.md](plan/master-roadmap-2026.md) | Master Roadmap Q2 2026: Entregáveis e prioridades estratégicas |
+| [plan/maintenance-frontend.md](plan/maintenance-frontend.md) | Guia/Plan: Diretrizes de Manutenção Visual e UX do Frontend |
+| [plan/completed/backend-dependency-injection-refactoring.md](plan/completed/backend-dependency-injection-refactoring.md) | Roadmap/Plan: Refatoração de Injeção de Dependência no Backend (Issue #101) |
+| [plan/completed/ARCHITECTURE_REFACTORING_PLAN.md](plan/completed/ARCHITECTURE_REFACTORING_PLAN.md) | Roadmap/Plan: Refatoração Arquitetural do Sistema e Gaps de I/O |
+| [plan/completed/maf-migration-phase1.md](plan/completed/maf-migration-phase1.md) | Roadmap/Plan: Transição de Habilidades Estáticas para Microsoft Agent Framework |
+| [plan/completed/remediation-backend.md](plan/completed/remediation-backend.md) | Roadmap/Plan: Remediação de DI e Segurança do Backend |
+| [plan/completed/strategic-alignment.md](plan/completed/strategic-alignment.md) | Guia/Plan: Alinhamento Estratégico do Core vs Lab |
+| [plan/completed/controle-acesso-rooms.md](plan/completed/controle-acesso-rooms.md) | Roadmap/Plan: Controle de Acesso e Permissões em Knowledge Rooms |
+| [plan/completed/documentation-update-plan.md](plan/completed/documentation-update-plan.md) | Roadmap/Plan: Atualização Completa e Faxina da Documentação |
+| [plan/completed/gaps-telas.md](plan/completed/gaps-telas.md) | Roadmap/Plan: Diagnóstico e Resolução de Gaps nas Telas de UI |
+| [plan/completed/claude-provider-test-fix.md](plan/completed/claude-provider-test-fix.md) | Bug Fix Plan: Teste de Conectividade de Provedores LLM (Claude) |
+| [plan/completed/cap-suggestions-ptbr.md](plan/completed/cap-suggestions-ptbr.md) | Roadmap/Plan: Sugestões de Capacidades em PT-BR com Dicas Visuais |
+| [plan/completed/architectural-refactoring-phase-2.md](plan/completed/architectural-refactoring-phase-2.md) | Roadmap/Plan: Refatoração Arquitetural e Limpeza do Backend - Fase 2 |
+| [plan/completed/refactoring-session-list.md](plan/completed/refactoring-session-list.md) | Roadmap/Plan: Refinamento de Listagem de Sessões de Usuário |
+| [plan/completed/p2-gateway-observability-finops.md](plan/completed/p2-gateway-observability-finops.md) | Roadmap/Plan: Gateway Observability & FinOps (Fase P2) |
+| [plan/completed/p4-selfhost-ollama-stabilization.md](plan/completed/p4-selfhost-ollama-stabilization.md) | Roadmap/Plan: Estabilização e Self-Hosting com Ollama (Fase P4) |
+| [plan/completed/agent-yaml-orchestration.md](plan/completed/agent-yaml-orchestration.md) | Roadmap/Plan: Editor de Agentes Declarativo com Suporte a YAML e Validação |
+| [plan/completed/MAF_NATIVE_REFACTORING.md](plan/completed/MAF_NATIVE_REFACTORING.md) | Roadmap/Plan: Trilha de Refatoração e Aproximação ao MAF Nativo |
+| [plan/completed/framework-first-migration-plan.md](plan/completed/framework-first-migration-plan.md) | Roadmap/Plan: Resumo Histórico da Migração Framework-First |
+| [plan/completed/REFACTORING_PROGRESS.md](plan/completed/REFACTORING_PROGRESS.md) | Roadmap/Plan: Consolidação e Progresso de Refatoração do MAF Native Runtime |
 | [planejamento/AI_Capabilities_Gaps.md](planejamento/AI_Capabilities_Gaps.md) | Diagnóstico vivo de gaps e oportunidades arquiteturais |
 | [planejamento/AI_Advanced_Capabilities_Roadmap.md](planejamento/AI_Advanced_Capabilities_Roadmap.md) | Roadmap futuro para capacidades avançadas |
-| [planejamento/framework-first-migration-plan.md](planejamento/framework-first-migration-plan.md) | Resumo histórico da migração framework-first (concluída) |
-| [planejamento/MAF_NATIVE_REFACTORING.md](planejamento/MAF_NATIVE_REFACTORING.md) | Trilha de redução de código MAF nativo (concluída) |
 | [planejamento/master-fullstack-roadmap.md](planejamento/master-fullstack-roadmap.md) | Roadmap fullstack consolidado |
-| [planejamento/p2-gateway-observability-finops.md](planejamento/p2-gateway-observability-finops.md) | Gateway observability e FinOps |
-| [planejamento/p4-selfhost-ollama-stabilization.md](planejamento/p4-selfhost-ollama-stabilization.md) | Stabilização do Ollama self-hosted |
-| [planejamento/agent-yaml-orchestration.md](planejamento/agent-yaml-orchestration.md) | Orquestração via agent.yaml |
 | [planejamento/overengineering-assessment.md](planejamento/overengineering-assessment.md) | Assessment de simplificação e hotspots de complexidade |
+| [planejamento/Agent_Runtime_State_Machine.md](planejamento/Agent_Runtime_State_Machine.md) | Diagnóstico: Análise de Estado de Execução e Práticas Enterprise-Grade |
 
 ---
 
