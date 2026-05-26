@@ -20,6 +20,7 @@ Documento canônico de arquitetura atual:
 | [user-stories/unified-chat-integration.md](user-stories/unified-chat-integration.md) | US-021: Integração Unificada de Pilares Tecnológicos no Chat Principal |
 | [user-stories/us-async-onnx-processing.md](user-stories/us-async-onnx-processing.md) | US-43: Processamento Assíncrono de Inferência ONNX |
 | [user-stories/us-advanced-chat-session-management.md](user-stories/us-advanced-chat-session-management.md) | US-44: Chat Avançado e Gerenciamento Unificado de Sessões |
+| [user-stories/us-032-dynamic-maf-workflows-engine.md](user-stories/us-032-dynamic-maf-workflows-engine.md) | US-032: Orquestração Dinâmica de Grafos de Agentes e Compilador MAF Declarativo |
 | [issue-61-multi-provider-api-keys.md](issue-61-multi-provider-api-keys.md) | GitHub Issue #61: Multi-Provider API Keys Epic |
 | [issue-chat-enhancements.md](issue-chat-enhancements.md) | GitHub Issue #93: Chat Avançado Epic |
 | [agentic-design-manifesto.md](agentic-design-manifesto.md) | Princípios de design e filosofia do sistema |
@@ -73,6 +74,7 @@ Documento canônico de arquitetura atual:
 | [architecture/adr/025-advanced-chat-session-management.md](architecture/adr/025-advanced-chat-session-management.md) | ADR 025: Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) |
 | [architecture/adr/027-maf-1-6-1-migration-architecture.md](architecture/adr/027-maf-1-6-1-migration-architecture.md) | ADR 027: Migração Completa para o Microsoft Agent Framework (MAF) 1.6.1 |
 | [architecture/adr/028-db-skills-dynamic-system.md](architecture/adr/028-db-skills-dynamic-system.md) | ADR 028: Implementação do DbAgentSkillsSource e CRUD de Skills via Tela |
+| [architecture/adr/029-dynamic-maf-workflows-engine.md](architecture/adr/029-dynamic-maf-workflows-engine.md) | ADR 029: Orquestração Dinâmica de Grafos de Agentes baseada no MAF |
 | [architecture/adr/ADR-004-MAF-Native-LLM-Clients.md](architecture/adr/ADR-004-MAF-Native-LLM-Clients.md) | ADR 004: Migração para Clientes Nativos do Microsoft Agent Framework (MAF 1.6+) |
 | [architecture/adr/ADR-005-MAF-Native-Workflows.md](architecture/adr/ADR-005-MAF-Native-Workflows.md) | ADR 005: Migração para Workflows Nativos do Microsoft Agent Framework (MAF 1.6+) |
 | [architecture/adr/ADR-006-MAF-Native-Skills.md](architecture/adr/ADR-006-MAF-Native-Skills.md) | ADR 006: Padronização do Skills Framework com MAF Nativo |
@@ -130,6 +132,7 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 | [plan/architectural-refactoring-plan.md](plan/architectural-refactoring-plan.md) | Roadmap/Plan: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
 | [plan/chat-enhancements.md](plan/chat-enhancements.md) | Roadmap/Plan: Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) (Issue #93) |
 | [plan/db-skills-dynamic-system.md](plan/db-skills-dynamic-system.md) | Roadmap/Plan: Implementação do DbAgentSkillsSource e Dynamic Skills System |
+| [plan/dynamic-maf-workflows-engine.md](plan/dynamic-maf-workflows-engine.md) | Roadmap/Plan: Orquestração Dinâmica de Grafos de Agentes (Abordagem B) |
 | [plan/backend-dependency-injection-refactoring.md](plan/backend-dependency-injection-refactoring.md) | Roadmap/Plan: Refatoração de Injeção de Dependência no Backend (Issue #101) |
 | [planejamento/AI_Capabilities_Gaps.md](planejamento/AI_Capabilities_Gaps.md) | Diagnóstico vivo de gaps e oportunidades arquiteturais |
 | [planejamento/AI_Advanced_Capabilities_Roadmap.md](planejamento/AI_Advanced_Capabilities_Roadmap.md) | Roadmap futuro para capacidades avançadas |

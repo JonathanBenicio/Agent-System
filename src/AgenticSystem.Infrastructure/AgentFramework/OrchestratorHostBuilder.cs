@@ -26,6 +26,7 @@ public class OrchestratorHostBuilder
     private readonly RAGContextProvider? _ragContextProvider;
     private readonly IQualityGateService? _qualityGateService;
     private readonly AgentSkillsProvider? _skillsProvider;
+    private readonly ITenantContextAccessor? _tenantContextAccessor;
     private readonly ILogger<OrchestratorHostBuilder> _logger;
 
     public OrchestratorHostBuilder(
@@ -41,7 +42,8 @@ public class OrchestratorHostBuilder
         ISkillManager skillManager,
         RAGContextProvider? ragContextProvider = null,
         IQualityGateService? qualityGateService = null,
-        AgentSkillsProvider? skillsProvider = null)
+        AgentSkillsProvider? skillsProvider = null,
+        ITenantContextAccessor? tenantContextAccessor = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
@@ -56,6 +58,7 @@ public class OrchestratorHostBuilder
         _ragContextProvider = ragContextProvider;
         _qualityGateService = qualityGateService;
         _skillsProvider = skillsProvider;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     /// <summary>
@@ -185,6 +188,12 @@ public class OrchestratorHostBuilder
         {
             var qualityGateLogger = _loggerFactory.CreateLogger<QualityGateDelegatingAgent>();
             builder = builder.UseQualityGates(_qualityGateService, qualityGateLogger);
+        }
+
+        if (_tenantContextAccessor is not null)
+        {
+            var fidesLogger = _loggerFactory.CreateLogger<AgenticSystem.Infrastructure.Security.FidesDataProtectionMiddleware>();
+            builder = builder.UseFidesDataProtection(_tenantContextAccessor, fidesLogger);
         }
 
         // Adicionar logging e telemetry nativo

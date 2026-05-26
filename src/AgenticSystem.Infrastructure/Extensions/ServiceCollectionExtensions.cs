@@ -167,6 +167,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<McpToolsAIFunctionAdapter>();
         services.AddHostedService<DynamicSkillCatalogHostedService>();
         services.AddSingleton<UnifiedAIToolProvider>();
+
+        // Registros para Banner Production
+        services.AddSingleton<AgenticSystem.Core.Skills.BannerProductionSkills>();
+        services.AddSingleton<AgenticSystem.Infrastructure.AI.BannerProductionWorkflowService>();
+        services.AddSingleton<AgenticSystem.Core.Interfaces.ITool, AgenticSystem.Infrastructure.Tools.BannerProductionTool>();
+
         return services;
     }
 
@@ -226,7 +232,8 @@ public static class ServiceCollectionExtensions
                     sp.GetRequiredService<ISkillManager>(),
                     sp.GetService<RAGContextProvider>(),
                     sp.GetService<IQualityGateService>(),
-                    sp.GetService<AgentSkillsProvider>()));
+                    sp.GetService<AgentSkillsProvider>(),
+                    sp.GetService<ITenantContextAccessor>()));
 
             services.AddSingleton<OrchestratorContextFactory>();
             services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
@@ -474,6 +481,7 @@ public static class ServiceCollectionExtensions
         {
             ReplaceSingleton<IVectorStore, InMemoryVectorStore>(services);
             ReplaceSingleton<IExternalQuotaSyncService, InMemoryExternalQuotaSyncService>(services);
+            ReplaceSingleton<IDynamicAgentRepository, InMemoryDynamicAgentRepository>(services);
             return services;
         }
 
@@ -488,6 +496,7 @@ public static class ServiceCollectionExtensions
 
             ReplaceSingleton<IVectorStore, SqliteVectorStore>(services);
             ReplaceSingleton<IExternalQuotaSyncService, InMemoryExternalQuotaSyncService>(services);
+            ReplaceSingleton<IDynamicAgentRepository, PostgresDynamicAgentRepository>(services);
             
             // Register MockEmbeddingGenerator for load testing
             services.AddSingleton<Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>>(new AgenticSystem.Infrastructure.Memory.MockEmbeddingGenerator());
@@ -512,6 +521,7 @@ public static class ServiceCollectionExtensions
         ReplaceSingleton<IScheduledTaskStore, PostgresScheduledTaskStore>(services);
         ReplaceSingleton<IConfigStore, PostgresConfigStore>(services);
         ReplaceSingleton<IRerankingAssetStore, PostgresRerankingAssetStore>(services);
+        ReplaceSingleton<IDynamicAgentRepository, PostgresDynamicAgentRepository>(services);
 
         var useInMemoryEventBus = configuration.GetValue<bool>("AgenticSystem:EventBus:UseInMemory");
 

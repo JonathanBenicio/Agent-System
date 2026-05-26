@@ -89,7 +89,7 @@ public class TenantMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_HeaderTakesPrecedence_OverClaim()
+    public async Task InvokeAsync_HeaderTakesPrecedence_OverClaim_WhenUserIsAdmin()
     {
         var claimTenant = new Tenant
         {
@@ -119,7 +119,8 @@ public class TenantMiddlewareTests
         // Set both claim and header - header should take precedence
         var identity = new ClaimsIdentity(new[]
         {
-            new Claim(TenantMiddleware.TenantIdClaimType, "claim-tenant")
+            new Claim(TenantMiddleware.TenantIdClaimType, "claim-tenant"),
+            new Claim(ClaimTypes.Role, "Admin")
         }, "TestAuth");
         httpContext.User = new ClaimsPrincipal(identity);
         httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = "header-tenant";
@@ -129,6 +130,30 @@ public class TenantMiddlewareTests
         // Header takes precedence over claim
         _tenantContextAccessor.Received(1).BeginScope(Arg.Is<TenantContext>(tc =>
             tc.TenantId == "header-tenant"));
+    }
+
+    [Fact]
+    public async Task InvokeAsync_HeaderAndClaimMismatch_ReturnsForbidden_WhenUserIsNotAdmin()
+    {
+        var middleware = CreateMiddleware();
+        var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = new MemoryStream();
+
+        // Set both claim and header with mismatch and NO admin role
+        var identity = new ClaimsIdentity(new[]
+        {
+            new Claim(TenantMiddleware.TenantIdClaimType, "tenant-a")
+        }, "TestAuth");
+        httpContext.User = new ClaimsPrincipal(identity);
+        httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = "tenant-b";
+
+        await middleware.InvokeAsync(httpContext, _resolver, _tenantContextAccessor);
+
+        // Should return 403 Forbidden
+        httpContext.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        
+        // Next middleware should not be called
+        _tenantContextAccessor.DidNotReceive().BeginScope(Arg.Any<TenantContext>());
     }
 
     [Fact]

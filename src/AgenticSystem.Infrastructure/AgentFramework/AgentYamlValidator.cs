@@ -269,29 +269,38 @@ public class AgentYamlValidator : IAgentYamlValidator
         // ─── Validação Semântica de Fórmulas PowerFx (Fase 4) ───
         if (dto.Rules is not null && dto.Rules.Count > 0)
         {
+            var engine = new Microsoft.PowerFx.RecalcEngine();
+
             foreach (var rule in dto.Rules)
             {
                 var formula = rule.Value;
                 if (string.IsNullOrWhiteSpace(formula)) continue;
 
-                // Verificar parênteses balanceados como critério sintático básico do PowerFx
-                int balance = 0;
-                foreach (char ch in formula)
+                try
                 {
-                    if (ch == '(') balance++;
-                    else if (ch == ')') balance--;
-                    
-                    if (balance < 0) break;
+                    // Usa o parser real do PowerFx para validar a fórmula sintaticamente
+                    var checkResult = engine.Check(formula);
+                    if (!checkResult.IsSuccess)
+                    {
+                        var powerFxErrors = string.Join("; ", checkResult.Errors.Select(e => e.Message));
+                        errors.Add(new YamlValidationError
+                        {
+                            Line = 1,
+                            Column = 1,
+                            ErrorCode = "INVALID_POWERFX_SYNTAX",
+                            Message = $"A regra '{rule.Key}' contém expressão PowerFx inválida: {powerFxErrors}",
+                            Severity = "Error"
+                        });
+                    }
                 }
-
-                if (balance != 0)
+                catch (Exception pfxEx)
                 {
                     errors.Add(new YamlValidationError
                     {
                         Line = 1,
                         Column = 1,
-                        ErrorCode = "INVALID_POWERFX_SYNTAX",
-                        Message = $"A regra '{rule.Key}' contém expressão PowerFx com parênteses desbalanceados: '{formula}'.",
+                        ErrorCode = "POWERFX_ENGINE_ERROR",
+                        Message = $"Erro no compilador PowerFx ao validar a regra '{rule.Key}': {pfxEx.Message}",
                         Severity = "Error"
                     });
                 }

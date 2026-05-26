@@ -216,7 +216,13 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
                 "AgentWorkflowBuilder collaboration executor failed for session {SessionId}", state.SessionId);
         }
 
-        var failedResponse = AgentResponse.Error("Erro ao executar workflow colaborativo.", "CollaborativeWorkflow");
+        string errorMsg = "Erro ao executar workflow colaborativo. Events: ";
+        foreach (var ev in run.OutgoingEvents) {
+            if (ev is AgentResponseEvent ar) errorMsg += $"[{ev.GetType().Name}: {ar.Response.Text}] ";
+            else errorMsg += $"[{ev.GetType().Name}] ";
+        }
+        
+        var failedResponse = AgentResponse.Error(errorMsg, "CollaborativeWorkflow");
         MergeWorkflowMetadata(failedResponse.Metadata, state.WorkflowMetadata);
         return failedResponse;
     }
@@ -968,8 +974,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             foreach (var frameworkHandoffAgent in frameworkHandoffAgents)
             {
                 handoffWorkflowBuilder.BindExecutor(frameworkHandoffAgent);
-                handoffWorkflowBuilder.AddEdge(frameworkReviewer, frameworkHandoffAgent, idempotent: true);
-                handoffWorkflowBuilder.AddEdge(frameworkHandoffAgent, frameworkReviewer, "Return findings to the review coordinator so the final recommendation can be produced.", idempotent: true);
+                handoffWorkflowBuilder.AddEdge(frameworkReviewer, frameworkHandoffAgent, "Handoff to expert for specialized review", idempotent: true);
             }
 
             var handoffWorkflow = handoffWorkflowBuilder.Build();
@@ -1010,8 +1015,8 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Native handoff review failed, falling back to native tool review");
-            return null;
+            _logger.LogError(ex, "Native handoff review failed, falling back to native tool review");
+            throw;
         }
     }
 
@@ -1023,10 +1028,32 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
         CancellationToken ct)
     {
         var agentResponses = run.OutgoingEvents.OfType<AgentResponseEvent>().ToList();
-        var content = string.Join("\n", agentResponses
-            .Select(agentResponseEvent => ExtractFrameworkResponseText(agentResponseEvent.Response))
-            .Where(text => !string.IsNullOrWhiteSpace(text))
-            .Select(text => text.Trim()));
+        
+        var contentParts = new List<string>();
+        
+        foreach (var ev in agentResponses)
+        {
+            var text = ExtractFrameworkResponseText(ev.Response);
+            if (!string.IsNullOrWhiteSpace(text)) contentParts.Add(text.Trim());
+        }
+        
+        if (contentParts.Count == 0)
+        {
+            // Fallback for streaming responses in MAF 1.6.2
+            foreach (dynamic ev in run.OutgoingEvents)
+            {
+                if (ev.GetType().Name == "AgentResponseUpdateEvent")
+                {
+                    string text = ev.Update?.Text;
+                    if (!string.IsNullOrWhiteSpace(text))
+                    {
+                        contentParts.Add(text.Trim());
+                    }
+                }
+            }
+        }
+
+        var content = string.Join("\n", contentParts);
 
         if (string.IsNullOrWhiteSpace(content))
         {

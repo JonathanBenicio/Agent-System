@@ -90,6 +90,53 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                 _logger.LogCritical("AgenticSystem:AdminApiKey não está configurado no appsettings.json! O sistema iniciará sem uma chave padrão.");
             }
 
+            // 3.5. Seed the Banner Production Workflow
+            var bannerWorkflowExists = await _dbContext.WorkflowDefinitions.IgnoreQueryFilters()
+                .AnyAsync(w => w.Id == "banner-production", cancellationToken);
+
+            if (!bannerWorkflowExists)
+            {
+                var bannerDef = new WorkflowDefinition
+                {
+                    Id = "banner-production",
+                    Name = "Banner Production Workflow",
+                    Description = "Orquestra a produção de um banner imobiliário via MAF.",
+                    Version = 1,
+                    TriggerType = WorkflowTriggerType.Manual,
+                    Steps = new System.Collections.Generic.List<WorkflowStep>
+                    {
+                        new WorkflowStep
+                        {
+                            Id = "step-1",
+                            Name = "Gerar Banner Imobiliário",
+                            StepType = WorkflowStepType.Action,
+                            ToolName = "banner-production",
+                            ActionDescription = "generate",
+                            Input = new System.Collections.Generic.Dictionary<string, object>
+                            {
+                                // Valores padrão (podem ser sobrescritos pelo executor do workflow)
+                                { "imagePath", "c:\\temp\\imovel.jpg" },
+                                { "price", 650000 },
+                                { "bedrooms", 3 }
+                            }
+                        }
+                    }
+                };
+
+                var bannerEntity = new WorkflowDefinitionEntity
+                {
+                    Id = bannerDef.Id,
+                    TenantId = adminTenant.Id,
+                    Name = bannerDef.Name,
+                    Version = bannerDef.Version,
+                    DefinitionJson = System.Text.Json.JsonSerializer.Serialize(bannerDef),
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                _dbContext.WorkflowDefinitions.Add(bannerEntity);
+                _logger.LogInformation("Workflow 'banner-production' provisionado no banco de dados para o Tenant 'admin'.");
+            }
+
             // 4. Salva de forma transacional e resiliente
             await _dbContext.SaveChangesAsync(cancellationToken);
             _logger.LogWarning("Auto-bootstrap concluído com sucesso. Tenant 'admin' foi provisionado no PostgreSQL.");

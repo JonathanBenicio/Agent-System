@@ -139,6 +139,35 @@ builder.AddEnterpriseObservability("AgenticSystem.Api");
 
 var app = builder.Build();
 
+// Auto-migrate database on startup
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetService<AgenticSystem.Infrastructure.Persistence.AgenticDbContext>();
+    if (dbContext is not null)
+    {
+        try
+        {
+            Serilog.Log.Information("Executando migrações do PostgreSQL/Supabase no startup...");
+            await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.MigrateAsync(dbContext.Database);
+            Serilog.Log.Information("Migrações concluídas com sucesso.");
+
+            var bootstrapService = scope.ServiceProvider.GetService<AgenticSystem.Core.Interfaces.ISystemBootstrapService>();
+            if (bootstrapService is not null)
+            {
+                var tenantAccessor = scope.ServiceProvider.GetRequiredService<AgenticSystem.Core.Interfaces.ITenantContextAccessor>();
+                using var tenantScope = tenantAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext { TenantId = "system-bootstrap", TenantName = "System Bootstrap" });
+                Serilog.Log.Information("Executando auto-bootstrap do banco de dados...");
+                await bootstrapService.BootstrapAsync();
+                Serilog.Log.Information("Auto-bootstrap finalizado.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Serilog.Log.Error(ex, "Erro fatal ao aplicar migrações ou auto-bootstrap no startup.");
+        }
+    }
+}
+
 app.UseExceptionHandler(exApp =>
 {
     exApp.Run(async context =>
@@ -161,11 +190,14 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Agentic System API v1"));
     
-    var agent = app.Services.GetRequiredKeyedService<Microsoft.Agents.AI.AIAgent>("AgenticSystem");
-    app.MapOpenAIResponses(agent);
-    app.MapOpenAIConversations();
-    
-    app.MapDevUI();
+    using (app.Services.GetRequiredService<ITenantContextAccessor>().BeginScope(new AgenticSystem.Core.Models.TenantContext { TenantId = "system-devui", TenantName = "System DevUI" }))
+    {
+        var agent = app.Services.GetRequiredKeyedService<Microsoft.Agents.AI.AIAgent>("AgenticSystem");
+        app.MapOpenAIResponses(agent);
+        app.MapOpenAIConversations();
+        
+        app.MapDevUI();
+    }
 }
 
 app.UseSerilogRequestLogging();
@@ -206,33 +238,7 @@ if (agUiEnabled)
 app.Services.SeedAgenticDefaults();
 app.Services.SeedInfrastructureTools();
 
-// Auto-migrate database on startup
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetService<AgenticSystem.Infrastructure.Persistence.AgenticDbContext>();
-    if (dbContext is not null)
-    {
-        try
-        {
-            Serilog.Log.Information("Executando migrações do PostgreSQL/Supabase no startup...");
-            await Microsoft.EntityFrameworkCore.RelationalDatabaseFacadeExtensions.MigrateAsync(dbContext.Database);
-            Serilog.Log.Information("Migrações concluídas com sucesso.");
 
-            // Executa o auto-bootstrap do sistema
-            var bootstrapService = scope.ServiceProvider.GetService<AgenticSystem.Core.Interfaces.ISystemBootstrapService>();
-            if (bootstrapService is not null)
-            {
-                Serilog.Log.Information("Executando auto-bootstrap do banco de dados...");
-                await bootstrapService.BootstrapAsync();
-                Serilog.Log.Information("Auto-bootstrap finalizado.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Serilog.Log.Error(ex, "Erro fatal ao aplicar migrações ou auto-bootstrap no startup.");
-        }
-    }
-}
 
 // Subscribe to FinOps events for real-time gateway monitoring
 var eventBus = app.Services.GetRequiredService<AgenticSystem.Core.Interfaces.IEventBus>();

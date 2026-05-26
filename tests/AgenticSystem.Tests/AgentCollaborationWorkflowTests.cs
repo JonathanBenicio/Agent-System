@@ -256,21 +256,29 @@ public class AgentCollaborationWorkflowTests
             });
 
         var mockChatClient = Substitute.For<IChatClient>();
+        int getResponseCount = 0;
         mockChatClient.GetResponseAsync(
                 Arg.Any<IEnumerable<ChatMessage>>(),
                 Arg.Any<ChatOptions?>(),
                 Arg.Any<CancellationToken>())
-            .Returns(
-                Task.FromResult(new AIChatResponse(new ChatMessage(ChatRole.Assistant, "Review completed via handoff workflow"))),
-                Task.FromResult(new AIChatResponse(new ChatMessage(ChatRole.Assistant, "Done"))));
+            .Returns(callInfo => {
+                getResponseCount++;
+                if (getResponseCount == 1) return Task.FromResult(new AIChatResponse(new ChatMessage(ChatRole.Assistant, "Review completed via handoff workflow")));
+                if (getResponseCount == 2) return Task.FromResult(new AIChatResponse(new ChatMessage(ChatRole.Assistant, "Done")));
+                return Task.FromResult(new AIChatResponse(new ChatMessage(ChatRole.Assistant, "")));
+            });
         
+        int getStreamingCount = 0;
         mockChatClient.GetStreamingResponseAsync(
                 Arg.Any<IEnumerable<ChatMessage>>(),
                 Arg.Any<ChatOptions?>(),
                 Arg.Any<CancellationToken>())
-            .Returns(
-                CreateStreamingResponse("Review completed via handoff workflow"),
-                CreateStreamingResponse("Done"));
+            .Returns(callInfo => {
+                getStreamingCount++;
+                if (getStreamingCount == 1) return CreateStreamingResponse("Review completed via handoff workflow");
+                if (getStreamingCount == 2) return CreateStreamingResponse("Done");
+                return CreateEmptyStreamingResponse();
+            });
 
         mockChatClient.GetService(Arg.Any<Type>(), Arg.Any<object?>())
             .Returns(callInfo => callInfo.Arg<Type>() == typeof(IChatClient) ? mockChatClient : null);
@@ -319,7 +327,7 @@ public class AgentCollaborationWorkflowTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var response = await sut.ExecuteAsync("session-handoff-1", "Implement migration", context, analysis, cts.Token);
 
-        response.Success.Should().BeTrue();
+        response.Success.Should().BeTrue($"Response content: {response.Content}");
         response.Metadata["nativeHandoffWorkflow"].Should().Be(true);
         response.Metadata["nativeReviewMode"].Should().Be("HandoffWorkflowBuilder");
         response.Metadata["handoffCheckpointingEnabled"].Should().Be(true);
@@ -500,5 +508,12 @@ public class AgentCollaborationWorkflowTests
         await Task.Yield();
         cancellationToken.ThrowIfCancellationRequested();
         yield return new ChatResponseUpdate(ChatRole.Assistant, responseText);
+    }
+    private static async IAsyncEnumerable<ChatResponseUpdate> CreateEmptyStreamingResponse(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await Task.Yield();
+        cancellationToken.ThrowIfCancellationRequested();
+        yield break;
     }
 }

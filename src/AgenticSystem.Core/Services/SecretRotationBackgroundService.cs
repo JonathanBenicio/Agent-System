@@ -46,6 +46,9 @@ public class SecretRotationBackgroundService : BackgroundService
     private async Task CheckExpiredSecretsAsync(CancellationToken ct)
     {
         using var scope = _serviceProvider.CreateScope();
+        var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+        using var tenantScope = tenantAccessor.BeginScope(new Models.TenantContext { TenantId = "system-background", TenantName = "System Background Worker" });
+        
         var configManager = scope.ServiceProvider.GetRequiredService<IConfigManager>();
         var auditLog = scope.ServiceProvider.GetRequiredService<IAuditLog>();
 

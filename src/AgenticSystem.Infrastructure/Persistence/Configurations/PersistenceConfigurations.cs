@@ -969,4 +969,49 @@ public class AccessApiKeyConfiguration : IEntityTypeConfiguration<AccessApiKeyEn
     }
 }
 
+public class DbSkillConfiguration : IEntityTypeConfiguration<DbSkillEntity>
+{
+    public void Configure(EntityTypeBuilder<DbSkillEntity> builder)
+    {
+        builder.ToTable("agent_skills");
 
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Domain).HasColumnName("domain").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Type).HasColumnName("type").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.SystemPromptFragment).HasColumnName("system_prompt_fragment").IsRequired();
+        builder.Property(e => e.FewShotExamples).HasColumnName("few_shot_examples");
+        builder.Property(e => e.IsSystem).HasColumnName("is_system").HasDefaultValue(false);
+        builder.Property(e => e.MetadataJson).HasColumnName("metadata_json");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_agent_skills_tenant_id");
+    }
+}
+
+public class DynamicAgentConfiguration : IEntityTypeConfiguration<DynamicAgentEntity>
+{
+    public void Configure(EntityTypeBuilder<DynamicAgentEntity> builder)
+    {
+        builder.ToTable("dynamic_agents");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Description).HasColumnName("description").HasMaxLength(500).IsRequired();
+        builder.Property(e => e.Domain).HasColumnName("domain").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Tier).HasColumnName("tier").IsRequired();
+        builder.Property(e => e.Instructions).HasColumnName("instructions").IsRequired();
+        builder.Property(e => e.AutonomyLevel).HasColumnName("autonomy_level").IsRequired();
+        builder.Property(e => e.AllowedToolsJson).HasColumnName("allowed_tools_json");
+        builder.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_dynamic_agents_tenant_id");
+    }
+}

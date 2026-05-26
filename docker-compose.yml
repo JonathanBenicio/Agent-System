@@ -119,6 +119,10 @@ services:
         curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"qwen2.5:0.5b\"}';
         echo 'Baixando modelo de Embeddings (nomic-embed-text)...';
         curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"nomic-embed-text\"}';
+        echo 'Baixando modelo Vision para Banner Production (llama3.2-vision)...';
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3.2-vision\"}';
+        echo 'Baixando modelo Action para Banner Production (llama3:8b)...';
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3:8b\"}';
         echo 'Modelos prontos e inicializados!';
       "
     depends_on:

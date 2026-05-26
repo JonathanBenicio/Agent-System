@@ -494,7 +494,7 @@ Os agentes no AgenticSystem são categorizados pelo seu ciclo de vida e escopo d
 | Tipo de Agente | Criação / Registro | Ciclo de Vida e Escopo | Exemplo de Uso |
 |---|---|---|---|
 | **Built-in (Nativo)** | Inicializado no startup via `HierarchicalAgentFactory` | Singleton (está ativo durante toda a execução da aplicação) | PersonalAgent, WorkAgent, GeneralAgent |
-| **Custom (Dinâmico)** | Criado por prompt do usuário via `DynamicAgentService` | Scoped ou In-Memory Pool (persiste as configurações em banco relacional) | "Agente de Direito Trabalhista" |
+| **Custom (Dinâmico)** | Persistido via `DynamicAgentEntity` (PostgreSQL) e Lazy-loaded via `HierarchicalAgentFactory` | In-Memory Pool após o carregamento; persistente via banco relacional entre reinícios | "Agente de Direito Trabalhista" |
 | **Framework-hosted** | Registrado via `AddAIAgent()` no arquivo `Program.cs` | Scoped por requisição de chat (gerenciado pelo container de DI) | OrchestratorAgent |
 
 *   **Cleanup de Inativos**: Para evitar vazamentos de memória e sobrecarga do banco de dados, o `AgentCleanupHostedService`  executa rotinas em background limpando agentes customizados e dados temporários inativos há mais de 24 horas.

@@ -20,10 +20,11 @@ ENV DOTNET_EnableDiagnostics=0
 
 # Install Node.js (required for running npx-based MCP servers) and basic utilities
 RUN apt-get update && \
-    apt-get install -y wget libgssapi-krb5-2 curl && \
+    apt-get install -y wget libgssapi-krb5-2 curl fontconfig fonts-liberation && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    fc-cache -f -v
 
 COPY --from=build /app/publish .
 

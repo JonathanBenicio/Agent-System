@@ -70,12 +70,18 @@ public class AgenticDbContext : DbContext
     public DbSet<CustomOnnxInferenceJobEntity> CustomOnnxInferenceJobs => Set<CustomOnnxInferenceJobEntity>();
     public DbSet<AccessApiKeyEntity> AccessApiKeys => Set<AccessApiKeyEntity>();
     public DbSet<DbSkillEntity> AgentSkills => Set<DbSkillEntity>();
+    public DbSet<DynamicAgentEntity> DynamicAgents => Set<DynamicAgentEntity>();
 
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AgenticDbContext).Assembly);
+
+        if (Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            modelBuilder.HasPostgresExtension("vector");
+        }
 
         // Global Query Filters for Multi-tenancy
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())

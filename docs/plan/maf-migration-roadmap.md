@@ -105,6 +105,7 @@ Garantir resiliência completa para workflows de longa duração e interações 
 ---
 
 ### Fase 4: Configuração Declarativa Avançada (`Microsoft.Agents.AI.Declarative` / PowerFx)
+**Status: Realizado ✅**
 #### Por que implementar?
 Remover código de configuração estática no C# permitindo que administradores escrevam manifestos YAML altamente dinâmicos com regras lógicas avançadas.
 #### Componentes propostos
@@ -113,9 +114,9 @@ Remover código de configuração estática no C# permitindo que administradores
 | `PromptAgentFactory` | Cria agentes a partir de metadados declarativos. |
 | `RecalcEngine` (PowerFx) | Avalia expressões dinâmicas lógicas/matemáticas (ex: calcular orçamentos com base no tier) em runtime. |
 #### Plano por etapas
-1. Instalar o pacote `Microsoft.Agents.AI.Declarative` e a dependência `Microsoft.PowerFx`.
-2. Integrar o `RecalcEngine` no ciclo de leitura do `AgentYamlValidator`.
-3. Atualizar o modelo de manifestos YAML dos agentes para aceitar expressões como `BoolExpression` e `IntExpression` dinamicamente carregadas pelas variáveis de configuração do Tenant.
+1. Instalar o pacote `Microsoft.Agents.AI.Declarative` e a dependência `Microsoft.PowerFx`. (Concluído)
+2. Integrar o `RecalcEngine` no ciclo de leitura do `AgentYamlValidator`. (Concluído)
+3. Atualizar o modelo de manifestos YAML dos agentes para aceitar expressões como `BoolExpression` e `IntExpression` dinamicamente carregadas pelas variáveis de configuração do Tenant. (Concluído)
 
 ---
 
@@ -128,8 +129,8 @@ Mitigar riscos graves de vazamento de dados de Tenants e execução prejudicial 
 | `FIDES Middleware` | Rastreamento e ocultação de variáveis baseado em etiquetas confidenciais de dados. |
 | `HyperlightExecuteCodeTool` | Executor isolado de scripts arbitrários em ambiente WebAssembly de alta velocidade (WASM). |
 #### Plano por etapas
-1. Implementar o middleware FIDES no pipeline do `AIAgentBuilder` to monitorar e etiquetar a entrada de dados do usuário sensíveis.
-2. Configurar regras de segurança determinísticas que bloqueiam vazamentos de dados rotulados antes que sejam transmitidos ao modelo.
+1. Implementar o middleware FIDES no pipeline do `AIAgentBuilder` to monitorar e etiquetar a entrada de dados do usuário sensíveis. (Concluído)
+2. Configurar regras de segurança determinísticas que bloqueiam vazamentos de dados rotulados antes que sejam transmitidos ao modelo. (Concluído)
 3. Substituir qualquer execução local de linha de comando (`process.Start`) no backend pelo uso integrado de `HyperlightExecuteCodeTool` para isolar ferramentas de código em sandboxes nativas.
 
 ---

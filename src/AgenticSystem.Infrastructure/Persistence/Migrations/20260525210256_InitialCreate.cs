@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -17,6 +17,39 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
         {
             migrationBuilder.AlterDatabase()
                 .Annotation("Npgsql:PostgresExtension:vector", ",,");
+
+            migrationBuilder.CreateTable(
+                name: "access_api_keys",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    key_hash = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    role = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false, defaultValue: "Admin"),
+                    is_enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    last_used_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_access_api_keys", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "agent_knowledge_room_assignments",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    agent_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    room_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_agent_knowledge_room_assignments", x => x.id);
+                });
 
             migrationBuilder.CreateTable(
                 name: "agent_marketplace_entries",
@@ -43,6 +76,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     user_id = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     agent_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     session_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
@@ -68,6 +102,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 {
                     id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     agent_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     domain = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     latency_ms = table.Column<double>(type: "double precision", nullable: false),
@@ -78,6 +113,27 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_agent_performance_metrics", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "agent_skills",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "text", nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    domain = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    type = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    system_prompt_fragment = table.Column<string>(type: "text", nullable: false),
+                    few_shot_examples = table.Column<string>(type: "text", nullable: true),
+                    is_system = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    metadata_json = table.Column<string>(type: "text", nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_agent_skills", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -148,7 +204,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     category = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     action = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     user_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
-                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     session_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     agent_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     tool_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
@@ -172,6 +228,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     config_key = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     action = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     changed_by = table.Column<string>(type: "text", nullable: true),
@@ -189,6 +246,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     key = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     value = table.Column<string>(type: "text", nullable: false),
                     encrypted_value = table.Column<string>(type: "text", nullable: true),
@@ -240,6 +298,37 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "custom_onnx_models",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    description = table.Column<string>(type: "text", nullable: true),
+                    model_file_name = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    model_data = table.Column<byte[]>(type: "bytea", nullable: true),
+                    input_node_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    output_node_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    input_width = table.Column<int>(type: "integer", nullable: false),
+                    input_height = table.Column<int>(type: "integer", nullable: false),
+                    channels = table.Column<int>(type: "integer", nullable: false),
+                    scale_factor = table.Column<float>(type: "real", nullable: false),
+                    mean_red = table.Column<float>(type: "real", nullable: false),
+                    mean_green = table.Column<float>(type: "real", nullable: false),
+                    mean_blue = table.Column<float>(type: "real", nullable: false),
+                    output_format = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    post_process_config = table.Column<string>(type: "jsonb", nullable: false),
+                    file_size_bytes = table.Column<long>(type: "bigint", nullable: false),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_custom_onnx_models", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "data_connectors",
                 columns: table => new
                 {
@@ -248,7 +337,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     connector_type = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     connection_string = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
                     settings = table.Column<string>(type: "jsonb", nullable: false),
-                    tenant_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                    tenant_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     sync_schedule = table.Column<string>(type: "jsonb", nullable: false),
                     is_active = table.Column<bool>(type: "boolean", nullable: false),
                     last_sync_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -260,10 +349,33 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "dynamic_agents",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "text", nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    name = table.Column<string>(type: "character varying(150)", maxLength: 150, nullable: false),
+                    description = table.Column<string>(type: "character varying(500)", maxLength: 500, nullable: false),
+                    domain = table.Column<string>(type: "character varying(50)", maxLength: 50, nullable: false),
+                    tier = table.Column<int>(type: "integer", nullable: false),
+                    instructions = table.Column<string>(type: "text", nullable: false),
+                    autonomy_level = table.Column<int>(type: "integer", nullable: false),
+                    allowed_tools_json = table.Column<string>(type: "text", nullable: true),
+                    is_active = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_dynamic_agents", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "embedding_models",
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     name = table.Column<string>(type: "text", nullable: false),
                     is_active = table.Column<bool>(type: "boolean", nullable: false),
                     data = table.Column<string>(type: "jsonb", nullable: false),
@@ -279,6 +391,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     agent_name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     session_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     content = table.Column<string>(type: "text", nullable: false),
@@ -325,10 +438,53 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "ExternalProviderQuotas",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    ProviderName = table.Column<string>(type: "text", nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
+                    ApiKeyId = table.Column<string>(type: "text", nullable: false),
+                    LimitRequests = table.Column<long>(type: "bigint", nullable: false),
+                    RemainingRequests = table.Column<long>(type: "bigint", nullable: false),
+                    LimitTokens = table.Column<long>(type: "bigint", nullable: false),
+                    RemainingTokens = table.Column<long>(type: "bigint", nullable: false),
+                    ResetAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    TotalBalance = table.Column<double>(type: "double precision", nullable: false),
+                    BalanceRemaining = table.Column<double>(type: "double precision", nullable: false),
+                    Currency = table.Column<string>(type: "text", nullable: false),
+                    LastSyncAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ExternalProviderQuotas", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "InboundWebhooks",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    Secret = table.Column<string>(type: "text", nullable: false),
+                    TargetWorkflowId = table.Column<string>(type: "text", nullable: true),
+                    TargetAgentName = table.Column<string>(type: "text", nullable: true),
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    LastTriggeredAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_InboundWebhooks", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "knowledge_graph_edges",
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     source_node_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     target_node_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     relation_type = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
@@ -347,6 +503,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     label = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     entity_type = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     description = table.Column<string>(type: "text", nullable: true),
@@ -357,6 +514,63 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_knowledge_graph_nodes", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "knowledge_room_permissions",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    room_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    user_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    role = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    granted_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_knowledge_room_permissions", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "knowledge_rooms",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    description = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: false),
+                    color = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    icon = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    document_count = table.Column<int>(type: "integer", nullable: false),
+                    tags = table.Column<string[]>(type: "text[]", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_knowledge_rooms", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "llm_provider_api_keys",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    provider_name = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    encrypted_value = table.Column<string>(type: "text", nullable: false),
+                    last_four = table.Column<string>(type: "character varying(4)", maxLength: 4, nullable: false),
+                    is_enabled = table.Column<bool>(type: "boolean", nullable: false),
+                    is_default = table.Column<bool>(type: "boolean", nullable: false),
+                    models = table.Column<string>(type: "text", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_llm_provider_api_keys", x => x.id);
                 });
 
             migrationBuilder.CreateTable(
@@ -378,10 +592,28 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "McpPlugins",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
+                    Name = table.Column<string>(type: "text", nullable: false),
+                    Description = table.Column<string>(type: "text", nullable: true),
+                    ConfigJson = table.Column<string>(type: "text", nullable: false),
+                    AutoStart = table.Column<bool>(type: "boolean", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_McpPlugins", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "migration_jobs",
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     status = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     data = table.Column<string>(type: "jsonb", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
@@ -396,6 +628,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     model_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     latency_ms = table.Column<double>(type: "double precision", nullable: false),
                     success = table.Column<bool>(type: "boolean", nullable: false),
@@ -414,6 +647,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     event_type = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     payload = table.Column<string>(type: "jsonb", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
@@ -471,7 +705,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     user_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     role_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
+                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     granted_by = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     granted_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
@@ -485,6 +719,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     session_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     type = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
@@ -505,6 +740,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     session_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     agent_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: true),
                     overall_score = table.Column<double>(type: "double precision", nullable: false),
@@ -526,6 +762,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 {
                     id = table.Column<long>(type: "bigint", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     session_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: true),
                     stream_count = table.Column<long>(type: "bigint", nullable: false),
                     agent_executions = table.Column<long>(type: "bigint", nullable: false),
@@ -554,6 +791,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     session_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     agent_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     action_taken = table.Column<string>(type: "text", nullable: false),
@@ -575,6 +813,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     execution_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     task_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     started_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     completed_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -591,6 +830,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     name = table.Column<string>(type: "text", nullable: false),
                     status = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     next_run_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
@@ -600,6 +840,25 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_scheduled_tasks", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "SessionInsights",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    SessionId = table.Column<string>(type: "text", nullable: false),
+                    UserId = table.Column<string>(type: "text", nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
+                    FactsJson = table.Column<string>(type: "text", nullable: false),
+                    DecisionsJson = table.Column<string>(type: "text", nullable: false),
+                    PreferencesJson = table.Column<string>(type: "text", nullable: false),
+                    ActionItemsJson = table.Column<string>(type: "text", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SessionInsights", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -617,6 +876,58 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_sessions", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "SessionSummaries",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    SessionId = table.Column<string>(type: "text", nullable: false),
+                    UserId = table.Column<string>(type: "text", nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
+                    Summary = table.Column<string>(type: "text", nullable: false),
+                    TopicsJson = table.Column<string>(type: "text", nullable: false),
+                    AgentsJson = table.Column<string>(type: "text", nullable: false),
+                    EventCount = table.Column<int>(type: "integer", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    SessionDuration = table.Column<TimeSpan>(type: "interval", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SessionSummaries", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "system_states",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    value = table.Column<string>(type: "text", nullable: false),
+                    updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_system_states", x => x.id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "SystemAlerts",
+                columns: table => new
+                {
+                    Id = table.Column<string>(type: "text", nullable: false),
+                    Type = table.Column<string>(type: "text", nullable: false),
+                    Severity = table.Column<string>(type: "text", nullable: false),
+                    Message = table.Column<string>(type: "text", nullable: false),
+                    ProviderName = table.Column<string>(type: "text", nullable: true),
+                    Percentage = table.Column<double>(type: "double precision", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    IsRead = table.Column<bool>(type: "boolean", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_SystemAlerts", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -644,6 +955,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     name = table.Column<string>(type: "text", nullable: false),
                     enabled = table.Column<bool>(type: "boolean", nullable: false),
                     payload = table.Column<string>(type: "jsonb", nullable: false),
@@ -659,10 +971,12 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     content = table.Column<string>(type: "text", nullable: false),
                     type = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     collection = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
                     embedding = table.Column<Vector>(type: "vector", nullable: true),
+                    EmbeddingData = table.Column<byte[]>(type: "bytea", nullable: true),
                     metadata = table.Column<string>(type: "jsonb", nullable: false),
                     indexed_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     SearchVector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true)
@@ -680,6 +994,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     version = table.Column<int>(type: "integer", nullable: false),
                     definition = table.Column<string>(type: "jsonb", nullable: false),
@@ -695,6 +1010,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     workflow_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     workflow_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
                     status = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
@@ -714,6 +1030,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    TenantId = table.Column<string>(type: "text", nullable: false),
                     execution_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     step_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
                     step_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
@@ -729,6 +1046,82 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 {
                     table.PrimaryKey("PK_workflow_step_executions", x => x.id);
                 });
+
+            migrationBuilder.CreateTable(
+                name: "custom_onnx_inference_jobs",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    model_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    status = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
+                    input_image_path = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    output_image_path = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: true),
+                    latency_ms = table.Column<long>(type: "bigint", nullable: true),
+                    error_message = table.Column<string>(type: "text", nullable: true),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
+                    completed_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_custom_onnx_inference_jobs", x => x.id);
+                    table.ForeignKey(
+                        name: "FK_custom_onnx_inference_jobs_custom_onnx_models_model_id",
+                        column: x => x.model_id,
+                        principalTable: "custom_onnx_models",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "custom_onnx_model_files",
+                columns: table => new
+                {
+                    id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    tenant_id = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    model_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
+                    file_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
+                    file_data = table.Column<byte[]>(type: "bytea", nullable: false),
+                    file_size_bytes = table.Column<long>(type: "bigint", nullable: false),
+                    created_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_custom_onnx_model_files", x => x.id);
+                    table.ForeignKey(
+                        name: "FK_custom_onnx_model_files_custom_onnx_models_model_id",
+                        column: x => x.model_id,
+                        principalTable: "custom_onnx_models",
+                        principalColumn: "id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_access_api_keys_hash",
+                table: "access_api_keys",
+                column: "key_hash",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_access_api_keys_tenant_id",
+                table: "access_api_keys",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_agent_room_assignments_agent",
+                table: "agent_knowledge_room_assignments",
+                column: "agent_name");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_agent_room_assignments_tenant",
+                table: "agent_knowledge_room_assignments",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ux_agent_room_assignment",
+                table: "agent_knowledge_room_assignments",
+                columns: new[] { "agent_name", "room_id", "tenant_id" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_marketplace_author",
@@ -776,6 +1169,11 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 column: "domain");
 
             migrationBuilder.CreateIndex(
+                name: "ix_agent_skills_tenant_id",
+                table: "agent_skills",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_agent_versions_agent_name",
                 table: "agent_versions",
                 column: "agent_name");
@@ -812,9 +1210,9 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 column: "category");
 
             migrationBuilder.CreateIndex(
-                name: "IX_config_entries_key",
+                name: "ix_config_entries_tenant_key",
                 table: "config_entries",
-                column: "key",
+                columns: new[] { "tenant_id", "key" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
@@ -844,8 +1242,60 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 columns: new[] { "tenant_id", "service_name", "recorded_at" });
 
             migrationBuilder.CreateIndex(
+                name: "ix_custom_onnx_inference_jobs_model_id",
+                table: "custom_onnx_inference_jobs",
+                column: "model_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_custom_onnx_inference_jobs_status",
+                table: "custom_onnx_inference_jobs",
+                column: "status");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_custom_onnx_inference_jobs_tenant_id",
+                table: "custom_onnx_inference_jobs",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_custom_onnx_model_files_model_id",
+                table: "custom_onnx_model_files",
+                column: "model_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_custom_onnx_model_files_tenant_id",
+                table: "custom_onnx_model_files",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ux_custom_onnx_model_files_model_name",
+                table: "custom_onnx_model_files",
+                columns: new[] { "model_id", "file_name" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_custom_onnx_models_active",
+                table: "custom_onnx_models",
+                column: "is_active");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_custom_onnx_models_tenant_id",
+                table: "custom_onnx_models",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ux_custom_onnx_models_tenant_name",
+                table: "custom_onnx_models",
+                columns: new[] { "tenant_id", "name" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "ix_data_connectors_tenant_id",
                 table: "data_connectors",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_dynamic_agents_tenant_id",
+                table: "dynamic_agents",
                 column: "tenant_id");
 
             migrationBuilder.CreateIndex(
@@ -918,6 +1368,38 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 name: "ix_knowledge_graph_nodes_source_document",
                 table: "knowledge_graph_nodes",
                 column: "source_document_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_knowledge_room_permissions_room_user",
+                table: "knowledge_room_permissions",
+                columns: new[] { "room_id", "user_id" },
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_knowledge_room_permissions_tenant_id",
+                table: "knowledge_room_permissions",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_knowledge_rooms_tenant_id",
+                table: "knowledge_rooms",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_llm_api_keys_tenant_provider",
+                table: "llm_provider_api_keys",
+                columns: new[] { "tenant_id", "provider_name" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_llm_api_keys_tenant_provider_default",
+                table: "llm_provider_api_keys",
+                columns: new[] { "tenant_id", "provider_name", "is_default" });
+
+            migrationBuilder.CreateIndex(
+                name: "ux_llm_api_keys_tenant_provider_name",
+                table: "llm_provider_api_keys",
+                columns: new[] { "tenant_id", "provider_name", "name" },
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "idx_migration_jobs_created",
@@ -1056,6 +1538,11 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 column: "user_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_system_states_tenant_id",
+                table: "system_states",
+                column: "tenant_id");
+
+            migrationBuilder.CreateIndex(
                 name: "ix_tenants_is_active",
                 table: "tenants",
                 column: "is_active");
@@ -1128,6 +1615,12 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "access_api_keys");
+
+            migrationBuilder.DropTable(
+                name: "agent_knowledge_room_assignments");
+
+            migrationBuilder.DropTable(
                 name: "agent_marketplace_entries");
 
             migrationBuilder.DropTable(
@@ -1135,6 +1628,9 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "agent_performance_metrics");
+
+            migrationBuilder.DropTable(
+                name: "agent_skills");
 
             migrationBuilder.DropTable(
                 name: "agent_versions");
@@ -1158,7 +1654,16 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 name: "cost_entries");
 
             migrationBuilder.DropTable(
+                name: "custom_onnx_inference_jobs");
+
+            migrationBuilder.DropTable(
+                name: "custom_onnx_model_files");
+
+            migrationBuilder.DropTable(
                 name: "data_connectors");
+
+            migrationBuilder.DropTable(
+                name: "dynamic_agents");
 
             migrationBuilder.DropTable(
                 name: "embedding_models");
@@ -1170,13 +1675,31 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 name: "eval_suite_results");
 
             migrationBuilder.DropTable(
+                name: "ExternalProviderQuotas");
+
+            migrationBuilder.DropTable(
+                name: "InboundWebhooks");
+
+            migrationBuilder.DropTable(
                 name: "knowledge_graph_edges");
 
             migrationBuilder.DropTable(
                 name: "knowledge_graph_nodes");
 
             migrationBuilder.DropTable(
+                name: "knowledge_room_permissions");
+
+            migrationBuilder.DropTable(
+                name: "knowledge_rooms");
+
+            migrationBuilder.DropTable(
+                name: "llm_provider_api_keys");
+
+            migrationBuilder.DropTable(
                 name: "LlmPricingRules");
+
+            migrationBuilder.DropTable(
+                name: "McpPlugins");
 
             migrationBuilder.DropTable(
                 name: "migration_jobs");
@@ -1215,7 +1738,19 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                 name: "scheduled_tasks");
 
             migrationBuilder.DropTable(
+                name: "SessionInsights");
+
+            migrationBuilder.DropTable(
                 name: "sessions");
+
+            migrationBuilder.DropTable(
+                name: "SessionSummaries");
+
+            migrationBuilder.DropTable(
+                name: "system_states");
+
+            migrationBuilder.DropTable(
+                name: "SystemAlerts");
 
             migrationBuilder.DropTable(
                 name: "tenants");
@@ -1234,6 +1769,9 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
 
             migrationBuilder.DropTable(
                 name: "workflow_step_executions");
+
+            migrationBuilder.DropTable(
+                name: "custom_onnx_models");
         }
     }
 }

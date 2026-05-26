@@ -28,6 +28,17 @@ public class TenantMiddleware
         var allowAnonymous = endpoint?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute>() is not null;
 
         var tenantId = ResolveTenantId(context);
+        var jwtTenantId = GetJwtTenantId(context);
+        var isAdmin = context.User?.IsInRole("Admin") ?? false;
+
+        if (!string.IsNullOrEmpty(tenantId) && !string.IsNullOrEmpty(jwtTenantId) && tenantId != jwtTenantId && !isAdmin)
+        {
+            _logger.LogWarning("Tenant spoofing attempt detected. Header tenant '{TenantId}' does not match JWT tenant '{JwtTenantId}'.", tenantId, jwtTenantId);
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(new { error = "Unauthorized tenant access." });
+            return;
+        }
+
         TenantContext? tenantContext = null;
 
         if (!string.IsNullOrWhiteSpace(tenantId))
@@ -92,6 +103,12 @@ public class TenantMiddleware
                 return val;
         }
 
+        // 2 & 3. JWT claim or Supabase Metadata
+        return GetJwtTenantId(context);
+    }
+
+    private static string? GetJwtTenantId(HttpContext context)
+    {
         // 2. JWT claim (Standard claim or Supabase claim)
         var claimValue = context.User?.FindFirst(TenantIdClaimType)?.Value;
         if (!string.IsNullOrWhiteSpace(claimValue))
