@@ -30,13 +30,17 @@ public class TenantMiddleware
         var tenantId = ResolveTenantId(context);
         var jwtTenantId = GetJwtTenantId(context);
         var isAdmin = context.User?.IsInRole("Admin") ?? false;
+        var isAuthenticated = context.User?.Identity?.IsAuthenticated == true;
 
-        if (!string.IsNullOrEmpty(tenantId) && !string.IsNullOrEmpty(jwtTenantId) && tenantId != jwtTenantId && !isAdmin)
+        if (isAuthenticated && !isAdmin && !string.IsNullOrWhiteSpace(tenantId))
         {
-            _logger.LogWarning("Tenant spoofing attempt detected. Header tenant '{TenantId}' does not match JWT tenant '{JwtTenantId}'.", tenantId, jwtTenantId);
-            context.Response.StatusCode = StatusCodes.Status403Forbidden;
-            await context.Response.WriteAsJsonAsync(new { error = "Unauthorized tenant access." });
-            return;
+            if (!string.Equals(tenantId?.Trim(), jwtTenantId?.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Tenant spoofing attempt detected. Header tenant '{TenantId}' does not match JWT tenant '{JwtTenantId}'.", tenantId, jwtTenantId);
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new { error = "Unauthorized tenant access." });
+                return;
+            }
         }
 
         TenantContext? tenantContext = null;
