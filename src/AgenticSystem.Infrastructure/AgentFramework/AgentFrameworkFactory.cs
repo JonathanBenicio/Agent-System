@@ -24,7 +24,7 @@ public class AgentFrameworkFactory
     private readonly ISkillManager? _skillManager;
     private readonly UnifiedAIToolProvider? _toolProvider;
     private readonly McpToolsAIFunctionAdapter? _mcpToolsAdapter;
-    private readonly SimpleSessionStoreAdapter? _sessionStore;
+    private readonly Microsoft.Agents.AI.Hosting.AgentSessionStore? _sessionStore;
     private readonly RAGContextProvider? _ragContextProvider;
     private readonly AgentSkillsProvider? _skillsProvider;
 
@@ -40,7 +40,7 @@ public class AgentFrameworkFactory
         ISkillManager? skillManager = null,
         UnifiedAIToolProvider? toolProvider = null,
         McpToolsAIFunctionAdapter? mcpToolsAdapter = null,
-        SimpleSessionStoreAdapter? sessionStore = null,
+        Microsoft.Agents.AI.Hosting.AgentSessionStore? sessionStore = null,
         RAGContextProvider? ragContextProvider = null,
         AgentSkillsProvider? skillsProvider = null)
     {
@@ -179,7 +179,7 @@ public class AgentFrameworkFactory
     {
         if (_sessionStore is null)
         {
-            throw new InvalidOperationException("SimpleSessionStoreAdapter is not available.");
+            throw new InvalidOperationException("AgentSessionStore is not available.");
         }
 
         return await _sessionStore.GetSessionAsync(agent, sessionId, ct);

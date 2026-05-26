@@ -40,85 +40,150 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
             // 1. Verifica se já existem Tenants cadastrados no banco de dados.
             // Ignora filtros de tenant se aplicados na instância (geralmente não aplicados no dbContext de startup).
             var tenantExists = await _dbContext.Tenants.IgnoreQueryFilters().AnyAsync(cancellationToken);
-            if (tenantExists)
+            if (!tenantExists)
             {
-                _logger.LogInformation("Database já possui tenants cadastrados. Ignorando auto-bootstrap.");
-                return;
-            }
+                _logger.LogWarning("Nenhum tenant encontrado no banco de dados. Iniciando provisionamento do Tenant 'admin'...");
 
-            _logger.LogWarning("Nenhum tenant encontrado no banco de dados. Iniciando provisionamento do Tenant 'admin'...");
-
-            // 2. Cria o Tenant admin padrão
-            var adminTenant = new Tenant
-            {
-                Id = "admin",
-                Name = "Administrator Tenant",
-                Slug = "admin",
-                Plan = TenantPlan.Pro,
-                Limits = TenantLimits.ProTier(),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-
-            _dbContext.Tenants.Add(adminTenant);
-
-            // 3. Obtém e Husha a chave legada AdminApiKey do appsettings.json para garantir retrocompatibilidade de acesso.
-            var legacyApiKey = _configuration["AgenticSystem:AdminApiKey"];
-            if (!string.IsNullOrWhiteSpace(legacyApiKey))
-            {
-                var keyBytes = Encoding.UTF8.GetBytes(legacyApiKey.Trim());
-                var hashBytes = SHA256.HashData(keyBytes);
-                var keyHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
-
-                var adminAccessKey = new AccessApiKeyEntity
+                // 2. Cria o Tenant admin padrão
+                var adminTenant = new Tenant
                 {
-                    Id = Guid.NewGuid(),
-                    TenantId = adminTenant.Id,
-                    KeyHash = keyHash,
-                    Name = "Default Legacy Admin API Key",
-                    Role = "Admin",
-                    IsEnabled = true,
-                    CreatedAt = DateTime.UtcNow
+                    Id = "admin",
+                    Name = "Administrator Tenant",
+                    Slug = "admin",
+                    Plan = TenantPlan.Pro,
+                    Limits = TenantLimits.ProTier(),
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
                 };
 
-                _dbContext.AccessApiKeys.Add(adminAccessKey);
-                _logger.LogInformation("Chave API administrativa legada (AdminApiKey) migrada e hashed com sucesso no banco de dados para o Tenant 'admin'.");
+                _dbContext.Tenants.Add(adminTenant);
+
+                // 3. Obtém e Husha a chave legada AdminApiKey do appsettings.json para garantir retrocompatibilidade de acesso.
+                var legacyApiKey = _configuration["AgenticSystem:AdminApiKey"];
+                if (!string.IsNullOrWhiteSpace(legacyApiKey))
+                {
+                    var keyBytes = Encoding.UTF8.GetBytes(legacyApiKey.Trim());
+                    var hashBytes = SHA256.HashData(keyBytes);
+                    var keyHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
+
+                    var adminAccessKey = new AccessApiKeyEntity
+                    {
+                        Id = Guid.NewGuid(),
+                        TenantId = adminTenant.Id,
+                        KeyHash = keyHash,
+                        Name = "Default Legacy Admin API Key",
+                        Role = "Admin",
+                        IsEnabled = true,
+                        CreatedAt = DateTime.UtcNow
+                    };
+
+                    _dbContext.AccessApiKeys.Add(adminAccessKey);
+                    _logger.LogInformation("Chave API administrativa legada (AdminApiKey) migrada e hashed com sucesso no banco de dados para o Tenant 'admin'.");
+                }
+                else
+                {
+                    _logger.LogCritical("AgenticSystem:AdminApiKey não está configurado no appsettings.json! O sistema iniciará sem uma chave padrão.");
+                }
+
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                _logger.LogWarning("Tenant 'admin' foi provisionado no PostgreSQL.");
             }
             else
             {
-                _logger.LogCritical("AgenticSystem:AdminApiKey não está configurado no appsettings.json! O sistema iniciará sem uma chave padrão.");
+                _logger.LogInformation("Database já possui tenants cadastrados. Pulando criação de tenant padrão.");
             }
 
-            // 3.5. Seed the Banner Production Workflow
-            var bannerWorkflowExists = await _dbContext.WorkflowDefinitions.IgnoreQueryFilters()
-                .AnyAsync(w => w.Id == "banner-production", cancellationToken);
+            // 3.6. Semeia agentes dinâmicos de Banner Production se não existirem
+            var visionAgentExists = await _dbContext.DynamicAgents.IgnoreQueryFilters()
+                .AnyAsync(a => a.Name == "VisionAnalyst", cancellationToken);
 
-            if (!bannerWorkflowExists)
+            if (!visionAgentExists)
             {
+                var visionAgent = new DynamicAgentEntity
+                {
+                    Name = "VisionAnalyst",
+                    Description = "Analista Visual de Imóveis (Ollama Vision)",
+                    Domain = "general",
+                    Tier = (int)AgentTier.Specialist,
+                    Instructions = "Voce e um analista visual de imoveis. Descreva os defeitos da foto (fios, postes) focando no topo da imagem, e identifique os pontos fortes. Fale em portugues de forma concisa.",
+                    AutonomyLevel = (int)AutonomyLevel.Supervised,
+                    AllowedToolsJson = "[]",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _dbContext.DynamicAgents.Add(visionAgent);
+                _logger.LogInformation("Agente dinâmico 'VisionAnalyst' semeado com sucesso.");
+            }
+
+            var editorAgentExists = await _dbContext.DynamicAgents.IgnoreQueryFilters()
+                .AnyAsync(a => a.Name == "EditorChefe", cancellationToken);
+
+            if (!editorAgentExists)
+            {
+                var editorAgent = new DynamicAgentEntity
+                {
+                    Name = "EditorChefe",
+                    Description = "Editor Chefe de Banner Publicitário",
+                    Domain = "general",
+                    Tier = (int)AgentTier.Specialist,
+                    Instructions = "Voce recebe a analise visual. Siga ESTRITAMENTE estes passos na ordem: 1) Chame a ferramenta CleanImageAsync passando a analise. 2) Pegue o caminho da imagem limpa retornado e chame a ferramenta RenderBannerAsync passando o caminho limpo, o preco e os quartos. 3) Retorne ao usuario o resultado final com o caminho.",
+                    AutonomyLevel = (int)AutonomyLevel.Supervised,
+                    AllowedToolsJson = "[\"CleanImageAsync\",\"RenderBannerAsync\"]",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+                _dbContext.DynamicAgents.Add(editorAgent);
+                _logger.LogInformation("Agente dinâmico 'EditorChefe' semeado com sucesso.");
+            }
+
+            // 3.7. Semeia/atualiza o workflow de banner dinâmico baseado em grafos do MAF
+            var existingWorkflow = await _dbContext.WorkflowDefinitions.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(w => w.Id == "banner-production", cancellationToken);
+
+            if (existingWorkflow == null || !existingWorkflow.DefinitionJson.Contains("Edges"))
+            {
+                if (existingWorkflow != null)
+                {
+                    _dbContext.WorkflowDefinitions.Remove(existingWorkflow);
+                }
+
                 var bannerDef = new WorkflowDefinition
                 {
                     Id = "banner-production",
                     Name = "Banner Production Workflow",
                     Description = "Orquestra a produção de um banner imobiliário via MAF.",
-                    Version = 1,
+                    Version = 2, // Versão atualizada do grafo dinâmico
                     TriggerType = WorkflowTriggerType.Manual,
+                    PromptTemplate = "Analise a foto, aplique a remocao de defeitos e desenhe um banner. Preco: {{price}}, Quartos: {{bedrooms}}. O caminho original e: {{imagePath}}",
                     Steps = new System.Collections.Generic.List<WorkflowStep>
                     {
                         new WorkflowStep
                         {
-                            Id = "step-1",
-                            Name = "Gerar Banner Imobiliário",
-                            StepType = WorkflowStepType.Action,
-                            ToolName = "banner-production",
-                            ActionDescription = "generate",
-                            Input = new System.Collections.Generic.Dictionary<string, object>
-                            {
-                                // Valores padrão (podem ser sobrescritos pelo executor do workflow)
-                                { "imagePath", "c:\\temp\\imovel.jpg" },
-                                { "price", 650000 },
-                                { "bedrooms", 3 }
-                            }
+                            Id = "vision-step",
+                            Name = "Analista Visual",
+                            StepType = WorkflowStepType.Agent,
+                            AgentName = "VisionAnalyst",
+                            Input = new System.Collections.Generic.Dictionary<string, object>()
+                        },
+                        new WorkflowStep
+                        {
+                            Id = "editor-step",
+                            Name = "Editor Chefe",
+                            StepType = WorkflowStepType.Agent,
+                            AgentName = "EditorChefe",
+                            AllowedToolsOverride = new System.Collections.Generic.List<string> { "CleanImageAsync", "RenderBannerAsync" },
+                            Input = new System.Collections.Generic.Dictionary<string, object>()
+                        }
+                    },
+                    Edges = new System.Collections.Generic.List<WorkflowEdge>
+                    {
+                        new WorkflowEdge
+                        {
+                            FromStepId = "vision-step",
+                            ToStepId = "editor-step"
                         }
                     }
                 };
@@ -126,7 +191,7 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                 var bannerEntity = new WorkflowDefinitionEntity
                 {
                     Id = bannerDef.Id,
-                    TenantId = adminTenant.Id,
+                    TenantId = "admin",
                     Name = bannerDef.Name,
                     Version = bannerDef.Version,
                     DefinitionJson = System.Text.Json.JsonSerializer.Serialize(bannerDef),
@@ -134,16 +199,16 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                 };
 
                 _dbContext.WorkflowDefinitions.Add(bannerEntity);
-                _logger.LogInformation("Workflow 'banner-production' provisionado no banco de dados para o Tenant 'admin'.");
+                _logger.LogInformation("Workflow dinâmico de grafo 'banner-production' provisionado no banco de dados.");
             }
 
             // 4. Salva de forma transacional e resiliente
             await _dbContext.SaveChangesAsync(cancellationToken);
-            _logger.LogWarning("Auto-bootstrap concluído com sucesso. Tenant 'admin' foi provisionado no PostgreSQL.");
+            _logger.LogWarning("Auto-bootstrap e semeação dinâmica concluídos com sucesso no PostgreSQL.");
         }
         catch (DbUpdateException ex)
         {
-            _logger.LogWarning(ex, "Concorrência detectada: O tenant 'admin' já foi criado em outra instância de startup concorrente.");
+            _logger.LogWarning(ex, "Concorrência detectada: O tenant 'admin' ou registros padrão já foram criados em outra instância concorrente.");
         }
         catch (Exception ex)
         {

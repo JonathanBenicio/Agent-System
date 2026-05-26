@@ -2395,3 +2395,27 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 - [ ] Notificar erros e falhas nas chamadas a APIs de LLM externas de forma isolada nos logs do Serilog, impedindo que a falha de um provedor afete os demais.
 - [ ] Disparar um evento SignalR `LlmCatalogUpdated` direcionado ao grupo do tenant no sucesso da varredura, notificando o frontend para atualizar o catálogo de modelos disponíveis dinamicamente em tempo real.
 
+---
+
+### Épico 13: Resilient Workflows & Durable Orchestration (Issue #108)
+
+#### US-52 — Migração para DurableTask Multi-Tenant no PostgreSQL
+
+**Como** arquiteto ou desenvolvedor do sistema,  
+**quero** que a plataforma execute as orquestrações e persista as sessões dos agentes utilizando a infraestrutura nativa do `Microsoft.Agents.AI.DurableTask`,  
+**para que** workflows de longa duração de múltiplos agentes sobrevivam a reinicializações com checkpoints robustos no PostgreSQL e isolamento estrito de Multi-Tenancy.
+
+| Item | Detalhe |
+|------|---------|
+| Componentes | `SimpleSessionStoreAdapter` (Substituição) · `DurableWorkflowCompiler` (Novo) |
+| API / Serviços | `IWorkflowCompiler` · `AgentSessionStore` · `DurableTask` Services |
+| Status | ⏳ Planejado (ADR-030, Issue #108) |
+
+**Critérios de Aceite:**
+- [ ] A sessão de orquestração do MAF deve ser delegada ao `Microsoft.Agents.AI.DurableTask` configurado com banco de dados PostgreSQL como engine de persistência.
+- [ ] O particionamento Multi-Tenant deve ser garantido prefixando o identificador do tenant em cada instância durável: `InstanceId = $"{TenantId}:{SessionId}"`.
+- [ ] As tabelas internas da engine do DurableTask PostgreSQL devem ser criadas na inicialização da aplicação usando scripts internos do provedor, sem poluir o histórico de migrations do EF Core.
+- [ ] O compilador de workflows orientados a grafos deve mapear de forma transparente os nós declarativos do banco para Atividades (Activities) assíncronas do DurableTask.
+- [ ] Garantir 100% de sucesso na suíte de testes de integração, cobrindo criação, serialização e recuperação de workflows duráveis simulados.
+
+

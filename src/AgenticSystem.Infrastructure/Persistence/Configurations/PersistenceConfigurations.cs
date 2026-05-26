@@ -1015,3 +1015,29 @@ public class DynamicAgentConfiguration : IEntityTypeConfiguration<DynamicAgentEn
         builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_dynamic_agents_tenant_id");
     }
 }
+
+public class DbToolConfiguration : IEntityTypeConfiguration<DbToolEntity>
+{
+    public void Configure(EntityTypeBuilder<DbToolEntity> builder)
+    {
+        builder.ToTable("agent_tools");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Description).HasColumnName("description").IsRequired();
+        builder.Property(e => e.Category).HasColumnName("category").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.RequiresAuth).HasColumnName("requires_auth").HasDefaultValue(false);
+        builder.Property(e => e.Type).HasColumnName("type").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.MetadataJson).HasColumnName("metadata_json").HasColumnType("jsonb");
+        builder.Property(e => e.Version).HasColumnName("version").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.VariantName).HasColumnName("variant_name").HasMaxLength(50);
+        builder.Property(e => e.RolloutPercentage).HasColumnName("rollout_percentage").HasDefaultValue(100);
+        builder.Property(e => e.IsDefault).HasColumnName("is_default").HasDefaultValue(true);
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_agent_tools_tenant_id");
+    }
+}

@@ -89,8 +89,15 @@ public class LLMController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.ProviderName))
             return BadRequest(new { error = "ProviderName is required." });
 
-        var configuration = await _llmAdministrationService.UpdateDefaultSelectionAsync(request, ct);
-        return Ok(configuration);
+        try
+        {
+            var configuration = await _llmAdministrationService.UpdateDefaultSelectionAsync(request, ct);
+            return Ok(configuration);
+        }
+        catch (System.InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPut("providers/{name}")]

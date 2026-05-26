@@ -71,6 +71,7 @@ public class AgenticDbContext : DbContext
     public DbSet<AccessApiKeyEntity> AccessApiKeys => Set<AccessApiKeyEntity>();
     public DbSet<DbSkillEntity> AgentSkills => Set<DbSkillEntity>();
     public DbSet<DynamicAgentEntity> DynamicAgents => Set<DynamicAgentEntity>();
+    public DbSet<DbToolEntity> AgentTools => Set<DbToolEntity>();
 
 
 

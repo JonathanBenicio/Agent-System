@@ -26,7 +26,7 @@ public class LLMManager : ILLMAdministrationService
         ["OpenAI"] = new(StringComparer.OrdinalIgnoreCase) { "gpt-4o", "gpt-4o-mini" },
         ["Gemini"] = new(StringComparer.OrdinalIgnoreCase) { "gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp" },
         ["Claude"] = new(StringComparer.OrdinalIgnoreCase) { "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest" },
-        ["Ollama"] = new(StringComparer.OrdinalIgnoreCase) { "llama3", "llama3.1", "mistral", "qwen2.5" },
+        ["Ollama"] = new(StringComparer.OrdinalIgnoreCase) { "llama3", "llama3.1", "llama3.2", "phi3", "mistral", "qwen2.5", "codellama", "nomic-embed-text" },
         ["OpenRouter"] = new(StringComparer.OrdinalIgnoreCase) { "openrouter/auto", "meta-llama/llama-3-8b-instruct", "google/gemini-2.5-flash", "anthropic/claude-3.5-sonnet" }
     };
 
@@ -590,6 +590,25 @@ public class LLMManager : ILLMAdministrationService
                             if (!string.IsNullOrWhiteSpace(modelId))
                             {
                                 discovered.Add(modelId);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (name.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
+            {
+                var baseUrl = _settings.Ollama.BaseUrl;
+                using var response = await httpClient.GetAsync($"{baseUrl.TrimEnd('/')}/api/tags", ct);
+                if (response.IsSuccessStatusCode)
+                {
+                    using var doc = await System.Text.Json.JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                    if (doc.RootElement.TryGetProperty("models", out var modelsProp) && modelsProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var item in modelsProp.EnumerateArray())
+                        {
+                            if (item.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                            {
+                                discovered.Add(nameProp.GetString()!);
                             }
                         }
                     }

@@ -14,10 +14,22 @@ public class WorkflowDefinition
     public string? Description { get; init; }
     public int Version { get; set; } = 1;
     public List<WorkflowStep> Steps { get; init; } = [];
+    public List<WorkflowEdge> Edges { get; init; } = [];
+    public string? PromptTemplate { get; init; }
     public Dictionary<string, object> Variables { get; init; } = new();
     public WorkflowTriggerType TriggerType { get; init; } = WorkflowTriggerType.Manual;
     public string? CronExpression { get; init; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// A directed connection (edge) between two workflow steps.
+/// </summary>
+public class WorkflowEdge
+{
+    public string FromStepId { get; init; } = string.Empty;
+    public string ToStepId { get; init; } = string.Empty;
+    public string? ConditionExpression { get; init; }
 }
 
 /// <summary>
@@ -33,6 +45,8 @@ public class WorkflowStep
     public string? ActionDescription { get; init; }
     public Dictionary<string, object> Input { get; init; } = new();
     public Dictionary<string, object> Output { get; set; } = new();
+    public string? ModelOverride { get; init; }
+    public List<string>? AllowedToolsOverride { get; init; }
 
     // ─── Flow control ───
     public List<string> DependsOn { get; init; } = []; // Step IDs that must complete first
@@ -83,7 +97,8 @@ public class WorkflowStepExecution
 
 public enum WorkflowStepType
 {
-    Action,      // Execute a tool or agent
+    Action,      // Execute a tool
+    Agent,       // Execute a dynamic agent
     Decision,    // Branch based on condition
     Parallel,    // Execute sub-steps in parallel
     Wait,        // Wait for external event or timer

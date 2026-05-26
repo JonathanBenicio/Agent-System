@@ -52,6 +52,7 @@ public class OutboxProcessorBackgroundService : BackgroundService
 
     private async Task ProcessOutboxMessagesAsync(CancellationToken stoppingToken)
     {
+        using var systemScope = _tenantContextAccessor.BeginScope(new Core.Models.TenantContext { TenantId = "system-background" });
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
         var publisher = scope.ServiceProvider.GetRequiredService<IPublisher>();

@@ -5,11 +5,13 @@ namespace AgenticSystem.Infrastructure.Tools;
 
 public class BannerProductionTool : ITool
 {
-    private readonly BannerProductionWorkflowService _workflowService;
+    private readonly IDynamicWorkflowCompiler _workflowCompiler;
+    private readonly ITenantContextAccessor _tenantAccessor;
 
-    public BannerProductionTool(BannerProductionWorkflowService workflowService)
+    public BannerProductionTool(IDynamicWorkflowCompiler workflowCompiler, ITenantContextAccessor tenantAccessor)
     {
-        _workflowService = workflowService;
+        _workflowCompiler = workflowCompiler;
+        _tenantAccessor = tenantAccessor;
     }
 
     public string Id => "banner-production";
@@ -34,7 +36,17 @@ public class BannerProductionTool : ITool
 
         try
         {
-            var result = await _workflowService.RunBannerProductionAsync(imagePath, price, bedrooms);
+            string? activeTenantId = null;
+            try { activeTenantId = _tenantAccessor.CurrentTenantId; } catch (InvalidOperationException) { }
+            
+            var parameters = new Dictionary<string, object>
+            {
+                { "imagePath", imagePath },
+                { "price", price },
+                { "bedrooms", bedrooms }
+            };
+
+            var result = await _workflowCompiler.ExecuteDynamicWorkflowAsync("banner-production", activeTenantId ?? "admin", parameters, ct);
             return ToolResult.Ok(result);
         }
         catch (Exception ex)

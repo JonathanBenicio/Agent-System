@@ -94,7 +94,15 @@ public class WorkflowController : ControllerBase
     public async Task<IActionResult> CancelExecution(string id, [FromQuery] string? reason, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
-        var execution = await _engine.CancelAsync(tenantId, id, reason, ct);
-        return Ok(execution);
+        try
+        {
+            var execution = await _engine.CancelAsync(tenantId, id, reason, ct);
+            return Ok(execution);
+        }
+        catch (System.ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Failed to cancel workflow execution: execution {ExecutionId} not found.", id);
+            return NotFound(new { error = ex.Message });
+        }
     }
 }
