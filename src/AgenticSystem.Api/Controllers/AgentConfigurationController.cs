@@ -15,15 +15,18 @@ public class AgentConfigurationController : ControllerBase
     private readonly IAgentYamlValidator _yamlValidator;
     private readonly IAgentVersioningService? _versioningService;
     private readonly IAgentKnowledgeRoomStore? _agentRoomStore;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
     public AgentConfigurationController(
         IAgentConfigurationService configurationService,
         IAgentYamlValidator yamlValidator,
+        ITenantContextAccessor tenantContextAccessor,
         IAgentVersioningService? versioningService = null,
         IAgentKnowledgeRoomStore? agentRoomStore = null)
     {
         _configurationService = configurationService;
         _yamlValidator = yamlValidator;
+        _tenantContextAccessor = tenantContextAccessor;
         _versioningService = versioningService;
         _agentRoomStore = agentRoomStore;
     }
@@ -104,5 +107,5 @@ public class AgentConfigurationController : ControllerBase
         return NoContent();
     }
 
-    private string GetTenantId() => Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+    private string GetTenantId() => _tenantContextAccessor.CurrentTenantId;
 }

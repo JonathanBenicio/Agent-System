@@ -13,11 +13,16 @@ public class KnowledgeRoomController : ControllerBase
 {
     private readonly IKnowledgeRoomService _roomService;
     private readonly ILogger<KnowledgeRoomController> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public KnowledgeRoomController(IKnowledgeRoomService roomService, ILogger<KnowledgeRoomController> logger)
+    public KnowledgeRoomController(
+        IKnowledgeRoomService roomService, 
+        ILogger<KnowledgeRoomController> logger,
+        ITenantContextAccessor tenantContextAccessor)
     {
         _roomService = roomService;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     private string GetUserId() => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.Identity?.Name ?? "system";
@@ -25,7 +30,7 @@ public class KnowledgeRoomController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> ListRooms(CancellationToken ct = default)
     {
-        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         var rooms = await _roomService.ListRoomsAsync(tenantId, GetUserId(), ct);
         return Ok(rooms);
     }
@@ -33,7 +38,7 @@ public class KnowledgeRoomController : ControllerBase
     [HttpGet("{id}")]
     public async Task<IActionResult> GetRoom(string id, CancellationToken ct = default)
     {
-        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         var room = await _roomService.GetRoomAsync(id, tenantId, GetUserId(), ct);
         if (room == null) return NotFound();
         return Ok(room);
@@ -42,18 +47,24 @@ public class KnowledgeRoomController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateRoom([FromBody] KnowledgeRoom room, CancellationToken ct = default)
     {
-        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
-        
-        var created = await _roomService.CreateRoomAsync(tenantId, GetUserId(), room, ct);
-        _logger.LogInformation("Created Knowledge Room: {RoomId} for tenant {TenantId}", created.Id, tenantId);
-        
-        return CreatedAtAction(nameof(GetRoom), new { id = created.Id }, created);
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
+        try
+        {
+            var created = await _roomService.CreateRoomAsync(tenantId, GetUserId(), room, ct);
+            _logger.LogInformation("Created Knowledge Room: {RoomId} for tenant {TenantId}", created.Id, tenantId);
+            return CreatedAtAction(nameof(GetRoom), new { id = created.Id }, created);
+        }
+        catch (System.Exception ex) when (ex.Message.Contains("23505") || ex.InnerException?.Message.Contains("23505") == true || ex.Message.Contains("unique constraint") || ex.InnerException?.Message.Contains("unique constraint") == true)
+        {
+            _logger.LogWarning(ex, "Conflict creating knowledge room: {RoomId} already exists.", room.Id);
+            return Conflict(new { error = $"Knowledge room '{room.Id}' already exists or has duplicate permissions." });
+        }
     }
 
     [HttpPut("{id}")]
     public async Task<IActionResult> UpdateRoom(string id, [FromBody] KnowledgeRoom room, CancellationToken ct = default)
     {
-        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         if (id != room.Id) return BadRequest("ID mismatch");
         
         try
@@ -70,7 +81,7 @@ public class KnowledgeRoomController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteRoom(string id, CancellationToken ct = default)
     {
-        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         var success = await _roomService.DeleteRoomAsync(id, tenantId, GetUserId(), ct);
         if (!success) return NotFound();
         
@@ -80,7 +91,7 @@ public class KnowledgeRoomController : ControllerBase
     [HttpGet("{id}/permissions")]
     public async Task<IActionResult> GetPermissions(string id, CancellationToken ct = default)
     {
-        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         try
         {
             var permissions = await _roomService.GetRoomPermissionsAsync(id, tenantId, GetUserId(), ct);
@@ -95,7 +106,7 @@ public class KnowledgeRoomController : ControllerBase
     [HttpPost("{id}/permissions")]
     public async Task<IActionResult> UpdatePermission(string id, [FromBody] KnowledgeRoomPermissionRequest request, CancellationToken ct = default)
     {
-        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         try
         {
             var permission = await _roomService.AddOrUpdatePermissionAsync(id, request.UserId, request.Role, tenantId, GetUserId(), ct);
@@ -110,7 +121,7 @@ public class KnowledgeRoomController : ControllerBase
     [HttpDelete("{id}/permissions/{targetUserId}")]
     public async Task<IActionResult> DeletePermission(string id, string targetUserId, CancellationToken ct = default)
     {
-        var tenantId = Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         try
         {
             var success = await _roomService.RemovePermissionAsync(id, targetUserId, tenantId, GetUserId(), ct);
