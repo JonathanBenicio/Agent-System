@@ -48,17 +48,9 @@ public class KnowledgeRoomController : ControllerBase
     public async Task<IActionResult> CreateRoom([FromBody] KnowledgeRoom room, CancellationToken ct = default)
     {
         var tenantId = _tenantContextAccessor.CurrentTenantId;
-        try
-        {
-            var created = await _roomService.CreateRoomAsync(tenantId, GetUserId(), room, ct);
-            _logger.LogInformation("Created Knowledge Room: {RoomId} for tenant {TenantId}", created.Id, tenantId);
-            return CreatedAtAction(nameof(GetRoom), new { id = created.Id }, created);
-        }
-        catch (System.Exception ex) when (ex.Message.Contains("23505") || ex.InnerException?.Message.Contains("23505") == true || ex.Message.Contains("unique constraint") || ex.InnerException?.Message.Contains("unique constraint") == true)
-        {
-            _logger.LogWarning(ex, "Conflict creating knowledge room: {RoomId} already exists.", room.Id);
-            return Conflict(new { error = $"Knowledge room '{room.Id}' already exists or has duplicate permissions." });
-        }
+        var created = await _roomService.CreateRoomAsync(tenantId, GetUserId(), room, ct);
+        _logger.LogInformation("Created Knowledge Room: {RoomId} for tenant {TenantId}", created.Id, tenantId);
+        return CreatedAtAction(nameof(GetRoom), new { id = created.Id }, created);
     }
 
     [HttpPut("{id}")]
