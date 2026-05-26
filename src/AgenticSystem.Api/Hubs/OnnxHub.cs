@@ -21,12 +21,7 @@ public class OnnxHub : Hub
     {
         if (string.IsNullOrWhiteSpace(tenantId)) return;
 
-        var userTenantId = Context.User?.FindFirst("tenant_id")?.Value;
-        if (!string.Equals(tenantId?.Trim(), userTenantId?.Trim(), StringComparison.OrdinalIgnoreCase) 
-            && !(Context.User?.IsInRole("Admin") ?? false))
-        {
-            throw new HubException("Unauthorized to subscribe to this tenant.");
-        }
+        EnsureAuthorizedForTenant(tenantId, "subscribe to");
 
         await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}");
         _logger.LogInformation("🔌 Client {ConnectionId} subscribed to ONNX updates for tenant {TenantId}",
@@ -37,16 +32,21 @@ public class OnnxHub : Hub
     {
         if (string.IsNullOrWhiteSpace(tenantId)) return;
 
-        var userTenantId = Context.User?.FindFirst("tenant_id")?.Value;
-        if (!string.Equals(tenantId?.Trim(), userTenantId?.Trim(), StringComparison.OrdinalIgnoreCase) 
-            && !(Context.User?.IsInRole("Admin") ?? false))
-        {
-            throw new HubException("Unauthorized to unsubscribe from this tenant.");
-        }
+        EnsureAuthorizedForTenant(tenantId, "unsubscribe from");
 
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"tenant:{tenantId}");
         _logger.LogInformation("🔌 Client {ConnectionId} unsubscribed from ONNX updates for tenant {TenantId}",
             Context.ConnectionId, tenantId);
+    }
+
+    private void EnsureAuthorizedForTenant(string tenantId, string action)
+    {
+        var userTenantId = Context.User?.FindFirst("tenant_id")?.Value;
+        if (!string.Equals(tenantId?.Trim(), userTenantId?.Trim(), StringComparison.OrdinalIgnoreCase) 
+            && !(Context.User?.IsInRole("Admin") ?? false))
+        {
+            throw new HubException($"Unauthorized to {action} this tenant.");
+        }
     }
 
     public override async Task OnConnectedAsync()
