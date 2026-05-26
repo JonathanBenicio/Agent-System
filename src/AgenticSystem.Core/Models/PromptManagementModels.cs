@@ -15,6 +15,7 @@ public class PromptTemplate
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
     public string Name { get; init; } = string.Empty;
     public string AgentName { get; init; } = string.Empty;
+    public string TenantId { get; set; } = string.Empty;
     public string TemplateBody { get; init; } = string.Empty;
     public int Version { get; set; } = 1;
     public string Locale { get; init; } = "pt-BR";

@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Infrastructure.Persistence.Entities;
 
 [Table("AgentPolicies")]
-public class AgentPolicyEntity
+public class AgentPolicyEntity : ITenantEntity
 {
     [Key]
     [MaxLength(50)]
@@ -22,7 +23,7 @@ public class AgentPolicyEntity
     public string? AgentNamePattern { get; set; }
 
     [MaxLength(50)]
-    public string? TenantId { get; set; }
+    public string TenantId { get; set; } = string.Empty;
 
     public AutonomyLevel MaxAutonomyLevel { get; set; }
 
