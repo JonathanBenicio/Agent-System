@@ -1,3 +1,4 @@
+using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Services.Ml;
 using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.Persistence.Entities;
@@ -21,21 +22,24 @@ public class OnnxModelController : ControllerBase
     private readonly IOnnxInferenceQueue _queue;
     private readonly ILogger<OnnxModelController> _logger;
     private readonly IWebHostEnvironment _env;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
     private const long MaxDbSize = 50 * 1024 * 1024; // 50 MB
 
     public OnnxModelController(
         AgenticDbContext db,
         IOnnxInferenceQueue queue,
         ILogger<OnnxModelController> logger,
-        IWebHostEnvironment env)
+        IWebHostEnvironment env,
+        ITenantContextAccessor tenantContextAccessor)
     {
         _db = db;
         _queue = queue;
         _logger = logger;
         _env = env;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
-    private string GetTenantId() => Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+    private string GetTenantId() => _tenantContextAccessor.CurrentTenantId;
 
     /// <summary>GET /api/onnx/models — list models (summary, no binary data)</summary>
     [HttpGet]
@@ -82,8 +86,9 @@ public class OnnxModelController : ControllerBase
 
     /// <summary>POST /api/onnx/models — upload model (multipart/form-data)</summary>
     [HttpPost]
+    [ApiExplorerSettings(IgnoreApi = true)]
     public async Task<IActionResult> UploadModel(
-        IFormFile file,
+        [FromForm] IFormFile file,
         [FromForm] string name,
         [FromForm] string inputNodeName,
         [FromForm] string outputNodeName,
@@ -287,6 +292,7 @@ public class OnnxModelController : ControllerBase
 
     /// <summary>POST /api/onnx/models/{id}/test — quick test with image (asynchronous)</summary>
     [HttpPost("{id}/test")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     public async Task<IActionResult> TestModel(string id, [FromForm] IFormFile? image, [FromForm] string? imageData, CancellationToken ct)
     {
         var entity = await _db.CustomOnnxModels
