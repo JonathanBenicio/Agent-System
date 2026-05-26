@@ -22,6 +22,8 @@ using AgenticSystem.Infrastructure.Services;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using DurableTask.PostgreSQL;
+using Microsoft.Agents.AI.DurableTask;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -44,7 +46,7 @@ public static class ServiceCollectionExtensions
             .AddAgenticLlmServices(configuration)
             .AddAgenticGateway()
             .AddAgenticQualityGates()
-            .AddAgenticMcpAndSkills()
+            .AddAgenticMcpAndSkills(configuration)
             .AddAgenticAgentFramework(configuration)
             .AddAgenticRagAndMemory(configuration)
             .AddAgenticDocumentServices()
@@ -161,7 +163,7 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddAgenticMcpAndSkills(this IServiceCollection services)
+    private static IServiceCollection AddAgenticMcpAndSkills(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<IMCPPluginManager, MCPPluginManager>();
         services.AddSingleton<McpToolsAIFunctionAdapter>();
@@ -170,7 +172,19 @@ public static class ServiceCollectionExtensions
 
         // Registros para Banner Production
         services.AddSingleton<AgenticSystem.Core.Skills.BannerProductionSkills>();
-        services.AddSingleton<AgenticSystem.Infrastructure.AI.BannerProductionWorkflowService>();
+        services.AddSingleton<AgenticSystem.Infrastructure.AI.DynamicMafWorkflowCompiler>();
+        services.AddSingleton<AgenticSystem.Infrastructure.AI.DurableWorkflowCompiler>();
+        
+        services.AddSingleton<AgenticSystem.Core.Interfaces.IDynamicWorkflowCompiler>(sp =>
+        {
+            var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
+            if (string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
+            {
+                return sp.GetRequiredService<AgenticSystem.Infrastructure.AI.DurableWorkflowCompiler>();
+            }
+            return sp.GetRequiredService<AgenticSystem.Infrastructure.AI.DynamicMafWorkflowCompiler>();
+        });
+
         services.AddSingleton<AgenticSystem.Core.Interfaces.ITool, AgenticSystem.Infrastructure.Tools.BannerProductionTool>();
 
         return services;
@@ -196,6 +210,18 @@ public static class ServiceCollectionExtensions
             services.AddSingleton(orchestratorMetadata);
             services.AddSingleton<AgentFrameworkFactory>();
             services.AddSingleton<SimpleSessionStoreAdapter>();
+            services.AddSingleton<DurableSessionStoreAdapter>();
+
+            services.AddSingleton<Microsoft.Agents.AI.Hosting.AgentSessionStore>(sp =>
+            {
+                var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
+                if (string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
+                {
+                    return sp.GetRequiredService<DurableSessionStoreAdapter>();
+                }
+                return sp.GetRequiredService<SimpleSessionStoreAdapter>();
+            });
+
             services.AddSingleton<OrchestratorAuxiliaryToolService>();
             services.AddSingleton<OrchestratorInstructionService>();
             services.AddSingleton<OrchestratorToolBindingService>();
@@ -241,7 +267,7 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<IDirectAgentExecutionService>(sp =>
                 new AgentFrameworkDirectExecutionService(
                     sp.GetRequiredService<AgentFrameworkFactory>(),
-                    sp.GetRequiredService<SimpleSessionStoreAdapter>(),
+                    sp.GetRequiredService<Microsoft.Agents.AI.Hosting.AgentSessionStore>(),
                     sp.GetRequiredService<ISessionManager>(),
                     sp.GetRequiredService<ILogger<AgentFrameworkDirectExecutionService>>(),
                     sp,
@@ -254,7 +280,7 @@ public static class ServiceCollectionExtensions
                 ServiceLifetime.Scoped);
 
             hostedOrchestratorBuilder.WithSessionStore(
-                static (sp, _) => sp.GetRequiredService<SimpleSessionStoreAdapter>(),
+                static (sp, _) => sp.GetRequiredService<Microsoft.Agents.AI.Hosting.AgentSessionStore>(),
                 ServiceLifetime.Singleton);
 
             services.AddSingleton<IFrameworkOrchestratorService, FrameworkOrchestratorService>();
@@ -522,6 +548,12 @@ public static class ServiceCollectionExtensions
         ReplaceSingleton<IConfigStore, PostgresConfigStore>(services);
         ReplaceSingleton<IRerankingAssetStore, PostgresRerankingAssetStore>(services);
         ReplaceSingleton<IDynamicAgentRepository, PostgresDynamicAgentRepository>(services);
+        
+        ReplaceSingleton<ISkillManager, PostgresSkillManager>(services);
+        ReplaceSingleton<IToolManager, PostgresToolManager>(services);
+        ReplaceSingleton<IPermissionService, PostgresPermissionService>(services);
+        ReplaceSingleton<IPolicyStore, PostgresPolicyStore>(services);
+        ReplaceSingleton<IExternalQuotaSyncService, ExternalQuotaSyncService>(services);
 
         var useInMemoryEventBus = configuration.GetValue<bool>("AgenticSystem:EventBus:UseInMemory");
 
@@ -540,6 +572,20 @@ public static class ServiceCollectionExtensions
         services.UsePostgresWorkflowEngine(connectionString);
         services.UsePostgresAdvancedIntelligence(connectionString);
         services.UsePostgresPlatformStores(connectionString);
+
+        // Registro nativo do backend durável do DurableTask PostgreSQL usando inicializador de objetos para propriedades init-only
+        var durableSettings = new PostgreSqlOrchestrationServiceSettings
+        {
+            ConnectionString = connectionString,
+            TaskHubName = "AgenticSystemHub",
+            AutoDeploySchema = true
+        };
+        services.AddDurableTaskPostgreSql(durableSettings);
+
+        services.ConfigureDurableAgents(options =>
+        {
+            options.DefaultTimeToLive = TimeSpan.FromDays(7);
+        });
 
         return services;
     }

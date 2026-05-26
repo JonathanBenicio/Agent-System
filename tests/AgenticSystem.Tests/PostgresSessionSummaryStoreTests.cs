@@ -12,7 +12,7 @@ namespace AgenticSystem.Tests;
 
 public class PostgresSessionSummaryStoreTests
 {
-    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
+    private readonly FakeDbContextFactory _dbContextFactory;
     private readonly PostgresSessionSummaryStore _sut;
     private readonly DbContextOptions<AgenticDbContext> _options;
     private readonly ITenantContextAccessor _tenantAccessor;
@@ -33,11 +33,10 @@ public class PostgresSessionSummaryStoreTests
             ctx.Database.EnsureCreated();
         }
 
-        var factory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
-        factory.CreateDbContextAsync(Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromResult(new AgenticDbContext(_options, _tenantAccessor)));
-
-        _dbContextFactory = factory;
+        _dbContextFactory = new FakeDbContextFactory
+        {
+            ContextCreator = () => new AgenticDbContext(_options, _tenantAccessor)
+        };
         _sut = new PostgresSessionSummaryStore(_dbContextFactory, NullLogger<PostgresSessionSummaryStore>.Instance);
     }
 

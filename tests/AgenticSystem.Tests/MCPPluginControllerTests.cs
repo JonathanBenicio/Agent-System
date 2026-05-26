@@ -13,13 +13,13 @@ namespace AgenticSystem.Tests;
 public class MCPPluginControllerTests
 {
     private readonly IMCPPluginManager _pluginManager;
-    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
+    private readonly FakeDbContextFactory _dbContextFactory;
     private readonly MCPPluginController _sut;
 
     public MCPPluginControllerTests()
     {
         _pluginManager = Substitute.For<IMCPPluginManager>();
-        _dbContextFactory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
+        _dbContextFactory = new FakeDbContextFactory();
         var logger = Substitute.For<ILogger<MCPPluginController>>();
         _sut = new MCPPluginController(_pluginManager, _dbContextFactory, logger);
     }
@@ -41,7 +41,7 @@ public class MCPPluginControllerTests
         using var db = new AgenticDbContext(options, tenantContextAccessor);
         await db.Database.EnsureCreatedAsync();
         
-        _dbContextFactory.CreateDbContextAsync(Arg.Any<CancellationToken>()).Returns(db);
+        _dbContextFactory.DbContext = db;
 
         var result = await _sut.GetPlugins();
 
@@ -61,7 +61,7 @@ public class MCPPluginControllerTests
         var db = new AgenticDbContext(options, tenantContextAccessor);
         await db.Database.EnsureCreatedAsync();
         
-        _dbContextFactory.CreateDbContextAsync(Arg.Any<CancellationToken>()).Returns(db);
+        _dbContextFactory.DbContext = db;
         return db;
     }
 
