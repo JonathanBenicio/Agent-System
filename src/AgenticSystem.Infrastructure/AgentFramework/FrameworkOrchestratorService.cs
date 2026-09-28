@@ -1,3 +1,6 @@
+using System;
+using System.Linq;
+using System.Collections.Generic;
 using System.Diagnostics;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
@@ -60,7 +63,18 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             "🎯 Orchestrator processing request via hosted framework agent: {Input}",
             input[..Math.Min(50, input.Length)]);
 
-        // 1. Resolver o hosted agent nativo e o contexto de specialist bindings da execução atual
+        // 1. Obter agentes ativos e construir o agente orquestrador de forma assíncrona
+        var activeAgents = (await serviceScope.ServiceProvider.GetRequiredService<IAgentFactory>().GetAllAgentsAsync())
+            .Where(a => a.IsActive).ToList();
+
+        var hostBuilder = serviceScope.ServiceProvider.GetRequiredService<OrchestratorHostBuilder>();
+        var orchestratorAgent = await hostBuilder.BuildAsync(activeAgents, sessionId, ct);
+
+        // Armazenar no estado scoped antes de resolver OrchestratorContext
+        var contextState = serviceScope.ServiceProvider.GetRequiredService<OrchestratorContextState>();
+        contextState.OrchestratorAgent = orchestratorAgent;
+        contextState.ActiveAgents = activeAgents;
+
         var orchestratorCtx = scopedServices.GetRequiredService<OrchestratorContext>();
         var orchestrator = scopedServices.GetRequiredKeyedService<AIAgent>(_orchestratorMetadata.Name);
         var sessionStore = scopedServices.GetRequiredKeyedService<AgentSessionStore>(_orchestratorMetadata.Name);
@@ -76,7 +90,7 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             Message = "Framework orchestrator delegating to specialists",
             Data = new Dictionary<string, object>
             {
-                ["specialistCount"] = orchestratorCtx.SpecialistBindings.Count,
+                ["specialistCount"] = activeAgents.Count,
                 ["mode"] = "framework-orchestration"
             }
         }, ct);
@@ -85,11 +99,8 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         FrameworkAgentResponse frameworkResponse;
         try
         {
-            var activeAgents = (await serviceScope.ServiceProvider.GetRequiredService<IAgentFactory>().GetAllAgentsAsync())
-                .Where(a => a.IsActive).ToList();
-            
             var workflow = await serviceScope.ServiceProvider.GetRequiredService<OrchestratorHostBuilder>()
-                .BuildHandoffWorkflowAsync(activeAgents, sessionId, ct);
+                .BuildHandoffWorkflowAsync(orchestratorAgent, activeAgents, ct);
 
             var messages = new List<ChatMessage> { new(ChatRole.User, preProcessingResult.EffectiveInput) };
             
@@ -119,6 +130,18 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         var calledAgent = handoffEvent ?? specialistCalls.FirstOrDefault();
         var calledBinding = FindCalledBinding(orchestratorCtx, calledAgent != null ? new[] { calledAgent } : Array.Empty<string>());
 
+        IAgent? resolvedAgent = null;
+        if (!string.IsNullOrEmpty(calledAgent))
+        {
+            var sanitizedCalledName = SanitizeAgentName(calledAgent);
+            var matchingAgentInfo = activeAgents.FirstOrDefault(a => SanitizeAgentName(a.Name) == sanitizedCalledName);
+            if (matchingAgentInfo != null)
+            {
+                var agentFactory = serviceScope.ServiceProvider.GetRequiredService<IAgentFactory>();
+                resolvedAgent = await agentFactory.ResolveAgentAsync(matchingAgentInfo);
+            }
+        }
+
         sw.Stop();
 
         // 6. Persistir sessão do framework para continuidade via hosting nativo
@@ -129,7 +152,7 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             input,
             context,
             content,
-            calledBinding?.Agent,
+            resolvedAgent ?? calledBinding?.Agent,
             calledAgent,
             orchestrator.Id ?? string.Empty,
             sw.Elapsed,
@@ -400,5 +423,11 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         }
 
         return null;
+    }
+
+    private static string SanitizeAgentName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return string.Empty;
+        return new string(name.Where(c => char.IsLetterOrDigit(c)).ToArray()).ToLowerInvariant();
     }
 }

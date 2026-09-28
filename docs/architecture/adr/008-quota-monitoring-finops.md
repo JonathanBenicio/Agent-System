@@ -22,3 +22,7 @@ Implementamos um sistema de **Monitoramento de Cotas Híbrido** e práticas de *
 - **Positive**: Controle total sobre os custos de IA; maior segurança operacional.
 - **Negative**: Código adicional para gerenciar estados de cotas e tratar exceções de limite excedido.
 - **Mitigation**: Implementação de alertas preventivos (ex: 80% da cota) e renovação automática baseada em tempo (diária/mensal).
+
+## Nota de Implementação
+
+A persistência e verificação de cotas de uso do sistema foram implementadas de forma a garantir alta performance e segurança. As cotas e limites definidos para cada inquilino (tenant) são armazenados de forma persistente no banco de dados PostgreSQL. Para evitar a sobrecarga de queries repetitivas ao banco a cada chamada de LLM, o componente `QuotaEnforcer` utiliza cache local via `IMemoryCache` com TTL de 60 segundos para leitura das cotas, enquanto as operações de incremento de uso (`IncrementUsageAsync`) atualizam o banco de dados de maneira transacional e segura.

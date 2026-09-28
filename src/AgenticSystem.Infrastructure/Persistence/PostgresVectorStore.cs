@@ -273,6 +273,8 @@ public class PostgresVectorStore : IVectorStore
         await using var db = await _dbContextFactory.CreateDbContextAsync();
         var dataQuery = db.VectorDocuments.AsNoTracking().AsQueryable();
 
+        // SQL-level filters: applied before the vector search to prevent unauthorized data leaking
+        // into the semantic candidate pool.
         if (filters.TryGetValue("type", out var typeFilter))
         {
             dataQuery = dataQuery.Where(item => item.Type == typeFilter);
@@ -286,6 +288,25 @@ public class PostgresVectorStore : IVectorStore
         if (filters.TryGetValue("id", out var idFilter))
         {
             dataQuery = dataQuery.Where(item => item.Id == idFilter);
+        }
+
+        // SECURITY: room_ids filter MUST be enforced at SQL level before the semantic search runs.
+        // Applying it in-memory after fetching top-K candidates creates a false-negative security gap:
+        // if none of the top-50 semantic results belong to the authorized room, the result is empty
+        // even when authorized documents exist — and cross-room documents may populate the top-50.
+        if (filters.TryGetValue("room_ids", out var roomIdsFilter))
+        {
+            var allowedRooms = roomIdsFilter
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
+
+            if (allowedRooms.Length > 0)
+            {
+                var matchingIds = await db.Database.SqlQuery<string>($"SELECT id FROM vector_documents WHERE metadata_json->>'room_id' = ANY({allowedRooms}) OR metadata_json->>'roomId' = ANY({allowedRooms})").ToListAsync();
+                dataQuery = dataQuery.Where(item => matchingIds.Contains(item.Id));
+            }
+
+            _logger.LogDebug("Applied SQL-level room_ids filter for {Count} room(s)", allowedRooms.Length);
         }
 
         float[]? queryEmbedding = null;
@@ -325,8 +346,10 @@ public class PostgresVectorStore : IVectorStore
                 .ToListAsync();
         }
 
+        // Remaining in-memory filters: only non-security metadata fields that don't require
+        // SQL-level enforcement (room_ids is now excluded as it was enforced at SQL level above).
         var remainingFilters = filters
-            .Where(item => item.Key is not ("type" or "collection" or "id"))
+            .Where(item => item.Key is not ("type" or "collection" or "id" or "room_ids"))
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
 
         var filtered = candidates.Where(item => MetadataMatches(item.MetadataJson, remainingFilters));

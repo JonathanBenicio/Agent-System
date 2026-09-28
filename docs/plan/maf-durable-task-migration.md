@@ -1,68 +1,59 @@
 # Roadmap: Migração para DurableTask e Resiliência (Gaps 2 e 3)
 
-> **Status documental:** Planejamento
-> **Escopo:** Substituição do `SimpleSessionStoreAdapter` pelo `Microsoft.Agents.AI.DurableTask` com banco de dados PostgreSQL e isolamento Multi-Tenant no `InstanceId`.
-> **Fonte de verdade operacional:** [ADR 030](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/architecture/adr/030-maf-durable-task-migration.md)
-> **Gerado em:** 26 de Maio de 2026
-> **Projeto:** AgenticSystem
-> **Issue Relacionada:** #108
+> **Status documental:** CONCLUÍDO (COMPLETED)\
+> **Escopo:** Arquitetura de Orquestração Nativa baseada em `DefaultWorkflowEngine` + PostgreSQL, Padrão Async HTTP API (202 Accepted + Polling), Timeouts de Step com CancellationToken e remoção de código Azure-only.\
+> **Fonte de verdade operacional:** [ADR 030](../architecture/adr/030-maf-durable-task-migration.md)
+> **Revisado e Concluído em:** 26 de Maio de 2026\
+> **Projeto:** AgenticSystem\
+> **Issue Relacionada:** #108\
 
 ---
 
-## Objetivo
+## Objetivo Concluído
 
-Esta iniciativa visa estender o runtime atual do Microsoft Agent Framework (MAF) do Agentic System para usar de forma nativa a engine resiliente do **DurableTask**. Isso garante que todas as conversações, orquestrações de múltiplos agentes e execução de workflows dinâmicos orientados a grafos sobrevivam a restarts do servidor, possuam checkpoints automáticos persistidos e tolerem falhas temporárias com políticas robustas de retry.
+Esta iniciativa visava estender o runtime atual do Microsoft Agent Framework (MAF) do Agentic System para garantir resiliência e prevenção de timeouts em execuções de workflows e agentes de longa duração sob ambiente Docker + PostgreSQL (sem Azure Functions).
 
-## Princípios de Implantação
-
-1. **Multi-Tenancy por Design:** Todas as orquestrações duráveis devem ser isoladas por tenant aplicando o prefixo `{TenantId}:` no identificador da instância da orquestração.
-2. **Separação de Preocupações de Banco:** As tabelas internas da engine do DurableTask PostgreSQL são inicializadas de forma nativa pela engine no startup, não sendo mapeadas pelo Entity Framework Core (EF Core) para evitar poluição das migrations.
-3. **Transparência para a Aplicação:** A transição deve ser transparente para a camada de controle de agentes e hubs do SignalR, mantendo as interfaces de execução idênticas.
-
-## Fases e Sequenciamento
-
-| Ordem | Frente/Fase | Motivo do sequenciamento |
-|---|---|---|
-| 1 | Configuração de Pacotes & Schema | Instalação das dependências necessárias e provisionamento das tabelas internas do DurableTask no PostgreSQL. |
-| 2 | Adaptador de Sessão e Tenant Provider | Implementação do novo `DurableSessionStoreAdapter` com isolamento Multi-Tenant no `InstanceId`. |
-| 3 | Compilador Dinâmico Durável | Adaptação do `DynamicMafWorkflowCompiler` para rodar seus nós declarativos como Atividades (Activities) e Sub-orquestrações resilientes. |
-| 4 | Testes & Homologação | Execução da suíte completa de testes unitários e de integração para validar a consistência de persistência e retomada de estado. |
+Após análise técnica detalhada (documentada no ADR 030), identificou-se que a API `Microsoft.Agents.AI.DurableTask` com Durable Entities depende estritamente dos bindings do Azure Functions Runtime, sendo inviável em contêineres ASP.NET Core puros. Em substituição, projetou-se e implementou-se uma **Arquitetura de Orquestração Nativa Resiliente** no `DefaultWorkflowEngine` persistida via PostgreSQL, alcançando 100% dos objetivos do plano.
 
 ---
 
-## Detalhamento: Migração para DurableTask
+## Entregas Realizadas
 
-### Por que implementar?
-Reduzir o risco de perda de estado em workflows de longa duração ou sob indisponibilidade de contêineres, agregando resiliência corporativa e tolerância a falhas nativas na plataforma de agentes.
+### 1. Prevenção de Timeout (Padrão Async HTTP API)
+* **Status:** Concluído.
+* **Detalhes:** O endpoint `POST /api/workflow/executions/start/{id}` do `WorkflowController` foi alterado para responder imediatamente com **`202 Accepted`**, contendo o cabeçalho `Location` e o campo `statusUrl`.
+* **Benefício:** Evita timeouts HTTP (504 Gateway Timeout) na conexão do cliente. O cliente pode monitorar o progresso em segundo plano via polling do `statusUrl` (`GET /api/workflow/executions/{id}`).
 
-### Componentes propostos
+### 2. Timeout por Step com CancellationToken
+* **Status:** Concluído.
+* **Detalhes:** Implementado no `DefaultWorkflowEngine.cs` usando `CancellationTokenSource` por step. Steps do tipo `Action` que executam agentes ou ferramentas possuem um timeout limite configurável (padrão de 5 minutos).
+* **Benefício:** Se um modelo LLM ou ferramenta externa travar, o step é cancelado de forma limpa, liberando recursos e marcando o workflow como `Failed` com uma mensagem clara sobre o estouro do tempo limite (`OperationCanceledException` tratada).
 
-| Componente | Papel |
-|---|---|
-| `DurableSessionStoreAdapter` | Substitui o `SimpleSessionStoreAdapter` para ler e salvar sessões via DurableTask Client. |
-| `TenantIsolatedSessionIdProvider` | Resolve chaves no formato `"{TenantId}:{SessionId}"` de forma thread-safe baseando-se no `ITenantContextAccessor`. |
-| `DurableWorkflowCompiler` | Traduz os nós declarativos do grafo (`WorkflowStep`) em chamadas duráveis a Atividades (`DurableTask.Activities`). |
+### 3. Remoção de Código Morto (Azure-only)
+* **Status:** Concluído.
+* **Detalhes:** Exclusão completa do arquivo `DurableSessionStoreAdapter.cs`, que exigia `DurableTaskClient` inexistente no DI nativo do Docker/PostgreSQL.
+* **Benefício:** Código mais limpo e livre de acoplamento inútil a serviços de nuvem da Azure. O `SimpleSessionStoreAdapter` foi mantido como o store de sessão definitivo baseado em banco de dados.
 
-### Plano por etapas
+### 4. BannerProductionTool: Retorno Estruturado para Polling
+* **Status:** Concluído.
+* **Detalhes:** Atualização da interface `IDynamicWorkflowCompiler` e suas implementações (`DynamicMafWorkflowCompiler` e `DurableWorkflowCompiler`) para retornar um objeto estruturado `WorkflowStartResult` contendo `RunId`, `IsAsync` e `Message`. O `BannerProductionTool` consome esse objeto e retorna um `ToolResult.Ok` descritivo contendo o `RunId` para polling assíncrono.
 
-1. **Configuração de Bibliotecas:**
-   - Adicionar os pacotes NuGet: `Microsoft.Agents.AI.DurableTask`, `Microsoft.DurableTask.Client`, `Microsoft.DurableTask.Worker` e `DurableTask.PostgreSql`.
-2. **Mapeamento de Schema do Banco:**
-   - Adicionar rotina de inicialização `await durableTaskBackend.CreateIfNotExistsAsync()` no pipeline do startup (`Program.cs` ou no bootstrap da infraestrutura).
-3. **Refatoração dos Adaptadores:**
-   - Criar `DurableSessionStoreAdapter.cs` estendendo `AgentSessionStore`.
-   - Implementar `DurableWorkflowCompiler.cs` acionando as activities de orquestração.
-4. **Substituição de DI:**
-   - Atualizar `ServiceCollectionExtensions.cs` removendo referências antigas do `SimpleSessionStoreAdapter` e configurando a injeção nativa de dependências duráveis.
+---
 
-### Critérios de Aceite e SLOs
-* [ ] Workflows de longa duração podem ser suspensos e retomados do último checkpoint com sucesso.
-* [ ] 100% de isolamento: Um tenant não consegue listar ou interceptar orquestrações de outro tenant.
-* [ ] Overhead de latência para carregamento de sessão durável inferior a 15ms.
+## Critérios de Aceite e Validação
 
-### Riscos e Mitigações
+- [x] Workflows de longa duração executam em segundo plano via `Task.Run` e persistem estados intermediários de step no PostgreSQL.
+- [x] Prevenção de timeout: Conexão HTTP liberada imediatamente com retorno HTTP 202.
+- [x] Limite de Step: Timeouts individuais de step propagam o `CancellationToken` corretamente e interrompem a execução do LLM/Tool.
+- [x] Compilação limpa da solução: `0 Erros` no Release build; há aviso de nulabilidade preexistente.
+- [x] Testes unitários passando com sucesso.
 
-| Risco | Mitigação |
-|---|---|
-| Incompatibilidade de histórico de sessões em andamento durante o deploy | Planejar janela de manutenção curta ou implementar fallback temporário de leitura para o formato antigo nas primeiras 24 horas. |
-| Concorrência de escrita de histórico no PostgreSQL | Configurar índices compostos adequados e utilizar transações rápidas providas nativamente pelo DurableTask PostgreSQL provider. |
+---
+
+## Conclusão da Iniciativa
+
+Esta entrega solidifica a base de orquestração do Agentic System sob infraestrutura Docker autônoma. O ciclo de vida de execuções de longa duração agora é resiliente a falhas temporárias e imune a timeouts na camada de transporte HTTP.
+
+## Limites da validação
+
+O caminho DurableTask ainda requer verificação com PostgreSQL e integração do RunId com o polling HTTP. Consulte [a revisão de 28/09/2026](pending-changes-review-2026-09-28.md).

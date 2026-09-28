@@ -43,7 +43,7 @@ public class DynamicMafWorkflowCompiler : IDynamicWorkflowCompiler
         _logger = logger;
     }
 
-    public async Task<string> ExecuteDynamicWorkflowAsync(
+    public async Task<WorkflowStartResult> ExecuteDynamicWorkflowAsync(
         string workflowDefinitionId,
         string tenantId,
         Dictionary<string, object> parameters,
@@ -104,7 +104,7 @@ public class DynamicMafWorkflowCompiler : IDynamicWorkflowCompiler
             if (allowedToolNames.Contains("RenderBannerAsync"))
             {
                 var renderFunc = AIFunctionFactory.Create(
-                    (string path, decimal prc, int beds) => _bannerSkills.RenderBannerAsync(path, prc, beds),
+                    (string path, decimal prc, int beds, string location, string phone) => _bannerSkills.RenderBannerAsync(path, prc, beds, location, phone),
                     "RenderBannerAsync",
                     "Gera o banner publicitário final desenhando preços e quartos sobre a imagem"
                 );
@@ -112,7 +112,7 @@ public class DynamicMafWorkflowCompiler : IDynamicWorkflowCompiler
             }
 
             // Compilar e materializar o agente nativo do MAF com suas ferramentas dedicadas
-            var frameworkAgent = await _frameworkFactory.CreateFromAgentAsync(coreAgent, additionalTools, ct);
+            var frameworkAgent = await _frameworkFactory.CreateFromAgentAsync(coreAgent, additionalTools, step.ModelOverride, ct);
             compiledAgents[step.Id] = frameworkAgent;
         }
 
@@ -210,12 +210,14 @@ public class DynamicMafWorkflowCompiler : IDynamicWorkflowCompiler
             if (msgsProperty?.GetValue(lastEvent.Response) is IEnumerable<ChatMessage> responseMessages)
             {
                 var lastAssistantMessage = responseMessages.LastOrDefault(m => m.Role == ChatRole.Assistant);
-                return lastAssistantMessage?.Text ?? "Sucesso (execução do workflow concluída sem conteúdo textual de saída).";
+                var output = lastAssistantMessage?.Text ?? "Sucesso (execução do workflow concluída sem conteúdo textual de saída).";
+                return new WorkflowStartResult(runId, output, IsAsync: false);
             }
 
-            return lastEvent.Response.ToString() ?? "Sucesso (retorno legível concluído).";
+            var responseStr = lastEvent.Response.ToString() ?? "Sucesso (retorno legível concluído).";
+            return new WorkflowStartResult(runId, responseStr, IsAsync: false);
         }
 
-        return "O processamento em grafo do MAF foi concluído, mas nenhuma mensagem textual legível foi retornada.";
+        return new WorkflowStartResult(runId, "O processamento em grafo do MAF foi concluído, mas nenhuma mensagem textual legível foi retornada.", IsAsync: false);
     }
 }

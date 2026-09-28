@@ -34,11 +34,13 @@ public class BannerProductionSkills
         return cleanPath;
     }
 
-    [Description("Gera o banner publicitario final desenhando textos, o preco e a quantidade de quartos sobre a imagem limpa.")]
+    [Description("Gera o banner publicitario final desenhando as tarjas geometricas modernas, preco, quartos, localizacao e telefone sobre a imagem limpa.")]
     public async Task<string> RenderBannerAsync(
         [Description("Caminho absoluto para a foto limpa")] string cleanImagePath, 
         [Description("Preco do imovel (ex: 650000)")] decimal price, 
-        [Description("Quantidade de quartos")] int bedrooms)
+        [Description("Quantidade de quartos")] int bedrooms,
+        [Description("Localizacao do imovel (bairro/cidade)")] string location,
+        [Description("Telefone de contato no formato Whatsapp")] string phone)
     {
         if (!File.Exists(cleanImagePath))
             return "Erro: Imagem limpa nao encontrada no caminho: " + cleanImagePath;
@@ -47,34 +49,85 @@ public class BannerProductionSkills
         
         using var image = await Image.LoadAsync(cleanImagePath);
         
-        // Tentar obter uma fonte padrão instalada no sistema
         Font font;
         if (SystemFonts.TryGet("Arial", out var fontFamily))
-            font = fontFamily.CreateFont(48, FontStyle.Bold);
+            font = fontFamily.CreateFont(36, FontStyle.Bold);
         else if (SystemFonts.Families.Any())
-            font = SystemFonts.Families.First().CreateFont(48, FontStyle.Bold);
+            font = SystemFonts.Families.First().CreateFont(36, FontStyle.Bold);
         else
             return "Erro: Nenhuma fonte encontrada no sistema para renderizar o banner.";
 
-        // Desenhar uma tarja na base da imagem
-        var stripHeight = 120;
-        var rect = new RectangleF(0, image.Height - stripHeight, image.Width, stripHeight);
-        var bannerColor = Color.ParseHex("#00000099"); // Preto com transparência
-        image.Mutate(x => x.Fill(bannerColor, rect));
+        Font bigFont = font.Family.CreateFont(56, FontStyle.Bold);
 
-        // Escrever o preço à esquerda
-        var textPrice = $"Venda: R$ {price:N2}";
-        var priceLocation = new PointF(40, image.Height - 90);
-        image.Mutate(x => x.DrawText(textPrice, font, Color.White, priceLocation));
+        var darkBlue = Color.ParseHex("#0B2046");
+        var green = Color.ParseHex("#128A81");
 
-        // Escrever a quantidade de quartos à direita
-        var textBedrooms = $"{bedrooms} Quartos";
+        // --- 1. Tarja Superior Direita (VENDE-SE + Telefone) ---
+        // Desenha um polígono estilo "seta"/"chanfro" que se alinha a direita.
+        var topStripHeight = 80f;
+        var topStripWidth = image.Width * 0.7f;
+        var topStripLeft = image.Width - topStripWidth;
+
+        var topPath = new PathBuilder()
+            .AddLines(new PointF[] {
+                new PointF(topStripLeft, 0),
+                new PointF(image.Width, 0),
+                new PointF(image.Width, topStripHeight),
+                new PointF(topStripLeft + 30f, topStripHeight),
+                new PointF(topStripLeft, 0)
+            })
+            .Build();
+
+        image.Mutate(x => x.Fill(darkBlue, topPath));
+        image.Mutate(x => x.DrawText($"VENDE-SE      (WHATSAPP) {phone}", font, Color.White, new PointF(topStripLeft + 60f, 15f)));
+
+        // --- 2. Fita Base (Branca) ---
+        var baseStripHeight = 100f;
+        var baseRect = new RectangleF(0, image.Height - baseStripHeight, image.Width, baseStripHeight);
+        image.Mutate(x => x.Fill(Color.White, baseRect));
+
+        // Elementos mockados de ícones na barra branca inferior
+        Font smallFont = font.Family.CreateFont(18, FontStyle.Bold);
+        image.Mutate(x => x.DrawText("📍 Excelente Localizacao   🛡️ Bairro Tranquilo e Valorizado   🔑 Pronta para Morar   📄 Documentacao Regular", smallFont, darkBlue, new PointF(40, image.Height - 65f)));
+
+        // --- 3. Tarjas de Valor e Localização (Canto Esquerdo Inferior) ---
+        // Fita Azul Escura de Localização (por baixo da verde)
+        var locPathHeight = 70f;
+        var locPathWidth = 400f;
+        var locPathY = image.Height - baseStripHeight - locPathHeight;
+
+        var locPath = new PathBuilder()
+            .AddLines(new PointF[] {
+                new PointF(0, locPathY),
+                new PointF(locPathWidth, locPathY),
+                new PointF(locPathWidth - 30f, locPathY + locPathHeight),
+                new PointF(0, locPathY + locPathHeight),
+                new PointF(0, locPathY)
+            })
+            .Build();
+        image.Mutate(x => x.Fill(darkBlue, locPath));
+        image.Mutate(x => x.DrawText($"📍 {location.ToUpper()}", font, Color.White, new PointF(20f, locPathY + 15f)));
+
+        // Fita Verde de Preço (sobreposta a direita)
+        var pricePathWidth = 500f;
+        var pricePathHeight = 85f;
+        var pricePathLeft = locPathWidth - 80f; // Overlaps
+        var pricePathY = image.Height - baseStripHeight - pricePathHeight;
         
-        // Aproximação do tamanho do texto para alinhar à direita
-        var estimatedTextWidth = textBedrooms.Length * 30; 
-        var bedLocation = new PointF(Math.Max(image.Width - estimatedTextWidth - 40, priceLocation.X + 400), image.Height - 90);
+        var pricePath = new PathBuilder()
+            .AddLines(new PointF[] {
+                new PointF(pricePathLeft, pricePathY),
+                new PointF(pricePathLeft + pricePathWidth, pricePathY),
+                new PointF(pricePathLeft + pricePathWidth - 40f, pricePathY + pricePathHeight),
+                new PointF(pricePathLeft - 40f, pricePathY + pricePathHeight),
+                new PointF(pricePathLeft, pricePathY)
+            })
+            .Build();
+
+        image.Mutate(x => x.Fill(green, pricePath));
         
-        image.Mutate(x => x.DrawText(textBedrooms, font, Color.Yellow, bedLocation));
+        // O texto tem tamanhos compostos na imagem (R$ pequeno, 400 grande)
+        image.Mutate(x => x.DrawText($"R$ {price:N0}   |  {bedrooms} Qtos", bigFont, Color.White, new PointF(pricePathLeft + 20f, pricePathY + 10f)));
 
         await image.SaveAsync(bannerPath);
         return bannerPath;

@@ -1,4 +1,3 @@
-#pragma warning disable MAAI001
 
 using System;
 using System.Collections.Generic;
@@ -76,7 +75,9 @@ public class RAGContextProviderTests
         var agent = Substitute.For<AIAgent>();
         agent.Name.Returns(agentName);
         var session = Substitute.For<AgentSession>();
+#pragma warning disable MAAI001
         return new MessageAIContextProvider.InvokingContext(agent, session, messages);
+#pragma warning restore MAAI001
     }
 
     [Fact]

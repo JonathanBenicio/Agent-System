@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AgenticSystem.Infrastructure.AgentFramework;
 
@@ -76,6 +77,13 @@ public class OrchestratorHostBuilder
         var allTools = new List<AITool>(toolBindings.Select(binding => binding.Tool));
         allTools.AddRange(auxiliaryTools);
 
+        // Resolve context state to store resolved bindings
+        var state = _serviceProvider.GetService<OrchestratorContextState>();
+        if (state != null)
+        {
+            state.SpecialistBindings = toolBindings;
+        }
+
         var instructions = _instructionService.GetInstructions(activeAgents, auxiliaryTools);
 
         // Enriquecer as instruções do orquestrador principal com as C# Skills contextuais!
@@ -94,14 +102,12 @@ public class OrchestratorHostBuilder
     /// Permite que agentes especialistas transfiram o controle entre si autonomamente.
     /// </summary>
     public async Task<Workflow> BuildHandoffWorkflowAsync(
+        AIAgent orchestratorAgent,
         IReadOnlyList<AgentInfo> activeAgents,
-        string sessionId = "default_session",
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(orchestratorAgent);
         ArgumentNullException.ThrowIfNull(activeAgents);
-
-        // 1. Criar o orquestrador principal (triage agent)
-        var orchestratorAgent = await BuildAsync(activeAgents, sessionId, ct);
 
         // 2. Resolver as instâncias reais dos agentes especialistas
         var specialistAgents = new List<AIAgent>();
@@ -139,15 +145,7 @@ public class OrchestratorHostBuilder
         return builder.Build();
     }
 
-    /// <summary>
-    /// Constrói versão síncrona (necessária para DI que ainda exige Resolve síncrono).
-    /// </summary>
-    public AIAgent Build(IReadOnlyList<AgentInfo> activeAgents, string sessionId = "default_session")
-    {
-        return BuildAsync(activeAgents, sessionId, CancellationToken.None)
-            .GetAwaiter()
-            .GetResult();
-    }
+
 
     private AIAgent CreateHostedOrchestratorAgent(
         string instructions,

@@ -43,7 +43,7 @@ public class WorkflowEngineTests
             }
         };
 
-        _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>())
+        _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(new AgentResponse { Success = true, Content = "Done" });
 
         await _store.SaveDefinitionAsync(TenantId, definition);
@@ -88,7 +88,7 @@ public class WorkflowEngineTests
             }
         };
 
-        _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>())
+        _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
             .Returns(async _ => 
             {
                 await Task.Delay(100);
@@ -105,7 +105,7 @@ public class WorkflowEngineTests
         var finalState = await _engine.GetExecutionAsync(TenantId, execution.Id);
         finalState!.Status.Should().Be(WorkflowExecutionStatus.Completed);
         finalState.StepExecutions.Should().HaveCount(3); // 1 parent + 2 parallel sub-steps
-        await _agentExecutor.Received(2).ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>());
+        await _agentExecutor.Received(2).ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -129,10 +129,10 @@ public class WorkflowEngineTests
             }
         };
 
-        _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), "AgentX")
+        _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), "AgentX", Arg.Any<CancellationToken>())
             .Returns(new AgentResponse { Success = false, ErrorMessage = "Boom" });
 
-        _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), "Cleaner")
+        _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), "Cleaner", Arg.Any<CancellationToken>())
             .Returns(new AgentResponse { Success = true, Content = "Cleaned" });
 
         await _store.SaveDefinitionAsync(TenantId, definition);
@@ -147,6 +147,6 @@ public class WorkflowEngineTests
         var badStep = finalState.StepExecutions.First(s => s.StepId == "bad-step");
         badStep.Status.Should().Be(WorkflowExecutionStatus.Failed);
         badStep.CompensationExecuted.Should().BeTrue();
-        await _agentExecutor.Received(1).ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), "Cleaner");
+        await _agentExecutor.Received(1).ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), "Cleaner", Arg.Any<CancellationToken>());
     }
 }

@@ -1,16 +1,17 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Infrastructure.AI;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AgenticSystem.Infrastructure.Tools;
 
 public class BannerProductionTool : ITool
 {
-    private readonly IDynamicWorkflowCompiler _workflowCompiler;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ITenantContextAccessor _tenantAccessor;
 
-    public BannerProductionTool(IDynamicWorkflowCompiler workflowCompiler, ITenantContextAccessor tenantAccessor)
+    public BannerProductionTool(IServiceScopeFactory scopeFactory, ITenantContextAccessor tenantAccessor)
     {
-        _workflowCompiler = workflowCompiler;
+        _scopeFactory = scopeFactory;
         _tenantAccessor = tenantAccessor;
     }
 
@@ -25,8 +26,12 @@ public class BannerProductionTool : ITool
         if (input.Action != "generate")
             return ToolResult.Fail("Action not supported. Use 'generate'.");
 
-        if (!input.Parameters.TryGetValue("imagePath", out var imagePathObj) || imagePathObj is not string imagePath)
+        if (!input.Parameters.TryGetValue("imagePath", out var imagePathObj) || string.IsNullOrWhiteSpace(imagePathObj?.ToString()))
             return ToolResult.Fail("Parameter 'imagePath' is required.");
+
+        var imagePath = imagePathObj is System.Text.Json.JsonElement jsonEl
+            ? jsonEl.GetString() ?? string.Empty
+            : imagePathObj.ToString() ?? string.Empty;
 
         if (!input.Parameters.TryGetValue("price", out var priceObj) || !decimal.TryParse(priceObj.ToString(), out var price))
             return ToolResult.Fail("Parameter 'price' is required and must be a number.");
@@ -46,12 +51,22 @@ public class BannerProductionTool : ITool
                 { "bedrooms", bedrooms }
             };
 
-            var result = await _workflowCompiler.ExecuteDynamicWorkflowAsync("banner-production", activeTenantId ?? "admin", parameters, ct);
-            return ToolResult.Ok(result);
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var workflowCompiler = scope.ServiceProvider.GetRequiredService<IDynamicWorkflowCompiler>();
+            var result = await workflowCompiler.ExecuteDynamicWorkflowAsync("banner-production", activeTenantId ?? "admin", parameters, ct);
+
+            if (result.IsAsync)
+            {
+                // Async HTTP API pattern: workflow runs in background.
+                // Return RunId so the caller can poll for completion.
+                return ToolResult.Ok($"Workflow iniciado em background. RunId={result.RunId} — acompanhe via GET /api/workflow/executions/{result.RunId}");
+            }
+
+            return ToolResult.Ok(result.Message);
         }
         catch (Exception ex)
         {
-            return ToolResult.Fail($"Workflow failed: {ex.Message}");
+            return ToolResult.Fail($"Workflow failed: {ex.ToString()}");
         }
     }
 

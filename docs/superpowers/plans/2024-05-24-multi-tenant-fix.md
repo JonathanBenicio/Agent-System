@@ -15,7 +15,7 @@
 **Files:**
 - Modify: `src/AgenticSystem.Api/Middleware/TenantMiddleware.cs`
 
-- [ ] **Step 1: Implement identity validation logic**
+- [x] **Step 1: Implement identity validation logic**
 Ajustar o `TenantMiddleware` para validar se o `X-Tenant-Id` do header é permitido para o usuário autenticado.
 
 ```csharp
@@ -32,10 +32,10 @@ if (!string.IsNullOrEmpty(tenantId) && !string.IsNullOrEmpty(jwtTenantId) && ten
 }
 ```
 
-- [ ] **Step 2: Add integration tests for spoofing**
+- [x] **Step 2: Add integration tests for spoofing**
 Criar um teste que envia um token do Tenant A com o header do Tenant B e espera um `403 Forbidden`.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ---
 
@@ -44,7 +44,7 @@ Criar um teste que envia um token do Tenant A com o header do Tenant B e espera 
 **Files:**
 - Modify: `src/AgenticSystem.Api/Hubs/OnnxHub.cs`
 
-- [ ] **Step 1: Add claim validation in SubscribeToTenant**
+- [x] **Step 1: Add claim validation in SubscribeToTenant**
 ```csharp
 public async Task SubscribeToTenant(string tenantId)
 {
@@ -57,10 +57,10 @@ public async Task SubscribeToTenant(string tenantId)
 }
 ```
 
-- [ ] **Step 2: Add claim validation in UnsubscribeFromTenant**
+- [x] **Step 2: Add claim validation in UnsubscribeFromTenant**
 Aplicar a mesma lógica de validação.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ---
 
@@ -72,16 +72,16 @@ Aplicar a mesma lógica de validação.
 - Modify: `src/AgenticSystem.Infrastructure/Persistence/Entities/PromptTemplateEntity.cs`
 - Modify: `src/AgenticSystem.Infrastructure/Persistence/Entities/EvalSuiteResultEntity.cs`
 
-- [ ] **Step 1: Implement ITenantEntity interface**
+- [x] **Step 1: Implement ITenantEntity interface**
 Adicionar a interface e a propriedade `TenantId` (se não existir).
 
-- [ ] **Step 2: Generate EF Core Migration**
+- [x] **Step 2: Generate EF Core Migration**
 Executar `dotnet ef migrations add AddMultiTenancyToCoreEntities`.
 
-- [ ] **Step 3: Apply Migration**
+- [x] **Step 3: Apply Migration**
 Executar `dotnet ef database update`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ---
 
@@ -92,7 +92,7 @@ Executar `dotnet ef database update`.
 - Modify: `src/AgenticSystem.Api/Controllers/DocumentController.cs`
 - Modify: `src/AgenticSystem.Api/Controllers/KnowledgeRoomController.cs`
 
-- [ ] **Step 1: Replace direct header access with ITenantContextAccessor**
+- [x] **Step 1: Replace direct header access with ITenantContextAccessor**
 ```csharp
 // De:
 private string GetTenantId() => Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
@@ -100,7 +100,7 @@ private string GetTenantId() => Request.Headers["X-Tenant-Id"].FirstOrDefault() 
 private string GetTenantId() => _tenantContextAccessor.CurrentTenantId;
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ---
 
@@ -109,7 +109,7 @@ private string GetTenantId() => _tenantContextAccessor.CurrentTenantId;
 **Files:**
 - Modify: `src/AgenticSystem.Api/Controllers/OnnxModelController.cs`
 
-- [ ] **Step 1: Ensure paths use validated TenantId**
+- [x] **Step 1: Ensure paths use validated TenantId**
 Garantir que o path físico não dependa de input direto do usuário/header, mas sim do `ITenantContextAccessor`.
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**

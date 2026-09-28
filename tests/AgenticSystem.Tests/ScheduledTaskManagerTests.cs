@@ -5,6 +5,7 @@ using NSubstitute.ExceptionExtensions;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
+using AgenticSystem.Core.Exceptions;
 
 namespace AgenticSystem.Tests;
 
@@ -243,4 +244,27 @@ public class ScheduledTaskManagerTests
         DeliveryChannels = new[] { "webhook" },
         Enabled = true
     };
+
+    [Theory]
+    [InlineData("0 9 * * 1", "0 0 9 ? * 2")]
+    [InlineData("0 9 * * 0", "0 0 9 ? * 1")]
+    [InlineData("0 9 * * 7", "0 0 9 ? * 1")]
+    [InlineData("0 9 * * 1-5", "0 0 9 ? * 2-6")]
+    [InlineData("0 9 * * 1,3,5", "0 0 9 ? * 2,4,6")]
+    [InlineData("0 0 9 ? * MON-FRI", "0 0 9 ? * MON-FRI")]
+    [InlineData("0 0 9 * * ?", "0 0 9 * * ?")]
+    [InlineData("0 0 9 * * ? 2026", "0 0 9 * * ? 2026")]
+    [InlineData("interval:30s", "interval:30s")]
+    public void NormalizeCronExpression_ShouldNormalizeCorrectly(string input, string expected)
+    {
+        var result = ScheduledTaskManager.NormalizeCronExpression(input);
+        result.Should().Be(expected);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_InvalidCronExpression_ThrowsInvalidCronExpressionException()
+    {
+        var act = () => _sut.RegisterAsync("bad-task", "invalid cron");
+        await act.Should().ThrowAsync<InvalidCronExpressionException>();
+    }
 }

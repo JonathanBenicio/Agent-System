@@ -222,7 +222,18 @@ public class DefaultWorkflowEngine : IWorkflowEngine
 
         try
         {
-            _logger.LogDebug("🎬 Executing step: {StepName} ({StepId}) in workflow {ExecutionId}", step.Name, step.Id, execution.Id);
+            // Per-step timeout: Action steps have a configurable timeout (default 5 min).
+            // This prevents a single hung LLM call from blocking the entire workflow forever.
+            var stepTimeout = step.Timeout ?? (step.StepType == WorkflowStepType.Action
+                ? TimeSpan.FromMinutes(5)
+                : TimeSpan.FromMinutes(30));
+
+            using var stepCts = new CancellationTokenSource(stepTimeout);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stepCts.Token);
+            var ct = linkedCts.Token;
+
+            _logger.LogDebug("🎬 Executing step: {StepName} ({StepId}) in workflow {ExecutionId} (timeout: {Timeout})",
+                step.Name, step.Id, execution.Id, stepTimeout);
 
             if (step.StepType == WorkflowStepType.Decision && !string.IsNullOrEmpty(step.ConditionExpression))
             {
@@ -249,8 +260,8 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                 {
                     var agentInput = ApplyVariables(step.ActionDescription ?? step.Name, execution.Variables);
                     var context = new UserContext { UserId = execution.InitiatedBy ?? "system" };
-                    var response = await _agentExecutor.ExecuteAsync(execution.Id, agentInput, context, step.AgentName);
-                    
+                    var response = await _agentExecutor.ExecuteAsync(execution.Id, agentInput, context, step.AgentName, ct);
+
                     stepExec.Output["content"] = response.Content;
                     stepExec.Output["success"] = response.Success;
                     if (!response.Success) throw new Exception(response.ErrorMessage ?? "Agent execution failed");
@@ -263,7 +274,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                         Parameters = step.Input,
                         UserId = execution.InitiatedBy
                     };
-                    var result = await _toolManager.ExecuteToolAsync(step.ToolName, toolInput);
+                    var result = await _toolManager.ExecuteToolAsync(step.ToolName, toolInput, ct);
                     
                     stepExec.Output["data"] = result.Data ?? string.Empty;
                     stepExec.Output["success"] = result.Success;
@@ -316,6 +327,16 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             }
 
             _logger.LogInformation("✅ Step {StepName} completed successfully", step.Name);
+        }
+        catch (OperationCanceledException)
+        {
+            var timeoutDuration = step.Timeout ?? TimeSpan.FromMinutes(5);
+            _logger.LogWarning("⏰ Step {StepName} timed out after {Timeout}", step.Name, timeoutDuration);
+            stepExec.Status = WorkflowExecutionStatus.Failed;
+            stepExec.ErrorMessage = $"Step timed out after {timeoutDuration.TotalMinutes:F0} minutes.";
+            stepExec.CompletedAt = DateTime.UtcNow;
+            await _store.SaveExecutionAsync(tenantId, execution);
+            if (_broadcaster != null) await _broadcaster.BroadcastStepFailed(execution.Id, stepExec);
         }
         catch (Exception ex)
         {

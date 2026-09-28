@@ -16,20 +16,24 @@ public class DocumentController : ControllerBase
     private readonly AgenticSystem.Infrastructure.Persistence.AgenticDbContext _dbContext;
     private readonly AgenticSystem.Infrastructure.RAG.IRerankingSettingsAccessor _rerankingSettingsAccessor;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _env;
 
     public DocumentController(
         IDocumentIngestionPipeline ingestionPipeline,
         ILogger<DocumentController> logger,
         AgenticSystem.Infrastructure.Persistence.AgenticDbContext dbContext,
         AgenticSystem.Infrastructure.RAG.IRerankingSettingsAccessor rerankingSettingsAccessor,
-        ITenantContextAccessor tenantContextAccessor)
+        ITenantContextAccessor tenantContextAccessor,
+        Microsoft.AspNetCore.Hosting.IWebHostEnvironment env)
     {
         _ingestionPipeline = ingestionPipeline;
         _logger = logger;
         _dbContext = dbContext;
         _rerankingSettingsAccessor = rerankingSettingsAccessor;
         _tenantContextAccessor = tenantContextAccessor;
+        _env = env;
     }
+
 
     /// <summary>
     /// Retorna métricas reais de RAG.
@@ -114,6 +118,27 @@ public class DocumentController : ControllerBase
             return UnprocessableEntity(new { error = result.Error, documentId = result.DocumentId });
         }
 
+        // Save a copy of the physical file to wwwroot/uploads/{tenantId}/{fileName}
+        string? fileDiskPath = null;
+        try
+        {
+            var webRoot = _env.WebRootPath ?? "wwwroot";
+            var uploadsDir = Path.Combine(webRoot, "uploads", tenantId);
+            Directory.CreateDirectory(uploadsDir);
+
+            // Sanitiza o nome do arquivo para evitar Directory Traversal
+            var safeFileName = Path.GetFileName(file.FileName);
+            var absolutePath = Path.Combine(uploadsDir, safeFileName);
+
+            await System.IO.File.WriteAllBytesAsync(absolutePath, rawDocument.Content, ct);
+            fileDiskPath = Path.GetFullPath(absolutePath).Replace("\\", "/");
+            _logger.LogInformation("💾 Cópia física do arquivo salva em: {DiskPath}", fileDiskPath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ Falha ao salvar cópia física do arquivo no disco.");
+        }
+
         _logger.LogInformation("✅ Ingestão concluída: {FileName} → {Chunks} chunks, {Tokens} tokens em {Duration}ms",
             file.FileName, result.ChunksCreated, result.TokensProcessed, result.Duration.TotalMilliseconds);
 
@@ -124,7 +149,8 @@ public class DocumentController : ControllerBase
             result.ChunksCreated,
             result.TokensProcessed,
             result.ContentHash,
-            DurationMs = result.Duration.TotalMilliseconds
+            DurationMs = result.Duration.TotalMilliseconds,
+            FileDiskPath = fileDiskPath
         });
     }
 
@@ -184,20 +210,52 @@ public class DocumentController : ControllerBase
 
         var results = await _ingestionPipeline.IngestBatchAsync(rawDocuments, config: config, ct);
 
+        // Save physical copies for successful documents
+        var diskPaths = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var webRoot = _env.WebRootPath ?? "wwwroot";
+            var uploadsDir = Path.Combine(webRoot, "uploads", tenantId);
+            Directory.CreateDirectory(uploadsDir);
+
+            foreach (var r in results)
+            {
+                if (r.Success)
+                {
+                    var rawDoc = rawDocuments.FirstOrDefault(d => string.Equals(d.FileName, r.FileName, StringComparison.OrdinalIgnoreCase));
+                    if (rawDoc != null)
+                    {
+                        var safeFileName = Path.GetFileName(rawDoc.FileName);
+                        var absolutePath = Path.Combine(uploadsDir, safeFileName);
+                        await System.IO.File.WriteAllBytesAsync(absolutePath, rawDoc.Content, ct);
+                        diskPaths[r.FileName] = Path.GetFullPath(absolutePath).Replace("\\", "/");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ Falha ao salvar cópia física dos arquivos do batch no disco.");
+        }
+
         return Ok(new
         {
             total = results.Count,
             succeeded = results.Count(r => r.Success),
             failed = results.Count(r => !r.Success),
-            results = results.Select(r => new
-            {
-                r.DocumentId,
-                r.FileName,
-                r.Success,
-                r.ChunksCreated,
-                r.TokensProcessed,
-                r.Error,
-                DurationMs = r.Duration.TotalMilliseconds
+            results = results.Select(r => {
+                diskPaths.TryGetValue(r.FileName, out var fileDiskPath);
+                return new
+                {
+                    r.DocumentId,
+                    r.FileName,
+                    r.Success,
+                    r.ChunksCreated,
+                    r.TokensProcessed,
+                    r.Error,
+                    DurationMs = r.Duration.TotalMilliseconds,
+                    FileDiskPath = fileDiskPath
+                };
             })
         });
     }

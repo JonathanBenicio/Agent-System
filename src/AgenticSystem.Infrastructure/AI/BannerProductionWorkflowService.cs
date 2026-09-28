@@ -39,14 +39,14 @@ public class BannerProductionWorkflowService
         );
         
         var renderFunc = AIFunctionFactory.Create(
-            (string path, decimal prc, int beds) => _skills.RenderBannerAsync(path, prc, beds),
+            (string path, decimal prc, int beds, string location, string phone) => _skills.RenderBannerAsync(path, prc, beds, location, phone),
             "RenderBannerAsync",
-            "Gera o banner publicitário final"
+            "Gera o banner publicitário final estilo ADM"
         );
 
         var actionAgent = new Microsoft.Agents.AI.ChatClientAgent(
             _actionChatClient,
-            "Voce recebe a analise visual. Siga ESTRITAMENTE estes passos na ordem: 1) Chame a ferramenta CleanImageAsync passando a analise. 2) Pegue o caminho da imagem limpa retornado e chame a ferramenta RenderBannerAsync passando o caminho limpo, o preco e os quartos. 3) Retorne ao usuario o resultado final com o caminho.",
+            "Voce recebe a analise visual. Siga ESTRITAMENTE estes passos na ordem: 1) Chame a ferramenta CleanImageAsync passando a analise. 2) Chame RenderBannerAsync informando o caminho, preco, quartos, bairro do imovel e seu telefone de contato.",
             "EditorChefe",
             "Editor Chefe",
             new[] { cleanFunc, renderFunc }

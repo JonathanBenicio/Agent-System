@@ -4,6 +4,7 @@ using AgenticSystem.Core.Services;
 using AgenticSystem.Core.Tools;
 using AgenticSystem.Infrastructure.AgentFramework;
 using AgenticSystem.Infrastructure.AI;
+using AgenticSystem.Infrastructure.BackgroundServices;
 using AgenticSystem.Infrastructure.Chunking;
 using AgenticSystem.Infrastructure.Configuration;
 using AgenticSystem.Infrastructure.Documents;
@@ -15,7 +16,6 @@ using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.RAG;
 using AgenticSystem.Infrastructure.Skills;
 using AgenticSystem.Infrastructure.Sync;
-using AgenticSystem.Infrastructure.BackgroundServices;
 using AgenticSystem.Infrastructure.LLM.BackgroundServices;
 using AgenticSystem.Infrastructure.LLM.Services;
 using AgenticSystem.Infrastructure.Services;
@@ -24,13 +24,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using DurableTask.PostgreSQL;
 using Microsoft.Agents.AI.DurableTask;
+using Microsoft.Agents.AI.DurableTask.Workflows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Pgvector.EntityFrameworkCore;
 using AgenticSystem.Core.Models;
-
+using Microsoft.DurableTask.Client;
 namespace AgenticSystem.Infrastructure.Extensions;
 
 public static class ServiceCollectionExtensions
@@ -172,10 +173,10 @@ public static class ServiceCollectionExtensions
 
         // Registros para Banner Production
         services.AddSingleton<AgenticSystem.Core.Skills.BannerProductionSkills>();
-        services.AddSingleton<AgenticSystem.Infrastructure.AI.DynamicMafWorkflowCompiler>();
-        services.AddSingleton<AgenticSystem.Infrastructure.AI.DurableWorkflowCompiler>();
+        services.AddScoped<AgenticSystem.Infrastructure.AI.DynamicMafWorkflowCompiler>();
+        services.AddScoped<AgenticSystem.Infrastructure.AI.DurableWorkflowCompiler>();
         
-        services.AddSingleton<AgenticSystem.Core.Interfaces.IDynamicWorkflowCompiler>(sp =>
+        services.AddScoped<AgenticSystem.Core.Interfaces.IDynamicWorkflowCompiler>(sp =>
         {
             var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
             if (string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
@@ -193,7 +194,7 @@ public static class ServiceCollectionExtensions
     private static IServiceCollection AddAgenticAgentFramework(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<ChatClientPlanner>();
-        services.AddSingleton<IAgentCollaborationWorkflow, AgentCollaborationWorkflow>();
+        services.AddScoped<IAgentCollaborationWorkflow, AgentCollaborationWorkflow>();
         services.AddSingleton<AgenticVectorStoreAdapter>();
         services.AddSingleton<IAgentChannelService, FrameworkAgentChannelService>();
         services.AddSingleton<AgenticSystem.Core.Interfaces.IAgentYamlValidator, AgenticSystem.Infrastructure.AgentFramework.AgentYamlValidator>();
@@ -208,29 +209,22 @@ public static class ServiceCollectionExtensions
             var orchestratorMetadata = OrchestratorMetadata.Default;
 
             services.AddSingleton(orchestratorMetadata);
-            services.AddSingleton<AgentFrameworkFactory>();
+            services.AddScoped<AgentFrameworkFactory>();
             services.AddSingleton<SimpleSessionStoreAdapter>();
-            services.AddSingleton<DurableSessionStoreAdapter>();
-
-            services.AddSingleton<Microsoft.Agents.AI.Hosting.AgentSessionStore>(sp =>
-            {
-                var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
-                if (string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
-                {
-                    return sp.GetRequiredService<DurableSessionStoreAdapter>();
-                }
-                return sp.GetRequiredService<SimpleSessionStoreAdapter>();
-            });
+            // AgentSessionStore: uses SimpleSessionStoreAdapter backed by PostgreSQL ISessionStore.
+            // This covers all deployment modes (Docker, bare-metal, cloud) without Azure Functions dependency.
+            services.AddSingleton<Microsoft.Agents.AI.Hosting.AgentSessionStore>(
+                sp => sp.GetRequiredService<SimpleSessionStoreAdapter>());
 
             services.AddSingleton<OrchestratorAuxiliaryToolService>();
             services.AddSingleton<OrchestratorInstructionService>();
-            services.AddSingleton<OrchestratorToolBindingService>();
+            services.AddScoped<OrchestratorToolBindingService>();
 
             services.AddSingleton<DbAgentSkillsSource>();
             services.AddSingleton<AgentSkillsProvider>();
             services.AddSingleton<Security.HyperlightSandboxedExecutor>();
 
-            services.AddSingleton<RAGContextProvider>(sp =>
+            services.AddScoped<RAGContextProvider>(sp =>
             {
                 var ragService = sp.GetService<IRAGService>();
                 if (ragService is null) return null!;
@@ -244,7 +238,7 @@ public static class ServiceCollectionExtensions
                     sp.GetRequiredService<ILLMRuntimeContextAccessor>());
             });
 
-            services.AddSingleton<OrchestratorHostBuilder>(sp =>
+            services.AddScoped<OrchestratorHostBuilder>(sp =>
                 new OrchestratorHostBuilder(
                     sp.GetRequiredService<IChatClient>(),
                     sp.GetRequiredService<ILoggerFactory>(),
@@ -261,10 +255,20 @@ public static class ServiceCollectionExtensions
                     sp.GetService<AgentSkillsProvider>(),
                     sp.GetService<ITenantContextAccessor>()));
 
-            services.AddSingleton<OrchestratorContextFactory>();
-            services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
+            services.AddScoped<OrchestratorContextFactory>();
+            services.AddScoped<OrchestratorContextState>();
+            services.AddScoped<OrchestratorContext>(sp =>
+            {
+                var state = sp.GetRequiredService<OrchestratorContextState>();
+                if (state.OrchestratorAgent == null)
+                {
+                    throw new InvalidOperationException("OrchestratorAgent is not initialized in OrchestratorContextState. Ensure build is called first.");
+                }
+                return new OrchestratorContext(state.OrchestratorAgent, state.SpecialistBindings?.ToList() ?? new List<AgentToolBinding>());
+            });
 
-            services.AddSingleton<IDirectAgentExecutionService>(sp =>
+            services.AddSingleton<IDirectAgentExecutionService, ScopedDirectAgentExecutionService>();
+            services.AddScoped<AgentFrameworkDirectExecutionService>(sp =>
                 new AgentFrameworkDirectExecutionService(
                     sp.GetRequiredService<AgentFrameworkFactory>(),
                     sp.GetRequiredService<Microsoft.Agents.AI.Hosting.AgentSessionStore>(),
@@ -332,7 +336,7 @@ public static class ServiceCollectionExtensions
         {
             services.AddSingleton<IAdvancedRetrievalService, InMemoryAdvancedRetrievalService>();
             services.AddSingleton<IKnowledgeRoomService, InMemoryKnowledgeRoomStore>();
-            services.AddSingleton<IAgentKnowledgeRoomStore, PostgresAgentKnowledgeRoomStore>();
+            services.AddScoped<IAgentKnowledgeRoomStore, PostgresAgentKnowledgeRoomStore>();
         }
         services.AddSingleton<IRAGService, RAGService>();
 
@@ -508,6 +512,7 @@ public static class ServiceCollectionExtensions
             ReplaceSingleton<IVectorStore, InMemoryVectorStore>(services);
             ReplaceSingleton<IExternalQuotaSyncService, InMemoryExternalQuotaSyncService>(services);
             ReplaceSingleton<IDynamicAgentRepository, InMemoryDynamicAgentRepository>(services);
+            ReplaceScoped<IGoldenSetRepository, AgenticSystem.Core.Services.InMemoryGoldenSetRepository>(services);
             return services;
         }
 
@@ -523,6 +528,7 @@ public static class ServiceCollectionExtensions
             ReplaceSingleton<IVectorStore, SqliteVectorStore>(services);
             ReplaceSingleton<IExternalQuotaSyncService, InMemoryExternalQuotaSyncService>(services);
             ReplaceSingleton<IDynamicAgentRepository, PostgresDynamicAgentRepository>(services);
+            ReplaceScoped<IGoldenSetRepository, PostgresGoldenSetRepository>(services);
             
             // Register MockEmbeddingGenerator for load testing
             services.AddSingleton<Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>>(new AgenticSystem.Infrastructure.Memory.MockEmbeddingGenerator());
@@ -554,6 +560,7 @@ public static class ServiceCollectionExtensions
         ReplaceSingleton<IPermissionService, PostgresPermissionService>(services);
         ReplaceSingleton<IPolicyStore, PostgresPolicyStore>(services);
         ReplaceSingleton<IExternalQuotaSyncService, ExternalQuotaSyncService>(services);
+        ReplaceScoped<IGoldenSetRepository, PostgresGoldenSetRepository>(services);
 
         var useInMemoryEventBus = configuration.GetValue<bool>("AgenticSystem:EventBus:UseInMemory");
 
@@ -573,6 +580,10 @@ public static class ServiceCollectionExtensions
         services.UsePostgresAdvancedIntelligence(connectionString);
         services.UsePostgresPlatformStores(connectionString);
 
+        // Quota persistence: replace in-memory repository with PostgreSQL-backed one.
+        ReplaceSingleton<ITenantQuotaRepository, TenantQuotaRepository>(services);
+        services.AddHostedService<DailyQuotaResetBackgroundService>();
+
         // Registro nativo do backend durável do DurableTask PostgreSQL usando inicializador de objetos para propriedades init-only
         var durableSettings = new PostgreSqlOrchestrationServiceSettings
         {
@@ -581,6 +592,26 @@ public static class ServiceCollectionExtensions
             AutoDeploySchema = true
         };
         services.AddDurableTaskPostgreSql(durableSettings);
+        services.ConfigureDurableWorkflows(options =>
+        {
+            // Ativa o suporte durável a workflows no Microsoft Agent Framework
+        });
+
+        services.AddDurableTaskClient(builder =>
+        {
+            builder.UseOrchestrationService();
+        });
+
+        // Registrar IWorkflowClient no contêiner de DI do Microsoft Agent Framework de forma resiliente e multi-tenant
+        services.AddSingleton<Microsoft.Agents.AI.DurableTask.Workflows.IWorkflowClient>(sp =>
+        {
+            var durableClient = sp.GetRequiredService<Microsoft.DurableTask.Client.DurableTaskClient>();
+            var clientType = typeof(Microsoft.Agents.AI.DurableTask.Workflows.IWorkflowClient).Assembly
+                .GetType("Microsoft.Agents.AI.DurableTask.Workflows.DurableWorkflowClient")
+                ?? throw new InvalidOperationException("Não foi possível resolver o tipo interno 'DurableWorkflowClient'.");
+            return (Microsoft.Agents.AI.DurableTask.Workflows.IWorkflowClient)Activator.CreateInstance(clientType, durableClient)!;
+        });
+
 
         services.ConfigureDurableAgents(options =>
         {
@@ -654,6 +685,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(factory);
     }
 
+    private static void ReplaceScoped<TService, TImplementation>(IServiceCollection services)
+        where TService : class
+        where TImplementation : class, TService
+    {
+        var descriptors = services.Where(d => d.ServiceType == typeof(TService)).ToList();
+        foreach (var descriptor in descriptors)
+        {
+            services.Remove(descriptor);
+        }
+
+        services.AddScoped<TService, TImplementation>();
+    }
+
     private static void EnsureDbContextRegistrations(IServiceCollection services, string connectionString)
     {
         if (services.Any(descriptor => descriptor.ServiceType == typeof(DbContextOptions<AgenticDbContext>)))
@@ -699,6 +743,17 @@ public static class ServiceCollectionExtensions
     public static IServiceProvider SeedInfrastructureTools(this IServiceProvider serviceProvider)
     {
         var toolManager = serviceProvider.GetRequiredService<IToolManager>();
+
+        // Registrar automaticamente todas as ferramentas adicionais (ITool) cadastradas no contêiner de DI (ex: BannerProductionTool)
+        var diTools = serviceProvider.GetServices<ITool>();
+        foreach (var tool in diTools)
+        {
+            if (tool != null)
+            {
+                toolManager.RegisterTool(tool);
+            }
+        }
+
         var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
         var logger = serviceProvider.GetRequiredService<ILogger<HttpTool>>();
         var httpClient = httpClientFactory.CreateClient("AgenticTools");

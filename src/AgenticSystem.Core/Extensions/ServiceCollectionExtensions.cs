@@ -21,7 +21,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddMemoryCache();
 
-        services.AddSingleton<IMetaAgent, MetaAgentOrchestrator>();
+        services.AddScoped<IMetaAgent, MetaAgentOrchestrator>();
         services.AddSingleton<IContextAnalyzer, ContextAnalyzer>();
         services.AddSingleton<IAgentFactory, HierarchicalAgentFactory>();
         services.AddSingleton<IAgentMemoryStore, InMemoryAgentMemoryStore>();
@@ -175,6 +175,7 @@ public static class ServiceCollectionExtensions
         // Agent Evaluation
         services.AddSingleton<IEvalResultStore, InMemoryEvalResultStore>();
         services.AddSingleton<IAgentEvaluationService, AgentEvaluationService>();
+        services.AddSingleton<IGoldenSetRepository, InMemoryGoldenSetRepository>();
 
         // Structured Output Validation
         services.AddSingleton<IStructuredOutputValidator, StructuredOutputValidator>();
@@ -215,11 +216,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDataConnectorManager, DataConnectorManager>();
         services.AddSingleton<ITenantIsolationEnforcer, TenantIsolationService>();
         services.AddSingleton<IAgentMarketplace, InMemoryAgentMarketplace>();
-        services.AddSingleton<IAdminConsole, AdminConsoleService>();
+        services.AddScoped<IAdminConsole, AdminConsoleService>();
         services.AddSingleton<IComplianceService, ComplianceService>();
         services.AddSingleton<IMemoryLifecycleStore, InMemoryMemoryLifecycleStore>();
 
         // Phase 5 — Enterprise Scoping & Sandboxing
+        // Default in-memory quota repository — overridden by TenantQuotaRepository in PostgreSQL mode.
+        services.AddSingleton<ITenantQuotaRepository, InMemoryTenantQuotaRepository>();
         services.AddSingleton<IQuotaEnforcer, QuotaEnforcer>();
         services.AddSingleton<IAgentSandbox, AgentSandbox>();
 
