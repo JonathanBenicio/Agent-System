@@ -1,6 +1,7 @@
 # CONSOLIDATED_DOCS.md
 
 > Contratos operacionais atuais: [hub do backend](docs/backend/README.md). Evidências: [validação](docs/backend/validation/2026-09-28.md).
+> Correções da revisão: [PR #118](docs/backend/validation/2026-09-28-review-fixes.md).
 
 Este arquivo foi substituído por um índice de navegação. Consulte a documentação canônica diretamente:
 

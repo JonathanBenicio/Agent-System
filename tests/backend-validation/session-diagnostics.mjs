@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHmac } from 'node:crypto';
-const directory = resolve(import.meta.dirname, '../TestResults/backend-documentation');
+import { messageSnapshot, assertMessagesPersisted } from './evidence.mjs';
+const directory = resolve(import.meta.dirname, '../TestResults/backend-documentation/current');
 const core = JSON.parse(readFileSync(resolve(directory, 'core-results.json'), 'utf8'));
 const tenant = core.run + '-a', otherTenant = core.run + '-b', alice = core.run + '-alice';
 const phase = process.argv.includes('--after-restart') ? 'after-restart' : 'before-restart';
@@ -21,9 +22,15 @@ async function test(id, criterion, fn) {
   console.log(id+': '+results.at(-1).result+' — '+results.at(-1).detail);
 }
 function check(value,detail){if(!value)throw new Error(detail);}
-const listed=await req('/api/session');
+const fixture = JSON.parse(readFileSync(resolve(directory, 'session-fixture.json'), 'utf8'));
+if (fixture.run !== core.run || fixture.baseline !== core.baseline) throw new Error('Fixture belongs to another run/revision');
 const previous=phase==='after-restart'?JSON.parse(readFileSync(resolve(directory,'session-before-restart.json'),'utf8')):null;
-const id=previous?.sessionId||listed.data?.[0]?.id;
+if (previous && (previous.run !== core.run || previous.baseline !== core.baseline)) {
+  throw new Error('Before/after restart artifacts belong to different runs or revisions');
+}
+const id = fixture.sessionId;
+if (previous && previous.sessionId !== id) throw new Error('Session changed between restart phases');
+let messagesSnapshot;
 await test('SESSION-READ-'+phase,'persisted session is visible only to its owner and tenant',async()=>{
   check(id,'no persisted session');
   const own=await req('/api/session/'+id),foreign=await req('/api/session/'+id,core.run+'-bob'),cross=await req('/api/session/'+id,alice,otherTenant);
@@ -37,10 +44,13 @@ if(!previous)await test('SESSION-TITLE','title change is persisted and foreign o
   check(correct.status===200&&foreign.status===404,'edit='+correct.status+' foreign='+foreign.status);
   return 'title=200 foreign=404';
 });
-await test('SESSION-MESSAGES-'+phase,'message endpoint enforces ownership',async()=>{
+await test('SESSION-MESSAGES-'+phase,'message ownership and nonempty content persist across restart',async()=>{
   const own=await req('/api/session/'+id+'/messages'),foreign=await req('/api/session/'+id+'/messages',core.run+'-bob');
   check(own.status===200&&Array.isArray(own.data)&&foreign.status===404,'status='+own.status+' foreign='+foreign.status);
-  return 'owner messages=200 other-user=404';
+  messagesSnapshot = messageSnapshot(own.data);
+  check(own.data.some(m=>m.role==='user'&&m.content===fixture.prompt)&&own.data.some(m=>m.role==='assistant'&&m.content===fixture.answer),'known fixture messages missing');
+  if (previous) assertMessagesPersisted(previous.messagesSnapshot, messagesSnapshot);
+  return 'owner messages=200 other-user=404; count='+messagesSnapshot.count+(previous?'; content/IDs/order/timestamps survived restart':'; snapshot captured');
 });
-writeFileSync(resolve(directory,'session-'+phase+'.json'),JSON.stringify({baseline:core.baseline,sessionId:id,phase,context:'sessions created by failing chat; validates persistence/CRUD, not successful conversation',results},null,2)+'\n');
+writeFileSync(resolve(directory,'session-'+phase+'.json'),JSON.stringify({baseline:core.baseline,run:core.run,sessionId:id,phase,messagesSnapshot,context:'known synthetic messages saved via real PostgreSQL store; validates persistence/CRUD, not successful LLM conversation',results},null,2)+'\n');
 if(results.some(r=>r.result==='failed'))process.exitCode=1;

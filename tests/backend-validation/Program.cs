@@ -51,6 +51,34 @@ const string connection = "Host=127.0.0.1;Port=55432;Database=backend_validation
 var accessor = new TenantContextAccessor();
 var options = new DbContextOptionsBuilder<AgenticDbContext>().UseNpgsql(connection, o => o.UseVector()).Options;
 var factory = new ValidationFactory(options, accessor);
+if (args.Contains("--session-fixture"))
+{
+    // Synthetic known messages via the real store, independent of failed LLM conversations.
+    var directory = Path.Combine(repositoryRoot, "tests", "TestResults", "backend-documentation", "current");
+    using var core = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "core-results.json")));
+    var run = core.RootElement.GetProperty("run").GetString()!;
+    if (!System.Text.RegularExpressions.Regex.IsMatch(run, "^doc-[a-f0-9]{8}$")) throw new InvalidOperationException("Invalid diagnostic run.");
+    var fixtureTenant = run + "-a";
+    using var fixtureScope = accessor.BeginScope(new TenantContext { TenantId = fixtureTenant });
+    await using var db = factory.CreateDbContext();
+    if (!await db.Tenants.AnyAsync(t => t.Id == fixtureTenant)) throw new InvalidOperationException("Core diagnostic tenant missing.");
+    var fixtureId = "persistence-" + Guid.NewGuid().ToString("N");
+    var prompt = "Persistence fixture prompt " + run;
+    var answer = "Persistence fixture answer " + run;
+    var store = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance);
+    await store.SaveAsync(new SessionData
+    {
+        Id = fixtureId, UserId = run + "-alice", TenantId = fixtureTenant, StartedAt = DateTime.UtcNow,
+        Events = [new AgentEvent { SessionId = fixtureId, AgentName = "PersistenceFixture", UserInput = prompt, AgentResponse = answer }]
+    });
+    await File.WriteAllTextAsync(Path.Combine(directory, "session-fixture.json"), JsonSerializer.Serialize(new
+    {
+        run, baseline = core.RootElement.GetProperty("baseline").GetString(), sessionId = fixtureId, prompt, answer,
+        context = "Synthetic known messages saved through real PostgreSQL session store; no successful LLM chat claimed."
+    }, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine("Known-message persistence fixture saved.");
+    return;
+}
 var tenant = "store-" + Guid.NewGuid().ToString("N")[..8];
 var otherTenant = tenant + "-other";
 var results = new List<object>();
