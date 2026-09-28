@@ -356,6 +356,9 @@ Para maximizar a precisão contextual sem estourar a janela de contexto dos mode
                       Contexto RAG Final
 ```
 
+### 8.3 Filtragem SQL-Nativa por Salas (Knowledge Rooms)
+Para garantir isolamento e performance na recuperação de documentos, a filtragem de documentos baseada em salas de conhecimento (`room_ids`) é feita de forma nativa no banco de dados. O `PostgresVectorStore` executa a busca de vetores (`pgvector`) combinada com uma filtragem SQL direta sobre o campo de metadados em formato JSONB, em vez de realizar uma filtragem in-memory após a recuperação. Isso reduz drasticamente a latência e o consumo de memória sob carga.
+
 ---
 
 ## 9. Middleware Pipeline e Auto-Ajuste (Correction Loop)

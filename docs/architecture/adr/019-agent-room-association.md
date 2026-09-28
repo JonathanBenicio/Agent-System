@@ -1,6 +1,6 @@
 # ADR-019: Associação Granular Agente-Sala (Contexto Restrito)
 
-**Status:** Proposto  
+**Status:** Aprovado\
 **Data:** 2026-05-18  
 **Decisores:** Equipe de Arquitetura  
 **Contexto:** Track 1 — Specialized Context (Roadmap Q2 2026)
@@ -108,3 +108,7 @@ Usar sub-tenants para isolamento.
 - US-41: Associar Agente a Knowledge Rooms
 - ADR-012: Multi-Tenant Agent Memory Schema
 - ADR-005: pgvector + Graph RAG
+
+## Nota de Implementação
+
+A associação granular entre agentes e Knowledge Rooms foi totalmente implementada e integrada. Para evitar in-memory filtering e otimizar a performance em tempo de consulta, a filtragem de documentos baseada em salas de conhecimento (`room_ids`) foi desenvolvida no nível de banco de dados no `PostgresVectorStore`. A busca utiliza consultas SQL nativas que filtram os registros comparando o array de IDs de salas contra o metadado estruturado em JSONB contido na tabela do pgvector, garantindo o isolamento contextual rigoroso e uma latência de busca otimizada.
