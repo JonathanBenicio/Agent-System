@@ -1,5 +1,5 @@
 # Plano — Documentação e validação do backend
-Status: entregue com pendências de produto; PR draft em preparação
+Status: entregue para revisão; PR draft [#118](https://github.com/JonathanBenicio/Agent-System/pull/118)
 Issue: [#110](https://github.com/JonathanBenicio/Agent-System/issues/110)
 ADR: [034](../architecture/adr/034-backend-contracts-and-access-target.md)
 Story: BACK-DOC-001 em [catálogo](../USER-STORIES.md)
@@ -18,7 +18,7 @@ Consolidar endpoints/regras/tenants/recursos/evidências e melhorar/executar o p
 - [x] Executar diagnóstico com PostgreSQL/pgvector e Ollama isolados, incluindo restart da API.
 - [x] Registrar resultados, cobertura, limitações e backlog #111–#117: 24 passaram, 9 falharam, 2 não executados; cobertura 22,39%.
 - [x] Sincronizar índices/links: 631 links locais verificados, zero destinos quebrados no escopo vivo.
-- [ ] Entregar commits/PR draft rastreável.
+- [x] Entregar commits/PR draft rastreável: [#118](https://github.com/JonathanBenicio/Agent-System/pull/118), commits locais 8aae1da/6457104 e de revisão remota be058e9/ce0dfe7, todos com Refs #110.
 
 ## Verificação
 Links e exemplos confrontados com código; inventário regenerável. Build/suíte/cobertura separados de estabilidade integrada. Cenários: auth/troca de tenant, salas/ACL/RAG, sessões/chat/SSE/SignalR, limites e persistência. Dois tenants e identidades sintéticas. Serviços reais; sem mocks de LLM/PG.
@@ -28,3 +28,5 @@ Download/recursos/startup podem limitar diagnóstico: reportar falhou/não execu
 
 ## Resultado e próximos passos
 Nenhum código/schema de produção alterado. Falhas centrais reproduzidas em API key, query de tenant SignalR, SQL/guard de RAG, chat MAF, concorrência de quotas e seeding de skills. [Backlog](../backend/backlog.md) define ordem e critérios. Memberships/suporte/limites unificados permanecem desenho futuro. A conclusão desta auditoria não certifica estabilidade do backend nem autoriza merge/deploy.
+
+O checkout remoto do PR ainda possui referências a fontes/planos existentes somente na baseline local, além de um link file:/// preexistente da base. Seu checker não passa antes de alinhar a base. A verificação de 631 links/zero quebrados refere-se exclusivamente à revisão local validada. PR não é certificado como reprodutível em b681722. Serviços isolados foram parados; volumes e evidências locais conservados.
