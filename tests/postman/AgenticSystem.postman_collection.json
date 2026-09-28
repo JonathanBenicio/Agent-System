@@ -365,7 +365,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "[\n  \"e2e-room-id\"\n]",
               "options": {
                 "raw": {
                   "language": "json"
@@ -432,7 +432,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "[\n  \"e2e-room-id\"\n]",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3413,6 +3413,16 @@
                 "skills",
                 "upload"
               ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
             }
           },
           "event": [
@@ -4158,6 +4168,76 @@
                   "if (pm.response.text().length > 0 && pm.response.headers.get('Content-Type') && pm.response.headers.get('Content-Type').includes('application/json')) {",
                   "    pm.test(\"Estrutura da resposta e um JSON valido\", function () {",
                   "        pm.expect(pm.response.json()).to.be.an('object');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "id": "df3ebdb7-c960-4b62-8d57-c6cd79a887dc",
+          "name": "[POST] Enviar Comando de Workflow no Chat (E2E)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/chat",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "chat"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"Por favor, produza um banner para o imóvel de 3 quartos com preço de R$ 320.000 usando a foto {{ingested_file_path}}.\",\n  \"targetAgent\": \"EditorChefe\",\n  \"context\": {\n    \"imagePath\": \"{{ingested_file_path}}\",\n    \"price\": 320000,\n    \"bedrooms\": 3\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// 1. Validação padrão de Status Code operacional",
+                  "pm.test(\"Status code operacional aceito\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 202, 204]);",
+                  "});",
+                  "",
+                  "// 2. Validação padrão de Tempo de Resposta (Performance)",
+                  "pm.test(\"Tempo de resposta dentro do limite de 1000ms\", function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "});",
+                  "",
+                  "// 3. Validação de retorno no chat",
+                  "if (pm.response.text().length > 0) {",
+                  "    var jsonData = pm.response.json();",
+                  "    pm.test(\"Retornou resposta do Meta-Agent\", function () {",
+                  "        pm.expect(jsonData.response || jsonData.message).to.be.a('string');",
                   "    });",
                   "}"
                 ],
@@ -5367,6 +5447,16 @@
                   "disabled": true
                 }
               ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": []
+                }
+              ]
             }
           },
           "event": [
@@ -5384,11 +5474,13 @@
                   "    pm.expect(pm.response.responseTime).to.be.below(1000);",
                   "});",
                   "",
-                  "// 3. Validação de formato da resposta (JSON) se houver corpo",
-                  "if (pm.response.text().length > 0 && pm.response.headers.get('Content-Type') && pm.response.headers.get('Content-Type').includes('application/json')) {",
-                  "    pm.test(\"Estrutura da resposta e um JSON valido\", function () {",
-                  "        pm.expect(pm.response.json()).to.be.an('object');",
-                  "    });",
+                  "// 3. Extração do caminho físico do arquivo no disco do servidor",
+                  "if (pm.response.code === 200) {",
+                  "    var jsonData = pm.response.json();",
+                  "    if (jsonData.fileDiskPath) {",
+                  "        pm.collectionVariables.set(\"ingested_file_path\", jsonData.fileDiskPath);",
+                  "        console.log(\"ingested_file_path definida com sucesso:\", jsonData.fileDiskPath);",
+                  "    }",
                   "}"
                 ],
                 "type": "text/javascript"
@@ -5430,6 +5522,16 @@
                   "value": "",
                   "description": "",
                   "disabled": true
+                }
+              ]
+            },
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": []
                 }
               ]
             }
@@ -8875,7 +8977,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "{\n  \"prompt\": \"Executar ferramenta de teste\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -11434,7 +11536,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "{\n  \"webhookUrl\": \"http://localhost:8080/api/webhooks/receive/test\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -12907,7 +13009,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "{\n  \"event\": \"test-webhook\",\n  \"data\": {\n    \"message\": \"Olá do Postman E2E!\"\n  }\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -13254,7 +13356,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{}",
+              "raw": "{\n  \"contextVar1\": \"value1\",\n  \"contextVar2\": 42\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -13504,6 +13606,81 @@
               }
             }
           ]
+        },
+        {
+          "id": "5e0264c2-ca2a-496f-8b8d-82ef397d1bcf",
+          "name": "[POST] Iniciar Workflow banner-production (E2E)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-Api-Key",
+                "value": "{{api_key}}",
+                "type": "text"
+              },
+              {
+                "key": "X-Tenant-Id",
+                "value": "{{tenant_id}}",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{jwt_token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/workflow/executions/start/banner-production",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "workflow",
+                "executions",
+                "start",
+                "banner-production"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"imagePath\": \"{{ingested_file_path}}\",\n  \"price\": 320000,\n  \"bedrooms\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// 1. Validação padrão de Status Code operacional",
+                  "pm.test(\"Status code operacional aceito\", function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 201, 202, 204]);",
+                  "});",
+                  "",
+                  "// 2. Validação padrão de Tempo de Resposta (Performance)",
+                  "pm.test(\"Tempo de resposta dentro do limite de 1000ms\", function () {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(1000);",
+                  "});",
+                  "",
+                  "// 3. Extração do Run ID para acompanhamento do progresso",
+                  "if (pm.response.code === 200 || pm.response.code === 202) {",
+                  "    var jsonData = pm.response.json();",
+                  "    var runId = jsonData.executionId || jsonData.runId || jsonData.id;",
+                  "    if (runId) {",
+                  "        pm.collectionVariables.set(\"workflow_run_id\", runId);",
+                  "        console.log(\"workflow_run_id definida com sucesso:\", runId);",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
         }
       ]
     }
@@ -13548,6 +13725,12 @@
       "key": "skill_id",
       "value": "skill-postman-e2e",
       "type": "string"
+    },
+    {
+      "key": "ingested_file_path",
+      "value": "/assets/apartment-front.jpg",
+      "type": "string",
+      "description": "Caminho físico absoluto da foto ingerida no disco do servidor local, alimentado dinamicamente pelo upload."
     }
   ]
 }
