@@ -2,6 +2,7 @@ import { createHmac, createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { assertSessionDenied, assertHubDenied, HubAuthorizationError } from './evidence.mjs';
 const root = resolve(import.meta.dirname, '../..');
 const base = 'http://127.0.0.1:5188'; // Fixed loopback target: never production.
 const compose = resolve(import.meta.dirname, 'compose.yml');
@@ -33,6 +34,12 @@ async function test(id, criterion, fn) {
 }
 async function hubInvoke(token, tenantQuery, hub, target, args) {
   const messages = []; let socket;
+  const query = tenantQuery ? '&X-Tenant-Id=' + encodeURIComponent(tenantQuery) : '';
+  const negotiation = await fetch(base + hub + '/negotiate?negotiateVersion=1' + query, {
+    method: 'POST', headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(10000)
+  });
+  if (negotiation.status === 403) throw new HubAuthorizationError('HTTP 403 at hub negotiation');
+  check(negotiation.ok, 'hub negotiation status=' + negotiation.status);
   try {
     await new Promise((ok, reject) => {
       socket = new WebSocket(base.replace('http:', 'ws:') + hub + '?access_token=' + encodeURIComponent(token) + (tenantQuery ? '&X-Tenant-Id=' + encodeURIComponent(tenantQuery) : ''));
@@ -42,9 +49,16 @@ async function hubInvoke(token, tenantQuery, hub, target, args) {
       socket.onclose = () => { clearTimeout(timeout); reject(new Error('hub closed before completion')); };
       socket.onmessage = event => {
         for (const part of String(event.data).split('\u001e').filter(Boolean)) {
-          const message = JSON.parse(part); messages.push(message);
+          let message;
+          try { message = JSON.parse(part); }
+          catch (error) { clearTimeout(timeout); reject(error); return; }
+          messages.push(message);
           if (message.type === undefined && !message.error) socket.send(JSON.stringify({ type: 1, invocationId: '1', target, arguments: args }) + '\u001e');
-          if (message.error) { clearTimeout(timeout); reject(new Error('hub invocation rejected')); }
+          if (message.error) {
+            clearTimeout(timeout);
+            const explicitTenantDenial = /^Strict Multi-Tenancy Violation: (?:No active Tenant Context resolved for this hub invocation\.|A valid Tenant Context is required to connect to this Hub\.)$/.test(message.error);
+            reject(explicitTenantDenial ? new HubAuthorizationError(message.error) : new Error('hub error: ' + message.error));
+          }
           if (message.type === 3) { clearTimeout(timeout); ok(); }
         }
       };
@@ -79,14 +93,14 @@ await test('RAG-02', 'upload and tenant stats isolation', async () => { const fo
 let session;
 await test('CHAT-01', 'synchronous chat succeeds and creates session', async () => { const r=await request('/api/chat',{method:'POST',body:{message:'Responda brevemente: olá.',provider:'Ollama',model:'qwen2.5:0.5b'}});session=r.data?.sessionId;check(r.status===200&&r.data?.success===true&&r.data.content?.length&&session,'status='+r.status+'; success='+r.data?.success+'; session='+Boolean(session)+'; error='+(r.data?.errorMessage||r.data?.error||''));return '200 success=true; session created'; });
 await test('SESSION-01', 'session persisted and other user/tenant denied', async () => { check(session,'dependency CHAT-01');const own=await request('/api/session/'+session);const other=await request('/api/session/'+session,{token:jwt(bob,tenantA)});const cross=await request('/api/session/'+session,{token:jwt(alice,tenantB)});check(own.status===200&&other.status===404&&cross.status===404,'own/other/cross='+[own.status,other.status,cross.status]);return '200/404/404'; });
-await test('CHAT-02', 'other user cannot resume session', async () => { check(session,'dependency CHAT-01');const r=await request('/api/chat',{token:jwt(bob,tenantA),method:'POST',body:{message:'Continue.',sessionId:session,provider:'Ollama',model:'qwen2.5:0.5b'}});check([403,404].includes(r.status)||(r.data?.success===false),'foreign session resumed: status='+r.status+' success='+r.data?.success);return 'denied'; });
+await test('CHAT-02', 'other user cannot resume session', async () => { check(session,'dependency CHAT-01');const r=await request('/api/chat',{token:jwt(bob,tenantA),method:'POST',body:{message:'Continue.',sessionId:session,provider:'Ollama',model:'qwen2.5:0.5b'}});return assertSessionDenied(r); });
 await test('SSE-01', 'SSE terminates successfully with structured events', async () => { const r=await request('/api/chat/stream',{method:'POST',body:{message:'Diga olá brevemente.',provider:'Ollama',model:'qwen2.5:0.5b'}});check(r.status===200&&r.contentType?.startsWith('text/event-stream'),'status='+r.status);const events=[...r.text.matchAll(/^data: (.+)$/gm)].map(m=>JSON.parse(m[1]));check(events.some(e=>e.Type===22)&&!events.some(e=>e.Type===23),'terminal sessioncompleted missing or error present; types='+events.map(e=>e.Type));return 'events='+events.length+'; Type numeric/PascalCase confirmed'; });
 await test('HUB-01', 'valid SignalR gateway invocation', async () => { const events=await hubInvoke(jwt(alice,tenantA),null,'/hubs/gateway','GetDashboard',[]);check(events.some(e=>e.target==='DashboardUpdate'),'no DashboardUpdate');return 'handshake/invocation completed'; });
-await test('HUB-02', 'query tenant override rejected', async () => { let accepted=false;try{await hubInvoke(jwt(alice,tenantA),tenantB,'/hubs/gateway','GetDashboard',[]);accepted=true;}catch{}check(!accepted,'cross-tenant query accepted and method completed');return 'rejected'; });
-await test('HUB-03', 'unknown query tenant rejected', async () => { let accepted=false;try{await hubInvoke(jwt(alice,tenantA),run+'-unknown','/hubs/gateway','GetDashboard',[]);accepted=true;}catch{}check(!accepted,'unknown query tenant accepted and method completed');return 'rejected'; });
+await test('HUB-02', 'query tenant override rejected', async () => { check(results.find(r=>r.id==='HUB-01')?.result==='passed','dependency HUB-01');return assertHubDenied(()=>hubInvoke(jwt(alice,tenantA),tenantB,'/hubs/gateway','GetDashboard',[])); });
+await test('HUB-03', 'unknown query tenant rejected', async () => { check(results.find(r=>r.id==='HUB-01')?.result==='passed','dependency HUB-01');return assertHubDenied(()=>hubInvoke(jwt(alice,tenantA),run+'-unknown','/hubs/gateway','GetDashboard',[])); });
 await test('HUB-04', 'SignalR chat returns terminal success', async () => { const events=await hubInvoke(jwt(alice,tenantA),null,'/hubs/chat','SendMessage',['Olá.',null,'Ollama','qwen2.5:0.5b',null,null,null]);const terminal=events.find(e=>e.target==='ReceiveMessage');check(terminal?.arguments?.[0]?.success===true,'no successful ReceiveMessage; events='+events.map(e=>e.target).filter(Boolean));return 'ReceiveMessage success=true'; });
 await test('RATE-01', 'HTTP rate limit and tenant partition', async () => { const statuses=[];for(let i=0;i<35;i++)statuses.push((await request('/api/chat',{method:'POST',body:{message:''}})).status);const b=await request('/api/chat',{token:jwt(alice,tenantB),method:'POST',body:{message:''}});check(statuses.includes(429)&&b.status===400,'429 present='+statuses.includes(429)+'; tenant B='+b.status);return '429 observed; other tenant 400 validation'; });
-const directory=resolve(root,'tests/TestResults/backend-documentation');mkdirSync(directory,{recursive:true});
+const directory=resolve(root,'tests/TestResults/backend-documentation/current');mkdirSync(directory,{recursive:true});
 writeFileSync(resolve(directory,'core-results.json'),JSON.stringify({baseline:'f8de7a6e3aa9d671a67ae60f2f52e0c1f80b3eae',run,services:'real PostgreSQL/pgvector and Ollama; no mock LLM',results},null,2)+'\n');
 console.log(JSON.stringify({passed:results.filter(r=>r.result==='passed').length,failed:results.filter(r=>r.result==='failed').length}));
 if(results.some(r=>r.result==='failed'))process.exitCode=1;
