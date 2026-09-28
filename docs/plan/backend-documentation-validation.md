@@ -6,7 +6,7 @@ Story: BACK-DOC-001 em [catálogo](../USER-STORIES.md)
 Baseline: f8de7a6e3aa9d671a67ae60f2f52e0c1f80b3eae, 2026-09-28.
 Branch local: docs/backend-contracts-validation (baseline f8de7a6).
 Branch de revisão remota: docs/backend-contracts-review; base: feature/opencode-gemini.
-Os 12 commits preexistentes da baseline não foram publicados por esta iniciativa. O PR recebe somente arquivos desta entrega; alinhar a base com a baseline antes de merge e de reproduzir diagnósticos a partir do PR.
+Sincronização 2026-09-28: o usuário publicou os 12 commits preexistentes; origin/feature/opencode-gemini está na baseline f8de7a6. A branch do PR incorporou essa base pelo merge 68ea51e, preservando os contratos e as revisões documentais.
 
 ## Objetivo e limites
 Consolidar endpoints/regras/tenants/recursos/evidências e melhorar/executar o processo. Sem mudanças de produção/schema, merge/deploy. Preservar alterações do usuário.
@@ -29,4 +29,4 @@ Download/recursos/startup podem limitar diagnóstico: reportar falhou/não execu
 ## Resultado e próximos passos
 Nenhum código/schema de produção alterado. Falhas centrais reproduzidas em API key, query de tenant SignalR, SQL/guard de RAG, chat MAF, concorrência de quotas e seeding de skills. [Backlog](../backend/backlog.md) define ordem e critérios. Memberships/suporte/limites unificados permanecem desenho futuro. A conclusão desta auditoria não certifica estabilidade do backend nem autoriza merge/deploy.
 
-O checkout remoto do PR ainda possui referências a fontes/planos existentes somente na baseline local, além de um link file:/// preexistente da base. Seu checker não passa antes de alinhar a base. A verificação de 631 links/zero quebrados refere-se exclusivamente à revisão local validada. PR não é certificado como reprodutível em b681722. Serviços isolados foram parados; volumes e evidências locais conservados.
+Após sincronização, o checkout da branch do PR passou no checker: 143 arquivos, 631 links, zero destinos quebrados. `dotnet build tests/backend-validation/BackendDiagnostics.csproj --configuration Release --verbosity quiet` passou com zero erros e 11 warnings preexistentes. O primeiro P1 da revisão (base ausente/harness sem compilação) foi resolvido. Os cenários integrados não foram reexecutados nesta sincronização; os demais achados da revisão sobre asserções negativas, consolidação de resultados e persistência de mensagens permanecem pendentes. Serviços isolados continuam parados; volumes e evidências locais conservados. Merge do PR/deploy não executados.
