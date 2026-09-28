@@ -1,5 +1,14 @@
 # Documentação — AgenticSystem
 
+## Backend: contratos e evidências
+
+- [Hub](backend/README.md)
+- [API do núcleo](backend/api-core.md) e [inventário](backend/endpoint-inventory.md)
+- [Schemas dos DTOs](backend/request-schemas.md) e [OpenAPI Release](backend/openapi-release.json)
+- [Tenants/acesso](backend/access-tenants.md), [recursos](backend/resources-rules.md), [transportes](backend/transports.md)
+- [Operação](backend/operations.md), [validação](backend/validation/2026-09-28.md), [backlog](backend/backlog.md)
+- [ADR-034](architecture/adr/034-backend-contracts-and-access-target.md), [plano](plan/backend-documentation-validation.md), [templates](../templates/README.md)
+
 Índice de navegação da documentação do projeto, organizado por papel documental.
 
 Documento canônico de arquitetura atual:
@@ -73,6 +82,10 @@ Documento canônico de arquitetura atual:
 | [architecture/adr/027-maf-1-6-1-migration-architecture.md](architecture/adr/027-maf-1-6-1-migration-architecture.md) | ADR 027: Migração Completa para o Microsoft Agent Framework (MAF) 1.6.1 |
 | [architecture/adr/028-db-skills-dynamic-system.md](architecture/adr/028-db-skills-dynamic-system.md) | ADR 028: Implementação do DbAgentSkillsSource e CRUD de Skills via Tela |
 | [architecture/adr/029-dynamic-maf-workflows-engine.md](architecture/adr/029-dynamic-maf-workflows-engine.md) | ADR 029: Orquestração Dinâmica de Grafos de Agentes baseada no MAF |
+| [architecture/adr/030-maf-durable-task-migration.md](architecture/adr/030-maf-durable-task-migration.md) | ADR 030: Workflows, sessões PostgreSQL e resposta HTTP assíncrona |
+| [architecture/adr/031-pgvector-sql-filter-tenant-quota-persistence.md](architecture/adr/031-pgvector-sql-filter-tenant-quota-persistence.md) | ADR 031: Filtro SQL-Nativo no PGVector e Persistência de Quotas de Tenant |
+| [architecture/adr/032-evaluation-golden-sets-rest-api.md](architecture/adr/032-evaluation-golden-sets-rest-api.md) | ADR 032: Contratos REST para CRUD de Golden Sets da Evaluation Suite |
+| [architecture/adr/033-maf-190-upgrade-di-cleanup.md](architecture/adr/033-maf-190-upgrade-di-cleanup.md) | ADR 033: Migração do Microsoft Agent Framework para 1.9.0 e Saneamento de DI |
 | [architecture/adr/ADR-004-MAF-Native-LLM-Clients.md](architecture/adr/ADR-004-MAF-Native-LLM-Clients.md) | ADR 004: Migração para Clientes Nativos do Microsoft Agent Framework (MAF 1.6+) |
 | [architecture/adr/ADR-005-MAF-Native-Workflows.md](architecture/adr/ADR-005-MAF-Native-Workflows.md) | ADR 005: Migração para Workflows Nativos do Microsoft Agent Framework (MAF 1.6+) |
 | [architecture/adr/ADR-006-MAF-Native-Skills.md](architecture/adr/ADR-006-MAF-Native-Skills.md) | ADR 006: Padronização do Skills Framework com MAF Nativo |
@@ -119,11 +132,19 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 
 | Documento | Descrição |
 |-----------|-----------|
+| [plan/pending-changes-review-2026-09-28.md](plan/pending-changes-review-2026-09-28.md) | Revisão de alterações pendentes e validações de 28/09/2026 |
+| [plan/di-upgrade-1-9-0.md](plan/di-upgrade-1-9-0.md) | Implementação e verificação da atualização MAF 1.9.0 e DI |
+| [plan/golden-set-api.md](plan/golden-set-api.md) | Plano de CRUD e avaliação de Golden Sets |
+| [plan/phase-3-backend-gaps.md](plan/phase-3-backend-gaps.md) | Complementos de Golden Sets e execução assíncrona |
+| [plan/backend-architecture-audit.md](plan/backend-architecture-audit.md) | Roadmap/Plan: Backend Architectural Audit & Technical Diagnosis Report |
+| [plan/phase-1-critical-fixes.md](plan/phase-1-critical-fixes.md) | Roadmap/Plan: Fase 1 — Correções Críticas de Segurança e Corretude |
+| [plan/phase-2-maf-migration.md](plan/phase-2-maf-migration.md) | Roadmap/Plan: Fase 2 — Saneamento de DI e Migração MAF 1.9.0 |
+| [plan/phase-3-roadmap-completion.md](plan/phase-3-roadmap-completion.md) | Roadmap/Plan: Fase 3 — Completar Tracks do Roadmap Q2 2026 |
 | [plan/completed/onnx-in-process.md](plan/completed/onnx-in-process.md) | Roadmap/Plan: Dynamic ONNX In-Process Inference Engine (Issue #74) |
 | [plan/completed/automatic-llm-inspection-plan.md](plan/completed/automatic-llm-inspection-plan.md) | Roadmap/Plan: Inspeção Automática de Modelos LLM no Login (Issue #94) |
 | [plan/gap-mitigation-plan.md](plan/gap-mitigation-plan.md) | Roadmap/Plan: Mitigação de Gaps Técnicos de Segurança e Performance (Issues #76, #77, #78, #79) |
-| [plan/bug-chat-workflow.md](plan/bug-chat-workflow.md) | Bug Fix Plan: Resposta do chat não aparece no frontend |
-| [plan/multi-provider-api-keys.md](plan/multi-provider-api-keys.md) | Roadmap/Plan: Multi-Provider API Keys |
+| [plan/bug-chat-workflow.md](plan/completed/bug-chat-workflow.md) | Bug Fix Plan: Resposta do chat não aparece no frontend |
+| [plan/multi-provider-api-keys.md](plan/completed/multi-provider-api-keys.md) | Roadmap/Plan: Multi-Provider API Keys |
 | [plan/completed/unified-chat-integration.md](plan/completed/unified-chat-integration.md) | Roadmap/Plan: Integração Unificada do Chat (12 Pilares) |
 | [plan/completed/async-onnx-processing-plan.md](plan/completed/async-onnx-processing-plan.md) | Roadmap/Plan: Processamento Assíncrono de Inferência ONNX e Galeria |
 | [plan/backend-testing-roadmap.md](plan/backend-testing-roadmap.md) | Roadmap/Plan: Plano e Roteiro de Testes do Backend (.NET 10) |

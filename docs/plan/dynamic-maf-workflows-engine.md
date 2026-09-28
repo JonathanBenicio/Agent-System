@@ -2,7 +2,7 @@
 
 > **Status documental:** Draft (Planejamento)  
 > **Escopo:** Backend (.NET 10, Core, Infrastructure, Api) e persistência em PostgreSQL.  
-> **Fonte de verdade operacional:** [ADR 029](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/architecture/adr/029-dynamic-maf-workflows-engine.md) e [US-032](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/user-stories/us-032-dynamic-maf-workflows-engine.md).  
+> **Fonte de verdade operacional:** [ADR 029](../architecture/adr/029-dynamic-maf-workflows-engine.md) e [US-032](../user-stories/us-032-dynamic-maf-workflows-engine.md).  
 > **Gerado em:** 25 de Maio de 2026  
 > **Projeto:** AgenticSystem  
 
@@ -10,7 +10,7 @@
 
 ## Objetivo
 
-Unificar o motor do **Microsoft Agent Framework (MAF)** com o catálogo de agentes e a persistência relacional do **PostgreSQL**. A iniciativa visa permitir que workflows complexos de múltiplos agentes sejam definidos e editados dinamicamente via chat/banco em tempo de execução (just-in-time), eliminando a necessidade de codificar ou compilar novas classes C# estáticas como [BannerProductionWorkflowService.cs](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AI/BannerProductionWorkflowService.cs).
+Unificar o motor do **Microsoft Agent Framework (MAF)** com o catálogo de agentes e a persistência relacional do **PostgreSQL**. A iniciativa visa permitir que workflows complexos de múltiplos agentes sejam definidos e editados dinamicamente via chat/banco em tempo de execução (just-in-time), eliminando a necessidade de codificar ou compilar novas classes C# estáticas como [BannerProductionWorkflowService.cs](../../src/AgenticSystem.Infrastructure/AI/BannerProductionWorkflowService.cs).
 
 ## Princípios de Implantação
 

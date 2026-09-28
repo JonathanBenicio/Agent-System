@@ -5,10 +5,10 @@
 ### Backend (.NET 10)
 ```bash
 # Quick start
-cp appsettings.example.json appsettings.json  # Configure API keys
+cp src/AgenticSystem.Api/appsettings.example.json src/AgenticSystem.Api/appsettings.json  # Configure API keys
 dotnet restore
-dotnet run --project src/AgenticSystem.Api   # https://localhost:5001
-dotnet test                                 # 608 unit tests, 80% coverage required
+dotnet run --project src/AgenticSystem.Api --urls http://localhost:5001
+dotnet test                                 # 688 unit tests, 80% coverage required
 
 # Build & publish
 dotnet build --configuration Release
@@ -39,10 +39,14 @@ dotnet tool install --global dotnet-reportgenerator-globaltool
 reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coverage-report"
 ```
 
+## Documentation workflow
+
+Follow [workflow](conductor/workflow.md) and [templates](templates/README.md). Current operational contracts: [backend hub](docs/backend/README.md). Record decision/implementation/validation separately and report gaps honestly.
+
 ## Architecture Boundaries
 
 ### Single Source of Truth
-- **Architecture**: `docs/architecture/backend-architecture-explained.md` (MAF 1.5.0 framework-first)
+- **Architecture**: `docs/architecture/backend-architecture-explained.md` (MAF 1.9.0 framework-first)
 - **Product Boundary**: `.github/copilot-instructions.md` (Core vs Lab governance)
 
 ### 📜 Governança de Documentação (Regra de Ouro)
@@ -54,10 +58,10 @@ Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem:
 5. **Rastreabilidade**: Commits vinculados à issue (ex: `feat: ... Closes #ID`).
 6. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
 
-Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridades.
+Consulte o [Master Roadmap Q2 2026](docs/plan/master-roadmap-2026.md) para prioridades.
 
 ### Package Responsibilities
-- **AgenticSystem.Api**: Web API + SignalR hubs (`/hubs/chat`, `/hubs/gateway`, `/hubs/external-agent`, `/hubs/workflow`)
+- **AgenticSystem.Api**: Web API + SignalR hubs (`/hubs/chat`, `/hubs/gateway`, `/hubs/external-agent`, `/hubs/workflow`, `/hubs/onnx`)
 - **AgenticSystem.Core**: Business logic, agents, workflows, tenant isolation (MAF native)
 - **AgenticSystem.Infrastructure**: External services (LLM, vector stores, MCP, gateway, PostgreSQL persistence)
 - **AgenticSystem.Tests**: Unit tests (xUnit + FluentAssertions + NSubstitute)
@@ -83,7 +87,7 @@ await dbContext.Database.MigrateAsync();
 
 ### Authentication & Authorization
 - **MultiAuth**: API Key OR JWT via `PolicyScheme`
-- **Tenant Context**: `TenantMiddleware` extracts tenant from `X-Tenant-Id` header (priority) or JWT `tenant_id` claim (fallback). Unknown tenants are strictly rejected for all authenticated routes, enforcing strict dynamic database boundary isolation.
+- **Tenant Context**: `TenantMiddleware` extracts tenant from `X-Tenant-Id` header (priority) or JWT `tenant_id` claim (fallback). Controller routes with AuthorizeAttribute reject unknown tenants; Admin override and hub fallback require validation (docs/backend/access-tenants.md).
 - **Rate Limiting**: Per-tenant sliding window (`/api/chat`: 30 req/min default)
 
 ### Configuration Sections
@@ -109,7 +113,7 @@ await dbContext.Database.MigrateAsync();
 ### Test Commands
 ```bash
 # Backend
-dotnet test                              # Full suite (608 tests)
+dotnet test                              # Full suite (688 tests)
 dotnet test --filter "Name~Tests"       # Specific tests
 
 # Frontend
@@ -147,7 +151,7 @@ npm run lint && npm run build && npm run cy:run
 ### Protocol Support
 - **A2A**: `/a2a` endpoint (enabled by default)
 - **AG-UI**: `/agui` endpoint (enabled by default)  
-- **MCP**: `/mcp` endpoint (commented out, requires auth)
+- **MCP**: `/mcp` is not mapped in the baseline; MCP client plugins are separate
 - **OpenAI Compatible**: Enabled for protocol hosting
 
 ### Observability
@@ -170,7 +174,7 @@ curl http://localhost:8080/health
 ```
 
 ### Environment Requirements
-- **.NET 10 SDK** (CI is outdated, use local version)
+- **.NET 10 SDK** (local and CI aligned)
 - **Node.js 20+** for frontend
 - **PostgreSQL 16+** with pgvector extension (production)
 - **Ollama** (optional, for local LLM)
@@ -199,5 +203,5 @@ curl http://localhost:8080/health
 
 ### Tenant Isolation
 - `X-Tenant-Id` header takes precedence over JWT `tenant_id` claim
-- Unknown tenants accepted (dev/test fallback)
+- Unknown tenants rejected on controller routes with AuthorizeAttribute; hub fallback differs (see docs/backend/access-tenants.md)
 - Global EF Core query filters apply `TenantId` to all `ITenantEntity` types

@@ -1,5 +1,19 @@
 # User Stories — Agentic System
 
+## BACK-DOC-001 — Contratos claros e validação do núcleo
+
+Como mantenedor, quero contratos rastreáveis de endpoints, acesso e recursos, para distinguir funcionalidades comprovadas de lacunas.
+
+Issue: [#110](https://github.com/JonathanBenicio/Agent-System/issues/110) • ADR: [034](architecture/adr/034-backend-contracts-and-access-target.md) • Plano: [execução](plan/backend-documentation-validation.md).
+Status: documentação e diagnóstico entregues; falhas de produto no [backlog](backend/backlog.md). Evidência: [relatório](backend/validation/2026-09-28.md).
+
+- Dado o código da baseline, quando consultar o hub, então encontrar rotas e fontes, regras atuais, alvo desejado e limites de validação.
+- Dado dois tenants e usuários sem ACL, quando executar diagnóstico, então registrar aprovação ou reprodução de vazamento/negação incorreta sem alterar produção.
+- Dado falha ou cenário não executado, quando entregar o PR, então informar resultado e backlog sem declarar estabilidade.
+- Dado nova iniciativa, quando usar templates, então obter issue → ADR → story → plano → commits → PR e evidências adequadas.
+
+IDs novos usam domínio e número únicos; IDs históricos duplicados permanecem como legado, sem renumeração destrutiva.
+
 > Catálogo consolidado de User Stories do backend (.NET 10, runtime framework-first hospedado) e frontend (React 19).
 > Gerado via pipeline Spec→Code em maio/2026.
 
@@ -1977,7 +1991,7 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 | Workflow Orchestration | 2 | US-34, US-35 | 1 | ⏳ |
 | Webhooks Integration | 2 | US-36, US-37 | 1 | ⏳ |
 | Alerts History | 2 | US-38, US-39 | 1 | ⏳ |
-| Specialized Context & Evolution | 4 | US-41 a US-44 | 1 | ⏳ |
+| Specialized Context & Evolution | 4 | US-41 a US-44 | 1 | 🚧 |
 | Dynamic ONNX Inference Engine | 3 | US-45 a US-47 | 4 | ✅ |
 | Dynamic Customization & No-Code | 3 | US-48 a US-50 | 2 | ⏳ |
 | **Total** | **50** | | **38 componentes** | **⏳** |
@@ -2235,12 +2249,14 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 |------|---------|
 | Componente | `EvaluationPage` |
 | Engine | `Microsoft.Extensions.AI.Evaluation` |
-| Status | ⏳ Planejado (ADR-021) |
+| Status | 🚧 CRUD backend implementado; interface e métricas pendentes (ADR-032) |
 
 **Critérios de Aceite:**
-- [ ] Upload/Edição de Golden Sets (Query vs Expected).
+- [ ] Upload/Edição de Golden Sets (Query vs Expected) na interface.
 - [ ] Relatório de comparação entre versões do agente.
 - [ ] Scores automáticos (0-1) para Grounding e Fluência.
+
+O backend oferece CRUD e execução de Golden Sets via REST. Esses endpoints não concluem, por si só, os critérios da interface e das métricas acima.
 
 ---
 
@@ -2417,5 +2433,3 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 - [ ] As tabelas internas da engine do DurableTask PostgreSQL devem ser criadas na inicialização da aplicação usando scripts internos do provedor, sem poluir o histórico de migrations do EF Core.
 - [ ] O compilador de workflows orientados a grafos deve mapear de forma transparente os nós declarativos do banco para Atividades (Activities) assíncronas do DurableTask.
 - [ ] Garantir 100% de sucesso na suíte de testes de integração, cobrindo criação, serialização e recuperação de workflows duráveis simulados.
-
-

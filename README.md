@@ -1,6 +1,8 @@
 # 🤖 Sistema Agentic Generalista
 
-> .NET 10 + Microsoft Agent Framework + Microsoft.Extensions.AI — orquestração framework-first hospedada, memória Obsidian + PostgreSQL/pgvector e superfícies A2A, AG-UI, MCP e OpenAI-compatible.
+> Backend: [contratos, acesso, recursos e validação](docs/backend/README.md). Processo: [templates](templates/README.md).
+
+> .NET 10 + Microsoft Agent Framework + Microsoft.Extensions.AI — orquestração framework-first hospedada, memória Obsidian + PostgreSQL/pgvector e superfícies A2A, AG-UI e OpenAI-compatible. Plugins MCP cliente disponíveis; servidor HTTP /mcp não mapeado na baseline.
 
 ## Atualização Maio/2026 — Runtime V2
 
@@ -316,13 +318,13 @@ Estamos evoluindo de um núcleo agentic robusto para uma plataforma especializad
 
 | Track | Objetivo | Status |
 |-------|----------|:------:|
-| **1. Specialized Context** | Restringir conhecimento de agentes a salas específicas (RBAC + Precisão) | 🚧 Em Progresso (ADR-019, Entity + Migration criados) |
-| **2. FinOps & Quotas** | Monitoramento em tempo real de custos e limites por tenant/agente | ⏳ Planejado |
+| **1. Specialized Context** | Restringir conhecimento de agentes a salas específicas (RBAC + Precisão) | 🚧 Filtro SQL implementado; integração PostgreSQL pendente (ADR-019) |
+| **2. FinOps & Quotas** | Monitoramento em tempo real de custos e limites por tenant/agente | 🚧 Persistência implementada; validação operacional pendente (ADR-008) |
 | **3. Protocol Hosting** | Exposição padronizada via A2A e AgUI para ecossistemas externos | ⏳ Planejado |
-| **4. Evaluation Suite** | Medição contínua de qualidade (Grounding, Fluency) via Golden Sets | ⏳ Planejado |
+| **4. Evaluation Suite** | Medição contínua de qualidade (Grounding, Fluency) via Golden Sets | 🚧 CRUD backend implementado; interface e métricas pendentes (ADR-032) |
 | **5. Automatic LLM Sync** | Descoberta automática de modelos LLM no Login por Tenant | 🚧 Em Progresso (ADR-021, Issue #94) |
 
-> Plano mestre detalhado: [plan/master-roadmap-2026.md](plan/master-roadmap-2026.md)
+> Plano mestre detalhado: [plan/master-roadmap-2026.md](docs/plan/master-roadmap-2026.md)
 
 ## 🗺️ Roadmap Histórico (ML Baseline)
 
@@ -498,7 +500,7 @@ Todos os serviços são registrados via DI como Singleton e cobertos por **344 t
 
 ## 📜 Licença
 
-MIT License - veja [LICENSE](LICENSE) para detalhes.
+O projeto declara MIT, mas o arquivo LICENSE não está presente na baseline. A formalização da licença está pendente.
 
 ## 🙏 Inspiração
 
