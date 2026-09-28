@@ -1,3 +1,9 @@
+---
+name: Documentação e validação
+about: Contratos, evidências e divergências entre documentação e código
+title: '[DOCS] '
+---
+
 # [TIPO] Problema e resultado
 ## Baseline e problema
 SHA/data, comportamento observado, impacto, reprodução. Distinguir hipótese/evidência.
