@@ -3,11 +3,14 @@ using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 
+[assembly: InternalsVisibleTo("AgenticSystem.Tests")]
+
 namespace AgenticSystem.Core.Services;
 
 /// <summary>
 /// Meta-Agent principal: analisa contexto, roteia para agents e gerencia sessões.
 /// Inspirado no Tech Lead do Labs com capacidade de orquestração.
+/// Refactored: dependencies reduced from 14 to 7 via SessionLifecycleCoordinator and ChatWorkflowCommandHandler.
 /// </summary>
 public class MetaAgentOrchestrator : IMetaAgent
 {
@@ -15,13 +18,12 @@ public class MetaAgentOrchestrator : IMetaAgent
     private readonly IDirectAgentRequestExecutor _directAgentRequestExecutor;
     private readonly ILLMRuntimeContextAccessor _llmRuntimeContextAccessor;
     private readonly IAgentFactory _agentFactory;
+    private readonly ISessionLifecycleCoordinator _sessionCoordinator;
     private readonly ISessionManager _sessionManager;
-    private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
     private readonly IContextAnalyzer _contextAnalyzer;
     private readonly ISmartRouter _smartRouter;
     private readonly IAgentCollaborationWorkflow? _collaborationWorkflow;
-    private readonly IWorkflowEngine? _workflowEngine;
-    private readonly ITenantIsolationEnforcer? _isolationEnforcer;
+    private readonly IChatWorkflowCommandHandler? _chatWorkflowCommandHandler;
     private readonly ILogger<MetaAgentOrchestrator> _logger;
 
     public MetaAgentOrchestrator(
@@ -29,31 +31,29 @@ public class MetaAgentOrchestrator : IMetaAgent
         IDirectAgentRequestExecutor directAgentRequestExecutor,
         ILLMRuntimeContextAccessor llmRuntimeContextAccessor,
         IAgentFactory agentFactory,
+        ISessionLifecycleCoordinator sessionCoordinator,
         ISessionManager sessionManager,
-        IAgentRuntimeCoordinator runtimeCoordinator,
         IContextAnalyzer contextAnalyzer,
         ISmartRouter smartRouter,
         ILogger<MetaAgentOrchestrator>? logger = null,
         IAgentCollaborationWorkflow? collaborationWorkflow = null,
-        IWorkflowEngine? workflowEngine = null,
-        ITenantIsolationEnforcer? isolationEnforcer = null)
+        IChatWorkflowCommandHandler? chatWorkflowCommandHandler = null)
     {
         _frameworkOrchestrator = frameworkOrchestrator;
         _directAgentRequestExecutor = directAgentRequestExecutor;
         _llmRuntimeContextAccessor = llmRuntimeContextAccessor;
         _agentFactory = agentFactory;
+        _sessionCoordinator = sessionCoordinator;
         _sessionManager = sessionManager;
-        _runtimeCoordinator = runtimeCoordinator;
         _contextAnalyzer = contextAnalyzer ?? new NullContextAnalyzer();
         _smartRouter = smartRouter;
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<MetaAgentOrchestrator>.Instance;
         _collaborationWorkflow = collaborationWorkflow;
-        _workflowEngine = workflowEngine;
-        _isolationEnforcer = isolationEnforcer;
+        _chatWorkflowCommandHandler = chatWorkflowCommandHandler;
     }
 
     // Backwards-compatible constructor for existing tests and custom setups
-    public MetaAgentOrchestrator(
+    internal MetaAgentOrchestrator(
         IFrameworkOrchestratorService frameworkOrchestrator,
         IDirectAgentRequestExecutor directAgentRequestExecutor,
         ILLMRuntimeContextAccessor llmRuntimeContextAccessor,
@@ -66,8 +66,11 @@ public class MetaAgentOrchestrator : IMetaAgent
             directAgentRequestExecutor,
             llmRuntimeContextAccessor,
             agentFactory,
+            new SessionLifecycleCoordinator(
+                sessionManager,
+                runtimeCoordinator,
+                Microsoft.Extensions.Logging.Abstractions.NullLogger<SessionLifecycleCoordinator>.Instance),
             sessionManager,
-            runtimeCoordinator,
             new NullContextAnalyzer(),
             new NullSmartRouter(),
             logger)
@@ -103,28 +106,23 @@ public class MetaAgentOrchestrator : IMetaAgent
             Task.FromResult(false);
     }
 
-    public async Task<AgentResponse> ProcessRequestAsync(string input, UserContext context)
+    public async Task<AgentResponse> ProcessRequestAsync(string input, UserContext context, string? sessionId = null)
     {
-        if (_isolationEnforcer != null && !string.IsNullOrEmpty(context.TenantId))
+        if (!string.IsNullOrEmpty(context.TenantId) && !await _sessionCoordinator.CanStartSessionAsync(context.TenantId))
         {
-            if (!await _isolationEnforcer.CanStartSessionAsync(context.TenantId))
-            {
-                return AgentResponse.Error("🚫 Limite de sessões simultâneas atingido para o seu tenant.");
-            }
+            return AgentResponse.Error("🚫 Limite de sessões simultâneas atingido para o seu tenant.");
         }
 
-        var sessionId = await _sessionManager.StartSessionAsync(context);
-        context.Preferences["sessionId"] = sessionId;
-        using var scope = _runtimeCoordinator.BeginExecutionScope(sessionId, context);
+        var resolvedSessionId = await _sessionCoordinator.StartSessionAsync(context, sessionId);
+        using var scope = _sessionCoordinator.BeginExecutionScope(resolvedSessionId, context);
         try
         {
-            var response = await ProcessRequestCoreAsync(sessionId, input, context, CancellationToken.None);
-            await _sessionManager.EndSessionAsync(sessionId);
+            var response = await ProcessRequestCoreAsync(resolvedSessionId, input, context, CancellationToken.None);
+            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context);
             return response;
         }
         catch (Exception)
         {
-            // Session ending on exception is already handled in ProcessRequestCoreAsync
             throw;
         }
     }
@@ -132,17 +130,17 @@ public class MetaAgentOrchestrator : IMetaAgent
     public async IAsyncEnumerable<AgentStreamEvent> ProcessRequestStreamAsync(
         string input,
         UserContext context,
+        string? sessionId = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var sessionId = await _sessionManager.StartSessionAsync(context);
-        context.Preferences["sessionId"] = sessionId;
+        var resolvedSessionId = await _sessionCoordinator.StartSessionAsync(context, sessionId, ct);
 
         try
         {
-            await foreach (var streamEvent in _runtimeCoordinator.StreamAsync(
-                sessionId,
+            await foreach (var streamEvent in _sessionCoordinator.StreamAsync(
+                resolvedSessionId,
                 context,
-                token => ProcessRequestCoreAsync(sessionId, input, context, token),
+                token => ProcessRequestCoreAsync(resolvedSessionId, input, context, token),
                 ct))
             {
                 yield return streamEvent;
@@ -150,7 +148,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         }
         finally
         {
-            await _sessionManager.EndSessionAsync(sessionId);
+            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context, ct);
         }
     }
 
@@ -158,17 +156,17 @@ public class MetaAgentOrchestrator : IMetaAgent
         string input,
         UserContext context,
         string targetAgent,
+        string? sessionId = null,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
-        var sessionId = await _sessionManager.StartSessionAsync(context);
-        context.Preferences["sessionId"] = sessionId;
+        var resolvedSessionId = await _sessionCoordinator.StartSessionAsync(context, sessionId, ct);
 
         try
         {
-            await foreach (var streamEvent in _runtimeCoordinator.StreamAsync(
-                sessionId,
+            await foreach (var streamEvent in _sessionCoordinator.StreamAsync(
+                resolvedSessionId,
                 context,
-                token => ProcessDirectRequestCoreAsync(sessionId, input, context, targetAgent, token),
+                token => ProcessDirectRequestCoreAsync(resolvedSessionId, input, context, targetAgent, token),
                 ct))
             {
                 yield return streamEvent;
@@ -176,7 +174,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         }
         finally
         {
-            await _sessionManager.EndSessionAsync(sessionId);
+            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context, ct);
         }
     }
 
@@ -184,10 +182,20 @@ public class MetaAgentOrchestrator : IMetaAgent
     {
         using var llmScope = _llmRuntimeContextAccessor.BeginScope(context, sessionId);
 
+        var effectiveInput = await InjectMemoryContextAsync(input, context, ct);
+
         try
         {
+            // Intercept conversational workflow commands via chat
+            if (_chatWorkflowCommandHandler != null)
+            {
+                var workflowResponse = await _chatWorkflowCommandHandler.TryHandleAsync(effectiveInput, context, ct);
+                if (workflowResponse != null)
+                    return workflowResponse;
+            }
+
             // 0. Triage Layer (Fast Path & Complexity Analysis)
-            var (isFastPath, fastPathResponse, triage) = await _smartRouter.TriageAsync(input, context, ct);
+            var (isFastPath, fastPathResponse, triage) = await _smartRouter.TriageAsync(effectiveInput, context, ct);
             if (isFastPath)
             {
                 return AgentResponse.Ok(fastPathResponse ?? string.Empty, "FastPath", AgentTier.Support);
@@ -205,42 +213,33 @@ public class MetaAgentOrchestrator : IMetaAgent
                 if (triage.Complexity == AgenticSystem.Core.Models.Triage.ComplexityLevel.Low && 
                     triage.Intent == AgenticSystem.Core.Models.Triage.IntentType.DirectAnswer)
                 {
-                    _logger.LogInformation("⚡ Executing Tier 1 logic (Low Complexity Direct Execution) for input: {Input}", input[..Math.Min(50, input.Length)]);
+                    _logger.LogInformation("⚡ Executing Tier 1 logic (Low Complexity Direct Execution) for input: {Input}", effectiveInput[..Math.Min(50, effectiveInput.Length)]);
                     var target = !string.IsNullOrWhiteSpace(triage.EstimatedAgent) ? triage.EstimatedAgent : "GeneralAgent";
-                    return await _directAgentRequestExecutor.ExecuteAsync(sessionId, input, context, target, ct);
+                    return await _directAgentRequestExecutor.ExecuteAsync(sessionId, effectiveInput, context, target, ct);
                 }
 
             }
 
-            _logger.LogInformation("🎯 Workflow executando request: {Input}", input[..Math.Min(50, input.Length)]);
+            _logger.LogInformation("🎯 Workflow executando request: {Input}", effectiveInput[..Math.Min(50, effectiveInput.Length)]);
 
             // 1. Analyze Context for Routing Decisions (Phase 2 Integration)
-            var analysis = await _contextAnalyzer.AnalyzeAsync(input, context);
+            var analysis = await _contextAnalyzer.AnalyzeAsync(effectiveInput, context);
 
-            // 2. Delegate to Workflow Engine if specific complex intent or workflow template is matched
-            if (_workflowEngine != null && (analysis.Intent == IntentType.Analyze || analysis.Intent == IntentType.Plan))
-            {
-                _logger.LogInformation("Delegating to Workflow Engine for intent: {Intent}", analysis.Intent);
-                // In a real implementation, we'd resolve the workflow definition first
-                // For this deep integration, we signal the intent
-                context.Preferences["workflow.intent"] = analysis.Intent.ToString();
-            }
-
-            // 3. Delegate to Collaboration Workflow if debate or high complexity (Phase 2 Integration)
-            if (_collaborationWorkflow != null && await _collaborationWorkflow.ShouldRunAsync(input, analysis, ct))
+            // 2. Delegate to Collaboration Workflow if debate or high complexity (Phase 2 Integration)
+            if (_collaborationWorkflow != null && await _collaborationWorkflow.ShouldRunAsync(effectiveInput, analysis, ct))
             {
                 _logger.LogInformation("Delegating to Collaboration Workflow (Multi-Agent)");
-                return await _collaborationWorkflow.ExecuteAsync(sessionId, input, context, analysis, ct);
+                return await _collaborationWorkflow.ExecuteAsync(sessionId, effectiveInput, context, analysis, ct);
             }
 
-            // 4. Fallback to Primary Framework Orchestrator
+            // 3. Fallback to Primary Framework Orchestrator
             _logger.LogDebug("Delegating to Framework Orchestrator");
-            return await _frameworkOrchestrator.ExecuteAsync(sessionId, input, context, ct);
+            return await _frameworkOrchestrator.ExecuteAsync(sessionId, effectiveInput, context, ct);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ Workflow execution failed: {Message}", ex.Message);
-            await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
+            await _sessionCoordinator.PublishEventAsync(new AgentStreamEvent
             {
                 Type = AgentStreamEventType.Error,
                 Message = ex.Message,
@@ -251,7 +250,7 @@ public class MetaAgentOrchestrator : IMetaAgent
                 }
             }, ct);
 
-            try { await _sessionManager.EndSessionAsync(sessionId); }
+            try { await _sessionCoordinator.EndSessionAsync(sessionId, context, ct); }
             catch (Exception endEx) { _logger.LogWarning(endEx, "Falha ao finalizar sessão {SessionId}", sessionId); }
 
             return AgentResponse.Error("Erro interno ao processar a requisição.", "MetaAgentOrchestrator");
@@ -287,21 +286,19 @@ public class MetaAgentOrchestrator : IMetaAgent
         _logger.LogInformation("🧹 Cleanup concluído: {Count} agents inativos removidos", totalCleaned);
     }
 
-    public async Task<AgentResponse> ProcessDirectRequestAsync(string input, UserContext context, string targetAgent)
+    public async Task<AgentResponse> ProcessDirectRequestAsync(string input, UserContext context, string targetAgent, string? sessionId = null)
     {
-        var sessionId = await _sessionManager.StartSessionAsync(context);
-        context.Preferences["sessionId"] = sessionId;
-        using var scope = _runtimeCoordinator.BeginExecutionScope(sessionId, context);
+        var resolvedSessionId = await _sessionCoordinator.StartSessionAsync(context, sessionId);
+        using var scope = _sessionCoordinator.BeginExecutionScope(resolvedSessionId, context);
         try
         {
-            var response = await ProcessDirectRequestCoreAsync(sessionId, input, context, targetAgent, CancellationToken.None);
-            await _sessionManager.EndSessionAsync(sessionId);
+            var response = await ProcessDirectRequestCoreAsync(resolvedSessionId, input, context, targetAgent, CancellationToken.None);
+            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context);
             return response;
         }
         catch (Exception)
         {
-            // In a real scenario, we might want to end session here too if not handled in core
-            await _sessionManager.EndSessionAsync(sessionId);
+            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context);
             throw;
         }
     }
@@ -309,6 +306,24 @@ public class MetaAgentOrchestrator : IMetaAgent
     private async Task<AgentResponse> ProcessDirectRequestCoreAsync(string sessionId, string input, UserContext context, string targetAgent, CancellationToken ct)
     {
         using var llmScope = _llmRuntimeContextAccessor.BeginScope(context, sessionId);
-        return await _directAgentRequestExecutor.ExecuteAsync(sessionId, input, context, targetAgent, ct);
+        var effectiveInput = await InjectMemoryContextAsync(input, context, ct);
+        return await _directAgentRequestExecutor.ExecuteAsync(sessionId, effectiveInput, context, targetAgent, ct);
+    }
+
+    private async Task<string> InjectMemoryContextAsync(string input, UserContext context, CancellationToken ct)
+    {
+        var tenantId = context.TenantId;
+        var memoryContext = await _sessionManager.GetMemoryContextAsync(input, context.UserId, tenantId, ct);
+
+        if (string.IsNullOrEmpty(memoryContext))
+        {
+            return input;
+        }
+
+        // Flag that memory was used for this request
+        context.Preferences["memory_injected"] = true;
+        
+        _logger.LogDebug("🧠 Injected {Length} chars of memory context", memoryContext.Length);
+        return memoryContext + "\n\n" + input;
     }
 }

@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Exceptions;
+
 
 namespace AgenticSystem.Core.Services;
 
@@ -401,30 +403,121 @@ public class ScheduledTaskManager : IScheduledTaskManager
         return TimeSpan.FromSeconds(seconds);
     }
 
+    /// <summary>
+    /// Calculates the next run time for a cron expression.
+    /// Throws <see cref="InvalidCronExpressionException"/> if the expression is invalid.
+    /// Returns null only for interval-based schedules that fail interval parsing.
+    /// </summary>
     private static DateTime? CalculateNextRun(string cronExpression)
     {
         if (string.IsNullOrEmpty(cronExpression))
             return null;
 
-        try
+        // Interval-based schedules (e.g. "interval:30s") are not cron — handle separately.
+        if (cronExpression.StartsWith("interval:", StringComparison.OrdinalIgnoreCase))
         {
-            var expression = new Quartz.CronExpression(cronExpression);
-            var next = expression.GetNextValidTimeAfter(DateTimeOffset.UtcNow);
-            return next?.UtcDateTime;
-        }
-        catch
-        {
-            // Fallback for simple interval format if needed, or invalid CRON
-            if (cronExpression.StartsWith("interval:", StringComparison.OrdinalIgnoreCase))
-            {
-                var val = cronExpression.Replace("interval:", "").Replace("s", "");
-                if (double.TryParse(val, out var seconds))
-                {
-                    return DateTime.UtcNow.AddSeconds(seconds);
-                }
-            }
+            var val = cronExpression.Replace("interval:", "", StringComparison.OrdinalIgnoreCase).Replace("s", "");
+            if (double.TryParse(val, out var seconds))
+                return DateTime.UtcNow.AddSeconds(seconds);
 
             return null;
         }
+
+        var quartzExpression = NormalizeCronExpression(cronExpression);
+        try
+        {
+            var expression = new Quartz.CronExpression(quartzExpression);
+            var next = expression.GetNextValidTimeAfter(DateTimeOffset.UtcNow);
+            return next?.UtcDateTime;
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidCronExpressionException(
+                cronExpression,
+                $"Cron expression '{cronExpression}' (normalized: '{quartzExpression}') is not valid: {ex.Message}",
+                ex);
+        }
+    }
+
+
+    /// <summary>
+    /// Normalizes a standard 5-field Linux cron expression to Quartz 6-field format.
+    /// Linux Day-of-Week (0=Sunday … 6=Saturday, 7=Sunday) is mapped to
+    /// Quartz Day-of-Week (1=Sunday … 7=Saturday) using the formula <c>(day % 7) + 1</c>.
+    /// A wildcard (*) in the DOW field is replaced with the Quartz no-specific-day marker (?).
+    /// </summary>
+    internal static string NormalizeCronExpression(string cronExpression)
+    {
+        var parts = cronExpression.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (parts.Length == 5)
+        {
+            // Standard Linux 5-field: minute hour day-of-month month day-of-week
+            var minute = parts[0];
+            var hour = parts[1];
+            var dayOfMonth = parts[2];
+            var month = parts[3];
+            var linuxDow = parts[4];
+
+            // Convert DOW: wildcard stays as '?', numeric values mapped (day % 7) + 1
+            var quartzDow = ConvertLinuxDowToQuartz(linuxDow);
+
+            // Quartz 6-field: seconds minute hour day-of-month month day-of-week
+            // When DOW is specified (!= '?'), day-of-month must be '?' per Quartz rules.
+            var quartzDayOfMonth = quartzDow == "?" ? dayOfMonth : "?";
+            return $"0 {minute} {hour} {quartzDayOfMonth} {month} {quartzDow}";
+        }
+
+        if (parts.Length == 6)
+        {
+            // Already Quartz 6-field — return as-is.
+            return cronExpression;
+        }
+
+        // Unknown format — return as-is and let Quartz parser report the error.
+        return cronExpression;
+    }
+
+    /// <summary>
+    /// Converts a Linux Day-of-Week token to Quartz format.
+    /// Linux: 0=Sunday, 1=Monday … 6=Saturday, 7=Sunday (alias).
+    /// Quartz: 1=Sunday, 2=Monday … 7=Saturday.
+    /// Wildcard (*) maps to '?' (no specific day, required by Quartz when DOW is not used).
+    /// Named DOW values (MON, TUE, etc.) are passed through unchanged.
+    /// </summary>
+    private static string ConvertLinuxDowToQuartz(string linuxDow)
+    {
+        if (linuxDow == "*") return "?";
+        if (linuxDow == "?") return "?";
+
+        // Attempt to parse a single numeric value
+        if (int.TryParse(linuxDow, out var dayNumber))
+        {
+            return ((dayNumber % 7) + 1).ToString();
+        }
+
+        // List of values (e.g. "1,3,5") — map each individually
+        if (linuxDow.Contains(','))
+        {
+            var converted = linuxDow.Split(',').Select(token =>
+                int.TryParse(token.Trim(), out var d) ? ((d % 7) + 1).ToString() : token.Trim());
+            return string.Join(",", converted);
+        }
+
+        // Range (e.g. "1-5") or named (e.g. "MON-FRI") — map each endpoint individually
+        if (linuxDow.Contains('-'))
+        {
+            var parts = linuxDow.Split('-');
+            if (parts.Length == 2)
+            {
+                var startToken = parts[0].Trim();
+                var endToken = parts[1].Trim();
+                var startVal = int.TryParse(startToken, out var sVal) ? ((sVal % 7) + 1).ToString() : startToken;
+                var endVal = int.TryParse(endToken, out var eVal) ? ((eVal % 7) + 1).ToString() : endToken;
+                return $"{startVal}-{endVal}";
+            }
+        }
+
+        return linuxDow;
     }
 }

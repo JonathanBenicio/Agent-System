@@ -7,10 +7,10 @@ description: Como gerenciar migrações de banco de dados (EF Core)
 Siga este workflow para adicionar ou atualizar o esquema do banco de dados utilizando EF Core.
 
 ### 1. Criar a Migração
-Execute o comando para gerar a nova migração baseada nas alterações das entidades.
+Execute o comando para gerar a nova migração baseada nas alterações das entidades na pasta correta.
 
 ```bash
-dotnet ef migrations add NomeDaMigracao --project <Path.Infrastructure> --startup-project <Path.Startup>
+dotnet ef migrations add NomeDaMigracao --project src/AgenticSystem.Infrastructure --startup-project src/AgenticSystem.Api --output-dir Persistence/Migrations
 ```
 
 ### 2. Validar a Migração
@@ -22,7 +22,7 @@ Verifique os arquivos criados na pasta de migrações.
 Aplique as alterações ao banco de dados local para teste.
 
 ```bash
-dotnet ef database update --project <Path.Infrastructure> --startup-project <Path.Startup>
+dotnet ef database update --project src/AgenticSystem.Infrastructure --startup-project src/AgenticSystem.Api
 ```
 
 ### 4. Boas Práticas

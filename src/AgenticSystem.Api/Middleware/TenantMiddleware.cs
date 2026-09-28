@@ -21,42 +21,64 @@ public class TenantMiddleware
         _logger = logger;
     }
 
-    public async Task InvokeAsync(HttpContext context, TenantContext tenantContext, ITenantResolver tenantResolver, ITenantContextAccessor tenantContextAccessor)
+    public async Task InvokeAsync(HttpContext context, ITenantResolver tenantResolver, ITenantContextAccessor tenantContextAccessor)
     {
-        using var tenantScope = tenantContextAccessor.BeginScope(tenantContext);
-
-        // Skip tenant resolution for unauthenticated endpoints (health, swagger, etc.)
         var endpoint = context.GetEndpoint();
         var hasAuthorize = endpoint?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.AuthorizeAttribute>() is not null;
         var allowAnonymous = endpoint?.Metadata.GetMetadata<Microsoft.AspNetCore.Authorization.AllowAnonymousAttribute>() is not null;
 
         var tenantId = ResolveTenantId(context);
+        var jwtTenantId = GetJwtTenantId(context);
+        var isAdmin = context.User?.IsInRole("Admin") ?? false;
+        var isAuthenticated = context.User?.Identity?.IsAuthenticated == true;
+
+        if (isAuthenticated && !isAdmin && !string.IsNullOrWhiteSpace(tenantId))
+        {
+            if (!string.Equals(tenantId?.Trim(), jwtTenantId?.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("Tenant spoofing attempt detected. Header tenant '{TenantId}' does not match JWT tenant '{JwtTenantId}'.", tenantId, jwtTenantId);
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new { error = "Unauthorized tenant access." });
+                return;
+            }
+        }
+
+        TenantContext? tenantContext = null;
 
         if (!string.IsNullOrWhiteSpace(tenantId))
         {
             var resolved = await tenantResolver.ResolveAsync(tenantId);
             if (resolved is not null)
             {
-                tenantContext.TenantId = resolved.TenantId;
-                tenantContext.TenantName = resolved.TenantName;
-                tenantContext.Plan = resolved.Plan;
-                tenantContext.Limits = resolved.Limits;
-                tenantContext.IsAuthenticated = resolved.IsAuthenticated;
-
-                _logger.LogDebug("Tenant resolved: {TenantId} ({TenantName})", tenantContext.TenantId, tenantContext.TenantName);
+                tenantContext = new TenantContext
+                {
+                    TenantId = resolved.TenantId,
+                    TenantName = resolved.TenantName,
+                    Plan = resolved.Plan,
+                    Limits = resolved.Limits,
+                    IsAuthenticated = resolved.IsAuthenticated
+                };
+                _logger.LogInformation("Tenant resolved: {TenantId} ({TenantName})", tenantContext.TenantId, tenantContext.TenantName);
+            }
+            else if (hasAuthorize && !allowAnonymous)
+            {
+                _logger.LogWarning("Tenant '{TenantId}' not found in store for authorized request.", tenantId);
+                context.Response.StatusCode = StatusCodes.Status403Forbidden;
+                await context.Response.WriteAsJsonAsync(new { error = "Tenant not found or inactive." });
+                return;
             }
             else
             {
-                _logger.LogWarning("Tenant not found for id: {TenantId}", tenantId);
-                if (hasAuthorize && !allowAnonymous)
+                // Fallback de desenvolvimento para rotas não protegidas
+                tenantContext = new TenantContext
                 {
-                    context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    await context.Response.WriteAsJsonAsync(new { error = "Tenant not found." });
-                    return;
-                }
+                    TenantId = tenantId,
+                    TenantName = tenantId,
+                    IsAuthenticated = true
+                };
             }
         }
-        else if (hasAuthorize && !allowAnonymous && context.User?.Identity?.IsAuthenticated == true)
+        else if (hasAuthorize && !allowAnonymous)
         {
             _logger.LogWarning("Authenticated request without tenant context.");
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
@@ -64,22 +86,53 @@ public class TenantMiddleware
             return;
         }
 
-        await _next(context);
+        if (tenantContext is not null)
+        {
+            using var tenantScope = tenantContextAccessor.BeginScope(tenantContext);
+            await _next(context);
+        }
+        else
+        {
+            await _next(context);
+        }
     }
 
     private static string? ResolveTenantId(HttpContext context)
     {
-        // 1. JWT claim
-        var claimValue = context.User?.FindFirst(TenantIdClaimType)?.Value;
-        if (!string.IsNullOrWhiteSpace(claimValue))
-            return claimValue;
-
-        // 2. Header X-Tenant-Id
+        // 1. Header X-Tenant-Id (prioridade máxima para permitir override explícito)
         if (context.Request.Headers.TryGetValue(TenantIdHeaderName, out var headerValue))
         {
             var val = headerValue.FirstOrDefault();
             if (!string.IsNullOrWhiteSpace(val))
                 return val;
+        }
+
+        // 2 & 3. JWT claim or Supabase Metadata
+        return GetJwtTenantId(context);
+    }
+
+    private static string? GetJwtTenantId(HttpContext context)
+    {
+        // 2. JWT claim (Standard claim or Supabase claim)
+        var claimValue = context.User?.FindFirst(TenantIdClaimType)?.Value;
+        if (!string.IsNullOrWhiteSpace(claimValue))
+            return claimValue;
+
+        // 3. Supabase Metadata (app_metadata.tenant_id)
+        // Note: Supabase puts custom claims inside app_metadata or user_metadata
+        // This requires the JWT to be parsed correctly by the handler
+        var metadataClaim = context.User?.FindFirst("app_metadata")?.Value;
+        if (!string.IsNullOrWhiteSpace(metadataClaim))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(metadataClaim);
+                if (doc.RootElement.TryGetProperty("tenant_id", out var tenantIdProp))
+                {
+                    return tenantIdProp.GetString();
+                }
+            }
+            catch { /* Ignore parse errors */ }
         }
 
         return null;

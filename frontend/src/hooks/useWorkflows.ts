@@ -22,6 +22,7 @@ export function useWorkflows() {
   }, [])
 
   useEffect(() => {
+
     refresh()
   }, [refresh])
 
@@ -35,7 +36,7 @@ export function useWorkflows() {
       await refresh()
       return saved
     } catch (err) {
-      throw new Error('Falha ao salvar workflow')
+      throw new Error('Falha ao salvar workflow', { cause: err })
     }
   }
 
@@ -44,7 +45,7 @@ export function useWorkflows() {
       await workflowApi.deleteDefinition(id)
       await refresh()
     } catch (err) {
-      throw new Error('Falha ao deletar workflow')
+      throw new Error('Falha ao deletar workflow', { cause: err })
     }
   }
 
@@ -52,7 +53,7 @@ export function useWorkflows() {
     try {
       return await workflowApi.startWorkflow(id)
     } catch (err) {
-      throw new Error('Falha ao iniciar execução do workflow')
+      throw new Error('Falha ao iniciar execução do workflow', { cause: err })
     }
   }
 

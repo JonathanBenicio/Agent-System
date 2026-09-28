@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using AgenticSystem.Infrastructure.Persistence.Entities;
+using AgenticSystem.Core.Interfaces;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,14 +16,17 @@ public class OutboxProcessorBackgroundService : BackgroundService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<OutboxProcessorBackgroundService> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
     private readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(5);
 
     public OutboxProcessorBackgroundService(
         IServiceProvider serviceProvider,
-        ILogger<OutboxProcessorBackgroundService> logger)
+        ILogger<OutboxProcessorBackgroundService> logger,
+        ITenantContextAccessor tenantContextAccessor)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -48,11 +52,13 @@ public class OutboxProcessorBackgroundService : BackgroundService
 
     private async Task ProcessOutboxMessagesAsync(CancellationToken stoppingToken)
     {
+        using var systemScope = _tenantContextAccessor.BeginScope(new Core.Models.TenantContext { TenantId = "system-background" });
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
         var publisher = scope.ServiceProvider.GetRequiredService<IPublisher>();
 
         var messages = await dbContext.OutboxMessages
+            .IgnoreQueryFilters()
             .Where(m => m.ProcessedAt == null && m.Error == null)
             .OrderBy(m => m.CreatedAt)
             .Take(50)
@@ -65,6 +71,7 @@ public class OutboxProcessorBackgroundService : BackgroundService
 
         foreach (var message in messages)
         {
+            using var tenantScope = _tenantContextAccessor.BeginScope(new Core.Models.TenantContext { TenantId = message.TenantId });
             try
             {
                 var eventType = Type.GetType(message.EventType);

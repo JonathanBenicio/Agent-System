@@ -90,6 +90,7 @@ function TasksTab() {
     }
   }, [])
 
+
   useEffect(() => { refresh() }, [refresh])
 
   const handlePause = async (id: string) => {
@@ -284,6 +285,7 @@ function RulesTab() {
       setLoading(false)
     }
   }, [])
+
 
   useEffect(() => { refresh() }, [refresh])
 
@@ -488,6 +490,7 @@ function ChannelsTab() {
     }
   }, [])
 
+
   useEffect(() => { refresh() }, [refresh])
 
   const handleTest = async (name: string) => {
@@ -598,6 +601,7 @@ function HealthTab() {
       setLoading(false)
     }
   }, [])
+
 
   useEffect(() => { refresh() }, [refresh])
 

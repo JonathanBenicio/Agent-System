@@ -25,6 +25,7 @@ export function usePlugins() {
     }
   }, [])
 
+
   useEffect(() => { refresh() }, [refresh])
 
   const loadPlugin = useCallback(async (req: LoadPluginRequest) => {
@@ -38,5 +39,14 @@ export function usePlugins() {
     setPlugins(prev => prev.filter(p => p.id !== id))
   }, [])
 
-  return { plugins, allTools, loading, error, refresh, loadPlugin, deletePlugin }
+  const updatePlugin = useCallback(async (id: string, req: LoadPluginRequest) => {
+    await pluginApi.update(id, req)
+    await refresh()
+  }, [refresh])
+
+  const getPluginDetails = useCallback(async (id: string) => {
+    return await pluginApi.get(id)
+  }, [])
+
+  return { plugins, allTools, loading, error, refresh, loadPlugin, deletePlugin, updatePlugin, getPluginDetails }
 }

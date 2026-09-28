@@ -16,12 +16,18 @@ public class ChatHub : Hub
     private readonly IMetaAgent _metaAgent;
     private readonly ISessionStore _sessionStore;
     private readonly ILogger<ChatHub> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public ChatHub(IMetaAgent metaAgent, ISessionStore sessionStore, ILogger<ChatHub> logger)
+    public ChatHub(
+        IMetaAgent metaAgent, 
+        ISessionStore sessionStore, 
+        ILogger<ChatHub> logger,
+        ITenantContextAccessor tenantContextAccessor)
     {
         _metaAgent = metaAgent;
         _sessionStore = sessionStore;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     public async Task SendMessage(
@@ -29,7 +35,9 @@ public class ChatHub : Hub
         string? targetAgent = null,
         string? provider = null,
         string? model = null,
-        string? apiKey = null)
+        string? apiKey = null,
+        string? sessionId = null,
+        string? selectedRoomId = null)
     {
         // Identity from authenticated principal — never trust client-supplied userId
         var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -37,14 +45,21 @@ public class ChatHub : Hub
             ?? Context.User?.Identity?.Name
             ?? "authenticated-user";
 
-        _logger.LogInformation("💬 Message from {UserId}: {Message} (target: {Target})", userId, message[..Math.Min(50, message.Length)], targetAgent ?? "auto");
+        _logger.LogInformation("💬 Message from {UserId}: {Message} (target: {Target}, session: {SessionId}, room: {RoomId})", userId, message[..Math.Min(50, message.Length)], targetAgent ?? "auto", sessionId ?? "new", selectedRoomId ?? "none");
+
+        var preferences = BuildLlmPreferences(provider, model, apiKey);
+        if (!string.IsNullOrWhiteSpace(selectedRoomId))
+        {
+            preferences["rag.knowledgeRoomId"] = selectedRoomId;
+        }
 
         var userContext = new UserContext
         {
             UserId = userId,
             Name = userId,
+            TenantId = _tenantContextAccessor.CurrentTenantId,
             Language = "pt-BR",
-            Preferences = BuildLlmPreferences(provider, model, apiKey)
+            Preferences = preferences
         };
 
         // Notify client that processing started
@@ -52,7 +67,7 @@ public class ChatHub : Hub
 
         try
         {
-            await foreach (var streamEvent in ResolveStream(message, userContext, targetAgent, Context.ConnectionAborted))
+            await foreach (var streamEvent in ResolveStream(message, userContext, targetAgent, sessionId, Context.ConnectionAborted))
             {
                 await Clients.Caller.SendAsync("StreamEvent", streamEvent, Context.ConnectionAborted);
 
@@ -67,7 +82,9 @@ public class ChatHub : Hub
                         tools = streamEvent.Data.TryGetValue("tools", out var tools) ? tools : null,
                         success = streamEvent.Data.TryGetValue("success", out var success) && success is bool ok && ok,
                         sessionId = streamEvent.SessionId,
-                        timestamp = streamEvent.Timestamp
+                        timestamp = streamEvent.Timestamp,
+                        memoryInjected = streamEvent.Data.TryGetValue("memoryInjected", out var mi) && mi is bool b && b,
+                        citations = streamEvent.Data.TryGetValue("citations", out var c) ? c : null
                     }, Context.ConnectionAborted);
                 }
             }
@@ -108,37 +125,10 @@ public class ChatHub : Hub
             sessionId = session.Id,
             title = session.RuntimeSettings.TryGetValue("title", out var t) ? t : null,
             startedAt = session.StartedAt,
-            messageCount = session.Events.Count
+            messageCount = session.Events.Count,
+            summary = session.Summary != null ? SessionDtoMapper.ToSummary(session.Summary) : null,
+            insights = session.Insights != null ? SessionDtoMapper.ToInsights(session.Insights) : null
         });
-
-        foreach (var evt in session.Events.OrderBy(e => e.Timestamp))
-        {
-            await Clients.Caller.SendAsync("ReceiveMessage", new
-            {
-                content = evt.UserInput,
-                agentName = (string?)null,
-                agentTier = (string?)null,
-                actions = (object?)null,
-                tools = (object?)null,
-                success = true,
-                sessionId = evt.SessionId,
-                timestamp = evt.Timestamp,
-                isHistory = true
-            });
-
-            await Clients.Caller.SendAsync("ReceiveMessage", new
-            {
-                content = evt.AgentResponse,
-                agentName = evt.AgentName,
-                agentTier = evt.AgentTier.ToString(),
-                actions = evt.ActionsPerformed.Count > 0 ? evt.ActionsPerformed : null,
-                tools = evt.ToolsUsed.Count > 0 ? evt.ToolsUsed : null,
-                success = true,
-                sessionId = evt.SessionId,
-                timestamp = evt.Timestamp,
-                isHistory = true
-            });
-        }
     }
 
     public Task SendMessageStream(
@@ -146,12 +136,19 @@ public class ChatHub : Hub
         string? targetAgent = null,
         string? provider = null,
         string? model = null,
-        string? apiKey = null)
-        => SendMessage(message, targetAgent, provider, model, apiKey);
+        string? apiKey = null,
+        string? sessionId = null,
+        string? selectedRoomId = null)
+        => SendMessage(message, targetAgent, provider, model, apiKey, sessionId, selectedRoomId);
 
     public override async Task OnConnectedAsync()
     {
         _logger.LogInformation("🔌 Client connected: {ConnectionId}", Context.ConnectionId);
+        
+        // Add connection to tenant group for targeted notifications (like LlmCatalogUpdated)
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}");
+        
         await Clients.Caller.SendAsync("Connected", new
         {
             connectionId = Context.ConnectionId,
@@ -194,10 +191,10 @@ public class ChatHub : Hub
         return preferences;
     }
 
-    private IAsyncEnumerable<AgentStreamEvent> ResolveStream(string message, UserContext userContext, string? targetAgent, CancellationToken ct)
+    private IAsyncEnumerable<AgentStreamEvent> ResolveStream(string message, UserContext userContext, string? targetAgent, string? sessionId, CancellationToken ct)
     {
         return !string.IsNullOrWhiteSpace(targetAgent)
-            ? _metaAgent.ProcessDirectRequestStreamAsync(message, userContext, targetAgent, ct)
-            : _metaAgent.ProcessRequestStreamAsync(message, userContext, ct);
+            ? _metaAgent.ProcessDirectRequestStreamAsync(message, userContext, targetAgent, sessionId, ct)
+            : _metaAgent.ProcessRequestStreamAsync(message, userContext, sessionId, ct);
     }
 }

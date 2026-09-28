@@ -1,16 +1,18 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
-import { llmApi } from '@/lib/api'
-import { getConnection, startConnection, signalR } from '@/lib/signalr'
+import { getConnection, signalR } from '@/lib/signalr'
 import { getAuthHeaders } from '@/lib/auth'
-import type { LLMProviderInfo } from '@/types/api'
-import type { ChatMessage, SignalRMessage } from '@/types/chat'
+import type { 
+  LLMProviderInfo, 
+  SessionSummaryDto, 
+  SessionInsightsDto 
+} from '@/types/api'
+import type { ChatMessage, SignalRMessage, Citation } from '@/types/chat'
 
-const ProviderStorageKey = 'agentic.chat.provider'
-const ModelStorageKey = 'agentic.chat.model'
-
-function generateId(): string {
-  return crypto.randomUUID?.() ?? Date.now().toString(36) + Math.random().toString(36).slice(2, 7)
-}
+// Specialized Hooks
+import { useLLMConfig } from './chat/useLLMConfig'
+import { useSignalR } from './chat/useSignalR'
+import { useChatState } from './chat/useChatState'
 
 interface ChatContextValue {
   messages: ChatMessage[]
@@ -18,70 +20,94 @@ interface ChatContextValue {
   isProcessing: boolean
   connectionState: string
   sessionId: string
+  activeSessionSummary?: SessionSummaryDto
+  activeSessionInsights?: SessionInsightsDto
   providers: LLMProviderInfo[]
   selectedProvider: string
   selectedModel: string
+  selectedRoomId: string
+  selectedAgentId: string
+  associateToRoom: boolean
+  activeChannel: string
+  setActiveChannel: (channel: string) => void
   setSelectedProvider: (providerName: string) => void
   setSelectedModel: (modelName: string) => void
-  refreshAiConfiguration: () => Promise<void>
+  setSelectedRoomId: (roomId: string) => void
+  setSelectedAgentId: (agentId: string) => void
+  setAssociateToRoom: (associate: boolean) => void
+  refreshAiConfiguration: () => Promise<any>
   sendMessage: (text: string, targetAgent?: string) => Promise<void>
-  clearMessages: () => void
+  clearMessages: () => Promise<void>
+  loadHistory: (sessionId: string) => Promise<void>
+  addLocalMessage: (message: ChatMessage) => void
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null)
 
-/**
- * Single provider that owns the SignalR connection and event handlers.
- * Mount once at the app root — all consumers share the same state.
- */
 export function ChatProvider({ children }: { children: ReactNode }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [isConnected, setIsConnected] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [connectionState, setConnectionState] = useState<string>('Disconnected')
-  const [sessionId, setSessionId] = useState<string>('')
-  const [providers, setProviders] = useState<LLMProviderInfo[]>([])
-  const [selectedProvider, setSelectedProviderState] = useState('')
-  const [selectedModel, setSelectedModelState] = useState('')
+  const { isConnected, connectionState } = useSignalR()
+  const { 
+    providers, selectedProvider, selectedModel, 
+    setSelectedProvider, setSelectedModel, refreshAiConfiguration 
+  } = useLLMConfig()
+  
+  const {
+    messages, setMessages, isProcessing, setIsProcessing,
+    sessionId, setSessionId, activeSessionSummary, setActiveSessionSummary,
+    activeSessionInsights, setActiveSessionInsights, loadHistory,
+    addLocalMessage, handleWorkflowGenerated, generateId,
+    activeChannel, setActiveChannel, clearMessages: clearState
+  } = useChatState()
+
+  const [selectedRoomId, setSelectedRoomId] = useState<string>('')
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('')
+  const [associateToRoom, setAssociateToRoom] = useState<boolean>(true)
   const sendingRef = useRef(false)
 
-  const refreshAiConfiguration = useCallback(async () => {
-    try {
-      const configuration = await llmApi.configuration()
-      const enabledProviders = configuration.providers.filter(provider => provider.isEnabled)
-      setProviders(enabledProviders)
-
-      if (enabledProviders.length === 0) {
-        setSelectedProviderState('')
-        setSelectedModelState('')
-        return
-      }
-
-      const preferredProvider = window.localStorage.getItem(ProviderStorageKey)
-      const nextProvider = resolveProvider(enabledProviders, preferredProvider, configuration.defaultProvider)
-      const preferredModel = window.localStorage.getItem(ModelStorageKey)
-      const nextModel = resolveModel(
-        nextProvider,
-        preferredModel,
-        nextProvider.name === configuration.defaultProvider ? configuration.defaultModel : nextProvider.defaultModel,
-      )
-
-      setSelectedProviderState(nextProvider.name)
-      setSelectedModelState(nextModel)
-      persistAiSelection(nextProvider.name, nextModel)
-    } catch (err) {
-      console.error('AI configuration error:', err)
+  // Safety Timeout US-25
+  useEffect(() => {
+    let timeoutId: any = null
+    if (isProcessing) {
+      timeoutId = setTimeout(() => {
+        setIsProcessing(false)
+        console.warn('⚠️ Processing timeout reached.')
+        setMessages(prev => [
+          ...prev,
+          {
+            id: generateId(),
+            role: 'system',
+            content: 'Aviso do Sistema: Tempo limite excedido ao aguardar resposta do agente.',
+            timestamp: new Date().toISOString(),
+          }
+        ])
+      }, 10000)
     }
-  }, [])
+    return () => timeoutId && clearTimeout(timeoutId)
+  }, [isProcessing, setIsProcessing, setMessages, generateId])
 
-  // Register handlers ONCE — no cleanup-per-instance
+  // SignalR Event Handlers
   useEffect(() => {
     const conn = getConnection()
 
-    conn.on('ReceiveMessage', (msg: SignalRMessage) => {
+    const onStreamEvent = (evt: any) => {
+      if (evt?.type === 20) {
+        const data = evt.data
+        if (data?.artifactType === 'Plan' && data?.definition) {
+          const definition = typeof data.definition === 'string' ? JSON.parse(data.definition) : data.definition
+          handleWorkflowGenerated(definition, data.workflowName)
+        }
+      }
+    }
+
+    const onReceiveMessage = (msg: SignalRMessage & { memoryInjected?: boolean; citations?: Citation[] }) => {
+      if (!msg.content?.trim()) {
+        setIsProcessing(false)
+        return
+      }
+
       const chatMsg: ChatMessage = {
         id: generateId(),
-        role: 'assistant',
+        role: msg.agentName ? 'assistant' : 'user',
         content: msg.content,
         agentName: msg.agentName,
         agentTier: msg.agentTier,
@@ -90,102 +116,73 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         success: msg.success,
         sessionId: msg.sessionId,
         timestamp: msg.timestamp,
+        isHistory: msg.isHistory,
+        memoryInjected: msg.memoryInjected,
+        citations: msg.citations,
       }
-      setMessages(prev => [...prev, chatMsg])
-      setIsProcessing(false)
+
+      setMessages(prev => {
+        if (!msg.isHistory && msg.memoryInjected && msg.agentName) {
+          const lastUserIdx = prev.findLastIndex(m => m.role === 'user')
+          if (lastUserIdx !== -1) {
+            const newMessages = [...prev]
+            newMessages[lastUserIdx] = { ...newMessages[lastUserIdx], memoryInjected: true }
+            return [...newMessages, chatMsg]
+          }
+        }
+        return [...prev, chatMsg]
+      })
+
+      if (!msg.isHistory) setIsProcessing(false)
       if (msg.sessionId) setSessionId(msg.sessionId)
-    })
+    }
 
-    conn.on('ProcessingStarted', () => {
-      setIsProcessing(true)
-    })
-
-    conn.on('ReceiveError', (data: { error: string; timestamp: string }) => {
-      const errorMsg: ChatMessage = {
+    const onProcessingStarted = () => setIsProcessing(true)
+    
+    const onReceiveError = (data: { error: string; timestamp: string }) => {
+      setMessages(prev => [...prev, {
         id: generateId(),
         role: 'system',
         content: `Erro: ${data.error}`,
         timestamp: data.timestamp,
-      }
-      setMessages(prev => [...prev, errorMsg])
+      }])
       setIsProcessing(false)
-    })
+    }
 
-    conn.on('Connected', (data: { connectionId: string; timestamp: string }) => {
-      console.log('SignalR connected:', data.connectionId)
-    })
+    const onSessionJoined = (data: any) => {
+      setActiveSessionSummary(data.summary)
+      setActiveSessionInsights(data.insights)
+    }
 
-    conn.onreconnecting(() => {
-      setIsConnected(false)
-      setConnectionState('Reconnecting')
-    })
+    conn.on('StreamEvent', onStreamEvent)
+    conn.on('ReceiveMessage', onReceiveMessage)
+    conn.on('ProcessingStarted', onProcessingStarted)
+    conn.on('ReceiveError', onReceiveError)
+    conn.on('SessionJoined', onSessionJoined)
 
-    conn.onreconnected(() => {
-      setIsConnected(true)
-      setConnectionState('Connected')
-    })
-
-    conn.onclose(() => {
-      setIsConnected(false)
-      setConnectionState('Disconnected')
-    })
-
-    startConnection()
-      .then(() => {
-        setIsConnected(true)
-        setConnectionState('Connected')
-      })
-      .catch((err) => {
-        console.error('SignalR connection error:', err)
-        setConnectionState('Error')
-      })
-
-    // Cleanup only on full unmount (app teardown)
     return () => {
-      conn.off('ReceiveMessage')
-      conn.off('ProcessingStarted')
-      conn.off('ReceiveError')
-      conn.off('Connected')
+      conn.off('StreamEvent', onStreamEvent)
+      conn.off('ReceiveMessage', onReceiveMessage)
+      conn.off('ProcessingStarted', onProcessingStarted)
+      conn.off('ReceiveError', onReceiveError)
+      conn.off('SessionJoined', onSessionJoined)
     }
-  }, [])
-
-  useEffect(() => {
-    void refreshAiConfiguration()
-
-    const handleRefresh = () => {
-      void refreshAiConfiguration()
-    }
-
-    window.addEventListener('agentic:llm-config-updated', handleRefresh)
-    return () => window.removeEventListener('agentic:llm-config-updated', handleRefresh)
-  }, [refreshAiConfiguration])
-
-  const setSelectedProvider = useCallback((providerName: string) => {
-    const provider = providers.find(item => item.name === providerName)
-    if (!provider) return
-
-    const nextModel = resolveModel(provider, undefined, provider.defaultModel)
-    setSelectedProviderState(provider.name)
-    setSelectedModelState(nextModel)
-    persistAiSelection(provider.name, nextModel)
-  }, [providers])
-
-  const setSelectedModel = useCallback((modelName: string) => {
-    setSelectedModelState(modelName)
-    persistAiSelection(selectedProvider, modelName)
-  }, [selectedProvider])
+  }, [handleWorkflowGenerated, setMessages, setIsProcessing, setSessionId, setActiveSessionSummary, setActiveSessionInsights, generateId])
 
   const sendViaRest = useCallback(async (text: string, targetAgent?: string) => {
     setIsProcessing(true)
     try {
+      const activeAgent = targetAgent ?? selectedAgentId
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           message: text,
-          targetAgent: targetAgent ?? null,
+          targetAgent: activeAgent || null,
           provider: selectedProvider || null,
           model: selectedModel || null,
+          sessionId: sessionId || null,
+          context: selectedRoomId ? { 'rag.knowledgeRoomId': selectedRoomId } : null,
         }),
       })
       const data = await res.json()
@@ -195,7 +192,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         content: data.response,
         agentName: data.agentUsed,
         agentTier: data.agentTier,
-        actions: data.actionsPerformed,
+        actions: data.actionsPerformed ?? data.actions,
+        tools: data.toolsPerformed ?? data.tools,
+        success: data.success,
+        citations: data.citations,
+        memoryInjected: data.memoryInjected,
         timestamp: new Date().toISOString(),
       }])
     } catch (err) {
@@ -203,12 +204,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setMessages(prev => [...prev, {
         id: generateId(),
         role: 'system',
-        content: 'Erro ao enviar mensagem. Verifique a conexão com o servidor.',
+        content: 'Erro ao enviar mensagem.',
         timestamp: new Date().toISOString(),
       }])
     }
     setIsProcessing(false)
-  }, [selectedModel, selectedProvider])
+  }, [selectedModel, selectedProvider, selectedAgentId, selectedRoomId, sessionId, setMessages, setIsProcessing, generateId])
 
   const sendMessage = useCallback(async (text: string, targetAgent?: string) => {
     if (!text.trim() || sendingRef.current) return
@@ -222,41 +223,47 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }])
 
     const conn = getConnection()
+    const activeAgent = targetAgent ?? selectedAgentId
     if (conn.state === signalR.HubConnectionState.Connected) {
       setIsProcessing(true)
       try {
-        await conn.invoke('SendMessage', text, targetAgent ?? null, selectedProvider || null, selectedModel || null, null)
+        await conn.invoke(
+          'SendMessage',
+          text,
+          activeAgent || null,
+          selectedProvider || null,
+          selectedModel || null,
+          null,
+          sessionId || null,
+          selectedRoomId || null
+        )
       } catch (err) {
         console.error('SendMessage error:', err)
-        await sendViaRest(text, targetAgent)
+        await sendViaRest(text, activeAgent)
       }
     } else {
-      await sendViaRest(text, targetAgent)
+      await sendViaRest(text, activeAgent)
     }
     sendingRef.current = false
-  }, [selectedModel, selectedProvider, sendViaRest])
+  }, [selectedModel, selectedProvider, selectedAgentId, selectedRoomId, sessionId, sendViaRest, setMessages, setIsProcessing, generateId])
 
-  const clearMessages = useCallback(() => {
-    setMessages([])
-    setSessionId('')
-  }, [])
+  const clearMessages = useCallback(async () => {
+    await clearState()
+    setSelectedRoomId('')
+    setSelectedAgentId('')
+    setAssociateToRoom(true)
+  }, [clearState])
 
   return (
     <ChatContext.Provider
       value={{
-        messages,
-        isConnected,
-        isProcessing,
-        connectionState,
-        sessionId,
-        providers,
-        selectedProvider,
-        selectedModel,
-        setSelectedProvider,
-        setSelectedModel,
-        refreshAiConfiguration,
-        sendMessage,
-        clearMessages,
+        messages, isConnected, isProcessing, connectionState, sessionId,
+        activeSessionSummary, activeSessionInsights, providers,
+        selectedProvider, selectedModel, selectedRoomId, selectedAgentId,
+        associateToRoom, activeChannel, setActiveChannel,
+        setSelectedProvider, setSelectedModel, setSelectedRoomId, setSelectedAgentId,
+        setAssociateToRoom, refreshAiConfiguration, sendMessage,
+        clearMessages, loadHistory, addLocalMessage
       }}
     >
       {children}
@@ -264,10 +271,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   )
 }
 
-/**
- * Hook to access the shared chat state.
- * @param targetAgent — optional; when provided, sendMessage automatically routes to this agent.
- */
 export function useChat(targetAgent?: string) {
   const ctx = useContext(ChatContext)
   if (!ctx) throw new Error('useChat must be used within <ChatProvider>')
@@ -277,42 +280,5 @@ export function useChat(targetAgent?: string) {
     [ctx.sendMessage, targetAgent],
   )
 
-  return {
-    messages: ctx.messages,
-    isConnected: ctx.isConnected,
-    isProcessing: ctx.isProcessing,
-    connectionState: ctx.connectionState,
-    sessionId: ctx.sessionId,
-    providers: ctx.providers,
-    selectedProvider: ctx.selectedProvider,
-    selectedModel: ctx.selectedModel,
-    setSelectedProvider: ctx.setSelectedProvider,
-    setSelectedModel: ctx.setSelectedModel,
-    refreshAiConfiguration: ctx.refreshAiConfiguration,
-    sendMessage: boundSend,
-    clearMessages: ctx.clearMessages,
-  }
-}
-
-function resolveProvider(providers: LLMProviderInfo[], preferredProvider?: string | null, defaultProvider?: string) {
-  return providers.find(provider => provider.name === preferredProvider)
-    ?? providers.find(provider => provider.name === defaultProvider)
-    ?? providers[0]
-}
-
-function resolveModel(provider: LLMProviderInfo, preferredModel?: string | null, defaultModel?: string) {
-  return provider.models.find(model => model === preferredModel)
-    ?? provider.models.find(model => model === defaultModel)
-    ?? provider.defaultModel
-    ?? provider.models[0]
-    ?? ''
-}
-
-function persistAiSelection(providerName: string, modelName: string) {
-  if (!providerName) return
-
-  window.localStorage.setItem(ProviderStorageKey, providerName)
-  if (modelName) {
-    window.localStorage.setItem(ModelStorageKey, modelName)
-  }
+  return { ...ctx, sendMessage: boundSend }
 }

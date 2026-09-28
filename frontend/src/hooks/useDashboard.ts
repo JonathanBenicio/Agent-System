@@ -20,6 +20,7 @@ export function useDashboard(pollInterval = 30000) {
   }, [])
 
   useEffect(() => {
+
     refresh()
     const id = setInterval(refresh, pollInterval)
     return () => clearInterval(id)

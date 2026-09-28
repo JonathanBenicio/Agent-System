@@ -1,10 +1,11 @@
-import { lazy, Suspense, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { Layout } from '@/components/layout/Layout'
 import { PageLoading } from '@/components/shared/Loading'
 import { ChatProvider, useChat } from '@/hooks/useChat'
 import { useSignalRAuth } from '@/hooks/useSignalRAuth'
+import { useAuthStore } from '@/store/authStore'
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute'
 
 const queryClient = new QueryClient({
@@ -35,6 +36,7 @@ const ConfigAdvancedPage = lazy(() => import('@/components/config/ConfigAdvanced
 const WorkflowBuilder = lazy(() => import('@/components/workflows/WorkflowBuilder').then(module => ({ default: module.default })))
 const WebhooksPage = lazy(() => import('@/components/gateway/WebhooksPage').then(module => ({ default: module.WebhooksPage })))
 const EmbeddingMigrationWizard = lazy(() => import('@/components/embedding-migration/EmbeddingMigrationWizard').then(module => ({ default: module.EmbeddingMigrationWizard })))
+const OnnxModelsPage = lazy(() => import('@/components/onnx/OnnxModelsPage'))
 
 function RouteBoundary({ children }: { children: ReactNode }) {
   return <Suspense fallback={<PageLoading />}>{children}</Suspense>
@@ -42,6 +44,11 @@ function RouteBoundary({ children }: { children: ReactNode }) {
 
 function AppRoutes() {
   useSignalRAuth()
+  const checkAuth = useAuthStore(state => state.checkAuth)
+
+  useEffect(() => {
+    void checkAuth()
+  }, [checkAuth])
 
   const {
     messages,
@@ -107,6 +114,7 @@ function AppRoutes() {
           <Route path="/config" element={<RouteBoundary><SettingsPage /></RouteBoundary>} />
           <Route path="/config/advanced" element={<RouteBoundary><ConfigAdvancedPage /></RouteBoundary>} />
           <Route path="/embedding-migration" element={<RouteBoundary><EmbeddingMigrationWizard /></RouteBoundary>} />
+          <Route path="/onnx-models" element={<RouteBoundary><OnnxModelsPage /></RouteBoundary>} />
         </Route>
       </Route>
     </Routes>

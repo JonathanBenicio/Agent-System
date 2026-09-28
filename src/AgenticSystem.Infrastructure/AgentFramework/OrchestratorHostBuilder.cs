@@ -4,6 +4,7 @@ using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AgenticSystem.Infrastructure.AgentFramework;
 
@@ -22,8 +23,11 @@ public class OrchestratorHostBuilder
     private readonly OrchestratorInstructionService _instructionService;
     private readonly OrchestratorToolBindingService _toolBindingService;
     private readonly OrchestratorAuxiliaryToolService _auxiliaryToolService;
+    private readonly ISkillManager _skillManager;
     private readonly RAGContextProvider? _ragContextProvider;
     private readonly IQualityGateService? _qualityGateService;
+    private readonly AgentSkillsProvider? _skillsProvider;
+    private readonly ITenantContextAccessor? _tenantContextAccessor;
     private readonly ILogger<OrchestratorHostBuilder> _logger;
 
     public OrchestratorHostBuilder(
@@ -36,8 +40,11 @@ public class OrchestratorHostBuilder
         OrchestratorToolBindingService toolBindingService,
         OrchestratorAuxiliaryToolService auxiliaryToolService,
         ILogger<OrchestratorHostBuilder> logger,
+        ISkillManager skillManager,
         RAGContextProvider? ragContextProvider = null,
-        IQualityGateService? qualityGateService = null)
+        IQualityGateService? qualityGateService = null,
+        AgentSkillsProvider? skillsProvider = null,
+        ITenantContextAccessor? tenantContextAccessor = null)
     {
         _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
@@ -48,8 +55,11 @@ public class OrchestratorHostBuilder
         _toolBindingService = toolBindingService ?? throw new ArgumentNullException(nameof(toolBindingService));
         _auxiliaryToolService = auxiliaryToolService ?? throw new ArgumentNullException(nameof(auxiliaryToolService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _skillManager = skillManager ?? throw new ArgumentNullException(nameof(skillManager));
         _ragContextProvider = ragContextProvider;
         _qualityGateService = qualityGateService;
+        _skillsProvider = skillsProvider;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     /// <summary>
@@ -67,7 +77,17 @@ public class OrchestratorHostBuilder
         var allTools = new List<AITool>(toolBindings.Select(binding => binding.Tool));
         allTools.AddRange(auxiliaryTools);
 
+        // Resolve context state to store resolved bindings
+        var state = _serviceProvider.GetService<OrchestratorContextState>();
+        if (state != null)
+        {
+            state.SpecialistBindings = toolBindings;
+        }
+
         var instructions = _instructionService.GetInstructions(activeAgents, auxiliaryTools);
+
+        // Enriquecer as instruções do orquestrador principal com as C# Skills contextuais!
+        instructions = await _skillManager.BuildEnrichedPromptAsync(_metadata.Name, "orchestrator", instructions);
 
         _logger.LogDebug(
             "Building orchestrator agent with {SpecialistCount} specialists and {ToolCount} tools",
@@ -82,14 +102,12 @@ public class OrchestratorHostBuilder
     /// Permite que agentes especialistas transfiram o controle entre si autonomamente.
     /// </summary>
     public async Task<Workflow> BuildHandoffWorkflowAsync(
+        AIAgent orchestratorAgent,
         IReadOnlyList<AgentInfo> activeAgents,
-        string sessionId = "default_session",
         CancellationToken ct = default)
     {
+        ArgumentNullException.ThrowIfNull(orchestratorAgent);
         ArgumentNullException.ThrowIfNull(activeAgents);
-
-        // 1. Criar o orquestrador principal (triage agent)
-        var orchestratorAgent = await BuildAsync(activeAgents, sessionId, ct);
 
         // 2. Resolver as instâncias reais dos agentes especialistas
         var specialistAgents = new List<AIAgent>();
@@ -102,14 +120,22 @@ public class OrchestratorHostBuilder
             }
         }
 
-        // 3. Configurar o grafo de handoffs: Orquestrador pode enviar para qualquer especialista e vice-versa
-        var builder = AgentWorkflowBuilder.CreateHandoffBuilderWith(orchestratorAgent)
-            .WithHandoffs(orchestratorAgent, specialistAgents);
+        // 3. Configurar o grafo de handoffs usando WorkflowBuilder nativo do MAF 1.6.1
+        var builder = new WorkflowBuilder(orchestratorAgent);
 
-        // Especialistas podem devolver para o orquestrador ou passar entre si (Mesh Topology)
         foreach (var specialist in specialistAgents)
         {
-            builder = builder.WithHandoffs(specialist, specialistAgents.Where(a => a != specialist).Append(orchestratorAgent));
+            builder.BindExecutor(specialist);
+            
+            // Orquestrador <-> Especialista
+            builder.AddEdge(orchestratorAgent, specialist, idempotent: true);
+            builder.AddEdge(specialist, orchestratorAgent, idempotent: true);
+
+            // Especialista <-> Outros Especialistas (Mesh Topology)
+            foreach (var otherSpecialist in specialistAgents.Where(a => a != specialist))
+            {
+                builder.AddEdge(specialist, otherSpecialist, idempotent: true);
+            }
         }
 
         _logger.LogInformation(
@@ -119,15 +145,7 @@ public class OrchestratorHostBuilder
         return builder.Build();
     }
 
-    /// <summary>
-    /// Constrói versão síncrona (necessária para DI que ainda exige Resolve síncrono).
-    /// </summary>
-    public AIAgent Build(IReadOnlyList<AgentInfo> activeAgents, string sessionId = "default_session")
-    {
-        return BuildAsync(activeAgents, sessionId, CancellationToken.None)
-            .GetAwaiter()
-            .GetResult();
-    }
+
 
     private AIAgent CreateHostedOrchestratorAgent(
         string instructions,
@@ -150,15 +168,30 @@ public class OrchestratorHostBuilder
         var builder = chatAgent.AsBuilder();
 
         // Aplicar providers e middleware de forma declarativa
+        var contextProviders = new List<MessageAIContextProvider>();
         if (_ragContextProvider is not null)
         {
-            builder = builder.UseAIContextProviders(_ragContextProvider);
+            contextProviders.Add(_ragContextProvider);
+        }
+        if (_skillsProvider is not null)
+        {
+            contextProviders.Add(_skillsProvider);
+        }
+        if (contextProviders.Count > 0)
+        {
+            builder = builder.UseAIContextProviders(contextProviders.ToArray());
         }
 
         if (_qualityGateService is not null)
         {
             var qualityGateLogger = _loggerFactory.CreateLogger<QualityGateDelegatingAgent>();
             builder = builder.UseQualityGates(_qualityGateService, qualityGateLogger);
+        }
+
+        if (_tenantContextAccessor is not null)
+        {
+            var fidesLogger = _loggerFactory.CreateLogger<AgenticSystem.Infrastructure.Security.FidesDataProtectionMiddleware>();
+            builder = builder.UseFidesDataProtection(_tenantContextAccessor, fidesLogger);
         }
 
         // Adicionar logging e telemetry nativo

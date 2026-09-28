@@ -1,71 +1,49 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { settingsApi } from '@/lib/api'
-import type { SystemSettings, GatewaySettings, MemorySettings, RerankingSettings } from '@/types/api'
+import type { GatewaySettings, MemorySettings, RerankingSettings } from '@/types/api'
 
 export function useSettings() {
-  const [settings, setSettings] = useState<SystemSettings | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
+  const queryClient = useQueryClient()
 
-  const refresh = useCallback(async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      const data = await settingsApi.getAll()
-      setSettings(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar configurações')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const { data: settings, isLoading: loading, error } = useQuery({
+    queryKey: ['settings'],
+    queryFn: () => settingsApi.getAll(),
+  })
 
-  useEffect(() => { refresh() }, [refresh])
+  const updateGatewayMutation = useMutation({
+    mutationFn: (s: GatewaySettings) => settingsApi.updateGateway(s),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] })
+  })
 
-  const saveGateway = useCallback(async (s: GatewaySettings) => {
-    setSaving(true)
-    try {
-      const updated = await settingsApi.updateGateway(s)
-      setSettings(prev => prev ? { ...prev, gateway: updated } : null)
-      return updated
-    } finally {
-      setSaving(false)
-    }
-  }, [])
+  const updateMemoryMutation = useMutation({
+    mutationFn: (s: MemorySettings) => settingsApi.updateMemory(s),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] })
+  })
 
-  const saveMemory = useCallback(async (s: MemorySettings) => {
-    setSaving(true)
-    try {
-      const updated = await settingsApi.updateMemory(s)
-      setSettings(prev => prev ? { ...prev, memory: updated } : null)
-      return updated
-    } finally {
-      setSaving(false)
-    }
-  }, [])
+  const updateRerankingMutation = useMutation({
+    mutationFn: (s: RerankingSettings) => settingsApi.updateReranking(s),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] })
+  })
 
-  const saveReranking = useCallback(async (s: RerankingSettings) => {
-    setSaving(true)
-    try {
-      const updated = await settingsApi.updateReranking(s)
-      setSettings(prev => prev ? { ...prev, reranking: updated } : null)
-      return updated
-    } finally {
-      setSaving(false)
-    }
-  }, [])
+  const uploadAssetsMutation = useMutation({
+    mutationFn: ({ modelFile, vocabularyFile, packageFile }: { modelFile?: File, vocabularyFile?: File, packageFile?: File }) => 
+      settingsApi.uploadRerankingAssets(modelFile, vocabularyFile, packageFile),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] })
+  })
 
-  const uploadRerankingAssets = useCallback(async (modelFile?: File, vocabularyFile?: File, packageFile?: File) => {
-    setSaving(true)
-    try {
-      const updated = await settingsApi.uploadRerankingAssets(modelFile, vocabularyFile, packageFile)
-      setSettings(prev => prev ? { ...prev, reranking: updated } : null)
-      return updated
-    } finally {
-      setSaving(false)
-    }
-  }, [])
-
-  return { settings, loading, error, saving, refresh, saveGateway, saveMemory, saveReranking, uploadRerankingAssets }
+  return {
+    settings,
+    loading,
+    error: error ? (error as Error).message : null,
+    saving: updateGatewayMutation.isPending || 
+            updateMemoryMutation.isPending || 
+            updateRerankingMutation.isPending || 
+            uploadAssetsMutation.isPending,
+    refresh: () => queryClient.invalidateQueries({ queryKey: ['settings'] }),
+    saveGateway: updateGatewayMutation.mutateAsync,
+    saveMemory: updateMemoryMutation.mutateAsync,
+    saveReranking: updateRerankingMutation.mutateAsync,
+    uploadRerankingAssets: (modelFile?: File, vocabularyFile?: File, packageFile?: File) => 
+      uploadAssetsMutation.mutateAsync({ modelFile, vocabularyFile, packageFile })
+  }
 }

@@ -36,7 +36,7 @@ public class PostgresDataConnectorStore : IDataConnectorStore
         entity.ConnectorType = config.ConnectorType.ToString();
         entity.ConnectionString = config.ConnectionString;
         entity.SettingsJson = JsonSerializer.Serialize(config.Settings, JsonOptions);
-        entity.TenantId = config.TenantId;
+        entity.TenantId = config.TenantId ?? throw new ArgumentException("TenantId cannot be null", nameof(config));
         entity.SyncScheduleJson = JsonSerializer.Serialize(config.SyncSchedule, JsonOptions);
         entity.IsActive = config.IsActive;
         entity.LastSyncAt = config.LastSyncAt;

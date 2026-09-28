@@ -1,5 +1,21 @@
 namespace AgenticSystem.Core.Models;
 
+public enum KnowledgeRoomRole
+{
+    Reader = 0,
+    Editor = 1,
+    Admin = 2
+}
+
+public class KnowledgeRoomPermission
+{
+    public string Id { get; set; } = string.Empty;
+    public string RoomId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public KnowledgeRoomRole Role { get; set; } = KnowledgeRoomRole.Reader;
+    public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class KnowledgeRoom
 {
     public string Id { get; set; } = string.Empty;

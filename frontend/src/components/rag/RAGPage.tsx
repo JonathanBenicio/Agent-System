@@ -107,7 +107,7 @@ export function RAGPage() {
         setSuccessMsg(`Lote processado: ${res.succeeded} documentos ingeridos com sucesso!`)
       }
       setSelectedFiles(null)
-    } catch (err) {
+    } catch {
       // Erro tratado no hook
     }
   }
@@ -124,7 +124,7 @@ export function RAGPage() {
       })
       setSuccessMsg('Configurações de Reranking & ONNX salvas com sucesso!')
       setEditingRerank(false)
-    } catch (err) {
+    } catch {
       // Erro tratado no hook
     }
   }
@@ -146,7 +146,7 @@ export function RAGPage() {
       setNewModelName('')
       setNewModelBaseUrl('')
       setNewModelApiKey('')
-    } catch (err) {
+    } catch {
       // Erro tratado no hook
     }
   }
@@ -161,7 +161,7 @@ export function RAGPage() {
         maxConcurrency: 4,
       })
       setSuccessMsg('Job de Migração de Chunks Vetoriais iniciado com sucesso!')
-    } catch (err) {
+    } catch {
       // Erro tratado no hook
     }
   }

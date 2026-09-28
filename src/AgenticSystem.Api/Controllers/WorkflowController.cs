@@ -68,16 +68,30 @@ public class WorkflowController : ControllerBase
         if (definition == null) return NotFound("Workflow definition not found");
 
         var userId = User.Identity?.Name ?? "anonymous";
-        var execution = await _engine.StartAsync(definition, variables, userId, ct);
-        
-        return Ok(execution);
+        var execution = await _engine.StartAsync(tenantId, definition, variables, userId, ct);
+
+        // Async HTTP API Pattern: return 202 Accepted — client polls statusUrl for completion.
+        // This prevents HTTP timeout on long-running LLM/agent workflows.
+        var statusUrl = Url.Action(nameof(GetExecution), new { id = execution.Id });
+        Response.Headers.Location = statusUrl ?? $"/api/workflow/executions/{execution.Id}";
+
+        return Accepted(new
+        {
+            executionId = execution.Id,
+            workflowId = execution.WorkflowId,
+            workflowName = execution.WorkflowName,
+            status = execution.Status.ToString(),
+            startedAt = execution.StartedAt,
+            statusUrl = statusUrl ?? $"/api/workflow/executions/{execution.Id}",
+            message = "Workflow started. Poll statusUrl for completion."
+        });
     }
 
     [HttpGet("executions/{id}")]
     public async Task<IActionResult> GetExecution(string id, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
-        var execution = await _store.GetExecutionAsync(tenantId, id, ct);
+        var execution = await _engine.GetExecutionAsync(tenantId, id, ct);
         if (execution == null) return NotFound();
         return Ok(execution);
     }
@@ -86,7 +100,7 @@ public class WorkflowController : ControllerBase
     public async Task<IActionResult> ListExecutions([FromQuery] WorkflowExecutionStatus? status, [FromQuery] int limit = 50, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
-        var executions = await _store.ListExecutionsAsync(tenantId, status, limit, ct);
+        var executions = await _engine.ListExecutionsAsync(tenantId, status, limit, ct);
         return Ok(executions);
     }
 
@@ -94,7 +108,15 @@ public class WorkflowController : ControllerBase
     public async Task<IActionResult> CancelExecution(string id, [FromQuery] string? reason, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
-        var execution = await _engine.CancelAsync(id, reason, ct);
-        return Ok(execution);
+        try
+        {
+            var execution = await _engine.CancelAsync(tenantId, id, reason, ct);
+            return Ok(execution);
+        }
+        catch (System.ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Failed to cancel workflow execution: execution {ExecutionId} not found.", id);
+            return NotFound(new { error = ex.Message });
+        }
     }
 }

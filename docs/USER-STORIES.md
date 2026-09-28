@@ -62,24 +62,22 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 
 ### Intelligence (ML3–ML5)
 
-#### ML3 — Task Planning
+#### ML3 — Task Planning & Native Workflow Orchestration
 
 **Como** usuário que faz solicitações complexas,
-**quero** que o sistema decomponha minha tarefa em etapas executáveis,
-**para que** tarefas multi-step sejam rastreadas e executadas com controle.
+**quero** que o sistema orquestre tarefas usando os workflows nativos do MAF 1.6+,
+**para que** tarefas multi-step sejam executadas de forma padrão e observável.
 
 | Item | Detalhe |
 |------|---------|
-| Serviço | `ITaskPlanManager` |
-| Responsabilidade | Criação de planos com steps, avanço/falha de etapas, pausa e cancelamento |
+| Serviço | `ITaskPlanManager` / `WorkflowBuilder` Nativo |
+| Responsabilidade | Criação de planos e roteamento entre agentes usando primitivas nativas (`Microsoft.Agents.AI.Workflows`) |
 | Testes | Unitários (xUnit) |
-| Status | ✅ Implementado |
+| Status | ✅ Em Migração (MAF Nativo) |
 
 **Critérios de Aceite:**
-- [x] Plano é criado com N steps ordenados
-- [x] Cada step pode ser avançado, pausado ou falhado individualmente
-- [x] Status do plano reflete progresso (InProgress, Completed, Failed, Cancelled)
-- [x] Histórico de execução é persistido por sessão
+- [x] O workflow deve ser instanciado via `Microsoft.Agents.AI.Workflows.WorkflowBuilder`.
+- [x] Estados de transição e roteamento são manipulados via `RouteBuilder` e `WorkflowSession`.
 
 ---
 
@@ -410,20 +408,21 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 
 ---
 
-#### ML17 — IChatClient Compatibility Layer
+#### ML17 — IChatClient Compatibility & Native MAF Integration
 
 **Como** integrador de LLM providers,
-**quero** bridge automático entre `IChatClient` (M.E.AI) e `ILLMProvider`,
-**para que** qualquer `IChatClient` seja utilizável sem código adicional.
+**quero** utilizar os clientes nativos do Microsoft Agent Framework (`Microsoft.Agents.AI.OpenAI`),
+**para que** a comunicação com o LLM possua telemetria oficial e binding otimizado de ferramentas.
 
 | Item | Detalhe |
 |------|---------|
-| Serviço | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` |
-| Responsabilidade | Seleção dinâmica de provider/modelo no runtime e compatibilidade entre `IChatClient` e `ILLMProvider` quando necessária |
+| Serviço | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` (Legado) / Clientes MAF Nativos |
+| Responsabilidade | Seleção dinâmica de provider/modelo no runtime e interoperabilidade nativa com MAF 1.6+ |
 | Testes | Unitários (xUnit) |
-| Status | ✅ Implementado |
+| Status | ✅ Em Migração (MAF Nativo) |
 
 **Critérios de Aceite:**
+- [x] O pipeline principal deve instanciar LLMs utilizando bibliotecas oficiais (`Microsoft.Agents.AI.OpenAI`).
 - [x] `ContextAwareChatClient` resolve provider/modelo a partir do contexto runtime atual
 - [x] `LLMManager` mantém catálogo administrativo e registro de chat clients por provider
 - [x] `ProviderBackedChatClient` oferece compatibilidade reversa quando um fluxo precisa expor `ILLMProvider` como `IChatClient`
@@ -482,6 +481,29 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 - [x] `TenantLimits` — rate limiting e quotas por tenant (requests, tokens, storage)
 
 ---
+
+#### ML19.1 — Auto-Bootstrap e Remoção do Tenant Default
+
+**Como** arquiteto do sistema,  
+**quero** que a plataforma gerencie credenciais dinamicamente via banco de dados e auto-provisione o tenant inicial admin,  
+**para que** o fallback inseguro "default" seja eliminado e haja isolamento multi-tenant real e estrito.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `SystemBootstrapService` · `ApiKeyAuthenticationHandler` · `TenantMiddleware` |
+| Responsabilidade | Auto-bootstrap de tenant/chaves no startup, validação de chaves hashed SHA-256 e remoção de referências hardcoded a "default" |
+| Testes | Unitários (xUnit) e Integração/E2E |
+| Status | ⏳ Proposto |
+
+**Critérios de Aceite:**
+- [ ] O banco de dados reflete o tenant `admin` e `access_api_keys` populados automaticamente no primeiro boot se a tabela estiver vazia.
+- [ ] Chaves de API são armazenadas exclusivamente como hash SHA-256 de via única, protegendo as chaves contra vazamento físico de banco.
+- [ ] Requisições com chaves válidas (enviadas por cookie ou header) são resolvidas para o `tenant_id` correto associado no banco.
+- [ ] Requisições autenticadas sem um `tenant_id` final explícito são rejeitadas pelo `TenantMiddleware` com HTTP 403 Forbidden.
+- [ ] Nenhuma constante estática ou string `"default"` permanece como fallback implícito no Core ou Api do sistema.
+
+---
+
 
 ### Infraestrutura Transversal (Backend)
 
@@ -1208,12 +1230,12 @@ TriggerEngine.EvaluateAsync(rule)
 |------|---------|
 | Serviços | `LocalOnnxCrossEncoderReRankerProvider` |
 | Responsabilidade | Re-ranqueamento de chunks recuperados via modelo ONNX local |
-| Status | ⏳ Planejado |
+| Status | ✅ Implementado |
 
 **Critérios de Aceite:**
-- [ ] Carregamento do modelo ONNX e vocabulário na inicialização.
-- [ ] Processamento de pares (query, chunk) para atribuição de score de relevância.
-- [ ] Filtragem e reordenação dos Top-K resultados antes de passar para o gerador.
+- [x] Carregamento do modelo ONNX e vocabulário na inicialização.
+- [x] Processamento de pares (query, chunk) para atribuição de score de relevância.
+- [x] Filtragem e reordenação dos Top-K resultados antes de passar para o gerador.
 
 ---
 
@@ -1236,27 +1258,6 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-#### ML40 — Smart Triage & Fast Path
-
-**Como** orquestrador de alta performance,
-**quero** uma pipeline de triage em 3 camadas (Regex → ML.NET → LLM),
-**para que** solicitações simples sejam resolvidas com latência ultra-baixa (Fast Path) e sem custo de LLM.
-
-| Item | Detalhe |
-|------|---------|
-| Serviços | `SmartRouter` · `MlFastPathInterceptor` · `RegexInterceptor` |
-| Responsabilidade | Classificação de intenção em multi-camadas e curto-circuito de execução |
-| Testes | Unitários (xUnit) + Benchmarking de latência |
-| Status | ✅ Implementado |
-
-**Critérios de Aceite:**
-- [x] Camada 1 (Regex): Intercepta saudações e comandos fixos em < 1ms
-- [x] Camada 2 (ML.NET): Classifica intenções comuns via modelo local em < 10ms
-- [x] Camada 3 (LLM): Somente ativada se as camadas anteriores não atingirem confiança mínima
-- [x] Fast Path: Retorna resposta pré-definida ou via template sem invocar agentes pesados
-- [x] Otimização: Redução de ~40% no consumo de tokens em interações triviais
-
----
 
 ## Backend — Resumo de Cobertura
 
@@ -1275,9 +1276,9 @@ TriggerEngine.EvaluateAsync(rule)
 | Vision | ML26 | 1 | ✅ |
 | MCP & Extensibility | ML27–ML28 | 3 | ✅ |
 | Agent Runtime Platform | ML29–ML34 | 6 | ✅ |
-| Advanced Capabilities | ML35–ML40 | 6 | ⏳ |
+| Advanced Capabilities | ML35–ML39 | 3 | ⏳ |
 | Transversal | T1–T10 | 10 | ✅ |
-| **Total** | **40 MLs + 10 Transversais** | **60 serviços** | **549+ testes** |
+| **Total** | **39 MLs + 10 Transversais** | **57 serviços** | **549+ testes** |
 
 ---
 
@@ -1360,6 +1361,66 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 - [x] ID de sessão gerado com `crypto.randomUUID()` (fallback seguro)
 - [x] Sessão persistida via API `/api/sessions`
 - [x] Histórico de mensagens por sessão
+
+---
+
+#### US-11 — Ingestão RAG via Drag and Drop de arquivos
+
+**Como** analista de conhecimento,
+**quero** arrastar e soltar arquivos na área de chat,
+**para que** eles sejam processados e indexados instantaneamente no Vector Store (da sessão ou de uma sala ativa).
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `ChatPage` · `ragApi` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Overlay visual (backdrop blur) com mensagem "Ingestão RAG Contextual" ao arrastar arquivos sobre o chat.
+- [x] Spinner "Processando Documentos" bloqueia interações temporariamente durante a ingestão.
+- [x] Roteamento de contexto de destino para a Sala de Conhecimento ativa ou para a Sessão temporária.
+- [x] Exibe feedback visual via Toast de sucesso/erro e adiciona mensagem especial de sistema informando o status da indexação.
+
+---
+
+#### US-12 — Rastreabilidade e Citações de Fontes RAG
+
+**Como** usuário exigente,
+**quero** auditar as fontes e trechos de documentos que embasaram a resposta do agente,
+**para que** eu possa evitar alucinações e verificar a exatidão das respostas.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `MessageBubble` (citations) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Seção "Fontes (n)" com ícone de livro em respostas baseadas em RAG.
+- [x] Exibição de pílulas bibliográficas resumindo o nome do documento.
+- [x] Popover interativo exibido ao clicar na pílula da citação.
+- [x] Popup contendo o trecho exato citado (`relevantExcerpt`), porcentagem de confiança e página do documento original.
+
+---
+
+#### US-13 — Visualização de Workflows, Ações e Metadados
+
+**Como** operador de sistema,
+**quero** monitorar a execução de fluxos, ferramentas e metadados diretamente no fluxo do chat,
+**para que** eu compreenda a tomada de decisões e a orquestração do agente.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `MessageBubble` · `WorkflowExecutionCard` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Renderização inteligente do cartão interativo `WorkflowExecutionCard` quando a resposta do agente contiver `workflowExecutionId`.
+- [x] Badges visuais identificadores para ferramentas (`🔧 tool`) e ações executadas (`⚡ action`).
+- [x] Badge indicador de "Memória Recuperada" nas mensagens enviadas do usuário quando contextualizadas via memória episódica.
+- [x] Mensagens de sistema (erros/conexão) formatadas com borda avermelhada e ícone de perigo `AlertTriangle`.
+
+---
+
 
 ---
 
@@ -1916,7 +1977,11 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 | Workflow Orchestration | 2 | US-34, US-35 | 1 | ⏳ |
 | Webhooks Integration | 2 | US-36, US-37 | 1 | ⏳ |
 | Alerts History | 2 | US-38, US-39 | 1 | ⏳ |
-| **Total** | **40** | | **31 componentes** | **⏳** |
+| Specialized Context & Evolution | 4 | US-41 a US-44 | 1 | 🚧 |
+| Dynamic ONNX Inference Engine | 3 | US-45 a US-47 | 4 | ✅ |
+| Dynamic Customization & No-Code | 3 | US-48 a US-50 | 2 | ⏳ |
+| **Total** | **50** | | **38 componentes** | **⏳** |
+
 
 ---
 
@@ -2024,10 +2089,10 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Canvas interativo com suporte a drag and drop de nós e conexões
-- [ ] Tipos de nós suportados: Agent Node e Tool Node
-- [ ] Toolbar com ações de adicionar nós, salvar e executar
-- [ ] Painel de status do motor exibindo nós ativos e conexões
+- [x] Canvas interativo com suporte a drag and drop de nós e conexões
+- [x] Tipos de nós suportados: Agent Node e Tool Node
+- [x] Toolbar com ações de adicionar nós, salvar e executar
+- [x] Painel de status do motor exibindo nós ativos e conexões
 
 ---
 
@@ -2039,9 +2104,9 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Botão "Save Workflow" gera a definição do workflow (JSON) e envia para a API
-- [ ] Botão "Run" dispara a execução do workflow no backend
-- [ ] Feedback visual de salvamento e execução
+- [x] Botão "Save Workflow" gera a definição do workflow (JSON) e envia para a API
+- [x] Botão "Run" dispara a execução do workflow no backend
+- [x] Feedback visual de salvamento e execução
 
 ---
 
@@ -2053,10 +2118,10 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Lista de webhooks com nome, status (Ativo/Inativo), data de criação e último disparo
-- [ ] Formulário para criar webhook com nome, agente alvo (opcional) e workflow alvo (opcional)
-- [ ] Ação de excluir webhook com confirmação
-- [ ] Copiar URL do webhook para a área de transferência
+- [x] Lista de webhooks com nome, status (Ativo/Inativo), data de criação e último disparo
+- [x] Formulário para criar webhook com nome, agente alvo (opcional) e workflow alvo (opcional)
+- [x] Ação de excluir webhook com confirmação
+- [x] Copiar URL do webhook para a área de transferência
 
 ---
 
@@ -2068,9 +2133,9 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Endpoint `/api/webhooks/receive/{id}` recebe requisições POST
-- [ ] Execução é encaminhada para o agente ou workflow configurado
-- [ ] Retorno de sucesso ou erro apropriado para o chamador
+- [x] Endpoint `/api/webhooks/receive/{id}` recebe requisições POST
+- [x] Execução é encaminhada para o agente ou workflow configurado
+- [x] Retorno de sucesso ou erro apropriado para o chamador
 
 ---
 
@@ -2082,9 +2147,9 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Lista de alertas exibindo provider, tipo, mensagem, percentual restante e data
-- [ ] Alertas não lidos destacados visualmente
-- [ ] Botão para atualizar a lista de alertas
+- [x] Lista de alertas exibindo provider, tipo, mensagem, percentual restante e data
+- [x] Alertas não lidos destacados visualmente
+- [x] Botão para atualizar a lista de alertas
 
 ---
 
@@ -2096,5 +2161,261 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Botão de check para marcar alerta como lido
-- [ ] Atualização do estado do alerta na interface sem recarregar a página
+- [x] Botão de check para marcar alerta como lido
+- [x] Atualização do estado do alerta na interface sem recarregar a página
+
+---
+
+### Épico 9: Specialized Context & Evolution (Roadmap Q2 2026)
+
+#### US-41 — Associar Agente a Knowledge Rooms
+
+**Como** administrador de segurança,
+**quero** selecionar quais Knowledge Rooms um agente pode acessar,
+**para que** o escopo de busca semântica seja restrito a contextos específicos e seguros.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `AgentFormModal` (seletor múltiplo) |
+| API | `PUT /api/agent/agents/{name}/rooms` |
+| Status | ✅ Implementado (ADR-019) |
+
+**Critérios de Aceite:**
+- [x] Lista de salas disponíveis carregada no modal de criação/edição de agente.
+- [x] Persistência da associação em tabela junction `AgentKnowledgeRoomAssignment`.
+- [x] O `KnowledgeSpecialist` filtra a busca vetorial automaticamente pelas salas associadas ao agente.
+
+---
+
+#### US-42 — Dashboard de FinOps e Previsão de Custos
+
+**Como** gestor financeiro,
+**quero** visualizar o consumo detalhado de tokens e custos por tenant/agente,
+**para que** eu possa prever gastos e ajustar quotas proativamente.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `FinOpsPage` (rota `/admin/finops`) |
+| API | `GET /api/admin/gateway/metrics/finops` |
+| Status | ⏳ Planejado (ADR-008) |
+
+**Critérios de Aceite:**
+- [ ] Gráficos de barra: Consumo por Provider (OpenAI, Gemini, Claude).
+- [ ] Tabela de Top-Agents por custo.
+- [ ] Alertas visuais quando um tenant atinge 80% da quota.
+
+---
+
+#### US-43 — Publicar Agentes via A2A/AgUI
+
+**Como** desenvolvedor de ecossistema,
+**quero** expor meus agentes internos via protocolos padronizados,
+**para que** eles possam ser consumidos por sistemas externos (ex: Copilot Studio).
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `ProtocolsPage` |
+| API | `GET /a2a` · `GET /agui` |
+| Status | ⏳ Planejado (ADR-020) |
+
+**Critérios de Aceite:**
+- [ ] Flag "Publicly Exportable" na configuração do agente.
+- [ ] Endpoint `/agui` retorna manifesto JSON válido do protocolo.
+- [ ] Logs de auditoria mostram chamadas originadas via protocolo.
+
+---
+
+#### US-44 — Executar Bateria de Avaliação de Qualidade
+
+**Como** arquiteto de prompts,
+**quero** rodar um Golden Set contra um agente após mudanças no sistema,
+**para que** eu valide scores de Relevância e Grounding (Grounding).
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `EvaluationPage` |
+| Engine | `Microsoft.Extensions.AI.Evaluation` |
+| Status | 🚧 CRUD backend implementado; interface e métricas pendentes (ADR-032) |
+
+**Critérios de Aceite:**
+- [ ] Upload/Edição de Golden Sets (Query vs Expected) na interface.
+- [ ] Relatório de comparação entre versões do agente.
+- [ ] Scores automáticos (0-1) para Grounding e Fluência.
+
+O backend oferece CRUD e execução de Golden Sets via REST. Esses endpoints não concluem, por si só, os critérios da interface e das métricas acima.
+
+---
+
+### Épico 10: Dynamic ONNX In-Process Inference Engine (Roadmap Q2 2026)
+
+#### US-45 — Upload e Gerenciamento Dinâmico de Modelos ONNX
+
+**Como** administrador do sistema,  
+**quero** fazer upload e configurar modelos ONNX pela interface web,  
+**para que** novas capacidades de IA local sejam incorporadas sem a necessidade de novos deploys de código C#.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `OnnxModelsPage` · `OnnxModelUploadModal` · `OnnxModelInspectModal` · `OnnxModelTestModal` |
+| API | `GET/POST/PUT/DELETE /api/onnx/models` · `POST /api/onnx/models/{id}/inspect` · `POST /api/onnx/models/{id}/test` |
+| Status | ✅ Implementado (ADR-010) |
+
+**Critérios de Aceite:**
+- [x] Interface de upload aceita o arquivo `.onnx` principal e opcionalmente o arquivo secundário de pesos (`.data` / `.bin`) para modelos split.
+- [x] Formulário de upload com validações para metadados de inferência (Input/Output Nodes, Width, Height, Channels, Scale Factor, Mean R/G/B, Output Format).
+- [x] Exibição de aviso visual claro e progresso de upload caso a soma dos arquivos exceda 50MB, indicando salvamento físico em disco.
+- [x] Rota de deleção física e lógica que limpa registros no PostgreSQL e diretórios físicos correspondentes no disco.
+- [x] Interface de testes rápidos (`TestModal`) que permite upload de imagem de teste local e exibe o resultado da inferência lado a lado com métricas de latência e shape.
+
+---
+
+#### US-46 — Execução Genérica via DynamicOnnxProcessorTool (ITool)
+
+**Como** construtor de workflows,  
+**quero** utilizar uma tool genérica do processador ONNX como bloco em meu fluxo,  
+**para que** eu possa aplicar inferências de IA em dados de imagem encadeados de forma transparente.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `DynamicOnnxProcessorTool` (`ITool`) · `WorkflowBuilder.tsx` (Properties Panel) |
+| API | SignalR `hubs/chat` · REST execution APIs |
+| Status | ✅ Implementado (ADR-010) |
+
+**Critérios de Aceite:**
+- [x] Registro correto da tool `onnx_processor` no `IToolManager` com a categoria `AI`.
+- [x] Properties Panel do Workflow Builder exibe dropdown populado dinamicamente com os modelos ONNX ativos ao selecionar o nó `onnx_processor`.
+- [x] A execução do processador decodifica a imagem base64 de entrada, realiza o pré-processamento de canais/normalização, cria a `InferenceSession`, executa a inferência e pós-processa o output de volta para base64.
+- [x] Tratamento de erros gracioso: falhas internas do runtime ONNX retornam uma descrição legível de erro no `ToolResult` em vez de crashar a thread.
+
+---
+
+#### US-47 — Isolamento Multi-Tenant e Segurança Físico-Lógica dos Modelos ONNX
+
+**Como** cliente/tenant da plataforma,  
+**quero** garantia absoluta de que meus modelos ONNX e arquivos de pesos carregados estão isolados física e logicamente,  
+**para que** meus ativos intelectuais e de dados nunca vazem para outros tenants.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `TenantMiddleware` · `AgenticDbContext` · `OnnxModelController` |
+| Segurança | Isolamento Físico e Lógico (T5, T7) |
+| Status | ✅ Implementado (ADR-010) |
+
+**Critérios de Aceite:**
+- [x] Aplicação de filtro global EF Core (`TenantId`) na entidade `CustomOnnxModelEntity`.
+- [x] Modelos armazenados fisicamente são salvos estritamente sob a estrutura `wwwroot/onnx-models/{tenantId}/{modelId}/` com nomes originais preservados.
+- [x] Resolução de arquivos secundários (`.data` / `.bin`) via path absoluto restrita estritamente ao diretório do respectivo `tenantId`, bloqueando acessos transversais de diretório (Directory Traversal).
+- [x] Validação no `DeleteModel` para impedir que um tenant delete arquivos pertencentes a outro através da manipulação do `modelId`.
+
+---
+
+### Épico 11: Dynamic Customization & No-Code Orchestration (Future Roadmap)
+
+#### US-48 — No-Code Skills (Dynamic Custom Skills via UI)
+
+**Como** construtor de agentes ou administrador do sistema,  
+**quero** criar, persistir de forma relacional e fiar dinamicamente Skills personalizadas diretamente pela interface de usuário (sem precisar codificar C#),  
+**para que** eu possa estender o comportamento dos agentes rapidamente usando instruções declarativas, parâmetros de inputs/outputs e prompts estruturados.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `CustomSkillsPage` · `SkillCreatorWizard` |
+| API / Serviço | `ICustomSkillManager` · `GET/POST/PUT/DELETE /api/skills/custom` |
+| Status | ⏳ Planejado (Future Roadmap) |
+
+**Critérios de Aceite:**
+- [ ] Interface visual para criação de Skills (Nome, Descrição, System Prompt/Instruções e Variáveis de Entrada/Saída).
+- [ ] Persistência relacional em banco de dados das custom skills com isolamento multi-tenant (`TenantId`).
+- [ ] Associação dinâmica a agentes existentes com fiação em tempo real (runtime reflection).
+- [ ] Validação de schema e tipos das variáveis de entrada/saída declaradas.
+- [ ] Suporte a importação/exportação de definições de Skills em formato YAML/JSON.
+
+---
+
+#### US-49 — Agent Constructor (Visual Agent Builder)
+
+**Como** administrador do sistema,  
+**quero** uma interface visual de construção de agentes que me permita arrastar ou selecionar via checkboxes as capabilities, tools, salas de RAG e skills de forma dinâmica,  
+**para que** novos agentes especializados possam ser montados em minutos sem qualquer deploy de código.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `AgentConstructorPage` · `AgentBuilderCanvas` |
+| API / Serviço | `IDynamicAgentFactory` · `PUT /api/agent/agents/{name}/wire` |
+| Status | ⏳ Planejado (Future Roadmap) |
+
+**Critérios de Aceite:**
+- [ ] Form Wizard visual premium com etapas claras para definição do perfil do Agente (Nome, Avatar, Modelo de LLM, Temperatura, Max Tokens).
+- [ ] Painel de Checkboxes / Multi-select interativo para Capabilities (Web Search, File Search, Advanced Math).
+- [ ] Painel para fiação de Tools de infraestrutura e plugins MCP registrados.
+- [ ] Seletor de Knowledge Rooms autorizadas para o agente (RAG).
+- [ ] Seletor de Custom Skills criadas declarativamente pela interface.
+- [ ] Visualização ao vivo do "Prompt Consolidado" resultante e testes rápidos integrados antes de salvar.
+
+---
+
+#### US-50 — Auto-Triage Pipeline (Semantic Router & Ingest Pipeline)
+
+**Como** arquiteto do sistema agêntico,  
+**quero** um classificador semântico em background que avalie e roteie de forma inteligente uploads de arquivos e mensagens no chat entre RAG (Knowledge Rooms) e Memória Episódica (Histórico/Conhecimento Pessoal do Usuário),  
+**para que** o armazenamento seja otimizado e a recuperação de contexto seja extremamente relevante e rápida.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | Background Ingest Monitor |
+| API / Serviço | `IAutoTriageService` · `SemanticTriageWorker` (Background Service) |
+| Status | ⏳ Planejado (Future Roadmap) |
+
+**Critérios de Aceite:**
+- [ ] Pipeline assíncrono em background (HostedService ou Worker) ativado após uploads ou interações significativas.
+- [ ] Classificador semântico que determina a natureza do dado (ex: manual/documento estático -> RAG Room; decisão/fato pessoal -> Memória Episódica).
+- [ ] Execução assíncrona em background que não bloqueia a interface do usuário nem o envio inicial de mensagens.
+- [ ] Mecanismo de re-indexação inteligente que move chunks stale ou consolidados entre as camadas de memória.
+- [ ] Painel de monitoramento visual do pipeline de triagem com status do routing e estatísticas de destinação.
+
+---
+
+### Épico 12: Multi-Provider LLM Sychronization & Integrity (Issue #94)
+
+#### US-51 — Inspeção Automática de Modelos LLM no Login
+
+**Como** usuário autenticado do sistema,  
+**quero** que a plataforma execute automaticamente em background a inspeção e descoberta de modelos LLM das chaves ativas associadas ao meu tenant,  
+**para que** a lista de modelos disponíveis na interface esteja sempre atualizada com as capacidades reais de cada provedor no momento do acesso.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `AuthController` (Backend Trigger) · `LlmCatalogUpdated` (SignalR Hub Notification) |
+| API / Serviço | `ILLMAdministrationService` · `ILLMProviderApiKeyService` · `IHubContext<ChatHub>` / `IHubContext<GatewayHub>` |
+| Status | ⏳ Planejado (ADR-021, Issue #94) |
+
+**Critérios de Aceite:**
+- [ ] O serviço `ILLMProviderApiKeyService` deve ser registrado no DI em `ServiceCollectionExtensions.cs` como Scoped.
+- [ ] O controller `AuthController.Login` deve injetar `IServiceScopeFactory` e disparar a descoberta em segundo plano via `Task.Run` sem bloquear o login HTTP.
+- [ ] A varredura de chaves armazenadas em banco deve ser restrita apenas ao **tenant do usuário logado**, mantendo o isolamento de dados entre os inquilinos.
+- [ ] As chaves ativas de infraestrutura global em `AgenticSystemSettings` devem ser inspecionadas se seus respectivos provedores estiverem ativos.
+- [ ] Notificar erros e falhas nas chamadas a APIs de LLM externas de forma isolada nos logs do Serilog, impedindo que a falha de um provedor afete os demais.
+- [ ] Disparar um evento SignalR `LlmCatalogUpdated` direcionado ao grupo do tenant no sucesso da varredura, notificando o frontend para atualizar o catálogo de modelos disponíveis dinamicamente em tempo real.
+
+---
+
+### Épico 13: Resilient Workflows & Durable Orchestration (Issue #108)
+
+#### US-52 — Migração para DurableTask Multi-Tenant no PostgreSQL
+
+**Como** arquiteto ou desenvolvedor do sistema,  
+**quero** que a plataforma execute as orquestrações e persista as sessões dos agentes utilizando a infraestrutura nativa do `Microsoft.Agents.AI.DurableTask`,  
+**para que** workflows de longa duração de múltiplos agentes sobrevivam a reinicializações com checkpoints robustos no PostgreSQL e isolamento estrito de Multi-Tenancy.
+
+| Item | Detalhe |
+|------|---------|
+| Componentes | `SimpleSessionStoreAdapter` (Substituição) · `DurableWorkflowCompiler` (Novo) |
+| API / Serviços | `IWorkflowCompiler` · `AgentSessionStore` · `DurableTask` Services |
+| Status | ⏳ Planejado (ADR-030, Issue #108) |
+
+**Critérios de Aceite:**
+- [ ] A sessão de orquestração do MAF deve ser delegada ao `Microsoft.Agents.AI.DurableTask` configurado com banco de dados PostgreSQL como engine de persistência.
+- [ ] O particionamento Multi-Tenant deve ser garantido prefixando o identificador do tenant em cada instância durável: `InstanceId = $"{TenantId}:{SessionId}"`.
+- [ ] As tabelas internas da engine do DurableTask PostgreSQL devem ser criadas na inicialização da aplicação usando scripts internos do provedor, sem poluir o histórico de migrations do EF Core.
+- [ ] O compilador de workflows orientados a grafos deve mapear de forma transparente os nós declarativos do banco para Atividades (Activities) assíncronas do DurableTask.
+- [ ] Garantir 100% de sucesso na suíte de testes de integração, cobrindo criação, serialização e recuperação de workflows duráveis simulados.

@@ -1,3 +1,6 @@
+using System;
+using System.Linq;
+using System.Collections.Generic;
 using System.Diagnostics;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
@@ -60,7 +63,18 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             "🎯 Orchestrator processing request via hosted framework agent: {Input}",
             input[..Math.Min(50, input.Length)]);
 
-        // 1. Resolver o hosted agent nativo e o contexto de specialist bindings da execução atual
+        // 1. Obter agentes ativos e construir o agente orquestrador de forma assíncrona
+        var activeAgents = (await serviceScope.ServiceProvider.GetRequiredService<IAgentFactory>().GetAllAgentsAsync())
+            .Where(a => a.IsActive).ToList();
+
+        var hostBuilder = serviceScope.ServiceProvider.GetRequiredService<OrchestratorHostBuilder>();
+        var orchestratorAgent = await hostBuilder.BuildAsync(activeAgents, sessionId, ct);
+
+        // Armazenar no estado scoped antes de resolver OrchestratorContext
+        var contextState = serviceScope.ServiceProvider.GetRequiredService<OrchestratorContextState>();
+        contextState.OrchestratorAgent = orchestratorAgent;
+        contextState.ActiveAgents = activeAgents;
+
         var orchestratorCtx = scopedServices.GetRequiredService<OrchestratorContext>();
         var orchestrator = scopedServices.GetRequiredKeyedService<AIAgent>(_orchestratorMetadata.Name);
         var sessionStore = scopedServices.GetRequiredKeyedService<AgentSessionStore>(_orchestratorMetadata.Name);
@@ -76,7 +90,7 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             Message = "Framework orchestrator delegating to specialists",
             Data = new Dictionary<string, object>
             {
-                ["specialistCount"] = orchestratorCtx.SpecialistBindings.Count,
+                ["specialistCount"] = activeAgents.Count,
                 ["mode"] = "framework-orchestration"
             }
         }, ct);
@@ -85,11 +99,8 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         FrameworkAgentResponse frameworkResponse;
         try
         {
-            var activeAgents = (await serviceScope.ServiceProvider.GetRequiredService<IAgentFactory>().GetAllAgentsAsync())
-                .Where(a => a.IsActive).ToList();
-            
             var workflow = await serviceScope.ServiceProvider.GetRequiredService<OrchestratorHostBuilder>()
-                .BuildHandoffWorkflowAsync(activeAgents, sessionId, ct);
+                .BuildHandoffWorkflowAsync(orchestratorAgent, activeAgents, ct);
 
             var messages = new List<ChatMessage> { new(ChatRole.User, preProcessingResult.EffectiveInput) };
             
@@ -107,13 +118,29 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         }
 
         // 4. Extrair conteúdo textual da resposta do framework
-        var content = ExtractContent(frameworkResponse);
+        var content = ExtractContent(frameworkResponse, _logger);
+
+        _logger.LogInformation(
+            "📝 Workflow extraction: {MsgCount} messages, content length: {Length}, isEmpty: {IsEmpty}",
+            frameworkResponse.Messages.Count, content.Length, string.IsNullOrWhiteSpace(content));
 
         // 5. Identificar qual especialista foi chamado (via tool calls no histórico ou eventos de handoff)
         var specialistCalls = GetSpecialistToolCalls(frameworkResponse);
         var handoffEvent = ExtractHandoffAgent(frameworkResponse);
         var calledAgent = handoffEvent ?? specialistCalls.FirstOrDefault();
         var calledBinding = FindCalledBinding(orchestratorCtx, calledAgent != null ? new[] { calledAgent } : Array.Empty<string>());
+
+        IAgent? resolvedAgent = null;
+        if (!string.IsNullOrEmpty(calledAgent))
+        {
+            var sanitizedCalledName = SanitizeAgentName(calledAgent);
+            var matchingAgentInfo = activeAgents.FirstOrDefault(a => SanitizeAgentName(a.Name) == sanitizedCalledName);
+            if (matchingAgentInfo != null)
+            {
+                var agentFactory = serviceScope.ServiceProvider.GetRequiredService<IAgentFactory>();
+                resolvedAgent = await agentFactory.ResolveAgentAsync(matchingAgentInfo);
+            }
+        }
 
         sw.Stop();
 
@@ -125,7 +152,7 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             input,
             context,
             content,
-            calledBinding?.Agent,
+            resolvedAgent ?? calledBinding?.Agent,
             calledAgent,
             orchestrator.Id ?? string.Empty,
             sw.Elapsed,
@@ -135,25 +162,73 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
     private static FrameworkAgentResponse ExtractResponseFromWorkflowRun(Run run)
     {
         var messages = new List<ChatMessage>();
-        
-        // Coletar todas as mensagens de assistant produzidas durante o run
+        var eventCount = run.OutgoingEvents.Count();
+
+        // Primary: AgentResponseEvent
         foreach (var ev in run.OutgoingEvents)
         {
             if (ev is AgentResponseEvent responseEvent)
             {
                 messages.AddRange(responseEvent.Response.Messages);
             }
-            else if (ev is WorkflowOutputEvent outputEvent && outputEvent.Is<ChatMessage>(out var msg))
+            else if (ev is AgentResponseUpdateEvent updateEvent)
             {
-                messages.Add(msg);
+                messages.AddRange(updateEvent.AsResponse().Messages);
+            }
+            else if (ev is WorkflowOutputEvent outputEvent)
+            {
+                if (outputEvent.Is<ChatMessage>(out var msg))
+                {
+                    messages.Add(msg);
+                }
+                else if (outputEvent.Is<string>(out var text) && !string.IsNullOrWhiteSpace(text))
+                {
+                    messages.Add(new ChatMessage(ChatRole.Assistant, text));
+                }
             }
         }
 
-        // Se não houver mensagens, tenta pegar do log de mensagens do run se disponível
+        // Fallback: try to extract text from any object in OutgoingEvents
+        if (messages.Count == 0)
+        {
+            foreach (var ev in run.OutgoingEvents)
+            {
+                var text = ExtractTextFromEventObject(ev);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    messages.Add(new ChatMessage(ChatRole.Assistant, text));
+                }
+            }
+        }
+
         return new FrameworkAgentResponse
         {
             Messages = messages
         };
+    }
+
+    private static string ExtractTextFromEventObject(object ev)
+    {
+        var type = ev.GetType();
+        var responseProp = type.GetProperty("Response");
+        if (responseProp != null)
+        {
+            var response = responseProp.GetValue(ev);
+            if (response != null)
+            {
+                var messagesProp = response.GetType().GetProperty("Messages");
+                if (messagesProp?.GetValue(response) is IEnumerable<ChatMessage> msgs)
+                {
+                    return string.Join("\n", msgs
+                        .Where(m => m.Role == ChatRole.Assistant)
+                        .SelectMany(m => m.Contents.OfType<TextContent>())
+                        .Select(t => t.Text));
+                }
+            }
+        }
+
+        var textProp = type.GetProperty("Text");
+        return textProp?.GetValue(ev) as string ?? string.Empty;
     }
 
     private static string? ExtractHandoffAgent(FrameworkAgentResponse response)
@@ -277,7 +352,7 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         };
     }
 
-    private static string ExtractContent(FrameworkAgentResponse frameworkResponse)
+    private static string ExtractContent(FrameworkAgentResponse frameworkResponse, ILogger? logger = null)
     {
         // Extrair texto das mensagens do assistant
         var content = string.Join("\n", frameworkResponse.Messages
@@ -290,6 +365,15 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             content = string.Join("\n", frameworkResponse.Messages
                 .Where(m => m.Role == ChatRole.Assistant)
                 .Select(m => m.Text));
+        }
+
+        if (string.IsNullOrWhiteSpace(content) && logger != null)
+        {
+            logger.LogWarning(
+                "⚠️ ExtractContent returned empty. Messages: {Count}, Roles: {Roles}, TotalContents: {TotalContents}",
+                frameworkResponse.Messages.Count,
+                string.Join(", ", frameworkResponse.Messages.Select(m => m.Role.ToString())),
+                frameworkResponse.Messages.Sum(m => m.Contents.Count()));
         }
 
         return content ?? string.Empty;
@@ -339,5 +423,11 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         }
 
         return null;
+    }
+
+    private static string SanitizeAgentName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return string.Empty;
+        return new string(name.Where(c => char.IsLetterOrDigit(c)).ToArray()).ToLowerInvariant();
     }
 }

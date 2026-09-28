@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Infrastructure.Persistence.Entities;
 
 [Table("prompt_templates")]
-public class PromptTemplateEntity
+public class PromptTemplateEntity : ITenantEntity
 {
     [Key]
     [MaxLength(64)]
@@ -18,6 +19,9 @@ public class PromptTemplateEntity
     [Required]
     [MaxLength(256)]
     public string AgentName { get; set; } = string.Empty;
+
+    [MaxLength(50)]
+    public string TenantId { get; set; } = string.Empty;
 
     [Required]
     public string TemplateBody { get; set; } = string.Empty;
@@ -49,6 +53,7 @@ public class PromptTemplateEntity
             Id = Id,
             Name = Name,
             AgentName = AgentName,
+            TenantId = TenantId,
             TemplateBody = TemplateBody,
             Version = Version,
             Locale = Locale,
@@ -68,6 +73,7 @@ public class PromptTemplateEntity
             Id = model.Id,
             Name = model.Name,
             AgentName = model.AgentName,
+            TenantId = model.TenantId,
             TemplateBody = model.TemplateBody,
             Version = model.Version,
             Locale = model.Locale,

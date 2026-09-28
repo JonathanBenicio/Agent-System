@@ -24,6 +24,7 @@ export function HealthPage() {
     }
   }
 
+
   useEffect(() => { refresh() }, [])
 
   if (loading) return <PageLoading />

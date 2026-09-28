@@ -7,14 +7,14 @@ namespace AgenticSystem.Core.Models;
 public class TenantContext
 {
     /// <summary>
-    /// Identificador único do tenant. "default" para single-tenant/testes.
+    /// Identificador único do tenant.
     /// </summary>
-    public string TenantId { get; set; } = Tenant.DefaultTenantId;
+    public required string TenantId { get; init; }
 
     /// <summary>
     /// Nome do tenant para exibição.
     /// </summary>
-    public string TenantName { get; set; } = "Default";
+    public string TenantName { get; set; } = string.Empty;
 
     /// <summary>
     /// Plano do tenant (Free, Pro, Enterprise).

@@ -91,6 +91,13 @@ services:
       - "11434:11434"
     volumes:
       - ollama-data:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 10s
@@ -112,6 +119,14 @@ services:
         curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"qwen2.5:0.5b\"}';
         echo 'Baixando modelo de Embeddings (nomic-embed-text)...';
         curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"nomic-embed-text\"}';
+        echo 'Baixando modelo Vision para Banner Production (llama3.2-vision)...';
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3.2-vision\"}';
+        echo 'Baixando modelo Llama 3.1 8B...';
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3.1:8b\"}';
+        echo 'Baixando modelo Llama 3.2 3B...';
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3.2:3b\"}';
+        echo 'Baixando modelo Action para Banner Production (llama3:8b)...';
+        curl -X POST http://ollama:11434/api/pull -d '{\"name\":\"llama3:8b\"}';
         echo 'Modelos prontos e inicializados!';
       "
     depends_on:

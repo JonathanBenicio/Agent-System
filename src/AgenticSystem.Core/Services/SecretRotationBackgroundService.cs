@@ -1,4 +1,5 @@
 using AgenticSystem.Core.Interfaces;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -10,19 +11,16 @@ namespace AgenticSystem.Core.Services;
 /// </summary>
 public class SecretRotationBackgroundService : BackgroundService
 {
-    private readonly IConfigManager _configManager;
-    private readonly IAuditLog _auditLog;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<SecretRotationBackgroundService> _logger;
     private readonly TimeSpan _checkInterval = TimeSpan.FromHours(1);
     private readonly TimeSpan _lookaheadWindow = TimeSpan.FromDays(7);
 
     public SecretRotationBackgroundService(
-        IConfigManager configManager,
-        IAuditLog auditLog,
+        IServiceProvider serviceProvider,
         ILogger<SecretRotationBackgroundService> logger)
     {
-        _configManager = configManager;
-        _auditLog = auditLog;
+        _serviceProvider = serviceProvider;
         _logger = logger;
     }
 
@@ -47,7 +45,14 @@ public class SecretRotationBackgroundService : BackgroundService
 
     private async Task CheckExpiredSecretsAsync(CancellationToken ct)
     {
-        var expiredSecrets = await _configManager.GetExpiredSecretsAsync(_lookaheadWindow);
+        using var scope = _serviceProvider.CreateScope();
+        var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+        using var tenantScope = tenantAccessor.BeginScope(new Models.TenantContext { TenantId = "system-background", TenantName = "System Background Worker" });
+        
+        var configManager = scope.ServiceProvider.GetRequiredService<IConfigManager>();
+        var auditLog = scope.ServiceProvider.GetRequiredService<IAuditLog>();
+
+        var expiredSecrets = await configManager.GetExpiredSecretsAsync(_lookaheadWindow);
         var expiredList = expiredSecrets.ToList();
 
         if (expiredList.Count == 0) return;
@@ -58,7 +63,7 @@ public class SecretRotationBackgroundService : BackgroundService
         {
             var isAlreadyExpired = secret.ExpiresAt.HasValue && secret.ExpiresAt.Value < DateTime.UtcNow;
 
-            await _auditLog.RecordAsync(new Models.AuditEntry
+            await auditLog.RecordAsync(new Models.AuditEntry
             {
                 Category = Models.AuditCategory.Security,
                 Action = isAlreadyExpired ? "SecretExpired" : "SecretExpiringSoon",

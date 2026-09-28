@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgenticSystem.Api.Controllers.OpenAI;
 
@@ -13,7 +15,7 @@ namespace AgenticSystem.Api.Controllers.OpenAI;
 /// permitindo integração com ferramentas que consomem a API OpenAI
 /// (Continue, Cursor, LangChain, etc.).
 /// 
-/// Autenticação via Bearer token (padrão OpenAI) — valida contra AdminApiKey.
+/// Autenticação via Bearer token (padrão OpenAI) — valida contra banco de dados.
 /// </summary>
 [ApiController]
 [Route("v1")]
@@ -21,16 +23,19 @@ namespace AgenticSystem.Api.Controllers.OpenAI;
 public class OpenAIChatCompletionController : ControllerBase
 {
     private readonly IFrameworkOrchestratorService _orchestrator;
-    private readonly IConfiguration _configuration;
+    private readonly AgenticDbContext _dbContext;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
     private readonly ILogger<OpenAIChatCompletionController> _logger;
 
     public OpenAIChatCompletionController(
         IFrameworkOrchestratorService orchestrator,
-        IConfiguration configuration,
+        AgenticDbContext dbContext,
+        ITenantContextAccessor tenantContextAccessor,
         ILogger<OpenAIChatCompletionController> logger)
     {
         _orchestrator = orchestrator;
-        _configuration = configuration;
+        _dbContext = dbContext;
+        _tenantContextAccessor = tenantContextAccessor;
         _logger = logger;
     }
 
@@ -48,7 +53,7 @@ public class OpenAIChatCompletionController : ControllerBase
         CancellationToken ct)
     {
         // 1. Autenticação via Bearer token (padrão OpenAI)
-        if (!ValidateBearerToken())
+        if (!await ValidateBearerTokenAsync())
         {
             return Unauthorized(new ChatCompletionError
             {
@@ -119,7 +124,7 @@ public class OpenAIChatCompletionController : ControllerBase
             agentResponse = await _orchestrator.ExecuteAsync(
                 sessionId,
                 lastUserMessage.Content,
-                new UserContext { UserId = sessionId },
+                new UserContext { UserId = sessionId, TenantId = _tenantContextAccessor.CurrentTenantId },
                 ct);
         }
         catch (OperationCanceledException)
@@ -184,9 +189,9 @@ public class OpenAIChatCompletionController : ControllerBase
     [HttpGet("models")]
     [Produces("application/json")]
     [ProducesResponseType(200)]
-    public IActionResult ListModels()
+    public async Task<IActionResult> ListModels()
     {
-        if (!ValidateBearerToken())
+        if (!await ValidateBearerTokenAsync())
         {
             return Unauthorized(new ChatCompletionError
             {
@@ -217,14 +222,8 @@ public class OpenAIChatCompletionController : ControllerBase
         return Ok(models);
     }
 
-    private bool ValidateBearerToken()
+    private async Task<bool> ValidateBearerTokenAsync()
     {
-        var configuredKey = _configuration["AgenticSystem:AdminApiKey"];
-
-        // Se nenhuma chave configurada, endpoint desabilitado
-        if (string.IsNullOrWhiteSpace(configuredKey))
-            return false;
-
         var authHeader = Request.Headers.Authorization.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(authHeader))
             return false;
@@ -237,8 +236,28 @@ public class OpenAIChatCompletionController : ControllerBase
         if (string.IsNullOrWhiteSpace(token))
             return false;
 
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(token),
-            Encoding.UTF8.GetBytes(configuredKey));
+        // Calcula o Hash SHA-256 da chave fornecida
+        var keyBytes = Encoding.UTF8.GetBytes(token);
+        var hashBytes = SHA256.HashData(keyBytes);
+        var keyHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
+
+        // Consulta no banco de dados se o hash corresponde a uma chave ativa
+        var accessKey = await _dbContext.AccessApiKeys
+            .IgnoreQueryFilters() // Ignora o filtro de tenant
+            .FirstOrDefaultAsync(k => k.KeyHash == keyHash && k.IsEnabled);
+
+        if (accessKey is null)
+            return false;
+
+        // Estabelece o escopo do Tenant via ITenantContextAccessor (single source of truth)
+        _tenantContextAccessor.BeginScope(new TenantContext
+        {
+            TenantId = accessKey.TenantId,
+            TenantName = accessKey.Name,
+            IsAuthenticated = true
+        });
+
+        return true;
     }
 }
+

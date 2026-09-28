@@ -71,8 +71,36 @@ public class SelfImprovementBackgroundJob : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var improvementService = scope.ServiceProvider.GetRequiredService<ISelfImprovementEngine>();
+            var tenantStore = scope.ServiceProvider.GetService<ITenantStore>();
+            var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
 
-            await improvementService.ProcessBatchImprovementsAsync(ct);
+            var tenants = new List<string> { "admin" };
+            if (tenantStore != null)
+            {
+                try
+                {
+                    var allTenants = await tenantStore.GetAllAsync(ct);
+                    if (allTenants != null && allTenants.Count > 0)
+                        tenants = allTenants.Select(t => t.Id).ToList();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to load tenants for self-improvement, falling back to admin");
+                }
+            }
+
+            foreach (var tenantId in tenants)
+            {
+                using var tenantScope = tenantContextAccessor.BeginScope(new TenantContext { TenantId = tenantId });
+                try 
+                {
+                    await improvementService.ProcessBatchImprovementsAsync(ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "❌ Error during self-improvement cycle for tenant {TenantId}", tenantId);
+                }
+            }
         }
         catch (Exception ex)
         {

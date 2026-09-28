@@ -35,8 +35,8 @@ public class AgentPolicy
     /// <summary>Agent name pattern this policy applies to. Null = all agents.</summary>
     public string? AgentNamePattern { get; set; }
 
-    /// <summary>Tenant ID this policy applies to. Null = all tenants.</summary>
-    public string? TenantId { get; set; }
+    /// <summary>Tenant ID this policy applies to.</summary>
+    public string TenantId { get; set; } = string.Empty;
 
     /// <summary>Maximum autonomy level allowed.</summary>
     public AutonomyLevel MaxAutonomyLevel { get; set; } = AutonomyLevel.Supervised;

@@ -53,7 +53,10 @@ public static class ObservabilityExtensions
             });
             tracing.AddSource(
                 "Microsoft.Extensions.AI",
-                "Experimental.Microsoft.Agents.AI"
+                "Experimental.Microsoft.Agents.AI",
+                "AgenticSystem.Embeddings",
+                "AgenticSystem.Orchestrator",
+                "AgenticSystem.Agents"
             );
 
             if (useOtel)
@@ -73,7 +76,10 @@ public static class ObservabilityExtensions
                 "Microsoft.AspNetCore.Server.Kestrel",
                 "AgenticSystem.Runtime", // Custom metrics for our coordinator
                 "Microsoft.Extensions.AI", // Native .NET AI telemetry (tokens, duration)
-                "Experimental.Microsoft.Agents.AI" // Native Microsoft Agent Framework telemetry (cost, tokens)
+                "Experimental.Microsoft.Agents.AI", // Native Microsoft Agent Framework telemetry (cost, tokens)
+                "AgenticSystem.Embeddings",
+                "AgenticSystem.Orchestrator",
+                "AgenticSystem.Agents"
             );
 
             if (useOtel)

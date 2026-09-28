@@ -58,13 +58,33 @@ public class AgenticDbContext : DbContext
     public DbSet<SystemAlertEntity> SystemAlerts => Set<SystemAlertEntity>();
     public DbSet<InboundWebhookEntity> InboundWebhooks => Set<InboundWebhookEntity>();
     public DbSet<KnowledgeRoomEntity> KnowledgeRooms => Set<KnowledgeRoomEntity>();
+    public DbSet<KnowledgeRoomPermissionEntity> KnowledgeRoomPermissions => Set<KnowledgeRoomPermissionEntity>();
+    public DbSet<AgentKnowledgeRoomAssignmentEntity> AgentKnowledgeRoomAssignments => Set<AgentKnowledgeRoomAssignmentEntity>();
     public DbSet<McpPluginEntity> McpPlugins => Set<McpPluginEntity>();
     public DbSet<SessionSummaryEntity> SessionSummaries => Set<SessionSummaryEntity>();
     public DbSet<SessionInsightEntity> SessionInsights => Set<SessionInsightEntity>();
+    public DbSet<SystemStateEntity> SystemStates => Set<SystemStateEntity>();
+    public DbSet<LLMProviderApiKeyEntity> ProviderApiKeys => Set<LLMProviderApiKeyEntity>();
+    public DbSet<CustomOnnxModelEntity> CustomOnnxModels => Set<CustomOnnxModelEntity>();
+    public DbSet<CustomOnnxModelFileEntity> CustomOnnxModelFiles => Set<CustomOnnxModelFileEntity>();
+    public DbSet<CustomOnnxInferenceJobEntity> CustomOnnxInferenceJobs => Set<CustomOnnxInferenceJobEntity>();
+    public DbSet<AccessApiKeyEntity> AccessApiKeys => Set<AccessApiKeyEntity>();
+    public DbSet<DbSkillEntity> AgentSkills => Set<DbSkillEntity>();
+    public DbSet<DynamicAgentEntity> DynamicAgents => Set<DynamicAgentEntity>();
+    public DbSet<DbToolEntity> AgentTools => Set<DbToolEntity>();
+    public DbSet<TenantQuotaEntity> TenantQuotas => Set<TenantQuotaEntity>();
+    public DbSet<GoldenSetEntity> GoldenSets => Set<GoldenSetEntity>();
+
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AgenticDbContext).Assembly);
+
+        if (Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            modelBuilder.HasPostgresExtension("vector");
+        }
 
         // Global Query Filters for Multi-tenancy
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
@@ -88,7 +108,7 @@ public class AgenticDbContext : DbContext
         {
             modelBuilder.Entity<VectorDocumentEntity>()
                 .HasGeneratedTsVectorColumn(
-                    p => p.SearchVector,
+                    p => p.SearchVector!,
                     "english",
                     p => new { p.Content })
                 .HasIndex(p => p.SearchVector)
@@ -101,7 +121,7 @@ public class AgenticDbContext : DbContext
         modelBuilder.Entity<T>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
     }
 
-    public string CurrentTenantId => _tenantContext.Current.TenantId;
+    public string CurrentTenantId => _tenantContext.CurrentTenantId;
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -117,14 +137,14 @@ public class AgenticDbContext : DbContext
 
     private void OnBeforeSaving()
     {
-        var tenantId = _tenantContext.Current.TenantId;
+        var tenantId = _tenantContext.CurrentTenantId;
 
         foreach (var entry in ChangeTracker.Entries<ITenantEntity>())
         {
             switch (entry.State)
             {
                 case EntityState.Added:
-                    if (string.IsNullOrEmpty(entry.Entity.TenantId) || entry.Entity.TenantId == "default")
+                    if (string.IsNullOrEmpty(entry.Entity.TenantId))
                     {
                         entry.Entity.TenantId = tenantId;
                     }
