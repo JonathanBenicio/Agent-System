@@ -1041,3 +1041,24 @@ public class DbToolConfiguration : IEntityTypeConfiguration<DbToolEntity>
         builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_agent_tools_tenant_id");
     }
 }
+
+public class GoldenSetConfiguration : IEntityTypeConfiguration<GoldenSetEntity>
+{
+    public void Configure(EntityTypeBuilder<GoldenSetEntity> builder)
+    {
+        builder.ToTable("golden_sets");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(50);
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Description).HasColumnName("description").HasMaxLength(500);
+        builder.Property(e => e.AgentName).HasColumnName("agent_name").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.CasesJson).HasColumnName("cases_json").HasColumnType("jsonb").IsRequired();
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_golden_sets_tenant_id");
+        builder.HasIndex(e => e.AgentName).HasDatabaseName("ix_golden_sets_agent_name");
+    }
+}

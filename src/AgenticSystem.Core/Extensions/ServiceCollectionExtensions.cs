@@ -175,6 +175,7 @@ public static class ServiceCollectionExtensions
         // Agent Evaluation
         services.AddSingleton<IEvalResultStore, InMemoryEvalResultStore>();
         services.AddSingleton<IAgentEvaluationService, AgentEvaluationService>();
+        services.AddSingleton<IGoldenSetRepository, InMemoryGoldenSetRepository>();
 
         // Structured Output Validation
         services.AddSingleton<IStructuredOutputValidator, StructuredOutputValidator>();

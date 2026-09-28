@@ -512,6 +512,7 @@ public static class ServiceCollectionExtensions
             ReplaceSingleton<IVectorStore, InMemoryVectorStore>(services);
             ReplaceSingleton<IExternalQuotaSyncService, InMemoryExternalQuotaSyncService>(services);
             ReplaceSingleton<IDynamicAgentRepository, InMemoryDynamicAgentRepository>(services);
+            ReplaceScoped<IGoldenSetRepository, AgenticSystem.Core.Services.InMemoryGoldenSetRepository>(services);
             return services;
         }
 
@@ -527,6 +528,7 @@ public static class ServiceCollectionExtensions
             ReplaceSingleton<IVectorStore, SqliteVectorStore>(services);
             ReplaceSingleton<IExternalQuotaSyncService, InMemoryExternalQuotaSyncService>(services);
             ReplaceSingleton<IDynamicAgentRepository, PostgresDynamicAgentRepository>(services);
+            ReplaceScoped<IGoldenSetRepository, PostgresGoldenSetRepository>(services);
             
             // Register MockEmbeddingGenerator for load testing
             services.AddSingleton<Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>>(new AgenticSystem.Infrastructure.Memory.MockEmbeddingGenerator());
@@ -558,6 +560,7 @@ public static class ServiceCollectionExtensions
         ReplaceSingleton<IPermissionService, PostgresPermissionService>(services);
         ReplaceSingleton<IPolicyStore, PostgresPolicyStore>(services);
         ReplaceSingleton<IExternalQuotaSyncService, ExternalQuotaSyncService>(services);
+        ReplaceScoped<IGoldenSetRepository, PostgresGoldenSetRepository>(services);
 
         var useInMemoryEventBus = configuration.GetValue<bool>("AgenticSystem:EventBus:UseInMemory");
 
@@ -680,6 +683,19 @@ public static class ServiceCollectionExtensions
         }
 
         services.AddSingleton(factory);
+    }
+
+    private static void ReplaceScoped<TService, TImplementation>(IServiceCollection services)
+        where TService : class
+        where TImplementation : class, TService
+    {
+        var descriptors = services.Where(d => d.ServiceType == typeof(TService)).ToList();
+        foreach (var descriptor in descriptors)
+        {
+            services.Remove(descriptor);
+        }
+
+        services.AddScoped<TService, TImplementation>();
     }
 
     private static void EnsureDbContextRegistrations(IServiceCollection services, string connectionString)
