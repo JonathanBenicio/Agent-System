@@ -72,6 +72,7 @@ public class AgenticDbContext : DbContext
     public DbSet<DbSkillEntity> AgentSkills => Set<DbSkillEntity>();
     public DbSet<DynamicAgentEntity> DynamicAgents => Set<DynamicAgentEntity>();
     public DbSet<DbToolEntity> AgentTools => Set<DbToolEntity>();
+    public DbSet<TenantQuotaEntity> TenantQuotas => Set<TenantQuotaEntity>();
 
 
 

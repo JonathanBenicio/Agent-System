@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using AgenticSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -14,9 +15,11 @@ using Pgvector;
 namespace AgenticSystem.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AgenticDbContext))]
-    partial class AgenticDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260604090000_AddTenantQuotas")]
+    partial class AddTenantQuotas
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1867,8 +1870,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnName("created_at");
 
                     b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
+                        .HasColumnType("text");
 
                     b.Property<string>("EntityType")
                         .IsRequired()
@@ -2397,8 +2399,7 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnName("deviations");
 
                     b.Property<string>("ImprovementSuggestion")
-                        .HasColumnType("text")
-                        .HasColumnName("improvement_suggestion");
+                        .HasColumnType("text");
 
                     b.Property<string>("LessonsLearnedJson")
                         .IsRequired()
@@ -2981,47 +2982,6 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.ToTable("system_states", (string)null);
                 });
 
-            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.TenantQuotaEntity", b =>
-                {
-                    b.Property<string>("TenantId")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<double>("CurrentDailyCostUsd")
-                        .HasColumnType("double precision");
-
-                    b.Property<int>("CurrentDailyRequests")
-                        .HasColumnType("integer");
-
-                    b.Property<long>("CurrentDailyTokens")
-                        .HasColumnType("bigint");
-
-                    b.Property<DateTime>("LastResetAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<double>("MaxDailyBudgetUsd")
-                        .HasColumnType("double precision");
-
-                    b.Property<long>("MaxTokensPerDay")
-                        .HasColumnType("bigint");
-
-                    b.Property<int>("RequestsPerMinute")
-                        .HasColumnType("integer");
-
-                    b.Property<uint>("RowVersion")
-                        .IsConcurrencyToken()
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("xid")
-                        .HasColumnName("xmin");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("TenantId");
-
-                    b.ToTable("tenant_quotas");
-                });
-
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.TriggerRuleEntity", b =>
                 {
                     b.Property<string>("Id")
@@ -3303,6 +3263,47 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_workflow_step_executions_unique_step");
 
                     b.ToTable("workflow_step_executions", (string)null);
+                });
+
+            modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.TenantQuotaEntity", b =>
+                {
+                    b.Property<string>("TenantId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<int>("CurrentDailyRequests")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("CurrentDailyTokens")
+                        .HasColumnType("bigint");
+
+                    b.Property<double>("CurrentDailyCostUsd")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("MaxDailyBudgetUsd")
+                        .HasColumnType("double precision");
+
+                    b.Property<long>("MaxTokensPerDay")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("RequestsPerMinute")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("LastResetAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("TenantId");
+
+                    b.ToTable("tenant_quotas");
                 });
 
             modelBuilder.Entity("AgenticSystem.Infrastructure.Persistence.Entities.CustomOnnxInferenceJobEntity", b =>

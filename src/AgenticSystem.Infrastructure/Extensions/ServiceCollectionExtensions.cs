@@ -577,6 +577,9 @@ public static class ServiceCollectionExtensions
         services.UsePostgresAdvancedIntelligence(connectionString);
         services.UsePostgresPlatformStores(connectionString);
 
+        // Quota persistence: replace in-memory repository with PostgreSQL-backed one.
+        ReplaceSingleton<ITenantQuotaRepository, TenantQuotaRepository>(services);
+        services.AddHostedService<DailyQuotaResetBackgroundService>();
 
         // Registro nativo do backend durável do DurableTask PostgreSQL usando inicializador de objetos para propriedades init-only
         var durableSettings = new PostgreSqlOrchestrationServiceSettings

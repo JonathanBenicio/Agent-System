@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -6,139 +7,201 @@ using AgenticSystem.Core.Models;
 namespace AgenticSystem.Core.Services;
 
 /// <summary>
-/// Concrete implementation of IQuotaEnforcer using in-memory tracking.
+/// Production implementation of <see cref="IQuotaEnforcer"/> that combines:
+/// <list type="bullet">
+///   <item>An <see cref="IMemoryCache"/> with a 60-second TTL for hot-path reads (rate-limit checks),</item>
+///   <item>An <see cref="ITenantQuotaRepository"/> for durable writes and daily-reset persistence.</item>
+/// </list>
+/// This dual-layer design avoids hitting the database on every token-counted LLM call while
+/// ensuring quotas survive application restarts and work correctly across multiple replicas.
 /// </summary>
 public class QuotaEnforcer : IQuotaEnforcer
 {
-    private readonly ConcurrentDictionary<string, QuotaConfig> _configs = new();
-    private readonly ConcurrentDictionary<string, QuotaUsage> _usage = new();
+    private readonly IMemoryCache _cache;
+    private readonly ITenantQuotaRepository _repository;
     private readonly ILogger<QuotaEnforcer> _logger;
 
-    public QuotaEnforcer(ILogger<QuotaEnforcer> logger)
+    /// <summary>
+    /// In-memory per-minute sliding window counters. These are intentionally NOT persisted
+    /// because per-minute rate-limiting is a per-instance concern (requests are sticky per pod
+    /// in the default deployment) and the data is obsolete within 60 seconds anyway.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, (int Count, DateTime WindowStart)> _minuteCounters = new();
+
+    private static readonly MemoryCacheEntryOptions CacheOptions = new()
     {
+        AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60),
+        Priority = CacheItemPriority.High,
+    };
+
+    public QuotaEnforcer(
+        IMemoryCache cache,
+        ITenantQuotaRepository repository,
+        ILogger<QuotaEnforcer> logger)
+    {
+        _cache = cache;
+        _repository = repository;
         _logger = logger;
     }
 
-    public Task<QuotaCheckResult> CheckQuotaAsync(
+    /// <inheritdoc/>
+    public async Task<QuotaCheckResult> CheckQuotaAsync(
         string ownerId,
         int estimatedTokens = 0,
         double estimatedCostUsd = 0,
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(ownerId))
+            return new QuotaCheckResult { Allowed = true };
+
+        // 1. Per-minute rate-limit check (in-memory, no DB trip needed)
+        var minuteWindow = GetOrResetMinuteWindow(ownerId);
+        var snapshot = await GetSnapshotAsync(ownerId, ct);
+
+        if (minuteWindow.Count >= snapshot.RequestsPerMinute)
         {
-            return Task.FromResult(new QuotaCheckResult { Allowed = true });
-        }
-
-        var config = _configs.GetOrAdd(ownerId, id => new QuotaConfig { OwnerId = id });
-        var usage = GetOrCreateUsage(ownerId);
-
-        // Reset periods if necessary
-        ResetUsagePeriods(usage);
-
-        // 1. Check Requests per minute
-        if (usage.RequestsThisMinute >= config.RequestsPerMinute)
-        {
-            return Task.FromResult(new QuotaCheckResult
+            return new QuotaCheckResult
             {
                 Allowed = false,
-                DenialReason = "Rate limit exceeded (Requests per minute)",
-                RecommendedAction = QuotaAlertAction.Block
-            });
+                DenialReason = "Rate limit exceeded (requests per minute)",
+                RecommendedAction = QuotaAlertAction.Block,
+                UsagePercent = 100
+            };
         }
 
-        // 2. Check Daily Tokens
-        if (usage.TokensToday + estimatedTokens > config.MaxTokensPerDay)
+        // 2. Daily token quota check (from cache → DB fallback)
+        if (snapshot.MaxTokensPerDay > 0 && snapshot.CurrentDailyTokens + estimatedTokens > snapshot.MaxTokensPerDay)
         {
-            return Task.FromResult(new QuotaCheckResult
+            return new QuotaCheckResult
             {
                 Allowed = false,
                 DenialReason = "Daily token quota exceeded",
-                RecommendedAction = QuotaAlertAction.Block
-            });
+                RecommendedAction = QuotaAlertAction.Block,
+                UsagePercent = CalculatePercent(snapshot.CurrentDailyTokens, snapshot.MaxTokensPerDay)
+            };
         }
 
-        // 3. Check Daily Budget
-        if (usage.CostToday + estimatedCostUsd > config.MaxDailyBudgetUsd)
+        // 3. Daily budget check
+        if (snapshot.MaxDailyBudgetUsd > 0 && snapshot.CurrentDailyCostUsd + estimatedCostUsd > snapshot.MaxDailyBudgetUsd)
         {
-            return Task.FromResult(new QuotaCheckResult
+            return new QuotaCheckResult
             {
                 Allowed = false,
                 DenialReason = "Daily budget exceeded",
-                RecommendedAction = QuotaAlertAction.Block
-            });
+                RecommendedAction = QuotaAlertAction.Block,
+                UsagePercent = CalculatePercent(snapshot.CurrentDailyCostUsd, snapshot.MaxDailyBudgetUsd)
+            };
         }
 
-        return Task.FromResult(new QuotaCheckResult { Allowed = true });
+        var usagePercent = CalculatePercent(
+            Math.Max(
+                snapshot.MaxTokensPerDay > 0 ? (double)snapshot.CurrentDailyTokens / snapshot.MaxTokensPerDay : 0,
+                snapshot.MaxDailyBudgetUsd > 0 ? snapshot.CurrentDailyCostUsd / snapshot.MaxDailyBudgetUsd : 0),
+            1.0);
+
+        return new QuotaCheckResult { Allowed = true, UsagePercent = usagePercent };
     }
 
-    public Task RecordUsageAsync(
+    /// <inheritdoc/>
+    public async Task RecordUsageAsync(
         string ownerId,
         int tokensUsed,
         double costUsd,
         CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(ownerId)) return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(ownerId)) return;
 
-        var usage = GetOrCreateUsage(ownerId);
-        lock (usage)
+        // Increment in-memory per-minute counter
+        IncrementMinuteWindow(ownerId);
+
+        // Persist to database — this is the source of truth for daily totals.
+        await _repository.IncrementUsageAsync(ownerId, tokensUsed, costUsd, ct);
+
+        // Invalidate cache so the next check reflects real DB values immediately.
+        _cache.Remove(CacheKey(ownerId));
+
+        _logger.LogDebug("Recorded usage for {OwnerId}: {Tokens} tokens, ${Cost:F4}", ownerId, tokensUsed, costUsd);
+    }
+
+    /// <inheritdoc/>
+    public async Task<QuotaUsage> GetUsageAsync(string ownerId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(ownerId))
+            return new QuotaUsage { OwnerId = ownerId };
+
+        var snapshot = await GetSnapshotAsync(ownerId, ct);
+        var minuteWindow = GetOrResetMinuteWindow(ownerId);
+
+        return new QuotaUsage
         {
-            ResetUsagePeriods(usage);
-            usage.RequestsThisMinute++;
-            usage.RequestsThisHour++;
-            usage.RequestsToday++;
-            usage.TokensToday += tokensUsed;
-            usage.CostToday += costUsd;
-            usage.CostThisMonth += costUsd;
-        }
-
-        _logger.LogDebug("Recorded usage for {OwnerId}: {Tokens} tokens, ${Cost}", ownerId, tokensUsed, costUsd);
-        return Task.CompletedTask;
-    }
-
-    public Task<QuotaUsage> GetUsageAsync(string ownerId, CancellationToken ct = default)
-    {
-        return Task.FromResult(GetOrCreateUsage(ownerId));
-    }
-
-    public Task SetQuotaConfigAsync(QuotaConfig config, CancellationToken ct = default)
-    {
-        _configs[config.OwnerId] = config;
-        return Task.CompletedTask;
-    }
-
-    public Task<QuotaConfig?> GetQuotaConfigAsync(string ownerId, CancellationToken ct = default)
-    {
-        _configs.TryGetValue(ownerId, out var config);
-        return Task.FromResult(config);
-    }
-
-    private QuotaUsage GetOrCreateUsage(string ownerId)
-    {
-        return _usage.GetOrAdd(ownerId, id => new QuotaUsage
-        {
-            OwnerId = id,
+            OwnerId = ownerId,
+            TokensToday = (int)Math.Min(snapshot.CurrentDailyTokens, int.MaxValue),
+            CostToday = snapshot.CurrentDailyCostUsd,
+            RequestsToday = snapshot.CurrentDailyRequests,
+            RequestsThisMinute = minuteWindow.Count,
             PeriodStart = DateTime.UtcNow.Date
-        });
+        };
     }
 
-    private void ResetUsagePeriods(QuotaUsage usage)
+    /// <inheritdoc/>
+    public async Task SetQuotaConfigAsync(QuotaConfig config, CancellationToken ct = default)
+    {
+        await _repository.UpsertConfigAsync(config.OwnerId, config, ct);
+        _cache.Remove(CacheKey(config.OwnerId));
+    }
+
+    /// <inheritdoc/>
+    public async Task<QuotaConfig?> GetQuotaConfigAsync(string ownerId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(ownerId)) return null;
+        var snapshot = await GetSnapshotAsync(ownerId, ct);
+
+        return new QuotaConfig
+        {
+            OwnerId = snapshot.TenantId,
+            RequestsPerMinute = snapshot.RequestsPerMinute,
+            MaxTokensPerDay = snapshot.MaxTokensPerDay,
+            MaxDailyBudgetUsd = snapshot.MaxDailyBudgetUsd
+        };
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    private async Task<TenantQuotaSnapshot> GetSnapshotAsync(string ownerId, CancellationToken ct)
+    {
+        return await _cache.GetOrCreateAsync(
+            CacheKey(ownerId),
+            async entry =>
+            {
+                entry.SetOptions(CacheOptions);
+                return await _repository.GetOrCreateAsync(ownerId, ct);
+            }) ?? await _repository.GetOrCreateAsync(ownerId, ct);
+    }
+
+    private (int Count, DateTime WindowStart) GetOrResetMinuteWindow(string ownerId)
     {
         var now = DateTime.UtcNow;
-        // In a real implementation, we'd track the minute/hour/day timestamps.
-        // For simplicity in this lab version, we just check against a single Daily PeriodStart.
-        if (usage.PeriodStart < now.Date)
-        {
-            lock (usage)
-            {
-                if (usage.PeriodStart < now.Date)
-                {
-                    usage.RequestsToday = 0;
-                    usage.TokensToday = 0;
-                    usage.CostToday = 0;
-                    // usage.PeriodStart = now.Date; // Need to handle month reset too
-                }
-            }
-        }
+        return _minuteCounters.AddOrUpdate(
+            ownerId,
+            _ => (0, now),
+            (_, existing) => existing.WindowStart.AddMinutes(1) < now
+                ? (0, now)
+                : existing);
     }
+
+    private void IncrementMinuteWindow(string ownerId)
+    {
+        var now = DateTime.UtcNow;
+        _minuteCounters.AddOrUpdate(
+            ownerId,
+            _ => (1, now),
+            (_, existing) => existing.WindowStart.AddMinutes(1) < now
+                ? (1, now)
+                : (existing.Count + 1, existing.WindowStart));
+    }
+
+    private static string CacheKey(string ownerId) => $"quota:{ownerId}";
+
+    private static double CalculatePercent(double current, double max) =>
+        max <= 0 ? 0 : Math.Min(100, current / max * 100);
 }

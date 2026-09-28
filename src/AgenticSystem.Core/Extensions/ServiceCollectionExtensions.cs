@@ -220,6 +220,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMemoryLifecycleStore, InMemoryMemoryLifecycleStore>();
 
         // Phase 5 — Enterprise Scoping & Sandboxing
+        // Default in-memory quota repository — overridden by TenantQuotaRepository in PostgreSQL mode.
+        services.AddSingleton<ITenantQuotaRepository, InMemoryTenantQuotaRepository>();
         services.AddSingleton<IQuotaEnforcer, QuotaEnforcer>();
         services.AddSingleton<IAgentSandbox, AgentSandbox>();
 
