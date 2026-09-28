@@ -300,11 +300,21 @@ public class PostgresVectorStore : IVectorStore
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .ToArray();
 
-            if (allowedRooms.Length > 0)
+            if (allowedRooms.Length == 0)
             {
-                var matchingIds = await db.Database.SqlQuery<string>($"SELECT id FROM vector_documents WHERE metadata_json->>'room_id' = ANY({allowedRooms}) OR metadata_json->>'roomId' = ANY({allowedRooms})").ToListAsync();
-                dataQuery = dataQuery.Where(item => matchingIds.Contains(item.Id));
+                sw.Stop();
+                return new SearchResult { Query = query, Matches = new List<SearchMatch>(), TotalFound = 0, ExecutionTime = sw.Elapsed };
             }
+
+            var currentTenantId = db.CurrentTenantId;
+            var matchingIds = await db.Database.SqlQuery<string>($"SELECT id AS \"Value\" FROM vector_documents WHERE \"TenantId\" = {currentTenantId} AND (metadata->>'room_id' = ANY({allowedRooms}) OR metadata->>'roomId' = ANY({allowedRooms}))").ToListAsync();
+            if (matchingIds.Count == 0)
+            {
+                sw.Stop();
+                return new SearchResult { Query = query, Matches = new List<SearchMatch>(), TotalFound = 0, ExecutionTime = sw.Elapsed };
+            }
+
+            dataQuery = dataQuery.Where(item => matchingIds.Contains(item.Id));
 
             _logger.LogDebug("Applied SQL-level room_ids filter for {Count} room(s)", allowedRooms.Length);
         }

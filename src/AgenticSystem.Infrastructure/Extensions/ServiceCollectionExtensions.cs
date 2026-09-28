@@ -285,7 +285,7 @@ public static class ServiceCollectionExtensions
 
             hostedOrchestratorBuilder.WithSessionStore(
                 static (sp, _) => sp.GetRequiredService<Microsoft.Agents.AI.Hosting.AgentSessionStore>(),
-                ServiceLifetime.Singleton);
+                ServiceLifetime.Scoped);
 
             services.AddSingleton<IFrameworkOrchestratorService, FrameworkOrchestratorService>();
         }

@@ -2,6 +2,7 @@
 
 > Contratos operacionais atuais: [hub do backend](docs/backend/README.md). Evidências: [validação](docs/backend/validation/2026-09-28.md).
 > Correções da revisão: [PR #118](docs/backend/validation/2026-09-28-review-fixes.md).
+> Correção de backend #111–#117: [ADR-035](docs/architecture/adr/035-backend-core-isolation-and-reliability.md), [plano/status](docs/plan/backend-core-remediation.md) e [evidências atuais](docs/backend/validation/backend-core-remediation.md).
 
 Este arquivo foi substituído por um índice de navegação. Consulte a documentação canônica diretamente:
 

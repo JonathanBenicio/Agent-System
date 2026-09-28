@@ -71,6 +71,12 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
             return AuthenticateResult.Fail("Invalid API key.");
         }
 
+        if (!new[] { "Owner", "Admin", "Operator", "Viewer", "Member", "ServiceAccount" }
+                .Contains(accessKey.Role, StringComparer.OrdinalIgnoreCase))
+        {
+            return AuthenticateResult.Fail("API key has an unsupported role.");
+        }
+
         // 3. Atualiza o timestamp de último uso de forma assíncrona
         try
         {
@@ -86,7 +92,7 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         {
             new Claim(ClaimTypes.Name, accessKey.Name),
             new Claim(ClaimTypes.NameIdentifier, accessKey.Id.ToString()),
-            new Claim(ClaimTypes.Role, "Admin"),
+            new Claim(ClaimTypes.Role, accessKey.Role),
             new Claim("tenant_id", accessKey.TenantId)
         };
         var identity = new ClaimsIdentity(claims, SchemeName);

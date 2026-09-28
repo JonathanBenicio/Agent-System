@@ -22,17 +22,18 @@ public class ExternalAgentHub : Hub
     /// </summary>
     public async Task RegisterBot(string botName, string[] capabilities)
     {
+        var tenantId = RequireTenantId();
         var connectionId = Context.ConnectionId;
         _logger.LogInformation("🤖 External Bot '{BotName}' registered with ConnectionId: {ConnectionId}", botName, connectionId);
 
         // Group by capabilities to route tasks appropriately
         foreach (var capability in capabilities)
         {
-            await Groups.AddToGroupAsync(connectionId, $"capability:{capability}");
+            await Groups.AddToGroupAsync(connectionId, $"tenant:{tenantId}:capability:{capability}");
         }
 
         // Add to a general bots group
-        await Groups.AddToGroupAsync(connectionId, "external_bots");
+        await Groups.AddToGroupAsync(connectionId, $"tenant:{tenantId}:external_bots");
 
         await Clients.Caller.SendAsync("RegistrationConfirmed", new { 
             BotName = botName, 
@@ -46,11 +47,12 @@ public class ExternalAgentHub : Hub
     /// </summary>
     public async Task ReportTaskResult(string taskId, string status, string resultPayload)
     {
+        var tenantId = RequireTenantId();
         _logger.LogInformation("✅ Task {TaskId} completed by external bot with status {Status}", taskId, status);
         
         // Broadcast the result to listeners or trigger internal state changes (e.g. WorkflowEngine)
         // For Phase 3, we just broadcast to the orchestrator group
-        await Clients.Group("orchestrators").SendAsync("TaskResultReceived", new {
+        await Clients.Group($"tenant:{tenantId}:orchestrators").SendAsync("TaskResultReceived", new {
             TaskId = taskId,
             Status = status,
             Result = resultPayload,
@@ -63,9 +65,13 @@ public class ExternalAgentHub : Hub
     /// </summary>
     public async Task JoinAsOrchestrator()
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, "orchestrators");
+        var tenantId = RequireTenantId();
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}:orchestrators");
         _logger.LogInformation("👁️ Client joined as External Orchestrator: {ConnectionId}", Context.ConnectionId);
     }
+
+    private string RequireTenantId() => Context.User?.FindFirst("tenant_id")?.Value
+        ?? throw new HubException("Tenant identity is required.");
 
     public override async Task OnConnectedAsync()
     {

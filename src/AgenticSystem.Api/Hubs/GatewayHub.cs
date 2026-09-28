@@ -13,11 +13,13 @@ public class GatewayHub : Hub
 {
     private readonly IServiceGateway _gateway;
     private readonly ILogger<GatewayHub> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public GatewayHub(IServiceGateway gateway, ILogger<GatewayHub> logger)
+    public GatewayHub(IServiceGateway gateway, ILogger<GatewayHub> logger, ITenantContextAccessor tenantContextAccessor)
     {
         _gateway = gateway;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     public async Task GetDashboard()
@@ -41,19 +43,23 @@ public class GatewayHub : Hub
 
     public async Task SubscribeToService(string serviceName)
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"service:{serviceName}");
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}:service:{serviceName}");
         _logger.LogDebug("Client {ConnectionId} subscribed to service {Service}",
             Context.ConnectionId, serviceName);
     }
 
     public async Task UnsubscribeFromService(string serviceName)
     {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"service:{serviceName}");
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"tenant:{tenantId}:service:{serviceName}");
     }
 
     public override async Task OnConnectedAsync()
     {
         _logger.LogInformation("🔌 GatewayHub client connected: {ConnectionId}", Context.ConnectionId);
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}:gateway");
         await base.OnConnectedAsync();
     }
 

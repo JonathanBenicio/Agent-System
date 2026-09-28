@@ -316,6 +316,41 @@ public class RoleAssignmentEntity : ITenantEntity
     public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>Tenant-scoped role membership for human and API key principals.</summary>
+public class TenantMembershipEntity : ITenantEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string SubjectId { get; set; } = string.Empty;
+    public string SubjectType { get; set; } = "User";
+    public string Role { get; set; } = "Viewer";
+    public string TenantId { get; set; } = string.Empty;
+    public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+    public string? GrantedBy { get; set; }
+}
+
+/// <summary>Explicit platform-wide administration grant; never backfilled from tenant roles.</summary>
+public class PlatformAdministratorEntity
+{
+    public string UserId { get; set; } = string.Empty;
+    public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+    public string? GrantedBy { get; set; }
+}
+
+/// <summary>Temporary, scoped and revocable support access to tenant content.</summary>
+public class TenantSupportGrantEntity : ITenantEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string TenantId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string Scope { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+    public string GrantedBy { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? RevokedAt { get; set; }
+    public string? RevokedBy { get; set; }
+}
+
 public class OutboxMessageEntity : ITenantEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();

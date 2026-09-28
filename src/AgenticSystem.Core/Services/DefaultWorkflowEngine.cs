@@ -217,7 +217,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
 
         if (_broadcaster != null)
         {
-            await _broadcaster.BroadcastStepStarted(execution.Id, stepExec);
+            await _broadcaster.BroadcastStepStarted(tenantId, execution.Id, stepExec);
         }
 
         try
@@ -315,14 +315,14 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             {
                 if (_broadcaster != null)
                 {
-                    await _broadcaster.BroadcastStepCompleted(execution.Id, stepExec);
+                await _broadcaster.BroadcastStepCompleted(tenantId, execution.Id, stepExec);
                 }
             }
             else if (stepExec.Status == WorkflowExecutionStatus.Failed)
             {
                 if (_broadcaster != null)
                 {
-                    await _broadcaster.BroadcastStepFailed(execution.Id, stepExec);
+                    await _broadcaster.BroadcastStepFailed(tenantId, execution.Id, stepExec);
                 }
             }
 
@@ -336,7 +336,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             stepExec.ErrorMessage = $"Step timed out after {timeoutDuration.TotalMinutes:F0} minutes.";
             stepExec.CompletedAt = DateTime.UtcNow;
             await _store.SaveExecutionAsync(tenantId, execution);
-            if (_broadcaster != null) await _broadcaster.BroadcastStepFailed(execution.Id, stepExec);
+            if (_broadcaster != null) await _broadcaster.BroadcastStepFailed(tenantId, execution.Id, stepExec);
         }
         catch (Exception ex)
         {
@@ -349,7 +349,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
 
             if (_broadcaster != null)
             {
-                await _broadcaster.BroadcastStepFailed(execution.Id, stepExec);
+                await _broadcaster.BroadcastStepFailed(tenantId, execution.Id, stepExec);
             }
 
             if (step.CompensationStep != null)

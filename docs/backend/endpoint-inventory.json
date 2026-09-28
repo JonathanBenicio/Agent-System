@@ -1523,8 +1523,8 @@
       "condition": "see runtime configuration in source",
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/ChatController.cs",
-      "line": 34,
-      "sha256": "33b51069b86d09bb986010d490683dd05bddf3bb92310b1ddbd2ea969fa07912"
+      "line": 36,
+      "sha256": "394e1ee39ec74457620709f8ae152b71029d52b9f632aced00d89ce182df33e2"
     },
     {
       "method": "POST",
@@ -1535,8 +1535,8 @@
       "condition": "see runtime configuration in source",
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/ChatController.cs",
-      "line": 61,
-      "sha256": "33b51069b86d09bb986010d490683dd05bddf3bb92310b1ddbd2ea969fa07912"
+      "line": 65,
+      "sha256": "394e1ee39ec74457620709f8ae152b71029d52b9f632aced00d89ce182df33e2"
     },
     {
       "method": "POST",
@@ -2077,6 +2077,66 @@
       "source": "src/AgenticSystem.Api/Controllers/PlannerController.cs",
       "line": 26,
       "sha256": "109cdc955a0b7bf4fc673ebec10d38f8cb835cf1b1a27892ca7eda0ee8c118ae"
+    },
+    {
+      "method": "GET",
+      "path": "/api/platform/tenants",
+      "action": "ListTenants",
+      "parameters": "CancellationToken ct",
+      "authorization": "Authorize (roles/policy: see source)",
+      "condition": "see runtime configuration in source",
+      "openApiHidden": false,
+      "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
+      "line": 27,
+      "sha256": "758bb66d4e41b4464848d8f3192fd3f8b8737912c2da5a817e73671dd343217d"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/platform/tenants/{tenantId}/plan",
+      "action": "UpdateTenantPlan",
+      "parameters": "string tenantId, [FromBody] UpdateTenantPlanRequest request, CancellationToken ct",
+      "authorization": "Authorize (roles/policy: see source)",
+      "condition": "see runtime configuration in source",
+      "openApiHidden": false,
+      "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
+      "line": 36,
+      "sha256": "758bb66d4e41b4464848d8f3192fd3f8b8737912c2da5a817e73671dd343217d"
+    },
+    {
+      "method": "GET",
+      "path": "/api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants",
+      "action": "ListSupportGrants",
+      "parameters": "string tenantId, string roomId, CancellationToken ct",
+      "authorization": "Authorize (roles/policy: see source)",
+      "condition": "see runtime configuration in source",
+      "openApiHidden": false,
+      "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
+      "line": 59,
+      "sha256": "758bb66d4e41b4464848d8f3192fd3f8b8737912c2da5a817e73671dd343217d"
+    },
+    {
+      "method": "POST",
+      "path": "/api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants",
+      "action": "CreateSupportGrant",
+      "parameters": "string tenantId, string roomId, [FromBody] CreateSupportGrantRequest request, CancellationToken ct",
+      "authorization": "Authorize (roles/policy: see source)",
+      "condition": "see runtime configuration in source",
+      "openApiHidden": false,
+      "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
+      "line": 75,
+      "sha256": "758bb66d4e41b4464848d8f3192fd3f8b8737912c2da5a817e73671dd343217d"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants/{grantId}",
+      "action": "RevokeSupportGrant",
+      "parameters": "string tenantId, string roomId, string grantId, CancellationToken ct",
+      "authorization": "Authorize (roles/policy: see source)",
+      "condition": "see runtime configuration in source",
+      "openApiHidden": false,
+      "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
+      "line": 144,
+      "sha256": "758bb66d4e41b4464848d8f3192fd3f8b8737912c2da5a817e73671dd343217d"
     },
     {
       "method": "GET",

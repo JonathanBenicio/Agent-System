@@ -21,11 +21,13 @@ public class ChatController : ControllerBase
 {
     private readonly IMetaAgent _metaAgent;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ISessionStore _sessionStore;
 
-    public ChatController(IMetaAgent metaAgent, ITenantContextAccessor tenantContextAccessor)
+    public ChatController(IMetaAgent metaAgent, ITenantContextAccessor tenantContextAccessor, ISessionStore sessionStore)
     {
         _metaAgent = metaAgent;
         _tenantContextAccessor = tenantContextAccessor;
+        _sessionStore = sessionStore;
     }
 
     /// <summary>
@@ -41,6 +43,8 @@ public class ChatController : ControllerBase
             return BadRequest(new { error = "Message exceeds maximum length of 10000 characters." });
 
         var userContext = BuildUserContext(request);
+        if (!await SessionAccessValidator.CanAccessAsync(_sessionStore, request.SessionId, userContext.UserId, userContext.TenantId))
+            return NotFound(new { error = "Session not found." });
 
         AgentResponse response;
         if (!string.IsNullOrWhiteSpace(request.TargetAgent))
@@ -68,6 +72,8 @@ public class ChatController : ControllerBase
             return Results.BadRequest(new { error = "Message exceeds maximum length of 10000 characters." });
 
         var userContext = BuildUserContext(request);
+        if (!await SessionAccessValidator.CanAccessAsync(_sessionStore, request.SessionId, userContext.UserId, userContext.TenantId, HttpContext.RequestAborted))
+            return Results.NotFound(new { error = "Session not found." });
 
         HttpContext.Response.StatusCode = StatusCodes.Status200OK;
         HttpContext.Response.Headers.Append("Cache-Control", "no-cache");

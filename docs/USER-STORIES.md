@@ -1,5 +1,20 @@
 # User Stories — Agentic System
 
+## BACK-FIX-111–117 — Núcleo seguro e operacional
+Como usuário de um tenant, quero executar conversas e consumir recursos autorizados sem acesso cruzado ou falhas de persistência, para operar o núcleo com isolamento e contabilização confiáveis.
+
+Issues: [#111](https://github.com/JonathanBenicio/Agent-System/issues/111)–[#117](https://github.com/JonathanBenicio/Agent-System/issues/117) • [ADR-035](architecture/adr/035-backend-core-isolation-and-reliability.md) • [Plano](plan/backend-core-remediation.md). Status: em execução.
+
+- BACK-FIX-111: chave Viewer conserva Viewer e não muda tenant sem vínculo/concessão; Admin legado permanece scoped.
+- BACK-FIX-112: header/query/claim seguem a mesma política; tenants desconhecidos/inativos e eventos cruzados são negados nos cinco hubs.
+- BACK-FIX-113: RAG vazio nega, SQL funciona no PostgreSQL real e sala permitida é encontrada mesmo com mais de 55 candidatos proibidos.
+- BACK-FIX-114: chat REST/SSE/SignalR gera conteúdo/sessionId, retoma somente para o dono e persiste após restart com isolamento MAF configurado.
+- BACK-FIX-115: incrementos confirmados não se perdem sob concorrência e rollover/reset/cache respeitam limites persistidos.
+- BACK-FIX-116: dois tenants têm defaults completos e isolados; seeding concorrente/idempotente conserva IDs e customizações antigas.
+- BACK-FIX-117: memberships por tenant aplicam papéis independentes; Platform Admin não tem conteúdo implícito; suporte expira/revoga com auditoria; planos limitam quotas e recursos, ACL de sala sempre obrigatória.
+
+Evidência unitária não substitui integração; critérios falhos/não executados permanecem abertos.
+
 ## BACK-DOC-001 — Contratos claros e validação do núcleo
 
 Como mantenedor, quero contratos rastreáveis de endpoints, acesso e recursos, para distinguir funcionalidades comprovadas de lacunas.

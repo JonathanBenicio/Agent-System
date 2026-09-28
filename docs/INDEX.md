@@ -9,6 +9,7 @@
 - [Operação](backend/operations.md), [validação](backend/validation/2026-09-28.md), [backlog](backend/backlog.md)
 - [Correções e validação da revisão do PR #118](backend/validation/2026-09-28-review-fixes.md)
 - [ADR-034](architecture/adr/034-backend-contracts-and-access-target.md), [plano](plan/backend-documentation-validation.md), [templates](../templates/README.md)
+- [Correção dos bugs #111–#117: ADR-035](architecture/adr/035-backend-core-isolation-and-reliability.md), [plano](plan/backend-core-remediation.md) e [relatório/evidências](backend/validation/backend-core-remediation.md)
 
 Índice de navegação da documentação do projeto, organizado por papel documental.
 

@@ -2,7 +2,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHmac } from 'node:crypto';
 import { messageSnapshot, assertMessagesPersisted } from './evidence.mjs';
-const directory = resolve(import.meta.dirname, '../TestResults/backend-documentation/current');
+const directory = process.env.BACKEND_VALIDATION_OUTPUT_DIR || resolve(import.meta.dirname, '../TestResults/backend-core-remediation/current');
+const protectedHistoricalOutput = resolve(import.meta.dirname, '../TestResults/backend-documentation/current');
+if (resolve(directory).toLowerCase() === protectedHistoricalOutput.toLowerCase())
+  throw new Error('Refusing to overwrite historical backend-documentation validation artifacts.');
 const core = JSON.parse(readFileSync(resolve(directory, 'core-results.json'), 'utf8'));
 const tenant = core.run + '-a', otherTenant = core.run + '-b', alice = core.run + '-alice';
 const phase = process.argv.includes('--after-restart') ? 'after-restart' : 'before-restart';

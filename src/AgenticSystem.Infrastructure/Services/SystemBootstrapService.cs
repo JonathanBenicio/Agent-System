@@ -82,6 +82,14 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                     };
 
                     _dbContext.AccessApiKeys.Add(adminAccessKey);
+                    _dbContext.TenantMemberships.Add(new TenantMembershipEntity
+                    {
+                        SubjectId = adminAccessKey.Id.ToString(),
+                        SubjectType = "ApiKey",
+                        Role = adminAccessKey.Role,
+                        TenantId = adminAccessKey.TenantId,
+                        GrantedAt = DateTime.UtcNow
+                    });
                     _logger.LogInformation("Chave API administrativa legada (AdminApiKey) migrada e hashed com sucesso no banco de dados para o Tenant 'admin'.");
                 }
                 else
@@ -95,6 +103,36 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
             else
             {
                 _logger.LogInformation("Database já possui tenants cadastrados. Pulando criação de tenant padrão.");
+            }
+
+            // Platform admins are bootstrapped only from explicit configuration and only
+            // while the registry is empty. Tenant Admin roles are never promoted.
+            var configuredPlatformAdmins = _configuration
+                .GetSection("AgenticSystem:PlatformAdministrators")
+                .Get<string[]>() ?? [];
+            if (configuredPlatformAdmins.Length > 0 &&
+                !await _dbContext.PlatformAdministrators.AnyAsync(cancellationToken))
+            {
+                var configuredUserIds = configuredPlatformAdmins
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .Select(id => id.Trim())
+                    .Distinct(StringComparer.Ordinal)
+                    .ToArray();
+                foreach (var userId in configuredUserIds)
+                {
+                    _dbContext.PlatformAdministrators.Add(new PlatformAdministratorEntity
+                    {
+                        UserId = userId,
+                        GrantedAt = DateTime.UtcNow,
+                        GrantedBy = "configuration-bootstrap"
+                    });
+                }
+
+                if (configuredUserIds.Length > 0)
+                {
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                    _logger.LogWarning("Bootstrapped {Count} explicitly configured platform administrators.", configuredUserIds.Length);
+                }
             }
 
             // 3.6. Semeia agentes dinâmicos de Banner Production se não existirem

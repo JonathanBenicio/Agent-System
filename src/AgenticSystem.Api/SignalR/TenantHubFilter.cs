@@ -13,15 +13,18 @@ public sealed class TenantHubFilter : IHubFilter
 {
     private readonly ITenantResolver _tenantResolver;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly IPermissionService _permissionService;
     private readonly ILogger<TenantHubFilter> _logger;
 
     public TenantHubFilter(
         ITenantResolver tenantResolver,
         ITenantContextAccessor tenantContextAccessor,
+        IPermissionService permissionService,
         ILogger<TenantHubFilter> logger)
     {
         _tenantResolver = tenantResolver;
         _tenantContextAccessor = tenantContextAccessor;
+        _permissionService = permissionService;
         _logger = logger;
     }
 
@@ -80,10 +83,43 @@ public sealed class TenantHubFilter : IHubFilter
             return null;
         }
 
-        var tenantId = ResolveTenantId(httpContext);
+        var claimTenantId = ResolveClaimTenantId(httpContext);
+        var requestedTenantId = ResolveExplicitTenantId(httpContext);
+        var tenantId = requestedTenantId ?? claimTenantId;
+
+        _logger.LogInformation(
+            "Hub tenant validation: path={Path}, requested={RequestedTenantId}, claim={ClaimTenantId}, authenticated={Authenticated}",
+            httpContext.Request.Path,
+            requestedTenantId,
+            claimTenantId,
+            httpContext.User?.Identity?.IsAuthenticated == true);
+
+        if (httpContext.User?.Identity?.IsAuthenticated == true &&
+            (string.IsNullOrWhiteSpace(claimTenantId) ||
+             requestedTenantId is not null &&
+             !string.Equals(requestedTenantId.Trim(), claimTenantId.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            _logger.LogWarning("Hub tenant mismatch rejected. Claim tenant '{ClaimTenantId}', requested tenant '{RequestedTenantId}'.", claimTenantId, tenantId);
+            return null;
+        }
 
         if (!string.IsNullOrWhiteSpace(tenantId))
         {
+            var userId = httpContext.User?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? httpContext.User?.FindFirst("sub")?.Value;
+            if (httpContext.User?.Identity?.IsAuthenticated == true)
+            {
+                if (string.IsNullOrWhiteSpace(userId))
+                    return null;
+
+                var roles = await _permissionService.GetRolesAsync(userId);
+                if (!roles.Any(role => string.Equals(role.TenantId, tenantId, StringComparison.OrdinalIgnoreCase)))
+                {
+                    _logger.LogWarning("Hub access rejected: user {UserId} has no membership in tenant {TenantId}.", userId, tenantId);
+                    return null;
+                }
+            }
+
             var resolved = await _tenantResolver.ResolveAsync(tenantId);
             if (resolved is not null)
             {
@@ -98,24 +134,12 @@ public sealed class TenantHubFilter : IHubFilter
                 _logger.LogDebug("Tenant resolved in Hub pipeline: {TenantId} ({TenantName})", tenantContext.TenantId, tenantContext.TenantName);
                 return tenantContext;
             }
-            else
-            {
-                // Fallback para cenários dev/test
-                _logger.LogDebug("Tenant resolved in Hub pipeline (not in store, using provided ID): {TenantId}", tenantId);
-                var tenantContext = new TenantContext
-                {
-                    TenantId = tenantId,
-                    TenantName = tenantId,
-                    IsAuthenticated = true
-                };
-                return tenantContext;
-            }
         }
 
         return null;
     }
 
-    private static string? ResolveTenantId(Microsoft.AspNetCore.Http.HttpContext httpContext)
+    private static string? ResolveExplicitTenantId(Microsoft.AspNetCore.Http.HttpContext httpContext)
     {
         // 1. Header X-Tenant-Id (prioridade máxima)
         if (httpContext.Request.Headers.TryGetValue("X-Tenant-Id", out var headerValue))
@@ -126,7 +150,9 @@ public sealed class TenantHubFilter : IHubFilter
         }
 
         // Query string fallback (SignalR WebSockets às vezes usam query params se headers não forem suportados)
-        if (httpContext.Request.Query.TryGetValue("X-Tenant-Id", out var queryValue))
+        var queryValue = httpContext.Request.Query
+            .FirstOrDefault(item => string.Equals(item.Key, "X-Tenant-Id", StringComparison.OrdinalIgnoreCase)).Value;
+        if (!Microsoft.Extensions.Primitives.StringValues.IsNullOrEmpty(queryValue))
         {
             var val = queryValue.FirstOrDefault();
             if (!string.IsNullOrWhiteSpace(val))
@@ -134,25 +160,29 @@ public sealed class TenantHubFilter : IHubFilter
         }
 
         // 2. JWT claim (Standard claim ou Supabase claim)
+        return null;
+    }
+
+    private static string? ResolveClaimTenantId(Microsoft.AspNetCore.Http.HttpContext httpContext)
+    {
         var claimValue = httpContext.User?.FindFirst("tenant_id")?.Value;
         if (!string.IsNullOrWhiteSpace(claimValue))
             return claimValue;
 
-        // 3. Supabase Metadata (app_metadata.tenant_id)
         var metadataClaim = httpContext.User?.FindFirst("app_metadata")?.Value;
         if (!string.IsNullOrWhiteSpace(metadataClaim))
         {
             try
             {
                 using var doc = System.Text.Json.JsonDocument.Parse(metadataClaim);
-                if (doc.RootElement.TryGetProperty("tenant_id", out var tenantIdProp))
-                {
-                    return tenantIdProp.GetString();
-                }
+                if (doc.RootElement.TryGetProperty("tenant_id", out var tenantId))
+                    return tenantId.GetString();
             }
-            catch { /* Ignore parse errors */ }
+            catch (System.Text.Json.JsonException)
+            {
+                return null;
+            }
         }
-
         return null;
     }
 }

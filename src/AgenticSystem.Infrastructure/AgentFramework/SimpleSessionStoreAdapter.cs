@@ -35,29 +35,21 @@ public sealed class SimpleSessionStoreAdapter : AgentSessionStore
         ArgumentException.ThrowIfNullOrWhiteSpace(conversationId);
         ArgumentNullException.ThrowIfNull(session);
 
-        try
-        {
-            var serialized = await agent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
-            var stateJson = serialized.GetRawText();
-            var runtimeKey = BuildRuntimeKey(agent.Name);
+        var serialized = await agent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
+        var stateJson = serialized.GetRawText();
+        var runtimeKey = BuildRuntimeKey(agent.Name);
 
-            var sessionData = await _sessionStore.GetAsync(conversationId, cancellationToken);
-            if (sessionData is not null)
-            {
-                sessionData.RuntimeSettings[runtimeKey] = stateJson;
-                await _sessionStore.SaveAsync(sessionData, cancellationToken);
-                
-                _logger.LogDebug(
-                    "Framework session persisted: ConversationId={ConversationId}, Agent={AgentName}, Key={RuntimeKey}",
-                    conversationId,
-                    agent.Name,
-                    runtimeKey);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to persist framework session for ConversationId={ConversationId}", conversationId);
-        }
+        var persistenceSessionId = GetPersistenceSessionId(conversationId);
+        var sessionData = await _sessionStore.GetAsync(persistenceSessionId, cancellationToken)
+            ?? throw new InvalidOperationException($"Conversation '{persistenceSessionId}' does not exist in the session store.");
+        sessionData.RuntimeSettings[runtimeKey] = stateJson;
+        await _sessionStore.SaveAsync(sessionData, cancellationToken);
+
+        _logger.LogDebug(
+            "Framework session persisted: ConversationId={ConversationId}, Agent={AgentName}, Key={RuntimeKey}",
+            persistenceSessionId,
+            agent.Name,
+            runtimeKey);
     }
 
     public override async ValueTask<AgentSession> GetSessionAsync(
@@ -69,7 +61,8 @@ public sealed class SimpleSessionStoreAdapter : AgentSessionStore
         ArgumentException.ThrowIfNullOrWhiteSpace(conversationId);
 
         var runtimeKey = BuildRuntimeKey(agent.Name);
-        var persistedState = await GetPersistedStateAsync(conversationId, runtimeKey, cancellationToken);
+        var persistenceSessionId = GetPersistenceSessionId(conversationId);
+        var persistedState = await GetPersistedStateAsync(persistenceSessionId, runtimeKey, cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(persistedState))
         {
@@ -87,7 +80,7 @@ public sealed class SimpleSessionStoreAdapter : AgentSessionStore
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to restore framework session, creating new one. ConversationId={ConversationId}", conversationId);
+                _logger.LogWarning(ex, "Failed to restore framework session, creating new one. ConversationId={ConversationId}", persistenceSessionId);
             }
         }
 
@@ -122,5 +115,16 @@ public sealed class SimpleSessionStoreAdapter : AgentSessionStore
 
         var normalized = agentName.Trim().ToLowerInvariant();
         return $"{FrameworkStateKey}:{normalized}";
+    }
+
+    // The hosting isolation decorator prefixes the framework conversation id with
+    // "<tenant>:<principal>::". Application session records keep the original id;
+    // tenant and user ownership are enforced by the session API and store.
+    private static string GetPersistenceSessionId(string conversationId)
+    {
+        var separator = conversationId.LastIndexOf("::", StringComparison.Ordinal);
+        return separator >= 0 && separator + 2 < conversationId.Length
+            ? conversationId[(separator + 2)..]
+            : conversationId;
     }
 }

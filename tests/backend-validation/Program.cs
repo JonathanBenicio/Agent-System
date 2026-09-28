@@ -3,6 +3,8 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
 using AgenticSystem.Infrastructure.Persistence;
+using AgenticSystem.Infrastructure.Persistence.Entities;
+using AgenticSystem.Infrastructure.AgentFramework;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -15,6 +17,11 @@ using System.Text.Json.Serialization;
 var repositoryRoot = AppContext.BaseDirectory;
 while (!Directory.Exists(Path.Combine(repositoryRoot, "src", "AgenticSystem.Api")))
     repositoryRoot = Directory.GetParent(repositoryRoot)?.FullName ?? throw new InvalidOperationException("Repository root not found.");
+var validationOutputDirectory = Environment.GetEnvironmentVariable("BACKEND_VALIDATION_OUTPUT_DIR")
+    ?? Path.Combine(repositoryRoot, "tests", "TestResults", "backend-core-remediation", "current");
+var historicalOutputDirectory = Path.Combine(repositoryRoot, "tests", "TestResults", "backend-documentation", "current");
+if (Path.GetFullPath(validationOutputDirectory).Equals(Path.GetFullPath(historicalOutputDirectory), StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("Refusing to overwrite historical backend-documentation validation artifacts.");
 
 if (args.Contains("--openapi"))
 {
@@ -36,7 +43,7 @@ if (args.Contains("--openapi"))
         parameters = o.Value.Parameters?.Select(x => new { x.Name, x.In, x.Required }),
         requestContentTypes = o.Value.RequestBody?.Content?.Keys
     })).OrderBy(x => x.path).ThenBy(x => x.method).ToList();
-    var outputFile = Path.Combine(repositoryRoot, "tests", "TestResults", "backend-documentation", "openapi-contracts.json");
+    var outputFile = Path.Combine(validationOutputDirectory, "openapi-contracts.json");
     Directory.CreateDirectory(Path.GetDirectoryName(outputFile)!);
     await File.WriteAllTextAsync(outputFile, JsonSerializer.Serialize(new { scope = "MVC/Swagger production registrations; not full running API pipeline", contracts }, new JsonSerializerOptions { WriteIndented = true }));
     using var schemaText = new StringWriter(System.Globalization.CultureInfo.InvariantCulture);
@@ -54,7 +61,7 @@ var factory = new ValidationFactory(options, accessor);
 if (args.Contains("--session-fixture"))
 {
     // Synthetic known messages via the real store, independent of failed LLM conversations.
-    var directory = Path.Combine(repositoryRoot, "tests", "TestResults", "backend-documentation", "current");
+    var directory = validationOutputDirectory;
     using var core = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "core-results.json")));
     var run = core.RootElement.GetProperty("run").GetString()!;
     if (!System.Text.RegularExpressions.Regex.IsMatch(run, "^doc-[a-f0-9]{8}$")) throw new InvalidOperationException("Invalid diagnostic run.");
@@ -97,28 +104,79 @@ await using (var db = factory.CreateDbContext())
 }
 using var generator = new OllamaEmbeddingGenerator(new Uri("http://127.0.0.1:11435"), "nomic-embed-text");
 var vector = new PostgresVectorStore(factory, NullLogger<PostgresVectorStore>.Instance, generator);
+float[]? validationEmbedding = null;
 await Test("STORE-01", "real pgvector semantic query excludes another tenant", async () =>
 {
-    var embedding = (await generator.GenerateAsync("Authorized validation document.")).Vector.ToArray();
-    await vector.UpsertAsync(new EmbeddingDocument { Id = tenant + "-authorized", TenantId = tenant, Content = "Authorized validation document.", Type = "document", Collection = tenant, Embedding = embedding, Metadata = new() { ["room_id"] = tenant + "-room" } });
-    await vector.UpsertAsync(new EmbeddingDocument { Id = tenant + "-denied", TenantId = tenant, Content = "Unauthorized validation document.", Type = "document", Collection = tenant, Embedding = embedding, Metadata = new() { ["roomId"] = tenant + "-private" } });
+    validationEmbedding = (await generator.GenerateAsync("Authorized validation document.")).Vector.ToArray();
+    await vector.UpsertAsync(new EmbeddingDocument { Id = tenant + "-authorized", TenantId = tenant, Content = "Authorized validation document.", Type = "document", Collection = tenant, Embedding = validationEmbedding, Metadata = new() { ["room_id"] = tenant + "-room" } });
+    await vector.UpsertAsync(new EmbeddingDocument { Id = tenant + "-denied", TenantId = tenant, Content = "Unauthorized validation document.", Type = "document", Collection = tenant, Embedding = validationEmbedding, Metadata = new() { ["roomId"] = tenant + "-private" } });
     using (accessor.BeginScope(new TenantContext { TenantId = otherTenant }))
-        await vector.UpsertAsync(new EmbeddingDocument { Id = otherTenant + "-document", TenantId = otherTenant, Content = "Authorized validation document.", Type = "document", Collection = tenant, Embedding = embedding });
+        await vector.UpsertAsync(new EmbeddingDocument { Id = otherTenant + "-document", TenantId = otherTenant, Content = "Authorized validation document.", Type = "document", Collection = tenant, Embedding = validationEmbedding });
     var found = await vector.SearchWithFiltersAsync("Authorized validation document.", new() { ["collection"] = tenant });
     Check(found.Matches.Count > 0 && found.Matches.All(m => !m.Id.StartsWith(otherTenant)), "cross-tenant match or empty result");
     return $"matches={found.Matches.Count}; foreign tenant excluded; embeddings real";
 });
 await Test("STORE-02", "SQL room prefilter returns only allowed room", async () =>
 {
+    Check(validationEmbedding is not null, "STORE-01 embedding unavailable");
+    for (var index = 0; index < 60; index++)
+    {
+        await vector.UpsertAsync(new EmbeddingDocument
+        {
+            Id = $"{tenant}-denied-{index:D2}", TenantId = tenant, Content = "Authorized validation document.",
+            Type = "document", Collection = tenant, Embedding = validationEmbedding!,
+            Metadata = new() { ["room_id"] = $"{tenant}-forbidden-{index:D2}" }
+        });
+    }
     var found = await vector.SearchWithFiltersAsync("Authorized validation document.", new() { ["collection"] = tenant, ["room_ids"] = tenant + "-room" });
     Check(found.Matches.Count == 1 && found.Matches[0].Id == tenant + "-authorized", "unexpected room matches=" + found.Matches.Count);
-    return "one authorized room match";
+    return "one authorized room match among 61 same-tenant room-tagged candidates";
 });
 await Test("STORE-03", "empty allowed-room list fails closed", async () =>
 {
     var found = await vector.SearchWithFiltersAsync("Authorized validation document.", new() { ["collection"] = tenant, ["room_ids"] = "" });
     Check(found.Matches.Count == 0, "empty room_ids returned matches=" + found.Matches.Count);
     return "zero matches";
+});
+await Test("SKILL-01", "defaults are tenant-scoped, stable, and preserve customized legacy entries", async () =>
+{
+    var source = new DbAgentSkillsSource(factory, NullLogger<DbAgentSkillsSource>.Instance);
+    using (accessor.BeginScope(new TenantContext { TenantId = tenant }))
+    {
+        await using var db = factory.CreateDbContext();
+        db.AgentSkills.Add(new DbSkillEntity
+        {
+            Id = tenant + "-custom-coding", TenantId = tenant, Name = "Coding Assistant", Domain = "work",
+            Type = "Instruction", SystemPromptFragment = "Customized tenant instruction", IsSystem = true
+        });
+        await db.SaveChangesAsync();
+
+        var first = (await source.LoadSkillsAsync()).ToList();
+        var second = (await source.LoadSkillsAsync()).ToList();
+        Check(first.Count == 4 && second.Count == 4, $"first={first.Count} second={second.Count}");
+        Check(first.Select(skill => skill.Id).Order().SequenceEqual(second.Select(skill => skill.Id).Order()), "skill IDs changed between loads");
+        Check(first.Any(skill => skill.Id == tenant + "-custom-coding"), "customized legacy skill was replaced");
+    }
+
+    using (accessor.BeginScope(new TenantContext { TenantId = otherTenant }))
+    {
+        var otherSkills = (await source.LoadSkillsAsync()).ToList();
+        Check(otherSkills.Count == 4, $"other tenant defaults={otherSkills.Count}");
+        Check(otherSkills.All(skill => !skill.Id.Contains(tenant, StringComparison.Ordinal)), "skill ID leaked another tenant identifier");
+    }
+
+    var raceTenant = tenant + "-race";
+    await using (var db = factory.CreateDbContext())
+    {
+        db.Tenants.Add(new Tenant { Id = raceTenant, Name = "Skills race validation", Slug = raceTenant, Limits = TenantLimits.FreeTier() });
+        await db.SaveChangesAsync();
+    }
+    using (accessor.BeginScope(new TenantContext { TenantId = raceTenant }))
+    {
+        var concurrent = await Task.WhenAll(source.LoadSkillsAsync(), source.LoadSkillsAsync());
+        Check(concurrent.All(skills => skills.Count() == 4), "concurrent seeding returned an incomplete catalog");
+    }
+    return "customized ID retained; defaults stable and isolated; concurrent catalog has 4 entries";
 });
 var repository = new TenantQuotaRepository(factory, NullLogger<TenantQuotaRepository>.Instance);
 await Test("QUOTA-01", "daily counters survive new repository/context", async () =>
@@ -160,8 +218,31 @@ await Test("QUOTA-04", "daily reset persists zero counters", async () =>
     Check(reset.CurrentDailyTokens == 0 && reset.CurrentDailyRequests == 0 && reset.LastResetAt.Date == DateTime.UtcNow.Date, "reset not persisted");
     return "persisted counters=0 and current UTC reset date";
 });
-var output = Path.Combine(repositoryRoot, "tests", "TestResults", "backend-documentation", "store-results.json");
-Directory.CreateDirectory(Path.GetDirectoryName(output)!);
+await Test("QUOTA-05", "saved quota cannot exceed the tenant plan ceiling", async () =>
+{
+    await repository.UpsertConfigAsync(tenant, new QuotaConfig
+    {
+        OwnerId = tenant,
+        RequestsPerMinute = 1000,
+        MaxTokensPerDay = 1_000_000,
+        MaxDailyBudgetUsd = 1000
+    });
+    using (accessor.BeginScope(new TenantContext
+    {
+        TenantId = tenant,
+        Plan = TenantPlan.Free,
+        Limits = TenantLimits.EnterpriseTier()
+    }))
+    {
+        using var cache = new MemoryCache(new MemoryCacheOptions());
+        var enforcer = new QuotaEnforcer(cache, repository, NullLogger<QuotaEnforcer>.Instance, accessor);
+        var result = await enforcer.CheckQuotaAsync(tenant, estimatedTokens: TenantLimits.FreeTier().MaxTokensPerDay + 1);
+        Check(!result.Allowed && result.DenialReason == "Daily token quota exceeded", "plan ceiling did not deny overage");
+    }
+    return "configured 1,000,000-token quota remained capped at Free plan limit";
+});
+var output = Path.Combine(validationOutputDirectory, "store-results.json");
+Directory.CreateDirectory(validationOutputDirectory);
 await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new { baseline = "f8de7a6", services = "real PostgreSQL/pgvector and Ollama embeddings", results }, new JsonSerializerOptions { WriteIndented = true }));
 Environment.ExitCode = results.Any(r => JsonSerializer.Serialize(r).Contains("\"failed\"")) ? 1 : 0;
 

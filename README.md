@@ -2,6 +2,7 @@
 
 > Backend: [contratos, acesso, recursos e validação](docs/backend/README.md). Processo: [templates](templates/README.md).
 > Revisão do PR: [correções e evidências](docs/backend/validation/2026-09-28-review-fixes.md).
+> Correção ativa dos bugs #111–#117: [ADR-035](docs/architecture/adr/035-backend-core-isolation-and-reliability.md) · [plano/status](docs/plan/backend-core-remediation.md) · [evidências](docs/backend/validation/backend-core-remediation.md).
 
 > .NET 10 + Microsoft Agent Framework + Microsoft.Extensions.AI — orquestração framework-first hospedada, memória Obsidian + PostgreSQL/pgvector e superfícies A2A, AG-UI e OpenAI-compatible. Plugins MCP cliente disponíveis; servidor HTTP /mcp não mapeado na baseline.
 

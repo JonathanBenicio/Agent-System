@@ -448,6 +448,58 @@ public class RoleAssignmentConfiguration : IEntityTypeConfiguration<RoleAssignme
     }
 }
 
+public class TenantMembershipConfiguration : IEntityTypeConfiguration<TenantMembershipEntity>
+{
+    public void Configure(EntityTypeBuilder<TenantMembershipEntity> builder)
+    {
+        builder.ToTable("tenant_memberships");
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(item => item.SubjectId).HasColumnName("subject_id").HasMaxLength(128).IsRequired();
+        builder.Property(item => item.SubjectType).HasColumnName("subject_type").HasMaxLength(32).IsRequired();
+        builder.Property(item => item.Role).HasColumnName("role").HasMaxLength(64).IsRequired();
+        builder.Property(item => item.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(item => item.GrantedAt).HasColumnName("granted_at");
+        builder.Property(item => item.GrantedBy).HasColumnName("granted_by").HasMaxLength(128);
+        builder.HasIndex(item => new { item.SubjectId, item.SubjectType, item.TenantId, item.Role })
+            .IsUnique().HasDatabaseName("ix_tenant_memberships_subject_tenant_role");
+        builder.HasIndex(item => item.TenantId).HasDatabaseName("ix_tenant_memberships_tenant_id");
+    }
+}
+
+public class PlatformAdministratorConfiguration : IEntityTypeConfiguration<PlatformAdministratorEntity>
+{
+    public void Configure(EntityTypeBuilder<PlatformAdministratorEntity> builder)
+    {
+        builder.ToTable("platform_administrators");
+        builder.HasKey(item => item.UserId);
+        builder.Property(item => item.UserId).HasColumnName("user_id").HasMaxLength(128);
+        builder.Property(item => item.GrantedAt).HasColumnName("granted_at");
+        builder.Property(item => item.GrantedBy).HasColumnName("granted_by").HasMaxLength(128);
+    }
+}
+
+public class TenantSupportGrantConfiguration : IEntityTypeConfiguration<TenantSupportGrantEntity>
+{
+    public void Configure(EntityTypeBuilder<TenantSupportGrantEntity> builder)
+    {
+        builder.ToTable("tenant_support_grants");
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(item => item.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(item => item.UserId).HasColumnName("user_id").HasMaxLength(128).IsRequired();
+        builder.Property(item => item.Scope).HasColumnName("scope").HasMaxLength(256).IsRequired();
+        builder.Property(item => item.Reason).HasColumnName("reason").HasMaxLength(2000).IsRequired();
+        builder.Property(item => item.GrantedAt).HasColumnName("granted_at");
+        builder.Property(item => item.GrantedBy).HasColumnName("granted_by").HasMaxLength(128).IsRequired();
+        builder.Property(item => item.ExpiresAt).HasColumnName("expires_at");
+        builder.Property(item => item.RevokedAt).HasColumnName("revoked_at");
+        builder.Property(item => item.RevokedBy).HasColumnName("revoked_by").HasMaxLength(128);
+        builder.HasIndex(item => new { item.TenantId, item.UserId, item.ExpiresAt })
+            .HasDatabaseName("ix_tenant_support_grants_active_lookup");
+    }
+}
+
 public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessageEntity>
 {
     public void Configure(EntityTypeBuilder<OutboxMessageEntity> builder)

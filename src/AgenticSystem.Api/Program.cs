@@ -27,6 +27,8 @@ builder.Host.UseDefaultServiceProvider((context, options) =>
 
 builder.Services.AddAgenticSystemCore();
 builder.Services.AddAgenticSystemInfrastructure(builder.Configuration);
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Microsoft.Agents.AI.Hosting.SessionIsolationKeyProvider, AgenticSystem.Api.Auth.TenantSessionIsolationKeyProvider>();
 
 // Register SignalR-based session event publisher for real-time UI sync
 builder.Services.AddSingleton<AgenticSystem.Core.Interfaces.IEventPublisher, AgenticSystem.Api.SignalR.SignalRSessionEventPublisher>();
@@ -83,6 +85,7 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
 
+builder.Services.AddScoped<AgenticSystem.Api.SignalR.TenantHubFilter>();
 builder.Services.AddSignalR(options =>
 {
     options.AddFilter<AgenticSystem.Api.SignalR.TenantHubFilter>();
@@ -247,13 +250,13 @@ await eventBus.SubscribeAsync("FinOps.TurnCostUpdated", "GatewayHubPublisher", a
 {
     if (busEvent.Payload.TryGetValue("TurnCostSummary", out var summaryObj))
     {
-        await gatewayHub.Clients.All.SendAsync("TurnCostSummaryUpdated", summaryObj);
+        await gatewayHub.Clients.Group($"tenant:{busEvent.TenantId}:gateway").SendAsync("TurnCostSummaryUpdated", summaryObj);
     }
 });
 
 await eventBus.SubscribeAsync("FinOps.QuotaThresholdReached", "GatewayHubPublisher", async busEvent =>
 {
-    await gatewayHub.Clients.All.SendAsync("QuotaThresholdReached", busEvent.Payload);
+    await gatewayHub.Clients.Group($"tenant:{busEvent.TenantId}:gateway").SendAsync("QuotaThresholdReached", busEvent.Payload);
 });
 
 Log.Information("Agentic System starting up...");

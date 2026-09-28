@@ -18,7 +18,8 @@ public class ApiKeyAuthenticationTests
 {
     private static ApiKeyAuthenticationHandler CreateHandler(
         string? configuredKey,
-        string? providedKey)
+        string? providedKey,
+        string role = "Admin")
     {
         var dbName = $"apikey-auth-tests-{Guid.NewGuid():N}";
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
@@ -43,6 +44,7 @@ public class ApiKeyAuthenticationTests
                 Name = "Admin Key",
                 TenantId = "admin",
                 KeyHash = keyHash,
+                Role = role,
                 IsEnabled = true,
                 CreatedAt = DateTime.UtcNow
             });
@@ -83,6 +85,18 @@ public class ApiKeyAuthenticationTests
 
         result.Succeeded.Should().BeTrue();
         result.Principal!.Identity!.Name.Should().Be("Admin Key");
+    }
+
+    [Fact]
+    public async Task Authenticate_UsesStoredRoleInsteadOfPromotingEveryKeyToAdmin()
+    {
+        var handler = CreateHandler("viewer-key", "viewer-key", "Viewer");
+
+        var result = await handler.AuthenticateAsync();
+
+        result.Succeeded.Should().BeTrue();
+        result.Principal!.IsInRole("Viewer").Should().BeTrue();
+        result.Principal.IsInRole("Admin").Should().BeFalse();
     }
 
     [Fact]

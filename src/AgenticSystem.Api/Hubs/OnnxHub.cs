@@ -42,8 +42,7 @@ public class OnnxHub : Hub
     private void EnsureAuthorizedForTenant(string tenantId, string action)
     {
         var userTenantId = Context.User?.FindFirst("tenant_id")?.Value;
-        if (!string.Equals(tenantId?.Trim(), userTenantId?.Trim(), StringComparison.OrdinalIgnoreCase) 
-            && !(Context.User?.IsInRole("Admin") ?? false))
+        if (!string.Equals(tenantId?.Trim(), userTenantId?.Trim(), StringComparison.OrdinalIgnoreCase))
         {
             throw new HubException($"Unauthorized to {action} this tenant.");
         }

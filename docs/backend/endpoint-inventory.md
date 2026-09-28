@@ -2,7 +2,7 @@
 
 Gerado com `node scripts/backend-contract-inventory.mjs`. Cada rota aponta para sua assinatura atual; parâmetros C# não substituem schema/obrigatoriedade de binding. Autorizações adicionais e flags exigem leitura da fonte. Endpoints fora do núcleo ainda não possuem prova integrada.
 
-201 combinações método/rota, incluindo aliases. Consulte [contratos do núcleo](api-core.md) e [hubs/protocolos](transports.md).
+206 combinações método/rota, incluindo aliases. Consulte [contratos do núcleo](api-core.md) e [hubs/protocolos](transports.md).
 
 | Método | Rota | Ação/entrada C# | Autorização declarada | Fonte |
 |---|---|---|---|---|
@@ -132,8 +132,8 @@ Gerado com `node scripts/backend-contract-inventory.mjs`. Cada rota aponta para 
 | POST | /api/agent/skills/upload | UploadSkill(IFormFile file) | Authorize (roles/policy: see source) | [AgentSkillsController.cs:223](../../src/AgenticSystem.Api/Controllers/AgentSkillsController.cs) |
 | POST | /api/auth/login | Login([FromBody] LoginRequest request) | no Authorize attribute; inspect action | [AuthController.cs:47](../../src/AgenticSystem.Api/Controllers/AuthController.cs) |
 | POST | /api/auth/logout | Logout() | no Authorize attribute; inspect action | [AuthController.cs:229](../../src/AgenticSystem.Api/Controllers/AuthController.cs) |
-| POST | /api/chat | Chat([FromBody] ChatRequest request) | Authorize (roles/policy: see source) | [ChatController.cs:34](../../src/AgenticSystem.Api/Controllers/ChatController.cs) |
-| POST | /api/chat/stream | ChatStream([FromBody] ChatRequest request) | Authorize (roles/policy: see source) | [ChatController.cs:61](../../src/AgenticSystem.Api/Controllers/ChatController.cs) |
+| POST | /api/chat | Chat([FromBody] ChatRequest request) | Authorize (roles/policy: see source) | [ChatController.cs:36](../../src/AgenticSystem.Api/Controllers/ChatController.cs) |
+| POST | /api/chat/stream | ChatStream([FromBody] ChatRequest request) | Authorize (roles/policy: see source) | [ChatController.cs:65](../../src/AgenticSystem.Api/Controllers/ChatController.cs) |
 | POST | /api/document/ingest | IngestDocument(IFormFile file, [FromQuery] string? source = null, CancellationToken ct = default) | Authorize (roles/policy: see source) | [DocumentController.cs:72](../../src/AgenticSystem.Api/Controllers/DocumentController.cs) |
 | POST | /api/document/ingest/batch | IngestBatch([FromForm] IFormFileCollection files, [FromQuery] string? source = null, CancellationToken ct = default) | Authorize (roles/policy: see source) | [DocumentController.cs:160](../../src/AgenticSystem.Api/Controllers/DocumentController.cs) |
 | GET | /api/document/stats | GetStats(CancellationToken ct = default) | Authorize (roles/policy: see source) | [DocumentController.cs:41](../../src/AgenticSystem.Api/Controllers/DocumentController.cs) |
@@ -179,6 +179,11 @@ Gerado com `node scripts/backend-contract-inventory.mjs`. Cada rota aponta para 
 | GET | /api/onnx/models/jobs | ListJobs([FromQuery] string? modelId = null, [FromQuery] int page = 1, [FromQuery] int pageSize = 10, CancellationToken ct = default) | Authorize (roles/policy: see source) | [OnnxModelController.cs:367](../../src/AgenticSystem.Api/Controllers/OnnxModelController.cs) |
 | DELETE | /api/onnx/models/jobs/{jobId} | DeleteJob(string jobId, CancellationToken ct) | Authorize (roles/policy: see source) | [OnnxModelController.cs:418](../../src/AgenticSystem.Api/Controllers/OnnxModelController.cs) |
 | POST | /api/planner/plan | CreatePlan([FromBody] CreatePlanRequest request, CancellationToken ct = default) | Authorize (roles/policy: see source) | [PlannerController.cs:26](../../src/AgenticSystem.Api/Controllers/PlannerController.cs) |
+| GET | /api/platform/tenants | ListTenants(CancellationToken ct) | Authorize (roles/policy: see source) | [PlatformAdminController.cs:27](../../src/AgenticSystem.Api/Controllers/PlatformAdminController.cs) |
+| PUT | /api/platform/tenants/{tenantId}/plan | UpdateTenantPlan(string tenantId, [FromBody] UpdateTenantPlanRequest request, CancellationToken ct) | Authorize (roles/policy: see source) | [PlatformAdminController.cs:36](../../src/AgenticSystem.Api/Controllers/PlatformAdminController.cs) |
+| GET | /api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants | ListSupportGrants(string tenantId, string roomId, CancellationToken ct) | Authorize (roles/policy: see source) | [PlatformAdminController.cs:59](../../src/AgenticSystem.Api/Controllers/PlatformAdminController.cs) |
+| POST | /api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants | CreateSupportGrant(string tenantId, string roomId, [FromBody] CreateSupportGrantRequest request, CancellationToken ct) | Authorize (roles/policy: see source) | [PlatformAdminController.cs:75](../../src/AgenticSystem.Api/Controllers/PlatformAdminController.cs) |
+| DELETE | /api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants/{grantId} | RevokeSupportGrant(string tenantId, string roomId, string grantId, CancellationToken ct) | Authorize (roles/policy: see source) | [PlatformAdminController.cs:144](../../src/AgenticSystem.Api/Controllers/PlatformAdminController.cs) |
 | GET | /api/session | GetSessions([FromQuery] int limit = 50, [FromQuery] string? search = null, CancellationToken ct = default) | Authorize (roles/policy: see source) | [SessionController.cs:29](../../src/AgenticSystem.Api/Controllers/SessionController.cs) |
 | DELETE | /api/session/{id} | DeleteSession(string id, CancellationToken ct = default) | Authorize (roles/policy: see source) | [SessionController.cs:71](../../src/AgenticSystem.Api/Controllers/SessionController.cs) |
 | GET | /api/session/{id} | GetSession(string id, CancellationToken ct = default) | Authorize (roles/policy: see source) | [SessionController.cs:45](../../src/AgenticSystem.Api/Controllers/SessionController.cs) |
