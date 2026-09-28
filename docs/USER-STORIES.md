@@ -1,5 +1,19 @@
 # User Stories — Agentic System
 
+## BACK-DOC-001 — Contratos claros e validação do núcleo
+
+Como mantenedor, quero contratos rastreáveis de endpoints, acesso e recursos, para distinguir funcionalidades comprovadas de lacunas.
+
+Issue: [#110](https://github.com/JonathanBenicio/Agent-System/issues/110) • ADR: [034](architecture/adr/034-backend-contracts-and-access-target.md) • Plano: [execução](plan/backend-documentation-validation.md).
+Status: documentação e diagnóstico entregues; falhas de produto no [backlog](backend/backlog.md). Evidência: [relatório](backend/validation/2026-09-28.md).
+
+- Dado o código da baseline, quando consultar o hub, então encontrar rotas e fontes, regras atuais, alvo desejado e limites de validação.
+- Dado dois tenants e usuários sem ACL, quando executar diagnóstico, então registrar aprovação ou reprodução de vazamento/negação incorreta sem alterar produção.
+- Dado falha ou cenário não executado, quando entregar o PR, então informar resultado e backlog sem declarar estabilidade.
+- Dado nova iniciativa, quando usar templates, então obter issue → ADR → story → plano → commits → PR e evidências adequadas.
+
+IDs novos usam domínio e número únicos; IDs históricos duplicados permanecem como legado, sem renumeração destrutiva.
+
 > Catálogo consolidado de User Stories do backend (.NET 10, runtime framework-first hospedado) e frontend (React 19).
 > Gerado via pipeline Spec→Code em maio/2026.
 

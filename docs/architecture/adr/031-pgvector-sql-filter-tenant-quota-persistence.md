@@ -1,5 +1,7 @@
 # ADR 031: Filtro de Metadata SQL-Nativo no PGVector e Persistência de Quotas de Tenant
 
+> Revisão operacional 2026-09-28: A proposta abaixo é histórica. Implementação atual usa vector_documents, pré-filtro de sala e scoring dos candidatos; quotas usam SaveChangesAsync com concorrência otimista e DailyQuotaResetBackgroundService, não UPDATE RETURNING/Quartz. Ver [matriz operacional](../../backend/resources-rules.md) e [evidência](../../backend/validation/2026-09-28.md).
+
 **Status:** Proposto
 **Data:** 04 de Junho de 2026
 **Autor(es):** Antigravity AI & Jonathan Benicio

@@ -29,35 +29,35 @@ Após varredura exaustiva de todo o backend, confirmo que o projeto está **muit
 
 O projeto **já implementou** o Skills Framework de forma nativa com persistência em banco:
 
-- [DbAgentSkillsSource](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AgentFramework/DbAgentSkillsSource.cs) — Carrega skills do PostgreSQL com auto-seeding por Tenant.
-- [AgentSkillsProvider](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AgentFramework/AgentSkillsProvider.cs) — Herda `MessageAIContextProvider` oficial do MAF, injetando skills dinamicamente no pipeline da LLM.
-- [DbBasedSkill](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AgentFramework/DbAgentSkillsSource.cs#L147-L188) — Implementação de `ISkill` baseada em registros do banco.
-- [DynamicSkillCatalogHostedService](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/Skills/DynamicSkillCatalogHostedService.cs) — Carrega skills declarativas de YAML/JSON em disco como complemento.
+- [DbAgentSkillsSource](../../src/AgenticSystem.Infrastructure/AgentFramework/DbAgentSkillsSource.cs) — Carrega skills do PostgreSQL com auto-seeding por Tenant.
+- [AgentSkillsProvider](../../src/AgenticSystem.Infrastructure/AgentFramework/AgentSkillsProvider.cs) — Herda `MessageAIContextProvider` oficial do MAF, injetando skills dinamicamente no pipeline da LLM.
+- [DbBasedSkill](../../src/AgenticSystem.Infrastructure/AgentFramework/DbAgentSkillsSource.cs) — Implementação de `ISkill` baseada em registros do banco.
+- [DynamicSkillCatalogHostedService](../../src/AgenticSystem.Infrastructure/Skills/DynamicSkillCatalogHostedService.cs) — Carrega skills declarativas de YAML/JSON em disco como complemento.
 - **API CRUD** via `AgentSkillsController` já exposta.
 
 ### ✅ Fase 4 — Configuração Declarativa (YAML): **PARCIALMENTE IMPLEMENTADA**
 
-- [AgentYamlValidator](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AgentFramework/AgentYamlValidator.cs) — Parser e validador de manifestos YAML dos agentes com DTOs completos (`AgentYamlDto`, `AgentYamlMetadataDto`, etc.).
-- [AgentConfigurationService](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Core/Services/AgentConfigurationService.cs) — Persistência de configurações no banco.
+- [AgentYamlValidator](../../src/AgenticSystem.Infrastructure/AgentFramework/AgentYamlValidator.cs) — Parser e validador de manifestos YAML dos agentes com DTOs completos (`AgentYamlDto`, `AgentYamlMetadataDto`, etc.).
+- [AgentConfigurationService](../../src/AgenticSystem.Core/Services/AgentConfigurationService.cs) — Persistência de configurações no banco.
 - ⚠️ **PowerFx**: Validação sintática básica (parênteses balanceados) existe, mas o motor `RecalcEngine` do `Microsoft.PowerFx` **NÃO está instalado nem integrado**. As expressões são validadas superficialmente.
 
 ### ✅ Fase 5 — Sandbox WASM: **PARCIALMENTE IMPLEMENTADA**
 
-- [HyperlightSandboxedExecutor](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/Security/HyperlightSandboxedExecutor.cs) — Classe implementada e registrada no DI, exposta como `HyperlightExecuteCodeTool` para os agentes.
+- [HyperlightSandboxedExecutor](../../src/AgenticSystem.Infrastructure/Security/HyperlightSandboxedExecutor.cs) — Classe implementada e registrada no DI, exposta como `HyperlightExecuteCodeTool` para os agentes.
 - ⚠️ **Porém é uma SIMULAÇÃO**: A execução não usa o SDK real do Hyperlight WASM. O código simula a sandbox com `Task.Delay` e outputs hardcoded. Não há isolamento real de micro-VM.
 - ⚠️ **FIDES**: Não implementado. Nenhum middleware de rastreamento de dados sensíveis existe.
 
 ### ✅ Fase 6 — DevUI e Evaluators: **IMPLEMENTADA**
 
-- `AddDevUI()` e `MapDevUI()` registrados no [Program.cs](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Api/Program.cs) (linhas 98 e 168).
-- [RuntimeEvaluatorService](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Core/Services/RuntimeEvaluatorService.cs) — Usa `CompositeEvaluator` com `FluencyEvaluator` e `RelevanceTruthAndCompletenessEvaluator` do `Microsoft.Extensions.AI.Evaluation.Quality`.
-- [AgentEvaluationService](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Core/Services/AgentEvaluationService.cs) — Usa `LocalEvaluator` com `FunctionEvaluator.Create()` para checks customizados (KeywordCoverage, SafetyCheck, HallucinationGuard).
+- `AddDevUI()` e `MapDevUI()` registrados no [Program.cs](../../src/AgenticSystem.Api/Program.cs) (linhas 98 e 168).
+- [RuntimeEvaluatorService](../../src/AgenticSystem.Core/Services/RuntimeEvaluatorService.cs) — Usa `CompositeEvaluator` com `FluencyEvaluator` e `RelevanceTruthAndCompletenessEvaluator` do `Microsoft.Extensions.AI.Evaluation.Quality`.
+- [AgentEvaluationService](../../src/AgenticSystem.Core/Services/AgentEvaluationService.cs) — Usa `LocalEvaluator` com `FunctionEvaluator.Create()` para checks customizados (KeywordCoverage, SafetyCheck, HallucinationGuard).
 - API REST exposta via `AgentRuntimeController` (endpoints `/evaluate` e `/regressions`).
 
 ### ✅ Criação Dinâmica de Agentes: **IMPLEMENTADA**
 
-- [DynamicAgentService](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Core/Services/DynamicAgentService.cs) — Cria agentes via linguagem natural usando LLM para gerar `AgentSpecification`.
-- [HierarchicalAgentFactory](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Core/Services/HierarchicalAgentFactory.cs) — Pool de agentes com suporte a `CustomAgent` dinâmico.
+- [DynamicAgentService](../../src/AgenticSystem.Core/Services/DynamicAgentService.cs) — Cria agentes via linguagem natural usando LLM para gerar `AgentSpecification`.
+- [HierarchicalAgentFactory](../../src/AgenticSystem.Core/Services/HierarchicalAgentFactory.cs) — Pool de agentes com suporte a `CustomAgent` dinâmico.
 - ⚠️ **Problema**: Agentes dinâmicos vivem apenas **in-memory** (`ConcurrentDictionary`). Se o servidor reiniciar, eles somem. Não há persistência de `AgentSpecification` no PostgreSQL.
 
 ---
@@ -154,8 +154,8 @@ O `HyperlightSandboxedExecutor` é um **stub** que simula execução. Não há i
 ## Documentação a Atualizar
 
 Após execução:
-1. Atualizar [backend-architecture-explained.md](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/architecture/backend-architecture-explained.md) — Seções 4, 12, 13.
-2. Atualizar [maf-migration-roadmap.md](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/plan/maf-migration-roadmap.md) — Marcar fases concluídas.
+1. Atualizar [backend-architecture-explained.md](../architecture/backend-architecture-explained.md) — Seções 4, 12, 13.
+2. Atualizar [maf-migration-roadmap.md](maf-migration-roadmap.md) — Marcar fases concluídas.
 3. Criar ADR para decisão sobre DurableTask (manter vs migrar).
 
 ## Verification Plan

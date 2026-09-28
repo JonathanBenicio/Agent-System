@@ -1,5 +1,14 @@
 # Documentação — AgenticSystem
 
+## Backend: contratos e evidências
+
+- [Hub](backend/README.md)
+- [API do núcleo](backend/api-core.md) e [inventário](backend/endpoint-inventory.md)
+- [Schemas dos DTOs](backend/request-schemas.md) e [OpenAPI Release](backend/openapi-release.json)
+- [Tenants/acesso](backend/access-tenants.md), [recursos](backend/resources-rules.md), [transportes](backend/transports.md)
+- [Operação](backend/operations.md), [validação](backend/validation/2026-09-28.md), [backlog](backend/backlog.md)
+- [ADR-034](architecture/adr/034-backend-contracts-and-access-target.md), [plano](plan/backend-documentation-validation.md), [templates](../templates/README.md)
+
 Índice de navegação da documentação do projeto, organizado por papel documental.
 
 Documento canônico de arquitetura atual:
@@ -134,8 +143,8 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 | [plan/completed/onnx-in-process.md](plan/completed/onnx-in-process.md) | Roadmap/Plan: Dynamic ONNX In-Process Inference Engine (Issue #74) |
 | [plan/completed/automatic-llm-inspection-plan.md](plan/completed/automatic-llm-inspection-plan.md) | Roadmap/Plan: Inspeção Automática de Modelos LLM no Login (Issue #94) |
 | [plan/gap-mitigation-plan.md](plan/gap-mitigation-plan.md) | Roadmap/Plan: Mitigação de Gaps Técnicos de Segurança e Performance (Issues #76, #77, #78, #79) |
-| [plan/bug-chat-workflow.md](plan/bug-chat-workflow.md) | Bug Fix Plan: Resposta do chat não aparece no frontend |
-| [plan/multi-provider-api-keys.md](plan/multi-provider-api-keys.md) | Roadmap/Plan: Multi-Provider API Keys |
+| [plan/bug-chat-workflow.md](plan/completed/bug-chat-workflow.md) | Bug Fix Plan: Resposta do chat não aparece no frontend |
+| [plan/multi-provider-api-keys.md](plan/completed/multi-provider-api-keys.md) | Roadmap/Plan: Multi-Provider API Keys |
 | [plan/completed/unified-chat-integration.md](plan/completed/unified-chat-integration.md) | Roadmap/Plan: Integração Unificada do Chat (12 Pilares) |
 | [plan/completed/async-onnx-processing-plan.md](plan/completed/async-onnx-processing-plan.md) | Roadmap/Plan: Processamento Assíncrono de Inferência ONNX e Galeria |
 | [plan/backend-testing-roadmap.md](plan/backend-testing-roadmap.md) | Roadmap/Plan: Plano e Roteiro de Testes do Backend (.NET 10) |

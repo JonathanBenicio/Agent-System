@@ -17,7 +17,7 @@
 * **Validação de Ciclos e Estrutura:** O compilador dinâmico de workflows deve conter um algoritmo de ordenação topológica (ex: DFS/Kahn) para detectar e rejeitar grafos ciclicamente inválidos ou com nós órfãos antes de registrar a definição ou iniciar a execução.
 * **Streaming de Eventos via SignalR:** Toda transição de nó do grafo (ex: `VisionAnalyst` concluiu a análise visual e passou a bola para o `EditorChefe`) deve emitir eventos estruturados em tempo real no SignalR Hub (`/hubs/workflow`), contendo o status de progresso, latência da etapa e outputs parciais.
 * **Isolamento de Tenants:** O compilador dinâmico deve carregar apenas agentes e ferramentas que estejam associados ou sejam visíveis ao `TenantId` da execução corrente.
-* **Retrocompatibilidade e Descontinuação de Código Rígido:** A especificação do workflow `banner-production` inserida no seed do banco inicial no bootstrap deve ser expandida para descrever a cooperação completa em grafo. Isso permitirá descontinuar e apagar com segurança o [BannerProductionWorkflowService.cs](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AI/BannerProductionWorkflowService.cs).
+* **Retrocompatibilidade e Descontinuação de Código Rígido:** A especificação do workflow `banner-production` inserida no seed do banco inicial no bootstrap deve ser expandida para descrever a cooperação completa em grafo. Isso permitirá descontinuar e apagar com segurança o [BannerProductionWorkflowService.cs](../../src/AgenticSystem.Infrastructure/AI/BannerProductionWorkflowService.cs).
 
 ## Critérios de Aceite (DoD)
 
@@ -25,7 +25,7 @@
 - [ ] **Critério 2 (Validação de Grafo):** A API valida a integridade do grafo em requisições de criação ou atualização. Grafos com loops infinitos ou nós desconectados retornam erro HTTP 400 com diagnóstico detalhado.
 - [ ] **Critério 3 (Compilador Dinâmico MAF):** O `DynamicMafWorkflowCompiler` instancia com sucesso os agentes declarados por meio do `IAgentFactory` (respeitando seus modelos individuais como `llama3.2-vision` ou `llama3-8b`), injeta suas respectivas `AIFunctions` e constrói dinamicamente o fluxo do MAF.
 - [ ] **Critério 4 (SignalR Progress):** O SignalR Hub transmite com sucesso eventos detalhados de transição de estado de cada nó (`StepStarted`, `StepCompleted`, `StepFailed`) no pipeline para permitir o monitoramento em tempo real no frontend.
-- [ ] **Critério 5 (Depreciação Completa do Serviço Estático):** O pipeline de produção de banner roda com sucesso no motor dinâmico e o arquivo [BannerProductionWorkflowService.cs](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AI/BannerProductionWorkflowService.cs) pode ser excluído da base de código sem quebrar a compilação.
+- [ ] **Critério 5 (Depreciação Completa do Serviço Estático):** O pipeline de produção de banner roda com sucesso no motor dinâmico e o arquivo [BannerProductionWorkflowService.cs](../../src/AgenticSystem.Infrastructure/AI/BannerProductionWorkflowService.cs) pode ser excluído da base de código sem quebrar a compilação.
 - [ ] **Critério 6 (Isolamento Multi-tenant):** A execução dinâmica do workflow valida e restringe os agentes e chaves do provedor LLM ao `TenantId` ativo.
 
 ## Dependências Técnicas
