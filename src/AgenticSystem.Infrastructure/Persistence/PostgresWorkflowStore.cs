@@ -9,6 +9,7 @@ namespace AgenticSystem.Infrastructure.Persistence;
 
 public class PostgresWorkflowStore : IWorkflowStore
 {
+    private static readonly System.Threading.SemaphoreSlim _semaphore = new(1, 1);
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresWorkflowStore> _logger;
 
@@ -80,70 +81,78 @@ public class PostgresWorkflowStore : IWorkflowStore
 
     public async Task SaveExecutionAsync(string tenantId, WorkflowExecution execution, CancellationToken ct = default)
     {
-        using var context = await _dbContextFactory.CreateDbContextAsync(ct);
-        
-        var execEntity = await context.WorkflowExecutions.FindAsync(new object[] { execution.Id }, ct);
-        if (execEntity == null)
+        await _semaphore.WaitAsync(ct);
+        try
         {
-            execEntity = new WorkflowExecutionEntity
-            {
-                Id = execution.Id,
-                TenantId = tenantId,
-                WorkflowId = execution.WorkflowId,
-                WorkflowName = execution.WorkflowName,
-                Status = execution.Status.ToString(),
-                InitiatedBy = execution.InitiatedBy,
-                VariablesJson = JsonSerializer.Serialize(execution.Variables),
-                StartedAt = execution.StartedAt,
-                CompletedAt = execution.CompletedAt,
-                ErrorMessage = execution.ErrorMessage
-            };
-            context.WorkflowExecutions.Add(execEntity);
-        }
-        else
-        {
-            execEntity.Status = execution.Status.ToString();
-            execEntity.VariablesJson = JsonSerializer.Serialize(execution.Variables);
-            execEntity.CompletedAt = execution.CompletedAt;
-            execEntity.ErrorMessage = execution.ErrorMessage;
-        }
+            using var context = await _dbContextFactory.CreateDbContextAsync(ct);
 
-        foreach (var stepExec in execution.StepExecutions)
-        {
-            var stepEntityId = $"{execution.Id}_{stepExec.StepId}";
-            var stepEntity = await context.WorkflowStepExecutions.FindAsync(new object[] { stepEntityId }, ct);
-
-            if (stepEntity == null)
+            var execEntity = await context.WorkflowExecutions.FindAsync(new object[] { execution.Id }, ct);
+            if (execEntity == null)
             {
-                stepEntity = new WorkflowStepExecutionEntity
+                execEntity = new WorkflowExecutionEntity
                 {
-                    Id = stepEntityId,
+                    Id = execution.Id,
                     TenantId = tenantId,
-                    ExecutionId = execution.Id,
-                    StepId = stepExec.StepId,
-                    StepName = stepExec.StepName,
-                    Status = stepExec.Status.ToString(),
-                    OutputJson = JsonSerializer.Serialize(stepExec.Output),
-                    ErrorMessage = stepExec.ErrorMessage,
-                    RetryCount = stepExec.RetryCount,
-                    CompensationExecuted = stepExec.CompensationExecuted,
-                    StartedAt = stepExec.StartedAt,
-                    CompletedAt = stepExec.CompletedAt
+                    WorkflowId = execution.WorkflowId,
+                    WorkflowName = execution.WorkflowName,
+                    Status = execution.Status.ToString(),
+                    InitiatedBy = execution.InitiatedBy,
+                    VariablesJson = JsonSerializer.Serialize(execution.Variables),
+                    StartedAt = execution.StartedAt,
+                    CompletedAt = execution.CompletedAt,
+                    ErrorMessage = execution.ErrorMessage
                 };
-                context.WorkflowStepExecutions.Add(stepEntity);
+                context.WorkflowExecutions.Add(execEntity);
             }
             else
             {
-                stepEntity.Status = stepExec.Status.ToString();
-                stepEntity.OutputJson = JsonSerializer.Serialize(stepExec.Output);
-                stepEntity.ErrorMessage = stepExec.ErrorMessage;
-                stepEntity.RetryCount = stepExec.RetryCount;
-                stepEntity.CompensationExecuted = stepExec.CompensationExecuted;
-                stepEntity.CompletedAt = stepExec.CompletedAt;
+                execEntity.Status = execution.Status.ToString();
+                execEntity.VariablesJson = JsonSerializer.Serialize(execution.Variables);
+                execEntity.CompletedAt = execution.CompletedAt;
+                execEntity.ErrorMessage = execution.ErrorMessage;
             }
-        }
 
-        await context.SaveChangesAsync(ct);
+            foreach (var stepExec in execution.StepExecutions)
+            {
+                var stepEntityId = $"{execution.Id}_{stepExec.StepId}";
+                var stepEntity = await context.WorkflowStepExecutions.FindAsync(new object[] { stepEntityId }, ct);
+
+                if (stepEntity == null)
+                {
+                    stepEntity = new WorkflowStepExecutionEntity
+                    {
+                        Id = stepEntityId,
+                        TenantId = tenantId,
+                        ExecutionId = execution.Id,
+                        StepId = stepExec.StepId,
+                        StepName = stepExec.StepName,
+                        Status = stepExec.Status.ToString(),
+                        OutputJson = JsonSerializer.Serialize(stepExec.Output),
+                        ErrorMessage = stepExec.ErrorMessage,
+                        RetryCount = stepExec.RetryCount,
+                        CompensationExecuted = stepExec.CompensationExecuted,
+                        StartedAt = stepExec.StartedAt,
+                        CompletedAt = stepExec.CompletedAt
+                    };
+                    context.WorkflowStepExecutions.Add(stepEntity);
+                }
+                else
+                {
+                    stepEntity.Status = stepExec.Status.ToString();
+                    stepEntity.OutputJson = JsonSerializer.Serialize(stepExec.Output);
+                    stepEntity.ErrorMessage = stepExec.ErrorMessage;
+                    stepEntity.RetryCount = stepExec.RetryCount;
+                    stepEntity.CompensationExecuted = stepExec.CompensationExecuted;
+                    stepEntity.CompletedAt = stepExec.CompletedAt;
+                }
+            }
+
+            await context.SaveChangesAsync(ct);
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
     }
 
     public async Task<WorkflowExecution?> GetExecutionAsync(string tenantId, string executionId, CancellationToken ct = default)

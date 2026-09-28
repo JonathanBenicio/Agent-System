@@ -47,11 +47,19 @@ public class BannerProductionTool : ITool
             };
 
             var result = await _workflowCompiler.ExecuteDynamicWorkflowAsync("banner-production", activeTenantId ?? "admin", parameters, ct);
-            return ToolResult.Ok(result);
+
+            if (result.IsAsync)
+            {
+                // Async HTTP API pattern: workflow runs in background.
+                // Return RunId so the caller can poll for completion.
+                return ToolResult.Ok($"Workflow iniciado em background. RunId={result.RunId} — acompanhe via GET /api/workflow/executions/{result.RunId}");
+            }
+
+            return ToolResult.Ok(result.Message);
         }
         catch (Exception ex)
         {
-            return ToolResult.Fail($"Workflow failed: {ex.Message}");
+            return ToolResult.Fail($"Workflow failed: {ex.ToString()}");
         }
     }
 

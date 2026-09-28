@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Workflows;
 using Microsoft.Agents.AI.DurableTask.Workflows;
-using Microsoft.DurableTask.Client;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
@@ -29,8 +29,7 @@ public class DurableWorkflowCompiler : IDynamicWorkflowCompiler
     private readonly IAgentFactory _agentFactory;
     private readonly AgentFrameworkFactory _frameworkFactory;
     private readonly BannerProductionSkills _bannerSkills;
-    private readonly IWorkflowClient _workflowClient;
-    private readonly DurableTaskClient _durableClient;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DurableWorkflowCompiler> _logger;
 
     public DurableWorkflowCompiler(
@@ -38,20 +37,18 @@ public class DurableWorkflowCompiler : IDynamicWorkflowCompiler
         IAgentFactory agentFactory,
         AgentFrameworkFactory frameworkFactory,
         BannerProductionSkills bannerSkills,
-        IWorkflowClient workflowClient,
-        DurableTaskClient durableClient,
+        IServiceProvider serviceProvider,
         ILogger<DurableWorkflowCompiler> logger)
     {
         _workflowStore = workflowStore ?? throw new ArgumentNullException(nameof(workflowStore));
         _agentFactory = agentFactory ?? throw new ArgumentNullException(nameof(agentFactory));
         _frameworkFactory = frameworkFactory ?? throw new ArgumentNullException(nameof(frameworkFactory));
         _bannerSkills = bannerSkills ?? throw new ArgumentNullException(nameof(bannerSkills));
-        _workflowClient = workflowClient ?? throw new ArgumentNullException(nameof(workflowClient));
-        _durableClient = durableClient ?? throw new ArgumentNullException(nameof(durableClient));
+        _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async Task<string> ExecuteDynamicWorkflowAsync(
+    public async Task<WorkflowStartResult> ExecuteDynamicWorkflowAsync(
         string workflowDefinitionId,
         string tenantId,
         Dictionary<string, object> parameters,
@@ -198,32 +195,17 @@ public class DurableWorkflowCompiler : IDynamicWorkflowCompiler
         var runId = $"{tenantId}:durable-run-{Guid.NewGuid().ToString("N")[..8]}";
         _logger.LogInformation("⚡ [DurableTask] Disparando execução durável do workflow MAF: '{RunId}'", runId);
 
-        var run = await _workflowClient.RunAsync(workflowGraph, messages, runId, ct);
-        
-        // Aguarda a conclusão resiliente da orquestração durável usando DurableTaskClient
-        await _durableClient.WaitForInstanceCompletionAsync(run.RunId, ct);
+        using var scope = _serviceProvider.CreateScope();
+        var workflowClient = scope.ServiceProvider.GetRequiredService<IWorkflowClient>();
+        var run = await workflowClient.RunAsync(workflowGraph, messages, runId, ct);
 
-        // Recupera o estado final e a saída serializada da orquestração
-        var instance = await _durableClient.GetInstanceAsync(run.RunId, ct);
+        _logger.LogInformation("⚡ [DurableTask] Workflow MAF iniciado. RunId='{RunId}' — polling via GET /api/workflow/executions/{RunId}", run.RunId, run.RunId);
 
-        if (instance != null && !string.IsNullOrWhiteSpace(instance.SerializedOutput))
-        {
-            try
-            {
-                // Tenta desserializar as mensagens de retorno
-                var responseMessages = JsonSerializer.Deserialize<List<ChatMessage>>(instance.SerializedOutput);
-                var lastAssistantMessage = responseMessages?.LastOrDefault(m => m.Role == ChatRole.Assistant);
-                if (lastAssistantMessage != null)
-                {
-                    return lastAssistantMessage.Text ?? "Sucesso (execução do workflow durável concluída sem conteúdo textual de saída).";
-                }
-            }
-            catch
-            {
-                return instance.SerializedOutput;
-            }
-        }
-
-        return "O processamento durável do MAF em grafo foi concluído, mas nenhuma mensagem de saída textual foi detectada.";
+        // Async HTTP API pattern: return immediately with RunId.
+        // Client polls GET /api/workflow/executions/{runId} for Completed/Failed status.
+        return new WorkflowStartResult(
+            RunId: run.RunId,
+            Message: $"Workflow durável iniciado. Acompanhe via RunId={run.RunId}",
+            IsAsync: true);
     }
 }

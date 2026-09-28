@@ -14,13 +14,27 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="DurableTask.PostgreSQL" Version="1.0.0-alpha.1" />
+    <PackageReference Include="DurableTask.PostgreSQL" Version="1.0.0-alpha.1" GeneratePathProperty="true" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copia os scripts SQL requeridos pelo PostgreSQL Orchestration Service para o diretório de execução -->
+    <Content Include="$(PkgDurableTask_PostgreSQL)\contentFiles\any\any\Scripts\*.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>%(Filename)%(Extension)</Link>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI" Version="1.6.2" />
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.6.2" />
     <PackageReference Include="Microsoft.Agents.AI.DurableTask" Version="1.6.2-preview.260521.1" />
     <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.6.2-preview.260521.1" />
     <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.6.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
+    <PackageReference Include="Microsoft.DurableTask.Client" Version="1.24.2" />
+    <PackageReference Include="Microsoft.DurableTask.Client.OrchestrationServiceClientShim" Version="1.18.0" />
+
 
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8">

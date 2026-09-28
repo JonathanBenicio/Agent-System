@@ -1,7 +1,8 @@
-# ADR 030: Migração para Microsoft.Agents.AI.DurableTask com PostgreSQL
+# ADR 030: Arquitetura de Orquestração Nativa — Docker/PostgreSQL
 
-**Status:** Aprovado  
-**Data:** 26 de Maio de 2026  
+**Status:** Revisado e Implementado\
+**Data Original:** 26 de Maio de 2026\
+**Data de Revisão:** 26 de Maio de 2026\
 **Autor(es):** Antigravity / Jonathan Benicio  
 **Issue Relacionada:** #108
 
@@ -9,36 +10,104 @@
 
 ## Contexto
 
-Atualmente, o Agentic System gerencia o estado das sessões dos agentes do Microsoft Agent Framework (MAF) na memória RAM ou no PostgreSQL através de um adaptador personalizado chamado `SimpleSessionStoreAdapter` que consome a interface simplificada `ISessionStore`.
+O Agentic System foi inicialmente planejado para usar `Microsoft.Agents.AI.DurableTask` com Durable Entities para persistência de sessões de agentes. Durante a implementação, descobriu-se que o registro anterior de `DurableTaskClient` não estava disponível no DI do host ASP.NET Core. A integração fora de Azure Functions exige configuração explícita de cliente, serviço de orquestração e worker; não basta trocar o store de sessões.
 
-Embora essa solução funcione perfeitamente para interações de chat síncronas/rápidas e seja altamente performática, ela possui limitações severas quando o assunto é resiliência de longa duração e orquestrações complexas:
-1. **Sem checkpoints automáticos:** Se um contêiner cair no meio da execução de um workflow complexo de múltiplos passos (como geração de banners), o estado é perdido e o workflow não pode ser retomado do ponto de falha.
-2. **Ausência de Replay e Idempotência nativos:** A engine do MAF possui suporte de primeira classe para workflows duráveis resilientes através do pacote `Microsoft.Agents.AI.DurableTask`, mas nós não o utilizávamos.
-3. **Acoplamento In-Process:** O compilador de grafos dinâmicos (`DynamicMafWorkflowCompiler`) operava inteiramente in-process e síncrono.
+O ambiente de execução é Docker + PostgreSQL, sem Azure Functions.
 
-## Decisão
+---
 
-Decidimos migrar completamente a gestão de sessões e a orquestração do MAF de in-process/síncrono para o **DurableTask** nativo (`Microsoft.Agents.AI.DurableTask`).
+## Decisão Revisada
 
-Especificamente:
-1. Adotaremos o **provedor oficial PostgreSQL** para a engine durável do DurableTask, compartilhando o mesmo banco de dados da aplicação.
-2. Como o DurableTask gerencia suas tabelas internas de forma otimizada via ADO.NET (com locks de banco de alta performance e streaming de histórico), suas tabelas **não** serão integradas diretamente no mapeamento de entidades do **Entity Framework Core (EF Core)**. Em vez disso, usaremos a inicialização de schema nativa do próprio DurableTask no startup da API.
-3. O isolamento rígido de Multi-Tenant (`X-Tenant-Id`) será garantido através de **particionamento lógico na chave da instância da orquestração**, prefixando o identificador da sessão com o ID do tenant: `InstanceId = "{TenantId}:{SessionId}"`.
-4. Refatoraremos o `IWorkflowCompiler` transparente para os agentes para que ele compile grafos de banco de dados diretamente em Atividades (Activities) e sub-orquestrações do DurableTask.
+Adotar a **arquitetura de orquestração nativa** composta por:
 
-## Justificativa
+1. **`DefaultWorkflowEngine`** como orquestrador central — gerencia o ciclo de vida de execuções, suporte a paralelismo (Fan-out/Fan-in), chaining sequencial e compensações.
+2. **`IWorkflowStore` / PostgreSQL** como backend de persistência de estado — todas as execuções e steps são salvos no banco via EF Core.
+3. **`SimpleSessionStoreAdapter` + `ISessionStore`** como store de sessões de agentes — persiste contexto de conversa dos agentes MAF no PostgreSQL.
+4. **Padrão Async HTTP API** — `POST /api/workflow/executions/start/{id}` retorna `202 Accepted` com `RunId` para polling via `GET /api/workflow/executions/{id}`.
 
-1. **[Resiliência Nativa]:** Retomada automática de workflows longos, tratamento de falhas e replay transparente com checkpoints periódicos no banco de dados.
-2. **[Multi-Tenancy Eficiente]:** O particionamento lógico com prefixo no `InstanceId` permite usar uma única engine centralizada no PostgreSQL, reduzindo o custo operacional e evitando a complexidade extrema de provisionar uma engine por tenant.
-3. **[Desempenho Otimizado]:** O uso direto de ADO.NET pelo DurableTask contorna o overhead do EF Core, garantindo leitura e gravação assíncrona de logs de histórico e enfileiramento em sub-milissegundos.
+---
+
+## Padrões Implementados
+
+### 1. Async HTTP API (Anti-Timeout para tarefas longas)
+
+```
+POST /api/workflow/executions/start/{id}
+→ 202 Accepted + { executionId, statusUrl }
+
+# Loop de polling (cliente)
+GET /api/workflow/executions/{executionId}
+→ { status: "Running" | "Completed" | "Failed", stepExecutions: [...] }
+```
+
+O `StartAsync` do `DefaultWorkflowEngine` usa `Task.Run()` (fire-and-forget) para processar o workflow em background, retornando imediatamente com o estado inicial.
+
+### 2. Function Chaining (Sequencial)
+
+`WorkflowStep.DependsOn` define dependências entre steps. O `DefaultWorkflowEngine` avança apenas quando os steps predecessores estão com status `Completed`.
+
+```json
+// WorkflowDefinition.Steps:
+[
+  { "id": "research", "dependsOn": [] },
+  { "id": "summarize", "dependsOn": ["research"] },
+  { "id": "review",   "dependsOn": ["summarize"] }
+]
+```
+
+### 3. Fan-out / Fan-in (Paralelo)
+
+Steps sem dependências entre si são executados em paralelo via `Task.WhenAll()`:
+
+```csharp
+// DefaultWorkflowEngine.ProcessExecutionAsync
+var tasks = readySteps.Select(step => ExecuteStepAsync(tenantId, execution, step)).ToList();
+await Task.WhenAll(tasks); // Fan-out + Fan-in automático
+```
+
+Steps do tipo `Parallel` com `ParallelSteps` também executam em paralelo.
+
+### 4. Timeout por Step
+
+Cada step de `Action` tem timeout de 5 minutos por padrão (configurável via `WorkflowStep.Timeout`). Implementado com `CancellationTokenSource` por step.
+
+---
+
+## Separação de Responsabilidades
+
+| Componente | Responsabilidade |
+|---|---|
+| `DefaultWorkflowEngine` | Fluxo, ordem, paralelismo, compensações |
+| `IWorkflowStore` (PostgreSQL) | Persistência de execuções e state checkpoints |
+| `IDirectAgentRequestExecutor` | Invocação do agente/LLM em cada step de Action |
+| `SimpleSessionStoreAdapter` | Contexto de conversa dos agentes MAF entre steps |
+| `WorkflowController` | Async HTTP API (202 + polling) |
+
+---
+
+## O que foi descartado e por quê
+
+| Componente | Razão do descarte |
+|---|---|
+| `DurableSessionStoreAdapter` | Dependia de cliente de Durable Entities não configurado no host. Deletado. |
+| `Microsoft.Agents.AI.DurableTask` como host de sessions | Não adotado para persistência das sessões de chat neste host. |
+| Durable Entities para sessão | Não configuradas nem validadas neste host. |
+
+---
 
 ## Consequências
 
 ### Positivas
-* **Resiliência a reinicializações:** Falhas de contêiner ou restarts de servidor não quebram workflows em andamento.
-* **Histórico persistente confiável:** Histórico de decisões do agente é gravado em logs de eventos duráveis estruturados no PostgreSQL.
-* **Orquestração complexa nativa:** Habilidade de suspender a execução aguardando aprovações humanas (Human-in-the-loop) de forma durável.
+- ✅ **Funciona 100% em Docker sem Azure** — sem dependência de cloud vendor.
+- ✅ **Resiliência via PostgreSQL** — execuções persistidas sobrevivem a restarts.
+- ✅ **Fan-out/Fan-in nativo** — `Task.WhenAll()` com state merge no banco.
+- ✅ **Timeout configurável por step** — previne travamento por LLM lento.
+- ✅ **Multi-tenant** — `TenantId` em todas as entidades de execução.
 
-### Desafios / Pontos de Atenção (Negativas)
-* **Complexidade de Schema:** O banco de dados PostgreSQL passará a conter tabelas do sistema de orquestração do DurableTask não gerenciadas por migrations do EF Core.
-* **Curva de Aprendizado:** Desenvolvedores devem respeitar as regras rígidas do DurableTask (ex: restrição a operações não determinísticas dentro do corpo do orquestrador).
+### Limitações conhecidas
+- ❌ **Sem replay automático** — se o container reiniciar durante um step Action em execução, o step ficará como `Running` no banco. Implementar job de recuperação (reconectar steps "Running" órfãos ao iniciar) é uma evolução futura.
+- ❌ **Fan-out não é distribuído** — paralelismo ocorre dentro do mesmo processo. Para paralelismo distribuído entre pods, seria necessário um message broker (RabbitMQ/Redis Streams).
+
+## Integração durável remanescente
+
+`DurableWorkflowCompiler` e o cliente PostgreSQL continuam registrados para workflows dinâmicos. A remoção do adapter de sessões não remove esse caminho. O polling HTTP consultando `IWorkflowStore` ainda precisa ser integrado ao estado do DurableTask; a execução e a retomada não foram validadas com banco real nesta revisão.

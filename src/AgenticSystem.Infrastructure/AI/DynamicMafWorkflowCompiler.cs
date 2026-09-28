@@ -43,7 +43,7 @@ public class DynamicMafWorkflowCompiler : IDynamicWorkflowCompiler
         _logger = logger;
     }
 
-    public async Task<string> ExecuteDynamicWorkflowAsync(
+    public async Task<WorkflowStartResult> ExecuteDynamicWorkflowAsync(
         string workflowDefinitionId,
         string tenantId,
         Dictionary<string, object> parameters,
@@ -210,12 +210,14 @@ public class DynamicMafWorkflowCompiler : IDynamicWorkflowCompiler
             if (msgsProperty?.GetValue(lastEvent.Response) is IEnumerable<ChatMessage> responseMessages)
             {
                 var lastAssistantMessage = responseMessages.LastOrDefault(m => m.Role == ChatRole.Assistant);
-                return lastAssistantMessage?.Text ?? "Sucesso (execução do workflow concluída sem conteúdo textual de saída).";
+                var output = lastAssistantMessage?.Text ?? "Sucesso (execução do workflow concluída sem conteúdo textual de saída).";
+                return new WorkflowStartResult(runId, output, IsAsync: false);
             }
 
-            return lastEvent.Response.ToString() ?? "Sucesso (retorno legível concluído).";
+            var responseStr = lastEvent.Response.ToString() ?? "Sucesso (retorno legível concluído).";
+            return new WorkflowStartResult(runId, responseStr, IsAsync: false);
         }
 
-        return "O processamento em grafo do MAF foi concluído, mas nenhuma mensagem textual legível foi retornada.";
+        return new WorkflowStartResult(runId, "O processamento em grafo do MAF foi concluído, mas nenhuma mensagem textual legível foi retornada.", IsAsync: false);
     }
 }

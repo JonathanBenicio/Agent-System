@@ -4,6 +4,7 @@ using AgenticSystem.Core.Services;
 using AgenticSystem.Core.Tools;
 using AgenticSystem.Infrastructure.AgentFramework;
 using AgenticSystem.Infrastructure.AI;
+using AgenticSystem.Infrastructure.BackgroundServices;
 using AgenticSystem.Infrastructure.Chunking;
 using AgenticSystem.Infrastructure.Configuration;
 using AgenticSystem.Infrastructure.Documents;
@@ -15,7 +16,6 @@ using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.RAG;
 using AgenticSystem.Infrastructure.Skills;
 using AgenticSystem.Infrastructure.Sync;
-using AgenticSystem.Infrastructure.BackgroundServices;
 using AgenticSystem.Infrastructure.LLM.BackgroundServices;
 using AgenticSystem.Infrastructure.LLM.Services;
 using AgenticSystem.Infrastructure.Services;
@@ -24,13 +24,14 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using DurableTask.PostgreSQL;
 using Microsoft.Agents.AI.DurableTask;
+using Microsoft.Agents.AI.DurableTask.Workflows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Pgvector.EntityFrameworkCore;
 using AgenticSystem.Core.Models;
-
+using Microsoft.DurableTask.Client;
 namespace AgenticSystem.Infrastructure.Extensions;
 
 public static class ServiceCollectionExtensions
@@ -210,17 +211,10 @@ public static class ServiceCollectionExtensions
             services.AddSingleton(orchestratorMetadata);
             services.AddSingleton<AgentFrameworkFactory>();
             services.AddSingleton<SimpleSessionStoreAdapter>();
-            services.AddSingleton<DurableSessionStoreAdapter>();
-
-            services.AddSingleton<Microsoft.Agents.AI.Hosting.AgentSessionStore>(sp =>
-            {
-                var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
-                if (string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
-                {
-                    return sp.GetRequiredService<DurableSessionStoreAdapter>();
-                }
-                return sp.GetRequiredService<SimpleSessionStoreAdapter>();
-            });
+            // AgentSessionStore: uses SimpleSessionStoreAdapter backed by PostgreSQL ISessionStore.
+            // This covers all deployment modes (Docker, bare-metal, cloud) without Azure Functions dependency.
+            services.AddSingleton<Microsoft.Agents.AI.Hosting.AgentSessionStore>(
+                sp => sp.GetRequiredService<SimpleSessionStoreAdapter>());
 
             services.AddSingleton<OrchestratorAuxiliaryToolService>();
             services.AddSingleton<OrchestratorInstructionService>();
@@ -573,6 +567,7 @@ public static class ServiceCollectionExtensions
         services.UsePostgresAdvancedIntelligence(connectionString);
         services.UsePostgresPlatformStores(connectionString);
 
+
         // Registro nativo do backend durável do DurableTask PostgreSQL usando inicializador de objetos para propriedades init-only
         var durableSettings = new PostgreSqlOrchestrationServiceSettings
         {
@@ -581,6 +576,26 @@ public static class ServiceCollectionExtensions
             AutoDeploySchema = true
         };
         services.AddDurableTaskPostgreSql(durableSettings);
+        services.ConfigureDurableWorkflows(options =>
+        {
+            // Ativa o suporte durável a workflows no Microsoft Agent Framework
+        });
+
+        services.AddDurableTaskClient(builder =>
+        {
+            builder.UseOrchestrationService();
+        });
+
+        // Registrar IWorkflowClient no contêiner de DI do Microsoft Agent Framework de forma resiliente e multi-tenant
+        services.AddSingleton<Microsoft.Agents.AI.DurableTask.Workflows.IWorkflowClient>(sp =>
+        {
+            var durableClient = sp.GetRequiredService<Microsoft.DurableTask.Client.DurableTaskClient>();
+            var clientType = typeof(Microsoft.Agents.AI.DurableTask.Workflows.IWorkflowClient).Assembly
+                .GetType("Microsoft.Agents.AI.DurableTask.Workflows.DurableWorkflowClient")
+                ?? throw new InvalidOperationException("Não foi possível resolver o tipo interno 'DurableWorkflowClient'.");
+            return (Microsoft.Agents.AI.DurableTask.Workflows.IWorkflowClient)Activator.CreateInstance(clientType, durableClient)!;
+        });
+
 
         services.ConfigureDurableAgents(options =>
         {
@@ -699,6 +714,7 @@ public static class ServiceCollectionExtensions
     public static IServiceProvider SeedInfrastructureTools(this IServiceProvider serviceProvider)
     {
         var toolManager = serviceProvider.GetRequiredService<IToolManager>();
+
         var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
         var logger = serviceProvider.GetRequiredService<ILogger<HttpTool>>();
         var httpClient = httpClientFactory.CreateClient("AgenticTools");

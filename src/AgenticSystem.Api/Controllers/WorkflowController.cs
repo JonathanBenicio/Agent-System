@@ -69,8 +69,22 @@ public class WorkflowController : ControllerBase
 
         var userId = User.Identity?.Name ?? "anonymous";
         var execution = await _engine.StartAsync(tenantId, definition, variables, userId, ct);
-        
-        return Ok(execution);
+
+        // Async HTTP API Pattern: return 202 Accepted — client polls statusUrl for completion.
+        // This prevents HTTP timeout on long-running LLM/agent workflows.
+        var statusUrl = Url.Action(nameof(GetExecution), new { id = execution.Id });
+        Response.Headers.Location = statusUrl ?? $"/api/workflow/executions/{execution.Id}";
+
+        return Accepted(new
+        {
+            executionId = execution.Id,
+            workflowId = execution.WorkflowId,
+            workflowName = execution.WorkflowName,
+            status = execution.Status.ToString(),
+            startedAt = execution.StartedAt,
+            statusUrl = statusUrl ?? $"/api/workflow/executions/{execution.Id}",
+            message = "Workflow started. Poll statusUrl for completion."
+        });
     }
 
     [HttpGet("executions/{id}")]
