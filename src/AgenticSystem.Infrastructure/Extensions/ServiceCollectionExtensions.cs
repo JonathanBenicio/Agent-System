@@ -715,6 +715,16 @@ public static class ServiceCollectionExtensions
     {
         var toolManager = serviceProvider.GetRequiredService<IToolManager>();
 
+        // Registrar automaticamente todas as ferramentas adicionais (ITool) cadastradas no contêiner de DI (ex: BannerProductionTool)
+        var diTools = serviceProvider.GetServices<ITool>();
+        foreach (var tool in diTools)
+        {
+            if (tool != null)
+            {
+                toolManager.RegisterTool(tool);
+            }
+        }
+
         var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
         var logger = serviceProvider.GetRequiredService<ILogger<HttpTool>>();
         var httpClient = httpClientFactory.CreateClient("AgenticTools");

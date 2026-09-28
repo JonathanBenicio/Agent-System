@@ -22,15 +22,18 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
     private readonly AgenticDbContext _dbContext;
     private readonly IConfiguration _configuration;
     private readonly ILogger<SystemBootstrapService> _logger;
+    private readonly IServiceProvider _serviceProvider;
 
     public SystemBootstrapService(
         AgenticDbContext dbContext,
         IConfiguration configuration,
-        ILogger<SystemBootstrapService> logger)
+        ILogger<SystemBootstrapService> logger,
+        IServiceProvider serviceProvider)
     {
         _dbContext = dbContext;
         _configuration = configuration;
         _logger = logger;
+        _serviceProvider = serviceProvider;
     }
 
     public async Task BootstrapAsync(CancellationToken cancellationToken = default)
@@ -128,7 +131,7 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                     Description = "Editor Chefe de Banner Publicitário",
                     Domain = "general",
                     Tier = (int)AgentTier.Specialist,
-                    Instructions = "Voce recebe a analise visual. Siga ESTRITAMENTE estes passos na ordem: 1) Chame a ferramenta CleanImageAsync passando a analise. 2) Pegue o caminho da imagem limpa retornado e chame a ferramenta RenderBannerAsync passando o caminho limpo, o preco e os quartos. 3) Retorne ao usuario o resultado final com o caminho.",
+                    Instructions = "Voce recebe a analise visual. Siga ESTRITAMENTE estes passos na ordem: 1) Chame a ferramenta CleanImageAsync passando a analise. 2) Chame RenderBannerAsync informando o caminho limpo retornado, o preco, os quartos, o bairro (location) e o telefone do corretor (phone). 3) Retorne o caminho da foto final.",
                     AutonomyLevel = (int)AutonomyLevel.Supervised,
                     AllowedToolsJson = "[\"CleanImageAsync\",\"RenderBannerAsync\"]",
                     IsActive = true,
@@ -143,7 +146,7 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
             var existingWorkflow = await _dbContext.WorkflowDefinitions.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(w => w.Id == "banner-production", cancellationToken);
 
-            if (existingWorkflow == null || !existingWorkflow.DefinitionJson.Contains("Edges"))
+            if (existingWorkflow == null || existingWorkflow.Version < 4 || !existingWorkflow.DefinitionJson.Contains("Edges"))
             {
                 if (existingWorkflow != null)
                 {
@@ -155,7 +158,7 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                     Id = "banner-production",
                     Name = "Banner Production Workflow",
                     Description = "Orquestra a produção de um banner imobiliário via MAF.",
-                    Version = 2, // Versão atualizada do grafo dinâmico
+                    Version = 4, // Versão atualizada com múltiplos modelos (LLM Manager)
                     TriggerType = WorkflowTriggerType.Manual,
                     PromptTemplate = "Analise a foto, aplique a remocao de defeitos e desenhe um banner. Preco: {{price}}, Quartos: {{bedrooms}}. O caminho original e: {{imagePath}}",
                     Steps = new System.Collections.Generic.List<WorkflowStep>
@@ -166,6 +169,7 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                             Name = "Analista Visual",
                             StepType = WorkflowStepType.Agent,
                             AgentName = "VisionAnalyst",
+                            ModelOverride = "llama3.2-vision",
                             Input = new System.Collections.Generic.Dictionary<string, object>()
                         },
                         new WorkflowStep
@@ -174,6 +178,8 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                             Name = "Editor Chefe",
                             StepType = WorkflowStepType.Agent,
                             AgentName = "EditorChefe",
+                            ModelOverride = "llama3-8b",
+                            DependsOn = new System.Collections.Generic.List<string> { "vision-step" },
                             AllowedToolsOverride = new System.Collections.Generic.List<string> { "CleanImageAsync", "RenderBannerAsync" },
                             Input = new System.Collections.Generic.Dictionary<string, object>()
                         }
@@ -199,7 +205,7 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                 };
 
                 _dbContext.WorkflowDefinitions.Add(bannerEntity);
-                _logger.LogInformation("Workflow dinâmico de grafo 'banner-production' provisionado no banco de dados.");
+                _logger.LogInformation("Workflow dinâmico de grafo 'banner-production' provisionado no banco de dados (Versão 4 - Multi-Model).");
             }
 
             // 4. Salva de forma transacional e resiliente
@@ -215,5 +221,6 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
             _logger.LogError(ex, "Erro fatal inesperado durante o auto-bootstrap do banco de dados.");
             throw;
         }
+
     }
 }

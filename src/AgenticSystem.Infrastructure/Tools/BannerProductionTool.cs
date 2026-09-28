@@ -25,8 +25,12 @@ public class BannerProductionTool : ITool
         if (input.Action != "generate")
             return ToolResult.Fail("Action not supported. Use 'generate'.");
 
-        if (!input.Parameters.TryGetValue("imagePath", out var imagePathObj) || imagePathObj is not string imagePath)
+        if (!input.Parameters.TryGetValue("imagePath", out var imagePathObj) || string.IsNullOrWhiteSpace(imagePathObj?.ToString()))
             return ToolResult.Fail("Parameter 'imagePath' is required.");
+
+        var imagePath = imagePathObj is System.Text.Json.JsonElement jsonEl
+            ? jsonEl.GetString() ?? string.Empty
+            : imagePathObj.ToString() ?? string.Empty;
 
         if (!input.Parameters.TryGetValue("price", out var priceObj) || !decimal.TryParse(priceObj.ToString(), out var price))
             return ToolResult.Fail("Parameter 'price' is required and must be a number.");

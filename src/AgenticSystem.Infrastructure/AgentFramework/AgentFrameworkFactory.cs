@@ -6,6 +6,7 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.AI;
 using AgenticSystem.Infrastructure.MCP;
+using AgenticSystem.Infrastructure.LLM;
 using FrameworkAgent = Microsoft.Agents.AI.AIAgent;
 using FrameworkAgentSession = Microsoft.Agents.AI.AgentSession;
 
@@ -62,11 +63,18 @@ public class AgentFrameworkFactory
     /// é controlada pelo SimpleSessionStoreAdapter quando o agent roda.
     /// </summary>
     public async Task<FrameworkAgent> CreateFromAgentAsync(IAgent agent, CancellationToken ct = default)
-         => await CreateFromAgentAsync(agent, additionalTools: null, ct);
+         => await CreateFromAgentAsync(agent, additionalTools: null, modelOverride: null, ct);
 
     public async Task<FrameworkAgent> CreateFromAgentAsync(
         IAgent agent,
         IEnumerable<AITool>? additionalTools,
+        CancellationToken ct = default)
+         => await CreateFromAgentAsync(agent, additionalTools, modelOverride: null, ct);
+
+    public async Task<FrameworkAgent> CreateFromAgentAsync(
+        IAgent agent,
+        IEnumerable<AITool>? additionalTools,
+        string? modelOverride,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(agent);
@@ -79,8 +87,12 @@ public class AgentFrameworkFactory
             ? await _skillManager.BuildEnrichedPromptAsync(agent.Name, agent.Domain, agent.Instructions)
             : agent.Instructions;
 
+        var effectiveClient = !string.IsNullOrWhiteSpace(modelOverride)
+            ? new ModelIdOverridingChatClient(_chatClient, modelOverride)
+            : _chatClient;
+
         var chatAgent = new ChatClientAgent(
-            _chatClient,
+            effectiveClient,
             enrichedInstructions, // instructions (system prompt rico com skills)
             agent.Name,          // name
             agent.Description,   // description
@@ -113,6 +125,15 @@ public class AgentFrameworkFactory
     /// Cria um ChatClientAgent a partir de uma AgentSpecification (agents dinâmicos).
     /// </summary>
     public async Task<FrameworkAgent> CreateFromSpecificationAsync(AgentSpecification spec, CancellationToken ct = default)
+         => await CreateFromSpecificationAsync(spec, modelOverride: null, ct);
+
+    /// <summary>
+    /// Cria um ChatClientAgent a partir de uma AgentSpecification com suporte a override de modelo.
+    /// </summary>
+    public async Task<FrameworkAgent> CreateFromSpecificationAsync(
+        AgentSpecification spec,
+        string? modelOverride,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(spec);
 
@@ -123,8 +144,12 @@ public class AgentFrameworkFactory
             ? await _skillManager.BuildEnrichedPromptAsync(spec.Name, spec.Domain ?? "general", spec.Instructions)
             : spec.Instructions;
 
+        var effectiveClient = !string.IsNullOrWhiteSpace(modelOverride)
+            ? new ModelIdOverridingChatClient(_chatClient, modelOverride)
+            : _chatClient;
+
         var chatAgent = new ChatClientAgent(
-            _chatClient,
+            effectiveClient,
             enrichedInstructions,   // instructions (system prompt rico com skills)
             spec.Name,           // name
             spec.Description,    // description

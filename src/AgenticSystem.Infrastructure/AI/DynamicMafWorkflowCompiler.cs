@@ -104,7 +104,7 @@ public class DynamicMafWorkflowCompiler : IDynamicWorkflowCompiler
             if (allowedToolNames.Contains("RenderBannerAsync"))
             {
                 var renderFunc = AIFunctionFactory.Create(
-                    (string path, decimal prc, int beds) => _bannerSkills.RenderBannerAsync(path, prc, beds),
+                    (string path, decimal prc, int beds, string location, string phone) => _bannerSkills.RenderBannerAsync(path, prc, beds, location, phone),
                     "RenderBannerAsync",
                     "Gera o banner publicitário final desenhando preços e quartos sobre a imagem"
                 );
@@ -112,7 +112,7 @@ public class DynamicMafWorkflowCompiler : IDynamicWorkflowCompiler
             }
 
             // Compilar e materializar o agente nativo do MAF com suas ferramentas dedicadas
-            var frameworkAgent = await _frameworkFactory.CreateFromAgentAsync(coreAgent, additionalTools, ct);
+            var frameworkAgent = await _frameworkFactory.CreateFromAgentAsync(coreAgent, additionalTools, step.ModelOverride, ct);
             compiledAgents[step.Id] = frameworkAgent;
         }
 

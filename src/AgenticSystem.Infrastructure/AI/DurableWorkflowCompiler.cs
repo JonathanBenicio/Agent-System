@@ -107,7 +107,7 @@ public class DurableWorkflowCompiler : IDynamicWorkflowCompiler
             if (allowedToolNames.Contains("RenderBannerAsync"))
             {
                 var renderFunc = AIFunctionFactory.Create(
-                    (string path, decimal prc, int beds) => _bannerSkills.RenderBannerAsync(path, prc, beds),
+                    (string path, decimal prc, int beds, string location, string phone) => _bannerSkills.RenderBannerAsync(path, prc, beds, location, phone),
                     "RenderBannerAsync",
                     "Gera o banner publicitário final desenhando preços e quartos sobre a imagem"
                 );
