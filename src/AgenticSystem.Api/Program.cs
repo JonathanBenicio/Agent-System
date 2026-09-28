@@ -17,8 +17,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseDefaultServiceProvider((context, options) =>
 {
-    options.ValidateScopes = false;
-    options.ValidateOnBuild = false;
+    options.ValidateScopes = true;
+    options.ValidateOnBuild = true;
 });
 
 // ============================================================================

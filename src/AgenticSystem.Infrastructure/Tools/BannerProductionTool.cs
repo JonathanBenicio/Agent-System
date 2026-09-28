@@ -1,16 +1,17 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Infrastructure.AI;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace AgenticSystem.Infrastructure.Tools;
 
 public class BannerProductionTool : ITool
 {
-    private readonly IDynamicWorkflowCompiler _workflowCompiler;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ITenantContextAccessor _tenantAccessor;
 
-    public BannerProductionTool(IDynamicWorkflowCompiler workflowCompiler, ITenantContextAccessor tenantAccessor)
+    public BannerProductionTool(IServiceScopeFactory scopeFactory, ITenantContextAccessor tenantAccessor)
     {
-        _workflowCompiler = workflowCompiler;
+        _scopeFactory = scopeFactory;
         _tenantAccessor = tenantAccessor;
     }
 
@@ -50,7 +51,9 @@ public class BannerProductionTool : ITool
                 { "bedrooms", bedrooms }
             };
 
-            var result = await _workflowCompiler.ExecuteDynamicWorkflowAsync("banner-production", activeTenantId ?? "admin", parameters, ct);
+            await using var scope = _scopeFactory.CreateAsyncScope();
+            var workflowCompiler = scope.ServiceProvider.GetRequiredService<IDynamicWorkflowCompiler>();
+            var result = await workflowCompiler.ExecuteDynamicWorkflowAsync("banner-production", activeTenantId ?? "admin", parameters, ct);
 
             if (result.IsAsync)
             {

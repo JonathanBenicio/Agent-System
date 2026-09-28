@@ -21,7 +21,7 @@ public static class ServiceCollectionExtensions
     {
         services.AddMemoryCache();
 
-        services.AddSingleton<IMetaAgent, MetaAgentOrchestrator>();
+        services.AddScoped<IMetaAgent, MetaAgentOrchestrator>();
         services.AddSingleton<IContextAnalyzer, ContextAnalyzer>();
         services.AddSingleton<IAgentFactory, HierarchicalAgentFactory>();
         services.AddSingleton<IAgentMemoryStore, InMemoryAgentMemoryStore>();
@@ -215,7 +215,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDataConnectorManager, DataConnectorManager>();
         services.AddSingleton<ITenantIsolationEnforcer, TenantIsolationService>();
         services.AddSingleton<IAgentMarketplace, InMemoryAgentMarketplace>();
-        services.AddSingleton<IAdminConsole, AdminConsoleService>();
+        services.AddScoped<IAdminConsole, AdminConsoleService>();
         services.AddSingleton<IComplianceService, ComplianceService>();
         services.AddSingleton<IMemoryLifecycleStore, InMemoryMemoryLifecycleStore>();
 

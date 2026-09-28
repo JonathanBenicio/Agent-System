@@ -875,7 +875,6 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
                 frameworkParticipants.Add(await _agentFrameworkFactory.CreateFromAgentAsync(agent, ct));
             }
 
-            #pragma warning disable MAAIW001
             var groupChatBuilder = AgentWorkflowBuilder.CreateGroupChatBuilderWith(agents =>
             {
                 groupChatManager = new RoundRobinGroupChatManager(
@@ -887,7 +886,6 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
                 .AddParticipants(frameworkParticipants)
                 .WithName("collaboration-review-group-chat")
                 .WithDescription("Review colaborativo com política nativa de terminação baseada em group chat.");
-            #pragma warning restore MAAIW001
 
             var groupChatWorkflow = groupChatBuilder.Build();
             var inputMessages = new List<ChatMessage>
