@@ -2,7 +2,7 @@
 
 > **Status documental:** Draft / Planejamento Futuro
 > **Escopo:** Mitigação de gaps no processador ONNX dinâmico, SignalR tenant isolation, background workers multi-tenant scope e alinhamento de documentação de CI
-> **Fonte de verdade operacional:** [codebase_gap_analysis.md](file:///C:/Users/Jonathan/.gemini/antigravity-ide/brain/4e5ee77e-93b1-49d5-9c0c-3469e8e4711c/codebase_gap_analysis.md)
+> **Fonte de verdade operacional:** codebase_gap_analysis.md (referência local externa indisponível)
 > **Gerado em:** 2026-05-21
 > **Projeto:** AgenticSystem
 

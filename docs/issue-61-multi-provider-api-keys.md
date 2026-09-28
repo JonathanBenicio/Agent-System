@@ -11,10 +11,10 @@ Esta funcionalidade estende o runtime do Microsoft Agent Framework (MAF) para pe
 - **Segurança da Informação:** Manter a proteção de chaves confidenciais por meio de encriptação AES em repouso, mascarando as credenciais no frontend e exibindo apenas o sufixo legível (`LastFour`).
 
 ## 🔗 Rastreabilidade & Documentação (Obrigatório)
-- **ADR (Architectural Decision Record)**: [ADR-020: Multi-Provider API Key Architecture](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/architecture/adr/020-multi-provider-api-keys.md)
-- **User Story**: [US-42: Gerenciamento e Roteamento de Múltiplas API Keys](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/user-stories/us-multi-provider-api-keys.md)
-- **Implementation Plan**: [Roadmap: Multi-Provider API Keys](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/plan/multi-provider-api-keys.md)
-- **BDD Feature**: [BDD: Multi-Provider API Keys Feature](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/bdd/multi-provider-api-keys.feature)
+- **ADR (Architectural Decision Record)**: [ADR-020: Multi-Provider API Key Architecture](architecture/adr/020-multi-provider-api-keys.md)
+- **User Story**: [US-42: Gerenciamento e Roteamento de Múltiplas API Keys](user-stories/us-multi-provider-api-keys.md)
+- **Implementation Plan**: [Roadmap: Multi-Provider API Keys](plan/completed/multi-provider-api-keys.md)
+- **BDD Feature**: [BDD: Multi-Provider API Keys Feature](bdd/multi-provider-api-keys.feature)
 
 ## ✅ Critérios de Aceite
 - [ ] O usuário deve poder cadastrar múltiplas credenciais para os provedores Gemini, OpenAI, Claude e OpenRouter.

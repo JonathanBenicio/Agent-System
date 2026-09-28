@@ -10,7 +10,7 @@
 
 O AgenticSystem utiliza o **Microsoft Agent Framework (MAF)** como runtime de orquestração de múltiplos agentes cooperativos. Embora o sistema de agentes seja dinâmico (permitindo registrar novos especialistas com prompts e modelos no banco de dados PostgreSQL via `IAgentFactory` e `IDynamicAgentRepository`), o mesmo não acontece com os **workflows estruturados**.
 
-Atualmente, workflows complexos de colaboração e encadeamento em grafo (como a produção de banners que envolve análise visual por um agente e renderização/edição por outro) exigem a criação de classes C# imperativas e rígidas, como o [BannerProductionWorkflowService](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AI/BannerProductionWorkflowService.cs). 
+Atualmente, workflows complexos de colaboração e encadeamento em grafo (como a produção de banners que envolve análise visual por um agente e renderização/edição por outro) exigem a criação de classes C# imperativas e rígidas, como o [BannerProductionWorkflowService](../../../src/AgenticSystem.Infrastructure/AI/BannerProductionWorkflowService.cs). 
 
 Nessas classes, a instanciação do `OllamaChatClient`, a criação de instâncias de `ChatClientAgent` (com prompts inline) e a própria topologia do grafo de execução via `WorkflowBuilder` são codificados diretamente em C#. 
 

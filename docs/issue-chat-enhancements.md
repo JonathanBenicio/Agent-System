@@ -16,10 +16,10 @@ Tudo isso encapsulado sob uma estética visual Premium UI/UX que respeita a pale
 - **Rastreabilidade**: Vincular o histórico de conversas aos respectivos workflows disparados e documentos consumidos, melhorando a auditoria e transparência do sistema.
 
 ## 🔗 Rastreabilidade & Documentação (Obrigatório)
-- **ADR (Architectural Decision Record)**: [ADR-025: Advanced Chat & Session Management Architecture](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/architecture/adr/025-advanced-chat-session-management.md)
-- **User Story**: [US-44: Chat Avançado e Gerenciamento Unificado de Sessões](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/user-stories/us-advanced-chat-session-management.md)
-- **BDD Feature**: [BDD: Advanced Chat & Session Management Feature](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/bdd/advanced-chat-session-management.feature)
-- **Implementation Plan**: [Roadmap: Chat Enhancements](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/plan/chat-enhancements.md)
+- **ADR (Architectural Decision Record)**: [ADR-025: Advanced Chat & Session Management Architecture](architecture/adr/025-advanced-chat-session-management.md)
+- **User Story**: [US-44: Chat Avançado e Gerenciamento Unificado de Sessões](user-stories/us-advanced-chat-session-management.md)
+- **BDD Feature**: [BDD: Advanced Chat & Session Management Feature](bdd/advanced-chat-session-management.feature)
+- **Implementation Plan**: Roadmap: Chat Enhancements (referência histórica; arquivo ausente na baseline)
 
 ## ✅ Critérios de Aceite
 - [ ] A listagem de sessões na barra lateral do chat deve permitir carregar o histórico de conversas completas (`loadHistory(sessionId)`).

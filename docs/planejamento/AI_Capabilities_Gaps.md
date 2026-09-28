@@ -201,7 +201,7 @@
 | **Item** | Agent Self-Improvement |
 | **Status atual** | `AgentExecutionWorkflow` converte reflexões críticas em regras automáticas via `ICorrectionLoop` e também persiste as sugestões na memória do agente |
 | **Resultado** | O loop de melhoria deixou de depender apenas de regras manuais: falhas/reflexões passam a gerar aprendizados reutilizados em execuções futuras |
-| **Referência** | [`AgentExecutionWorkflow.cs`](../../src/AgenticSystem.Core/Services/AgentExecutionWorkflow.cs), [`CorrectionLoopService.cs`](../../src/AgenticSystem.Core/Services/CorrectionLoopService.cs), [`AgentMemoryModels.cs`](../../src/AgenticSystem.Core/Models/AgentMemoryModels.cs) |
+| **Referência** | `AgentExecutionWorkflow.cs` (referência histórica removida; runtime atual: [FrameworkOrchestratorService](../../src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs)), [`CorrectionLoopService.cs`](../../src/AgenticSystem.Core/Services/CorrectionLoopService.cs), [`AgentMemoryModels.cs`](../../src/AgenticSystem.Core/Models/AgentMemoryModels.cs) |
 
 ---
 

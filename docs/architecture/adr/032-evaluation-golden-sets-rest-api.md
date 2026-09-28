@@ -1,5 +1,7 @@
 # ADR 032: Contratos REST para CRUD de Golden Sets da Evaluation Suite
 
+> Revisão operacional 2026-09-28: Schemas abaixo são proposta histórica, não resposta atual. Controller possui três aliases, lista array, agentName obrigatório, <=20 casos retorna suiteId/results; >20 retorna 202/runId e GET /runs/{runId} com cache local. Ver [contrato atual](../../backend/api-core.md).
+
 **Status:** Proposto
 **Data:** 04 de Junho de 2026
 **Autor(es):** Antigravity AI & Jonathan Benicio
