@@ -1,8 +1,8 @@
-﻿# ADR-038 — Orquestrador supervisor dinâmico com ferramentas MAF
+# ADR-038 — Orquestrador supervisor dinâmico com ferramentas MAF
 
 Data: 2026-09-29 · Issue: [#122](https://github.com/JonathanBenicio/Agent-System/issues/122) · Story: BACK-ORCH-122 · [Plano](../../plan/dynamic-orchestrator-implementation.md). Dependência: MAF/session-store de [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
 
-Decisão: aceita para implementação · Implementação: parcial em `40c262f`/`ebe8e9d` e worktree · Validação: build Release e suíte com Compose isolado: 738 aprovados, 1 teste vetorial explicitamente ignorado. Regressões locais de binding, multi-tool, metadados, resposta sem candidato/sem conteúdo, erro, cancelamento e persistência seletiva passaram. Testes PostgreSQL salvaram/reabriram snapshot MAF e workflow versionado; restart real do processo com sessões do supervisor/especialistas ainda pende.
+Decisão: aceita · Implementação funcional concluída · Build Release; suíte PostgreSQL/Ollama 753 aprovados/1 skip. Binding, multi-tool, catálogo e cache tenant-scoped; sessão MAF reaberta após reinício real da API. O Wait do engine canônico também concluiu após encerramento forçado antes do prazo. [Evidência](../../backend/validation/maf-122-workflow-runtime-2026-09-29.md). A geração de Banner por essa rota ainda precisa de suporte a imagem, modelo e tools da definição.
 
 ## Contexto
 

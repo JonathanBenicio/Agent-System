@@ -20,7 +20,7 @@ Evidência unitária não substitui integração; critérios falhos/não executa
 Como mantenedor do backend multi-tenant, quero atualizar o Microsoft Agent Framework com compatibilidade comprovada e encaminhar providers ativos pelo Gateway, para que o runtime de produção tenha execução e telemetria reais sob os controles existentes.
 
 Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [Plano](plan/maf-122-protocols-gateway.md).
-Status: implementação parcial; store global separado do tenant foi migrado e validado no PostgreSQL isolado. Suíte Release com Compose: 738 aprovados, 1 teste vetorial explicitamente ignorado, 0 falhas; build sem avisos/erros; EF sem mudanças pendentes. Testes integrados verificaram criptografia/auditoria, leitura entre tenants, propagação do PostgreSQL NOTIFY pelo listener, sessões MAF e retomada de workflow pela definição snapshot/version/hash após editar a definição viva. Provider LLM real, atualização efetiva entre dois hosts e restart real do host ainda pendem. A execução de workflows dinâmicos foi reorientada para `IWorkflowEngine`/`IWorkflowStore`; recovery por lease após restart continua pendente. A2A/AG-UI permanecem preview e seguem em follow-up [#121](https://github.com/JonathanBenicio/Agent-System/issues/121).
+Status: implementação MAF/Gateway validada; suíte 753 aprovados, 1 skip vetorial, 0 falhas; build limpo. PostgreSQL validou store global/NOTIFY, dois LLMManagers/Gateways com inferência Ollama, sessão MAF reaberta após reinício real da API e Wait recuperado após encerramento forçado. Handler externo ainda precisa deduplicar; geração final de Banner não foi demonstrada. A2A/AG-UI preview está separado em #121. [Evidência](backend/validation/maf-122-workflow-runtime-2026-09-29.md).
 
 - Dada sessão pertencente a usuário/tenant, quando criada, serializada, retomada ou restaurada após restart, então seu owner, tenant, ID e estado MAF permanecem iguais; identidade de outro tenant recebe negação sem dados.
 - Dado provider de infraestrutura habilitado na configuração do host, quando a aplicação inicia e chama o modelo, então ele aparece no Gateway e chamadas completas/streaming atualizam status/circuito/limite; provider desabilitado não é registrado.
@@ -36,7 +36,7 @@ Status: implementação parcial; store global separado do tenant foi migrado e v
 Como usuário da plataforma de agentes personalizáveis, quero que o orquestrador identifique e delegue a solicitação aos especialistas ativos configurados para meu tenant, para receber resposta consolidada sem perder o estado das sessões.
 
 Issue: [#122](https://github.com/JonathanBenicio/Agent-System/issues/122) · [ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md) · [Plano separado](plan/dynamic-orchestrator-implementation.md). Dependência: API de sessões MAF 1.22 em [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
-Status: implementação parcial; regressão funcional local cobre delegação multi-tool, binding indisponível, especialista não chamado, identificação do agente, resposta direta sem candidato, resposta vazia, provider error, cancelamento e persistência seletiva de sessões. Build Release e suíte completa passaram (738 aprovados com Compose, 1 skip vetorial explícito). Teste integrado validou snapshot MAF PostgreSQL após recriar adapter e negação de outro tenant; restart real do processo/host ainda pende.
+Status: implementação funcional do supervisor concluída; regressões cobrem multi-tool, binding, identidade, catálogo, persistência seletiva de sessões e cache tenant-scoped. Sessão MAF do supervisor reaberta após reinício real da API; especialistas só foram reabertos com novos adapters/contextos. Suíte: 753 aprovados/1 skip.
 
 - Dada lista de specialists com bindings válidos, quando o modo “Intelligent Router” recebe input, então `ChatClientAgent` do MAF pode invocar um ou mais `AIFunction`s correspondentes e consolidar resposta útil.
 - Dado agente ativo cuja tool/binding falhou ou agente inativo, quando o prompt supervisor é construído, então ele não é apresentado como candidato delegável.
@@ -2485,14 +2485,14 @@ O backend oferece CRUD e execução de Golden Sets via REST. Esses endpoints nã
 |------|---------|
 | Runtime | `IWorkflowEngine`/`IWorkflowStore` como orquestrador da aplicação; MAF 1.22 como runtime de agentes e ferramentas |
 | Persistência | PostgreSQL com versão/hash imutável da definição, execução, etapas, aprovação/espera e lease de worker |
-| Status | Decisão arquitetural atualizada; execution id, snapshot/version/hash, rotas approval/reject, passo `Agent`, delay `Wait` e falha explícita de subworkflow implementados; teste PostgreSQL provou retomada da versão registrada após edição do workflow; lease/recuperação automática após crash ainda pendentes em #120 |
+| Status | Engine dinâmico canônico implementado: ID/status, snapshot/hash, approval/reject, Agent, Wait persistido, retries, RBAC de tool e lease/recovery. Wait concluiu após encerramento forçado antes do prazo. Banner compartilha start/status com o store, mas ainda não produz imagem pela rota canônica; handler externo precisa deduplicar a chave. Suíte 753 aprovados/1 skip. |
 
 O Issue #108 exigia especificamente `Microsoft.Agents.AI.DurableTask`. Essa escolha foi substituída na análise atual: a extensão agenda por nome com registry criado no startup, enquanto as definições do produto são tenant/request-specific e a API atual consulta `IWorkflowStore`. O valor de produto continua; o mecanismo não é requisito.
 
 **Critérios de aceite:**
-- [ ] O start cria um execution ID persistido e o mesmo ID é usado por polling, cancelamento e SignalR; outro tenant não consegue ler ou alterar a execução.
-- [ ] Cada execução fixa versão/hash e snapshot da definição; editar o workflow não muda uma execução iniciada nem sua recuperação.
-- [ ] Workers reivindicam execuções com lease atômica; dois nós não executam o mesmo claim simultaneamente e uma lease expirada permite retomar após reinício.
-- [ ] Etapas Agent/Action executam o agente/tool autorizado; Approval pausa até decisão autorizada; Wait persiste o prazo; Subworkflow executa ou é rejeitado na validação, nunca é reportado como sucesso ao ser ignorado.
-- [ ] Retry de etapa tem semântica at-least-once explícita, chave idempotente por execução/etapa e compensação quando disponível; não declarar exactly-once sem evidência.
-- [ ] Testes PostgreSQL no Compose isolado cobrem restart, claim concorrente, retomada, status final, aprovação/cancelamento e isolamento entre tenants.
+- [x] O start cria um execution ID persistido e o mesmo ID serve à consulta/cancelamento/eventos; PostgreSQL validou leitura negada por outro tenant.
+- [x] Cada execução fixa versão/hash e snapshot imutável; editar a definição viva não altera a retomada.
+- [x] Claims concorrentes, fencing e recovery após lease expirado foram testados no PostgreSQL; Wait persiste prazo e retoma após recriar engine/store. Restart abrupto de API no meio de efeito externo continua follow-up.
+- [x] Etapas Agent/Action executam; Action exige `Permission.Execute`, Approval restringe papéis, Wait retoma no prazo e Subworkflow falha explicitamente quando não suportado.
+- [x] `MaxRetries` é aplicado e a tool recebe chave idempotente estável por execução/etapa; handler externo precisa deduplicar. Semântica at-least-once, sem exactly-once.
+- [x] Testes PostgreSQL no Compose isolado cobrem claims concorrentes, lease expirado, Wait após reinício real, start/status de Banner, aprovação, isolamento e fencing. Efeito externo interrompido e imagem final de Banner seguem abertos.

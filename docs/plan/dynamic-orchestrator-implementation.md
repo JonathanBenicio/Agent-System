@@ -1,6 +1,6 @@
-﻿# Plano — Implementar o orquestrador supervisor dinâmico
+# Plano — Implementar o orquestrador supervisor dinâmico
 
-Status: plano separado do upgrade MAF/Gateway; issue #122 criada e vinculada a ADR-038, story e este plano. Última suíte Release com Compose isolado: 738 aprovados, 1 teste vetorial explicitamente ignorado, 0 falhas; build Release sem avisos/erros. A regressão funcional do orquestrador passou; testes PostgreSQL validaram snapshot MAF e workflow versionado. Restart real do processo/host continua pendente. Story: BACK-ORCH-122 · [ADR-038](../architecture/adr/038-dynamic-supervisor-orchestrator.md). Depende da API de sessão MAF 1.22 em [#120](maf-122-protocols-gateway.md).
+Status: implementação funcional do supervisor dinâmico concluída; dois DI graphs/LLMManagers atualizaram via PostgreSQL NOTIFY e fizeram inferência Ollama. A API reabriu uma sessão MAF persistida após reinício real. Suíte: 753 aprovados, 1 skip vetorial, 0 falhas; build limpo. Evidência: [runtime](../backend/validation/maf-122-workflow-runtime-2026-09-29.md). Story: BACK-ORCH-122 · [ADR-038](../architecture/adr/038-dynamic-supervisor-orchestrator.md) · MAF/session-store 1.22 em [#120](maf-122-protocols-gateway.md).
 
 ## Objetivo
 
@@ -8,31 +8,31 @@ Fazer a rota inteligente do chat executar o `ChatClientAgent` supervisor com spe
 
 ## Estado encontrado
 
-O backend já tem `OrchestratorHostBuilder`, `OrchestratorToolBindingService`, `AgentFrameworkFactory`, `FrameworkOrchestratorService` e `ChatClientAgent`; não é um orquestrador greenfield. O gap é tornar esse caminho coerente: binding e grafo de handoff competem, o `IAgent` do catálogo não é `AIAgent`, o wrapper de workflow não recebe a sessão MAF criada para o request, e somente a sessão do supervisor é persistida. O cache de instruções usa apenas nomes, portanto edição dinâmica de configuração pode deixar prompt obsoleto.
+O supervisor já é executado diretamente pelo `ChatClientAgent`, com bindings válidos no prompt, sessões MAF separadas e cache de instruções fingerprintado. O `HierarchicalAgentFactory` agora mantém agentes customizados por tenant e atualiza a definição em cada resolução, evitando reuso de nome/configuração entre tenants.
 
 ## Etapas
 
 | Entrega | Verificação | Estado |
 |---|---|---|
 | Separar os especialistas efetivamente bindados dos agentes ativos e usar apenas bindings no prompt/cache | Provider que falha ao criar tool não aparece como delegável; mudança de descrição/domínio/tier/tools muda fingerprint | Teste funcional confirma especialista indisponível omitido das tools MAF expostas; teste dedicado prova fingerprint muda por descrição/domínio/tools |
-| Executar supervisor diretamente com a AgentSession tenant/user-scoped | Fake MAF/IChatClient chama ferramentas e retorna resposta; sessões supervisor/especialistas ficam serializadas | Regressão funcional chama duas ferramentas e persiste as sessões MAF de supervisor e especialistas; retomada/restart real permanece pendente |
+| Executar supervisor diretamente com a AgentSession tenant/user-scoped | Fake MAF/IChatClient chama ferramentas e retorna resposta; sessões supervisor/especialistas ficam serializadas | Regressão funcional chama duas tools e persiste sessões MAF do supervisor e specialists; PostgreSQL reabriu state com novos adapters/contextos e negou tenant cruzado. Após reinício real, a API reabriu a sessão do supervisor. |
 | Persistir supervisor e todos os specialists chamados | Duas tools chamadas salvam cada sessão; tool não chamada não causa gravação | Teste verifica duas sessões chamadas persistidas e especialista bound mas não invocado ausente do store |
 | Corrigir resolução de agente usado/delegado | Resposta expõe nome de domínio do specialist e não nome técnico `AIFunction`; nenhum tool call mantém o supervisor como agente final | Teste confirma resposta consolidada, `AgentName` e `delegatedTo` com o nome do especialista |
 | Preservar roteamento direto e contratos existentes | `targetAgent` bypassa supervisor; REST/SSE/SignalR mantêm argumentos, resposta final, owner e `sessionId` | Regressão da rota direta existente e revisão estática do frontend confirmam contrato inalterado; teste do supervisor cobre resposta direta sem especialista |
-| Validar modelo e integração | testes focados, suíte Release; PostgreSQL com restart e isolamento entre tenants no Compose de validação | Build Release limpo; suíte completa com Compose: 738 aprovados, 1 teste vetorial explicitamente ignorado, 0 falhas. Regressão funcional após cobertura de provider error/cancelamento passou. Testes PostgreSQL validaram store global/listener, snapshot MAF e retomada usando versão/hash fixos após alteração da definição; restart real do processo/host continua pendente |
+| Validar modelo e integração | Build Release, suíte completa e PostgreSQL isolado para sessão/tenant | Build limpo; suíte 753 aprovados/1 skip; sessão MAF reaberta após reinício real da API; snapshot/version/hash, claims concorrentes, Wait após encerramento forçado e catálogo por tenant validados. Efeito externo interrompido não foi exercitado. |
 
 ## Pendências
 
-Validar retomada/restart/isolamento real de sessão MAF em PostgreSQL usando exclusivamente o compose `tests/backend-validation/compose.yml` e ambas as variáveis de conexão protegidas por allowlist de host/porta/database/usuário. Manter commits separados do plano #120.
+Follow-up explícito: testar interrupção durante efeito externo e deduplicação pelo handler. Dois grafos independentes de DI/LLMManager/Gateway receberam reload PostgreSQL e inferência Ollama; esses managers rodaram no mesmo processo, portanto não demonstram propagação entre processos. Manter commits por contexto.
 
 ## Critérios de aceite
 
 - [x] Prompt e tool registry representam exatamente os especialistas ativos com binding válido e suas versões atuais.
 - [x] Rota inteligente executa supervisor MAF e pode chamar um ou vários agentes via `AIFunction`; seu retorno contém resposta útil e agente realmente delegado.
-- [ ] Sessões do supervisor e especialistas persistem no store PostgreSQL com partições MAF tenant+usuário; owner errado, chave ausente e tenant cruzado falham sem vazamento.
+- [x] Sessões do supervisor e especialistas persistem no PostgreSQL por tenant+usuário; owner incorreto, chave ausente e tenant cruzado são negados. A sessão do supervisor foi reaberta por um novo processo da API.
 - [x] Falhas na criação de binding não anunciam tools inexistentes; falhas durante execução não retornam resposta vazia com `Success=true`.
 - [x] `targetAgent` explícito preserva execução direta; provider/model e selection do frontend não mudam de wire format.
-- [ ] Testes de função cobrem escolha de especialista, resposta consolidada, multi-tool, ausência de candidato, erro/cancelamento, atualização de catálogo, restart e isolamento.
+- [x] Testes cobrem seleção, resposta consolidada, multi-tool, ausência de candidato, erro/cancelamento, atualização do catálogo e isolamento. A sessão do supervisor foi reaberta após reinício real; especialistas não tiveram prova equivalente em processo separado.
 
 ## Impacto no frontend para planejamento futuro
 

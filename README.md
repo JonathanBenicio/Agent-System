@@ -109,7 +109,7 @@ graph TD
 | Camada | Tecnologias |
 |--------|-------------|
 | **Core** | .NET 10, ASP.NET Core 10, SignalR 10, Microsoft.Extensions.AI |
-| **Agent Runtime** | Microsoft Agent Framework 1.4 + hosting/workflows |
+| **Agent Runtime** | Microsoft Agent Framework 1.22.0 + hosted agents/workflows; A2A/AG-UI hosting remains preview |
 | **LLM** | OpenAI, Google Gemini, Anthropic Claude, Ollama, IChatClient contextual |
 | **Embeddings** | OpenAI (text-embedding-3-small), Google (text-embedding-004), Ollama (nomic-embed-text), ML.NET+ONNX |
 | **Memory** | Obsidian vault (human-readable), PostgreSQL + pgvector (semantic search) |
