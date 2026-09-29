@@ -675,6 +675,9 @@ public class WorkflowExecutionConfiguration : IEntityTypeConfiguration<WorkflowE
         builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
         builder.Property(e => e.WorkflowId).HasColumnName("workflow_id").HasMaxLength(64).IsRequired();
         builder.Property(e => e.WorkflowName).HasColumnName("workflow_name").HasMaxLength(256).IsRequired();
+        builder.Property(e => e.WorkflowDefinitionVersion).HasColumnName("workflow_definition_version");
+        builder.Property(e => e.WorkflowDefinitionHash).HasColumnName("workflow_definition_hash").HasMaxLength(64);
+        builder.Property(e => e.WorkflowDefinitionSnapshotJson).HasColumnName("workflow_definition_snapshot").HasColumnType("jsonb");
         builder.Property(e => e.Status).HasColumnName("status").HasMaxLength(64).IsRequired();
         builder.Property(e => e.VariablesJson).HasColumnName("variables").HasColumnType("jsonb").IsRequired();
         builder.Property(e => e.InitiatedBy).HasColumnName("initiated_by").HasMaxLength(128);
@@ -905,6 +908,39 @@ public class SystemStateConfiguration : IEntityTypeConfiguration<SystemStateEnti
         builder.Property(s => s.UpdatedAt).HasColumnName("updated_at");
 
         builder.HasIndex(s => s.TenantId).HasDatabaseName("ix_system_states_tenant_id");
+    }
+}
+
+public class PlatformConfigConfiguration : IEntityTypeConfiguration<PlatformConfigEntity>
+{
+    public void Configure(EntityTypeBuilder<PlatformConfigEntity> builder)
+    {
+        builder.ToTable("platform_configs");
+        builder.HasKey(setting => setting.Key);
+        builder.Property(setting => setting.Key).HasColumnName("key").HasMaxLength(256);
+        builder.Property(setting => setting.Value).HasColumnName("value").IsRequired();
+        builder.Property(setting => setting.EncryptedValue).HasColumnName("encrypted_value");
+        builder.Property(setting => setting.IsSecret).HasColumnName("is_secret");
+        builder.Property(setting => setting.ChangedBy).HasColumnName("changed_by").HasMaxLength(256).IsRequired();
+        builder.Property(setting => setting.UpdatedAt).HasColumnName("updated_at");
+    }
+}
+
+public class PlatformConfigAuditConfiguration : IEntityTypeConfiguration<PlatformConfigAuditEntity>
+{
+    public void Configure(EntityTypeBuilder<PlatformConfigAuditEntity> builder)
+    {
+        builder.ToTable("platform_config_audits");
+        builder.HasKey(entry => entry.Id);
+        builder.Property(entry => entry.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(entry => entry.Key).HasColumnName("key").HasMaxLength(256).IsRequired();
+        builder.Property(entry => entry.Action).HasColumnName("action").HasMaxLength(64).IsRequired();
+        builder.Property(entry => entry.ChangedBy).HasColumnName("changed_by").HasMaxLength(256).IsRequired();
+        builder.Property(entry => entry.PreviousValueHash).HasColumnName("previous_value_hash").HasMaxLength(128);
+        builder.Property(entry => entry.NewValueHash).HasColumnName("new_value_hash").HasMaxLength(128);
+        builder.Property(entry => entry.ChangedAt).HasColumnName("changed_at");
+        builder.HasIndex(entry => new { entry.Key, entry.ChangedAt })
+            .HasDatabaseName("ix_platform_config_audits_key_changed_at");
     }
 }
 

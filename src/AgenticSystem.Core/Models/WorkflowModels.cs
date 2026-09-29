@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AgenticSystem.Core.Models;
 
 // ═══════════════════════════════════════════════════════════
@@ -69,6 +71,10 @@ public class WorkflowExecution
     public string TenantId { get; set; } = string.Empty;
     public string WorkflowId { get; init; } = string.Empty;
     public string WorkflowName { get; init; } = string.Empty;
+    public int WorkflowDefinitionVersion { get; set; }
+    public string WorkflowDefinitionHash { get; set; } = string.Empty;
+    [JsonIgnore]
+    public string WorkflowDefinitionSnapshotJson { get; set; } = string.Empty;
     public WorkflowExecutionStatus Status { get; set; } = WorkflowExecutionStatus.Pending;
     public List<WorkflowStepExecution> StepExecutions { get; init; } = [];
     public Dictionary<string, object> Variables { get; set; } = new();

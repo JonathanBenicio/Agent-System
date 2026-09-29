@@ -101,7 +101,7 @@ public class WorkflowEngineTests
         await _agentExecutor.Received(1).ExecuteAsync(
             started.Id,
             "Research the topic",
-            Arg.Any<UserContext>(),
+            Arg.Is<UserContext>(context => context.TenantId == TenantId && context.UserId == "user-1"),
             "ResearchAgent",
             Arg.Any<CancellationToken>());
     }
@@ -185,6 +185,78 @@ public class WorkflowEngineTests
         rejected.Status.Should().Be(WorkflowExecutionStatus.Cancelled);
         rejected.ErrorMessage.Should().Be("Needs revision");
         rejected.StepExecutions.Single(step => step.StepId == "approval").Status.Should().Be(WorkflowExecutionStatus.Failed);
+        await _agentExecutor.DidNotReceive().ExecuteAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ApprovalResume_UsesTheDefinitionVersionCapturedAtStart()
+    {
+        var original = new WorkflowDefinition
+        {
+            Id = "wf-snapshot",
+            Name = "Snapshot Workflow",
+            Version = 1,
+            Steps =
+            [
+                new WorkflowStep { Id = "approval", Name = "Review", StepType = WorkflowStepType.Approval },
+                new WorkflowStep { Id = "publish", Name = "Publish", StepType = WorkflowStepType.Agent, AgentName = "OriginalAgent", DependsOn = ["approval"] }
+            ]
+        };
+        await _store.SaveDefinitionAsync(TenantId, original);
+        _agentExecutor.ExecuteAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new AgentResponse { Success = true, Content = "Done" });
+
+        var started = await _engine.StartAsync(TenantId, original, initiatedBy: "user-1");
+        await Task.Delay(100);
+
+        var edited = new WorkflowDefinition
+        {
+            Id = original.Id,
+            Name = original.Name,
+            Version = 2,
+            Steps =
+            [
+                new WorkflowStep { Id = "approval", Name = "Review", StepType = WorkflowStepType.Approval },
+                new WorkflowStep { Id = "publish", Name = "Publish", StepType = WorkflowStepType.Agent, AgentName = "NewAgent", DependsOn = ["approval"] }
+            ]
+        };
+        await _store.SaveDefinitionAsync(TenantId, edited);
+
+        await _engine.ApproveAsync(TenantId, started.Id, "reviewer-1");
+        await Task.Delay(100);
+
+        var completed = await _engine.GetExecutionAsync(TenantId, started.Id);
+        completed!.Status.Should().Be(WorkflowExecutionStatus.Completed);
+        completed.WorkflowDefinitionVersion.Should().Be(1);
+        await _agentExecutor.Received(1).ExecuteAsync(
+            started.Id, Arg.Any<string>(), Arg.Any<UserContext>(), "OriginalAgent", Arg.Any<CancellationToken>());
+        await _agentExecutor.DidNotReceive().ExecuteAsync(
+            started.Id, Arg.Any<string>(), Arg.Any<UserContext>(), "NewAgent", Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ApprovalResume_RejectsATamperedDefinitionSnapshot()
+    {
+        var definition = new WorkflowDefinition
+        {
+            Id = "wf-tampered-snapshot",
+            Name = "Snapshot Integrity",
+            Steps = [new WorkflowStep { Id = "approval", Name = "Review", StepType = WorkflowStepType.Approval }]
+        };
+        await _store.SaveDefinitionAsync(TenantId, definition);
+
+        var started = await _engine.StartAsync(TenantId, definition);
+        await Task.Delay(100);
+        var waiting = await _engine.GetExecutionAsync(TenantId, started.Id);
+        waiting!.WorkflowDefinitionSnapshotJson = waiting.WorkflowDefinitionSnapshotJson
+            .Replace("Snapshot Integrity", "Tampered Integrity", StringComparison.Ordinal);
+
+        var act = () => _engine.ApproveAsync(TenantId, started.Id, "reviewer-1");
+
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*snapshot hash does not match*");
         await _agentExecutor.DidNotReceive().ExecuteAsync(
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }

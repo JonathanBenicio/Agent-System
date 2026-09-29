@@ -2,7 +2,7 @@
 
 Data: 2026-09-29 · Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · Story: BACK-MAF-120 · [Plano](../../plan/maf-122-protocols-gateway.md). Validação E2E A2A/AG-UI foi separada para [#121](https://github.com/JonathanBenicio/Agent-System/issues/121), [ADR-037](037-a2a-agui-preview-validation.md).
 
-Decisão: aceita · Implementação: parcial; evidência PostgreSQL local em `40c262f`, engine e controller alterados no worktree · Validação: build Release e suíte com Compose isolado (735 aprovados, 1 teste vetorial explicitamente ignorado) passaram após as mudanças atuais. Integração PostgreSQL verificou migration, armazenamento cifrado/auditoria, leitura entre tenants, propagação NOTIFY pelo listener ao notifier e snapshot MAF salvo/reaberto após recriar adapter, negando outro tenant. Worker/lease/recovery, restart real, provider LLM e atualização efetiva entre hosts ainda não foram demonstrados.
+Decisão: aceita · Implementação: parcial; evidência PostgreSQL local em `40c262f`, engine/controller em `ebe8e9d`, recuperação ainda em andamento · Validação: build Release e suíte com Compose isolado (738 aprovados, 1 teste vetorial explicitamente ignorado) passaram. Integração PostgreSQL verificou migration, configuração global, leitura entre tenants, NOTIFY, sessão MAF e execução continuada a partir de snapshot/hash da versão 7 após editar a definição viva para versão 8. Worker/lease/recovery após restart real, provider LLM e atualização efetiva entre hosts ainda não foram demonstrados.
 
 ## Contexto
 

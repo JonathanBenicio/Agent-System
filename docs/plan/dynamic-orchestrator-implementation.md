@@ -1,6 +1,6 @@
 ﻿# Plano — Implementar o orquestrador supervisor dinâmico
 
-Status: plano separado do upgrade MAF/Gateway; issue #122 criada e vinculada a ADR-038, story e este plano. Última suíte Release com Compose isolado: 735 aprovados, 1 teste vetorial explicitamente ignorado, 0 falhas; build Release sem avisos/erros. A regressão funcional do orquestrador passou; teste de snapshot confirmou persistência e reabertura MAF após recriar adapter no PostgreSQL e negou outro tenant. Restart real do processo/host continua pendente. Story: BACK-ORCH-122 · [ADR-038](../architecture/adr/038-dynamic-supervisor-orchestrator.md). Depende da API de sessão MAF 1.22 em [#120](maf-122-protocols-gateway.md).
+Status: plano separado do upgrade MAF/Gateway; issue #122 criada e vinculada a ADR-038, story e este plano. Última suíte Release com Compose isolado: 738 aprovados, 1 teste vetorial explicitamente ignorado, 0 falhas; build Release sem avisos/erros. A regressão funcional do orquestrador passou; testes PostgreSQL validaram snapshot MAF e workflow versionado. Restart real do processo/host continua pendente. Story: BACK-ORCH-122 · [ADR-038](../architecture/adr/038-dynamic-supervisor-orchestrator.md). Depende da API de sessão MAF 1.22 em [#120](maf-122-protocols-gateway.md).
 
 ## Objetivo
 
@@ -19,7 +19,7 @@ O backend já tem `OrchestratorHostBuilder`, `OrchestratorToolBindingService`, `
 | Persistir supervisor e todos os specialists chamados | Duas tools chamadas salvam cada sessão; tool não chamada não causa gravação | Teste verifica duas sessões chamadas persistidas e especialista bound mas não invocado ausente do store |
 | Corrigir resolução de agente usado/delegado | Resposta expõe nome de domínio do specialist e não nome técnico `AIFunction`; nenhum tool call mantém o supervisor como agente final | Teste confirma resposta consolidada, `AgentName` e `delegatedTo` com o nome do especialista |
 | Preservar roteamento direto e contratos existentes | `targetAgent` bypassa supervisor; REST/SSE/SignalR mantêm argumentos, resposta final, owner e `sessionId` | Regressão da rota direta existente e revisão estática do frontend confirmam contrato inalterado; teste do supervisor cobre resposta direta sem especialista |
-| Validar modelo e integração | testes focados, suíte Release; PostgreSQL com restart e isolamento entre tenants no Compose de validação | Build Release limpo; suíte completa com Compose: 735 aprovados, 1 teste vetorial explicitamente ignorado, 0 falhas. Regressão funcional após cobertura de provider error/cancelamento passou. Testes PostgreSQL validaram store global/listener e snapshot MAF ao recriar adapter; restart real do processo/host continua pendente |
+| Validar modelo e integração | testes focados, suíte Release; PostgreSQL com restart e isolamento entre tenants no Compose de validação | Build Release limpo; suíte completa com Compose: 738 aprovados, 1 teste vetorial explicitamente ignorado, 0 falhas. Regressão funcional após cobertura de provider error/cancelamento passou. Testes PostgreSQL validaram store global/listener, snapshot MAF e retomada usando versão/hash fixos após alteração da definição; restart real do processo/host continua pendente |
 
 ## Pendências
 

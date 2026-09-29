@@ -1,3 +1,6 @@
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using Microsoft.Extensions.Logging;
@@ -35,12 +38,16 @@ public class DefaultWorkflowEngine : IWorkflowEngine
     {
         _logger.LogInformation("🚀 Starting workflow: {WorkflowName} ({WorkflowId}) for tenant {TenantId}", workflow.Name, workflow.Id, tenantId);
 
+        var definitionSnapshot = JsonSerializer.Serialize(workflow);
         var execution = new WorkflowExecution
         {
             WorkflowId = workflow.Id,
             WorkflowName = workflow.Name,
             TenantId = tenantId,
             Status = WorkflowExecutionStatus.Running,
+            WorkflowDefinitionVersion = workflow.Version,
+            WorkflowDefinitionHash = HashDefinitionSnapshot(definitionSnapshot),
+            WorkflowDefinitionSnapshotJson = definitionSnapshot,
             Variables = initialVariables ?? new(),
             InitiatedBy = initiatedBy,
             StartedAt = DateTime.UtcNow
@@ -80,8 +87,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         execution.Status = WorkflowExecutionStatus.Running;
         await _store.SaveExecutionAsync(tenantId, execution, ct);
 
-        var definition = await _store.GetDefinitionAsync(tenantId, execution.WorkflowId, ct);
-        if (definition == null) throw new InvalidOperationException("Workflow definition not found");
+        var definition = RestoreDefinitionSnapshot(execution);
 
         _ = Task.Run(() => ProcessExecutionAsync(tenantId, execution.Id, definition));
 
@@ -96,8 +102,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(approvedBy);
         var execution = await GetPendingApprovalExecutionAsync(tenantId, executionId, ct);
-        var definition = await _store.GetDefinitionAsync(tenantId, execution.WorkflowId, ct)
-            ?? throw new InvalidOperationException("Workflow definition not found.");
+        var definition = RestoreDefinitionSnapshot(execution);
         var step = GetPendingApprovalStep(execution);
 
         step.Status = WorkflowExecutionStatus.Completed;
@@ -194,6 +199,81 @@ public class DefaultWorkflowEngine : IWorkflowEngine
 
     private static WorkflowStepExecution GetPendingApprovalStep(WorkflowExecution execution) =>
         execution.StepExecutions.Single(step => step.Status == WorkflowExecutionStatus.WaitingForApproval);
+
+    private static WorkflowDefinition RestoreDefinitionSnapshot(WorkflowExecution execution)
+    {
+        if (string.IsNullOrWhiteSpace(execution.WorkflowDefinitionSnapshotJson)
+            || string.IsNullOrWhiteSpace(execution.WorkflowDefinitionHash))
+        {
+            throw new InvalidOperationException(
+                "This workflow execution has no immutable definition snapshot and cannot be resumed safely.");
+        }
+
+        var actualHash = HashDefinitionSnapshot(execution.WorkflowDefinitionSnapshotJson);
+        if (!string.Equals(actualHash, execution.WorkflowDefinitionHash, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("The workflow definition snapshot hash does not match the stored execution.");
+
+        var definition = JsonSerializer.Deserialize<WorkflowDefinition>(execution.WorkflowDefinitionSnapshotJson)
+            ?? throw new InvalidOperationException("The workflow definition snapshot is invalid.");
+        if (!string.Equals(definition.Id, execution.WorkflowId, StringComparison.Ordinal)
+            || definition.Version != execution.WorkflowDefinitionVersion)
+        {
+            throw new InvalidOperationException("The workflow definition snapshot identity does not match the stored execution.");
+        }
+
+        return definition;
+    }
+
+    private static string HashDefinitionSnapshot(string snapshotJson) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(CanonicalizeJson(snapshotJson))));
+
+    private static string CanonicalizeJson(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+            WriteCanonicalElement(document.RootElement, writer);
+        return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    private static void WriteCanonicalElement(JsonElement element, Utf8JsonWriter writer)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Object:
+                writer.WriteStartObject();
+                foreach (var property in element.EnumerateObject().OrderBy(property => property.Name, StringComparer.Ordinal))
+                {
+                    writer.WritePropertyName(property.Name);
+                    WriteCanonicalElement(property.Value, writer);
+                }
+                writer.WriteEndObject();
+                break;
+            case JsonValueKind.Array:
+                writer.WriteStartArray();
+                foreach (var item in element.EnumerateArray())
+                    WriteCanonicalElement(item, writer);
+                writer.WriteEndArray();
+                break;
+            case JsonValueKind.String:
+                writer.WriteStringValue(element.GetString());
+                break;
+            case JsonValueKind.Number:
+                writer.WriteRawValue(element.GetRawText(), skipInputValidation: true);
+                break;
+            case JsonValueKind.True:
+                writer.WriteBooleanValue(true);
+                break;
+            case JsonValueKind.False:
+                writer.WriteBooleanValue(false);
+                break;
+            case JsonValueKind.Null:
+                writer.WriteNullValue();
+                break;
+            default:
+                throw new InvalidOperationException($"Unsupported JSON value kind '{element.ValueKind}' in workflow definition snapshot.");
+        }
+    }
 
     private async Task ProcessExecutionAsync(string tenantId, string executionId, WorkflowDefinition definition)
     {
@@ -345,7 +425,11 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                 if (!string.IsNullOrEmpty(step.AgentName))
                 {
                     var agentInput = ApplyVariables(step.ActionDescription ?? step.Name, execution.Variables);
-                    var context = new UserContext { UserId = execution.InitiatedBy ?? "system" };
+                    var context = new UserContext
+                    {
+                        UserId = execution.InitiatedBy ?? "system",
+                        TenantId = tenantId
+                    };
                     var response = await _agentExecutor.ExecuteAsync(execution.Id, agentInput, context, step.AgentName, ct);
 
                     stepExec.Output["content"] = response.Content;

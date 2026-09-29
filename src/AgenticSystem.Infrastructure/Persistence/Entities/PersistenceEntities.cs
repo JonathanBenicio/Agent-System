@@ -336,6 +336,29 @@ public class PlatformAdministratorEntity
     public string? GrantedBy { get; set; }
 }
 
+/// <summary>Platform-wide provider setting; intentionally has no TenantId.</summary>
+public class PlatformConfigEntity
+{
+    public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public string? EncryptedValue { get; set; }
+    public bool IsSecret { get; set; }
+    public string ChangedBy { get; set; } = string.Empty;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>Change history for platform configuration; secret values are represented by hashes only.</summary>
+public class PlatformConfigAuditEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Key { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public string ChangedBy { get; set; } = string.Empty;
+    public string? PreviousValueHash { get; set; }
+    public string? NewValueHash { get; set; }
+    public DateTime ChangedAt { get; set; } = DateTime.UtcNow;
+}
+
 /// <summary>Temporary, scoped and revocable support access to tenant content.</summary>
 public class TenantSupportGrantEntity : ITenantEntity
 {
@@ -411,6 +434,9 @@ public class WorkflowExecutionEntity : ITenantEntity
     public string TenantId { get; set; } = string.Empty;
     public string WorkflowId { get; set; } = string.Empty;
     public string WorkflowName { get; set; } = string.Empty;
+    public int WorkflowDefinitionVersion { get; set; }
+    public string? WorkflowDefinitionHash { get; set; }
+    public string? WorkflowDefinitionSnapshotJson { get; set; }
     public string Status { get; set; } = string.Empty; // Core.Models.WorkflowExecutionStatus
     public string VariablesJson { get; set; } = "{}";
     public string? InitiatedBy { get; set; }

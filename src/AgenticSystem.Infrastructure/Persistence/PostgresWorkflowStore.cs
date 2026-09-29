@@ -95,6 +95,9 @@ public class PostgresWorkflowStore : IWorkflowStore
                     TenantId = tenantId,
                     WorkflowId = execution.WorkflowId,
                     WorkflowName = execution.WorkflowName,
+                    WorkflowDefinitionVersion = execution.WorkflowDefinitionVersion,
+                    WorkflowDefinitionHash = execution.WorkflowDefinitionHash,
+                    WorkflowDefinitionSnapshotJson = execution.WorkflowDefinitionSnapshotJson,
                     Status = execution.Status.ToString(),
                     InitiatedBy = execution.InitiatedBy,
                     VariablesJson = JsonSerializer.Serialize(execution.Variables),
@@ -106,6 +109,13 @@ public class PostgresWorkflowStore : IWorkflowStore
             }
             else
             {
+                if (string.IsNullOrWhiteSpace(execEntity.WorkflowDefinitionSnapshotJson)
+                    && !string.IsNullOrWhiteSpace(execution.WorkflowDefinitionSnapshotJson))
+                {
+                    execEntity.WorkflowDefinitionVersion = execution.WorkflowDefinitionVersion;
+                    execEntity.WorkflowDefinitionHash = execution.WorkflowDefinitionHash;
+                    execEntity.WorkflowDefinitionSnapshotJson = execution.WorkflowDefinitionSnapshotJson;
+                }
                 execEntity.Status = execution.Status.ToString();
                 execEntity.VariablesJson = JsonSerializer.Serialize(execution.Variables);
                 execEntity.CompletedAt = execution.CompletedAt;
@@ -171,6 +181,9 @@ public class PostgresWorkflowStore : IWorkflowStore
             TenantId = execEntity.TenantId,
             WorkflowId = execEntity.WorkflowId,
             WorkflowName = execEntity.WorkflowName,
+            WorkflowDefinitionVersion = execEntity.WorkflowDefinitionVersion,
+            WorkflowDefinitionHash = execEntity.WorkflowDefinitionHash ?? string.Empty,
+            WorkflowDefinitionSnapshotJson = execEntity.WorkflowDefinitionSnapshotJson ?? string.Empty,
             Status = Enum.Parse<WorkflowExecutionStatus>(execEntity.Status),
             Variables = JsonSerializer.Deserialize<Dictionary<string, object>>(execEntity.VariablesJson) ?? new(),
             InitiatedBy = execEntity.InitiatedBy,
