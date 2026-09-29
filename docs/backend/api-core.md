@@ -65,6 +65,21 @@ curl -X POST "http://localhost:5188/api/document/ingest?source=validacao" \
 ```
 Efeitos: parse/chunk/embed/index e cópia física por tenant/nome. `fileDiskPath` ainda expõe caminho de servidor e nomes repetidos podem sobrescrever a cópia física; planeje nomes únicos. A quota de documentos/bytes conta documento lógico e tamanho de origem, não alocação física total; [recursos e limites](resources-rules.md).
 
+## Workflows dinâmicos — /api/workflow
+[WorkflowController](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs), [engine](../../src/AgenticSystem.Core/Services/DefaultWorkflowEngine.cs) e [modelos/status](../../src/AgenticSystem.Core/Models/WorkflowModels.cs). Todas as rotas exigem autenticação e tenant ativo.
+
+| Método/rota | Entrada/resultado | Regras atuais |
+|---|---|---|
+| GET /definitions, GET /definitions/{id} | lista/detalhe | somente definições do tenant; ausente ou outro tenant retorna 404 |
+| POST /definitions, DELETE /definitions/{id} | WorkflowDefinition / id | grava ou remove no store tenant-scoped |
+| POST /executions/start/{definitionId} | mapa opcional de variáveis; 202 com `id` e alias `executionId`, status e `statusUrl` | ambos os IDs apontam para a mesma execução persistida |
+| GET /executions/{id}, GET /executions | id; status/limit opcionais | consulta o mesmo `IWorkflowStore` usado pelo engine; outra tenant não vê a execução |
+| POST /executions/{id}/cancel | `reason` opcional na query | grava Cancelled e emite evento; ainda não interrompe token de uma etapa em execução, então uma ação longa pode continuar e sobrescrever estado |
+| POST /executions/{id}/approve | sem body; retorna WorkflowExecution | Owner/Admin/Operator do tenant aprovam a etapa pendente e retomam; Viewer recebe 403; papel/grupo por etapa ainda não configurável |
+| POST /executions/{id}/reject | `reason` opcional na query; retorna WorkflowExecution | Owner/Admin/Operator rejeitam a etapa pendente e terminam como Cancelled; Viewer recebe 403 |
+
+Status: Pending=0, Running=1, Paused=2, WaitingForApproval=3, Completed=4, Failed=5, Cancelled=6, Compensating=7. O engine executa `Agent`/`Action`, pausa em Approval e aguarda a duração configurada em Wait. `Subworkflow` ainda não é executado e falha explicitamente. Execuções ainda usam `Task.Run` no processo: os registros permanecem no PostgreSQL, mas não há lease ou retomada automática depois de um crash; a definição por execução ainda não tem snapshot imutável. A [decisão e plano de recuperação](../plan/maf-122-protocols-gateway.md) registra esses limites. O hub pode enviar `ApprovalRequested`; o hook frontend ainda precisa escutar esse evento e corrigir o polling que hoje só refaz GET para status Pending=0.
+
 ## Outros recursos
 Todo endpoint dos controladores aparece no [inventário](endpoint-inventory.md), com assinatura e fonte. Isso é catálogo, não contrato detalhado validado dos módulos fora do núcleo.
 Rotas administrativas de MCP plugins são /api/admin/plugins, não /api/admin/mcp/plugins. Scheduled tasks: /api/admin/scheduled-tasks.

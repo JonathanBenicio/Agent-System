@@ -20,7 +20,7 @@ Evidência unitária não substitui integração; critérios falhos/não executa
 Como mantenedor do backend multi-tenant, quero atualizar o Microsoft Agent Framework com compatibilidade comprovada e encaminhar providers ativos pelo Gateway, para que o runtime de produção tenha execução e telemetria reais sob os controles existentes.
 
 Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [Plano](plan/maf-122-protocols-gateway.md).
-Status: implementação parcial; store global separado do tenant foi migrado e validado no PostgreSQL isolado. Suíte Release com Compose: 726 aprovados, 1 teste vetorial explicitamente ignorado, 0 falhas; build sem avisos/erros. Testes integrados verificaram criptografia/auditoria, leitura entre tenants, propagação do PostgreSQL NOTIFY pelo listener real até o notifier e persistência/retomada de snapshot MAF após recriar adapter, com negação para outro tenant. Provider LLM real, atualização efetiva entre dois hosts e restart real do host ainda pendem. DurableTask PostgreSQL não executa os grafos dinâmicos atuais: client agenda por nome, o worker só registra grafos no startup, o provider não oferece worker builder compatível e o endpoint de polling consulta outro engine; execução e consulta permanecem gaps. A2A/AG-UI permanecem preview e seguem em follow-up [#121](https://github.com/JonathanBenicio/Agent-System/issues/121).
+Status: implementação parcial; store global separado do tenant foi migrado e validado no PostgreSQL isolado. Suíte Release com Compose: 735 aprovados, 1 teste vetorial explicitamente ignorado, 0 falhas; build sem avisos/erros. Testes integrados verificaram criptografia/auditoria, leitura entre tenants, propagação do PostgreSQL NOTIFY pelo listener real até o notifier e persistência/retomada de snapshot MAF após recriar adapter, com negação para outro tenant. Provider LLM real, atualização efetiva entre dois hosts e restart real do host ainda pendem. A execução de workflows dinâmicos foi reorientada para `IWorkflowEngine`/`IWorkflowStore`; recovery por lease após restart continua pendente. A2A/AG-UI permanecem preview e seguem em follow-up [#121](https://github.com/JonathanBenicio/Agent-System/issues/121).
 
 - Dada sessão pertencente a usuário/tenant, quando criada, serializada, retomada ou restaurada após restart, então seu owner, tenant, ID e estado MAF permanecem iguais; identidade de outro tenant recebe negação sem dados.
 - Dado provider de infraestrutura habilitado na configuração do host, quando a aplicação inicia e chama o modelo, então ele aparece no Gateway e chamadas completas/streaming atualizam status/circuito/limite; provider desabilitado não é registrado.
@@ -36,7 +36,7 @@ Status: implementação parcial; store global separado do tenant foi migrado e v
 Como usuário da plataforma de agentes personalizáveis, quero que o orquestrador identifique e delegue a solicitação aos especialistas ativos configurados para meu tenant, para receber resposta consolidada sem perder o estado das sessões.
 
 Issue: [#122](https://github.com/JonathanBenicio/Agent-System/issues/122) · [ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md) · [Plano separado](plan/dynamic-orchestrator-implementation.md). Dependência: API de sessões MAF 1.22 em [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
-Status: implementação parcial; regressão funcional local cobre delegação multi-tool, binding indisponível, especialista não chamado, identificação do agente, resposta direta sem candidato, resposta vazia, provider error, cancelamento e persistência seletiva de sessões. Build Release e suíte completa passaram (726 aprovados com Compose, 1 skip vetorial explícito). Teste integrado validou snapshot MAF PostgreSQL após recriar adapter e negação de outro tenant; restart real do processo/host ainda pende.
+Status: implementação parcial; regressão funcional local cobre delegação multi-tool, binding indisponível, especialista não chamado, identificação do agente, resposta direta sem candidato, resposta vazia, provider error, cancelamento e persistência seletiva de sessões. Build Release e suíte completa passaram (735 aprovados com Compose, 1 skip vetorial explícito). Teste integrado validou snapshot MAF PostgreSQL após recriar adapter e negação de outro tenant; restart real do processo/host ainda pende.
 
 - Dada lista de specialists com bindings válidos, quando o modo “Intelligent Router” recebe input, então `ChatClientAgent` do MAF pode invocar um ou mais `AIFunction`s correspondentes e consolidar resposta útil.
 - Dado agente ativo cuja tool/binding falhou ou agente inativo, quando o prompt supervisor é construído, então ele não é apresentado como candidato delegável.
@@ -2471,23 +2471,28 @@ O backend oferece CRUD e execução de Golden Sets via REST. Esses endpoints nã
 
 ---
 
-### Épico 13: Resilient Workflows & Durable Orchestration (Issue #108)
+### Épico 13: Resilient Workflows & Durable Orchestration
 
-#### US-52 — Migração para DurableTask Multi-Tenant no PostgreSQL
+#### US-52 — Execução recuperável de workflows dinâmicos multi-tenant
 
-**Como** arquiteto ou desenvolvedor do sistema,  
-**quero** que a plataforma execute as orquestrações e persista as sessões dos agentes utilizando a infraestrutura nativa do `Microsoft.Agents.AI.DurableTask`,  
-**para que** workflows de longa duração de múltiplos agentes sobrevivam a reinicializações com checkpoints robustos no PostgreSQL e isolamento estrito de Multi-Tenancy.
+**Rastreabilidade:** [Issue original #108 (fechada)](https://github.com/JonathanBenicio/Agent-System/issues/108) · reavaliação do backend em [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [plano](plan/maf-122-protocols-gateway.md).
+
+**Como** usuário de uma plataforma de agentes personalizáveis,<br>
+**quero** executar definições de workflow do meu tenant, acompanhar o mesmo ID até o resultado e retomar execuções após falha do worker,<br>
+**para que** automações dinâmicas preservem estado, autorização e efeitos rastreáveis sem depender de um grafo global estático.
 
 | Item | Detalhe |
 |------|---------|
-| Componentes | `SimpleSessionStoreAdapter` (Substituição) · `DurableWorkflowCompiler` (Novo) |
-| API / Serviços | `IWorkflowCompiler` · `AgentSessionStore` · `DurableTask` Services |
-| Status | ⏳ Planejado (ADR-030, Issue #108) |
+| Runtime | `IWorkflowEngine`/`IWorkflowStore` como orquestrador da aplicação; MAF 1.22 como runtime de agentes e ferramentas |
+| Persistência | PostgreSQL com versão/hash imutável da definição, execução, etapas, aprovação/espera e lease de worker |
+| Status | Decisão arquitetural atualizada; execution id e rotas approval/reject, passo `Agent`, delay `Wait` e falha explícita de subworkflow implementados; lease/recuperação após restart ainda pendentes em #120 |
 
-**Critérios de Aceite:**
-- [ ] A sessão de orquestração do MAF deve ser delegada ao `Microsoft.Agents.AI.DurableTask` configurado com banco de dados PostgreSQL como engine de persistência.
-- [ ] O particionamento Multi-Tenant deve ser garantido prefixando o identificador do tenant em cada instância durável: `InstanceId = $"{TenantId}:{SessionId}"`.
-- [ ] As tabelas internas da engine do DurableTask PostgreSQL devem ser criadas na inicialização da aplicação usando scripts internos do provedor, sem poluir o histórico de migrations do EF Core.
-- [ ] O compilador de workflows orientados a grafos deve mapear de forma transparente os nós declarativos do banco para Atividades (Activities) assíncronas do DurableTask.
-- [ ] Garantir 100% de sucesso na suíte de testes de integração, cobrindo criação, serialização e recuperação de workflows duráveis simulados.
+O Issue #108 exigia especificamente `Microsoft.Agents.AI.DurableTask`. Essa escolha foi substituída na análise atual: a extensão agenda por nome com registry criado no startup, enquanto as definições do produto são tenant/request-specific e a API atual consulta `IWorkflowStore`. O valor de produto continua; o mecanismo não é requisito.
+
+**Critérios de aceite:**
+- [ ] O start cria um execution ID persistido e o mesmo ID é usado por polling, cancelamento e SignalR; outro tenant não consegue ler ou alterar a execução.
+- [ ] Cada execução fixa versão/hash e snapshot da definição; editar o workflow não muda uma execução iniciada nem sua recuperação.
+- [ ] Workers reivindicam execuções com lease atômica; dois nós não executam o mesmo claim simultaneamente e uma lease expirada permite retomar após reinício.
+- [ ] Etapas Agent/Action executam o agente/tool autorizado; Approval pausa até decisão autorizada; Wait persiste o prazo; Subworkflow executa ou é rejeitado na validação, nunca é reportado como sucesso ao ser ignorado.
+- [ ] Retry de etapa tem semântica at-least-once explícita, chave idempotente por execução/etapa e compensação quando disponível; não declarar exactly-once sem evidência.
+- [ ] Testes PostgreSQL no Compose isolado cobrem restart, claim concorrente, retomada, status final, aprovação/cancelamento e isolamento entre tenants.

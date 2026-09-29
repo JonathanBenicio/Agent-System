@@ -88,6 +88,63 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         return execution;
     }
 
+    public async Task<WorkflowExecution> ApproveAsync(
+        string tenantId,
+        string executionId,
+        string approvedBy,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(approvedBy);
+        var execution = await GetPendingApprovalExecutionAsync(tenantId, executionId, ct);
+        var definition = await _store.GetDefinitionAsync(tenantId, execution.WorkflowId, ct)
+            ?? throw new InvalidOperationException("Workflow definition not found.");
+        var step = GetPendingApprovalStep(execution);
+
+        step.Status = WorkflowExecutionStatus.Completed;
+        step.Output["approved"] = true;
+        step.Output["approvedBy"] = approvedBy;
+        step.CompletedAt = DateTime.UtcNow;
+        execution.Status = WorkflowExecutionStatus.Running;
+        await _store.SaveExecutionAsync(tenantId, execution, ct);
+
+        if (_broadcaster is not null)
+            await _broadcaster.BroadcastStepCompleted(tenantId, executionId, step);
+
+        _ = Task.Run(() => ProcessExecutionAsync(tenantId, execution.Id, definition), ct);
+        return execution;
+    }
+
+    public async Task<WorkflowExecution> RejectAsync(
+        string tenantId,
+        string executionId,
+        string rejectedBy,
+        string? reason = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(rejectedBy);
+        var execution = await GetPendingApprovalExecutionAsync(tenantId, executionId, ct);
+        var step = GetPendingApprovalStep(execution);
+        var rejectionReason = string.IsNullOrWhiteSpace(reason) ? "Rejected by approver." : reason;
+
+        step.Status = WorkflowExecutionStatus.Failed;
+        step.ErrorMessage = rejectionReason;
+        step.Output["approved"] = false;
+        step.Output["rejectedBy"] = rejectedBy;
+        step.CompletedAt = DateTime.UtcNow;
+        execution.Status = WorkflowExecutionStatus.Cancelled;
+        execution.ErrorMessage = rejectionReason;
+        execution.CompletedAt = DateTime.UtcNow;
+        await _store.SaveExecutionAsync(tenantId, execution, ct);
+
+        if (_broadcaster is not null)
+        {
+            await _broadcaster.BroadcastStepFailed(tenantId, executionId, step);
+            await _broadcaster.BroadcastExecutionCancelled(execution);
+        }
+
+        return execution;
+    }
+
     public async Task<WorkflowExecution> CancelAsync(
         string tenantId,
         string executionId,
@@ -118,6 +175,25 @@ public class DefaultWorkflowEngine : IWorkflowEngine
 
     public Task<IReadOnlyList<WorkflowExecution>> ListExecutionsAsync(string tenantId, WorkflowExecutionStatus? statusFilter = null, int limit = 20, CancellationToken ct = default)
         => _store.ListExecutionsAsync(tenantId, statusFilter, limit, ct);
+
+    private async Task<WorkflowExecution> GetPendingApprovalExecutionAsync(
+        string tenantId,
+        string executionId,
+        CancellationToken ct)
+    {
+        var execution = await _store.GetExecutionAsync(tenantId, executionId, ct)
+            ?? throw new ArgumentException("Execution not found", nameof(executionId));
+        if (execution.Status != WorkflowExecutionStatus.WaitingForApproval
+            || !execution.StepExecutions.Any(step => step.Status == WorkflowExecutionStatus.WaitingForApproval))
+        {
+            throw new InvalidOperationException("Workflow execution has no pending approval step.");
+        }
+
+        return execution;
+    }
+
+    private static WorkflowStepExecution GetPendingApprovalStep(WorkflowExecution execution) =>
+        execution.StepExecutions.Single(step => step.Status == WorkflowExecutionStatus.WaitingForApproval);
 
     private async Task ProcessExecutionAsync(string tenantId, string executionId, WorkflowDefinition definition)
     {
@@ -224,9 +300,14 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         {
             // Per-step timeout: Action steps have a configurable timeout (default 5 min).
             // This prevents a single hung LLM call from blocking the entire workflow forever.
-            var stepTimeout = step.Timeout ?? (step.StepType == WorkflowStepType.Action
-                ? TimeSpan.FromMinutes(5)
-                : TimeSpan.FromMinutes(30));
+            // For Wait steps, Timeout is the requested delay itself, not a watchdog timeout.
+            // Applying the same duration as a CancellationTokenSource races the delay and can
+            // report a valid wait as a failed step at its deadline.
+            var stepTimeout = step.StepType == WorkflowStepType.Wait
+                ? System.Threading.Timeout.InfiniteTimeSpan
+                : step.Timeout ?? (step.StepType is WorkflowStepType.Action or WorkflowStepType.Agent
+                    ? TimeSpan.FromMinutes(5)
+                    : TimeSpan.FromMinutes(30));
 
             using var stepCts = new CancellationTokenSource(stepTimeout);
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stepCts.Token);
@@ -245,16 +326,21 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             {
                 var timeout = step.Timeout ?? TimeSpan.FromMinutes(5);
                 _logger.LogInformation("⏳ Waiting for {Timeout} on step: {StepName}", timeout, step.Name);
+                await Task.Delay(timeout, ct);
                 stepExec.Output["waited"] = timeout.ToString();
                 stepExec.Status = WorkflowExecutionStatus.Completed;
             }
             else if (step.StepType == WorkflowStepType.Approval)
             {
-                _logger.LogInformation("⏸️ Approval gate reached: {StepName} - auto-approving for now", step.Name);
-                stepExec.Output["approved"] = true;
-                stepExec.Status = WorkflowExecutionStatus.Completed;
+                _logger.LogInformation("⏸️ Approval gate reached: {StepName}", step.Name);
+                stepExec.Status = WorkflowExecutionStatus.WaitingForApproval;
+                execution.Status = WorkflowExecutionStatus.WaitingForApproval;
+                await _store.SaveExecutionAsync(tenantId, execution);
+                if (_broadcaster is not null)
+                    await _broadcaster.BroadcastApprovalRequested(execution, stepExec);
+                return;
             }
-            else if (step.StepType == WorkflowStepType.Action)
+            else if (step.StepType is WorkflowStepType.Action or WorkflowStepType.Agent)
             {
                 if (!string.IsNullOrEmpty(step.AgentName))
                 {
@@ -280,6 +366,10 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                     stepExec.Output["success"] = result.Success;
                     if (!result.Success) throw new Exception(result.ErrorMessage ?? "Tool execution failed");
                 }
+                else
+                {
+                    throw new InvalidOperationException($"Step '{step.Name}' must configure an agent or tool.");
+                }
                 stepExec.Status = WorkflowExecutionStatus.Completed;
 
                 foreach (var kvp in stepExec.Output)
@@ -299,13 +389,11 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             }
             else if (step.StepType == WorkflowStepType.Subworkflow)
             {
-                _logger.LogInformation("🔄 Subworkflow execution not yet implemented: {StepName}", step.Name);
-                stepExec.Output["skipped"] = "Subworkflow not implemented";
-                stepExec.Status = WorkflowExecutionStatus.Completed;
+                throw new NotSupportedException($"Subworkflow step '{step.Name}' is not supported by this workflow engine.");
             }
             else
             {
-                stepExec.Status = WorkflowExecutionStatus.Completed;
+                throw new NotSupportedException($"Workflow step type '{step.StepType}' is not supported.");
             }
 
             stepExec.CompletedAt = DateTime.UtcNow;

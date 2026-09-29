@@ -22,6 +22,8 @@ Na baseline, Token=7, SessionCompleted=22 e Error=23 em [RuntimeModels](../../sr
 
 Todos exigem autenticação. JWT access_token ou API key em query são aceitos para /hubs; evitar guardar URL com segredo. Tenant header/query/claim: [regras](access-tenants.md). Opções JSON do MVC não configuram automaticamente o serializer SignalR. Gateway dashboard, status e subscriptions são exclusivos do Platform Admin explícito; eventos e grupos continuam scoping pelo tenant selecionado.
 
+WorkflowHub agrupa por tenant + execution ID. Eventos atuais incluem ExecutionStarted, StepStarted, ApprovalRequested, StepCompleted, StepFailed, ExecutionCompleted, ExecutionFailed e ExecutionCancelled. O hook frontend já atualiza estados por polling/SignalR, mas ainda não assina `ApprovalRequested`; ver o [plano de execução dinâmica](../plan/maf-122-protocols-gateway.md) antes de tratar a atualização de aprovação como tempo real garantido.
+
 ChatHub.SendMessage(message, targetAgent?, provider?, model?, apiKey?, sessionId?, selectedRoomId?). selectedRoomId vira preferência rag.knowledgeRoomId. Eventos: ProcessingStarted, StreamEvent (AgentStreamEvent completo), ReceiveMessage em SessionCompleted, ReceiveError em exceção. AgentSelected é um tipo de StreamEvent, não evento independente. SessionUpdated e SessionDeleted são enviados por usuário; verificar isolamento tenant/usuário em cenários reais.
 
 ## Endpoints de host
@@ -36,4 +38,4 @@ ChatHub.SendMessage(message, targetAgent?, provider?, model?, apiKey?, sessionId
 | /mcp | não mapeado na baseline | MCP client/plugin não é servidor HTTP /mcp |
 | /api/test/rag/* | compilação DEBUG ou STAGING | sem AuthorizeAttribute; não expor como API de produção |
 
-Apenas A2A/AGUI habilitados registram keyed agent AgenticSystem; Development tenta resolvê-lo para DevUI mesmo se ambos estiverem desabilitados. Configuração e autenticação precisam validação específica por protocolo. Inventário de fonte inclui rotas de compilação condicional; não implica que estejam ativas no build Release.
+Apenas A2A/AG-UI habilitados registram o keyed agent `AgenticSystem`; a hosting API em uso requer `AddAGUIServer`/`MapAGUIServer`. O agente proxy é singleton e cria escopo por execução; session store PostgreSQL também é singleton para resolução durante o mapeamento de rota e honra as partições `AgentSessionStoreKey`. O build Release confirma compatibilidade MAF 1.22, mas hosting permanece preview: autenticação, sessão, tenant e streaming E2E continuam pendentes no follow-up [#121](../plan/a2a-agui-preview-validation.md). Inventário da fonte inclui rotas condicionais; não implica ativação em qualquer configuração.

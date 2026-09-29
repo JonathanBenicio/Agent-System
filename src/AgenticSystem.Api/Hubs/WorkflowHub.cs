@@ -99,6 +99,27 @@ public class SignalRWorkflowEventBroadcaster : IWorkflowEventBroadcaster
         }
     }
 
+    public async Task BroadcastApprovalRequested(WorkflowExecution execution, WorkflowStepExecution step)
+    {
+        try
+        {
+            await _hubContext.Clients.Group(WorkflowGroup(execution.TenantId, execution.Id)).SendAsync("ApprovalRequested", new
+            {
+                executionId = execution.Id,
+                workflowId = execution.WorkflowId,
+                executionStatus = execution.Status,
+                step.StepId,
+                step.StepName,
+                stepStatus = step.Status,
+                step.StartedAt
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to broadcast ApprovalRequested for {ExecutionId}/{StepId}", execution.Id, step.StepId);
+        }
+    }
+
     public async Task BroadcastStepCompleted(string tenantId, string executionId, WorkflowStepExecution step)
     {
         try

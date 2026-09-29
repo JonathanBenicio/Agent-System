@@ -2,7 +2,7 @@
 
 Data: 2026-09-29 · Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · Story: BACK-MAF-120 · [Plano](../../plan/maf-122-protocols-gateway.md). Validação E2E A2A/AG-UI foi separada para [#121](https://github.com/JonathanBenicio/Agent-System/issues/121), [ADR-037](037-a2a-agui-preview-validation.md).
 
-Decisão: aceita · Implementação: parcial no worktree, sem commits · Validação: build Release (0 avisos/erros) e suíte com Compose isolado (726 aprovados, 1 teste vetorial explicitamente ignorado) passaram. Integração PostgreSQL verificou migration, armazenamento cifrado/auditoria, leitura entre tenants, propagação NOTIFY pelo listener ao notifier e snapshot MAF salvo/reaberto após recriar adapter, negando outro tenant. Atualização efetiva em outro LLMManager/host, restart real de sessão e provider real ainda não foram demonstrados. DurableTask continua incompatível com grafos dinâmicos e com polling atual.
+Decisão: aceita · Implementação: parcial; evidência PostgreSQL local em `40c262f`, engine e controller alterados no worktree · Validação: build Release e suíte com Compose isolado (735 aprovados, 1 teste vetorial explicitamente ignorado) passaram após as mudanças atuais. Integração PostgreSQL verificou migration, armazenamento cifrado/auditoria, leitura entre tenants, propagação NOTIFY pelo listener ao notifier e snapshot MAF salvo/reaberto após recriar adapter, negando outro tenant. Worker/lease/recovery, restart real, provider LLM e atualização efetiva entre hosts ainda não foram demonstrados.
 
 ## Contexto
 
@@ -23,6 +23,8 @@ O código atual persiste a configuração alterada por `LLMController` através 
 - Manter A2A/AG-UI sob suas feature flags e sem ampliação de escopo/configuração nesta issue. Validar seus fluxos E2E posteriormente conforme ADR-037 e issue #121.
 - Registrar no startup de produção apenas providers de infraestrutura configurados e habilitados. Chamadas completas e streaming desses providers passam por `IServiceGateway`; estados de circuit breaker, rate limit e saúde refletem execução real. Credenciais BYOK de tenant continuam no caminho atual e fora do registro global, pois os controles do Gateway são globais por provider e poderiam permitir que uma chave afete outros tenants. Quotas persistidas continuam autoridade por tenant. Custo estimado do Gateway não representa custo real por token.
 - Uma migration é necessária para armazenamento global de configurações e sua auditoria. Ela preserva as configurações tenant-scoped atuais e não promove credenciais tenant para globais. A API não retorna segredos; BYOK continua em tabela e quota tenant-scoped. Se aparecer outra mudança de modelo, parar e revisar antes de gerar migration.
+- Para workflows definidos/editados por tenant, manter `IWorkflowEngine`/`IWorkflowStore` como orquestrador e fonte de status porque esse é o contrato já usado pelo frontend e esses tipos carregam as políticas da aplicação. MAF 1.22 continua sendo o runtime dos agentes e pode fornecer composição/checkpoints internos. Não usar `Microsoft.Agents.AI.DurableTask` para receber um `Workflow` diferente por request: a integração atual agenda por nome, registra a topologia no startup e o provider PostgreSQL não fornece worker compatível. O caminho de Banner deve retornar um ID criado pelo mesmo engine que atende `GET /api/workflow/executions/{id}`.
+- Tornar esse engine realmente recuperável exige snapshot/hash da definição por execução, claim/lease multi-worker, retomada após expiração, passos com semântica persistida de aprovação/espera e chave de idempotência. Execuções externas são at-least-once após crash; a plataforma não promete exactly-once.
 
 ## Alternativas e trade-offs
 
@@ -30,10 +32,11 @@ O código atual persiste a configuração alterada por `LLMController` através 
 - Atualizar sem matriz de compatibilidade foi rejeitado: breaking changes documentadas afetam sessões, aprovações/replay, MCP e A2A.
 - Trocar o roteador multi-tenant do produto pelo roteador de sessão do framework agora foi rejeitado: os escopos se sobrepõem parcialmente e a paridade de credenciais/quotas ainda não foi demonstrada.
 - Registrar providers apenas para o dashboard não prova que o Gateway governa tráfego real; a decisão integra chamadas completas e streaming, aceitando a extensão do contrato público de `IServiceGateway`.
+- Usar DurableTask sem registry dinâmico foi rejeitado para o workflow builder atual. O runtime MAF DurableTask continua candidato somente para workflows versionados registrados de forma compatível, ou para uma topologia genérica que passe pelo mesmo contrato de execução/status do produto.
 
 ## Consequências e migração
 
-A atualização pode exigir adaptações de API em adaptadores MAF e código de armazenamento de sessão. Componentes de hosting permanecem preview e exigem testes de protocolo. O contrato de `IServiceGateway` ganha operação de streaming que contabiliza falhas durante enumeração, cancelamento e latência real; consumidores existentes de chamadas completas permanecem compatíveis. A configuração global de providers deve ser separada de configuração BYOK por tenant; o store atual é tenant-scoped e não satisfaz a decisão de plataforma. Rollback de código consiste em reverter os commits por contexto; qualquer dado global novo deve ter migração/rollback explícitos.
+A atualização pode exigir adaptações de API em adaptadores MAF e código de armazenamento de sessão. Componentes de hosting permanecem preview e exigem testes de protocolo. O contrato de `IServiceGateway` ganha operação de streaming que contabiliza falhas durante enumeração, cancelamento e latência real; consumidores existentes de chamadas completas permanecem compatíveis. A configuração global de providers deve ser separada de configuração BYOK por tenant; o store atual é tenant-scoped e não satisfaz a decisão de plataforma. A aplicação mantém o scheduler de workflow e precisa acrescentar leases/recuperação sem trocar o ID/status visto pelo frontend. Rollback de código consiste em reverter os commits por contexto; qualquer dado global novo deve ter migração/rollback explícitos.
 
 ## Verificação e gaps
 

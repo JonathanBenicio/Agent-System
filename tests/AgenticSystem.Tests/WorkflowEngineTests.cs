@@ -65,6 +65,171 @@ public class WorkflowEngineTests
     }
 
     [Fact]
+    public async Task StartAsync_WithAgentStepType_ExecutesTheConfiguredAgent()
+    {
+        var definition = new WorkflowDefinition
+        {
+            Id = "wf-agent-step",
+            Name = "Agent Step Workflow",
+            Steps =
+            [
+                new WorkflowStep
+                {
+                    Id = "agent-step",
+                    Name = "Research",
+                    StepType = WorkflowStepType.Agent,
+                    AgentName = "ResearchAgent",
+                    ActionDescription = "Research the topic"
+                }
+            ]
+        };
+        _agentExecutor.ExecuteAsync(
+                Arg.Any<string>(),
+                Arg.Any<string>(),
+                Arg.Any<UserContext>(),
+                "ResearchAgent",
+                Arg.Any<CancellationToken>())
+            .Returns(new AgentResponse { Success = true, Content = "Research complete" });
+
+        var started = await _engine.StartAsync(TenantId, definition, initiatedBy: "user-1");
+        await Task.Delay(100);
+
+        var finalState = await _engine.GetExecutionAsync(TenantId, started.Id);
+        finalState!.Status.Should().Be(WorkflowExecutionStatus.Completed);
+        finalState.StepExecutions.Should().ContainSingle()
+            .Which.Output["content"].Should().Be("Research complete");
+        await _agentExecutor.Received(1).ExecuteAsync(
+            started.Id,
+            "Research the topic",
+            Arg.Any<UserContext>(),
+            "ResearchAgent",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ApprovalStep_PausesUntilApprovedThenResumesTheDependentAgent()
+    {
+        var definition = new WorkflowDefinition
+        {
+            Id = "wf-approval",
+            Name = "Approval Workflow",
+            Steps =
+            [
+                new WorkflowStep { Id = "approval", Name = "Review", StepType = WorkflowStepType.Approval },
+                new WorkflowStep
+                {
+                    Id = "agent-step",
+                    Name = "Publish",
+                    StepType = WorkflowStepType.Agent,
+                    AgentName = "Publisher",
+                    DependsOn = ["approval"]
+                }
+            ]
+        };
+        _agentExecutor.ExecuteAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), "Publisher", Arg.Any<CancellationToken>())
+            .Returns(new AgentResponse { Success = true, Content = "Published" });
+        await _store.SaveDefinitionAsync(TenantId, definition);
+
+        var started = await _engine.StartAsync(TenantId, definition, initiatedBy: "user-1");
+        await Task.Delay(100);
+
+        var waiting = await _engine.GetExecutionAsync(TenantId, started.Id);
+        waiting!.Status.Should().Be(WorkflowExecutionStatus.WaitingForApproval);
+        waiting.StepExecutions.Should().ContainSingle(step => step.StepId == "approval"
+            && step.Status == WorkflowExecutionStatus.WaitingForApproval);
+        await _agentExecutor.DidNotReceive().ExecuteAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+
+        await _engine.ApproveAsync(TenantId, started.Id, "reviewer-1");
+        await Task.Delay(100);
+
+        var completed = await _engine.GetExecutionAsync(TenantId, started.Id);
+        completed!.Status.Should().Be(WorkflowExecutionStatus.Completed);
+        completed.StepExecutions.Single(step => step.StepId == "approval").Output["approvedBy"].Should().Be("reviewer-1");
+        await _agentExecutor.Received(1).ExecuteAsync(
+            started.Id,
+            Arg.Any<string>(),
+            Arg.Any<UserContext>(),
+            "Publisher",
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ApprovalStep_RejectionCancelsWithoutRunningDependentSteps()
+    {
+        var definition = new WorkflowDefinition
+        {
+            Id = "wf-rejected-approval",
+            Name = "Rejected Approval Workflow",
+            Steps =
+            [
+                new WorkflowStep { Id = "approval", Name = "Review", StepType = WorkflowStepType.Approval },
+                new WorkflowStep
+                {
+                    Id = "agent-step",
+                    Name = "Publish",
+                    StepType = WorkflowStepType.Agent,
+                    AgentName = "Publisher",
+                    DependsOn = ["approval"]
+                }
+            ]
+        };
+        await _store.SaveDefinitionAsync(TenantId, definition);
+
+        var started = await _engine.StartAsync(TenantId, definition, initiatedBy: "user-1");
+        await Task.Delay(100);
+
+        var rejected = await _engine.RejectAsync(TenantId, started.Id, "reviewer-1", "Needs revision");
+
+        rejected.Status.Should().Be(WorkflowExecutionStatus.Cancelled);
+        rejected.ErrorMessage.Should().Be("Needs revision");
+        rejected.StepExecutions.Single(step => step.StepId == "approval").Status.Should().Be(WorkflowExecutionStatus.Failed);
+        await _agentExecutor.DidNotReceive().ExecuteAsync(
+            Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task WaitStep_DoesNotCompleteBeforeItsConfiguredDelay()
+    {
+        var definition = new WorkflowDefinition
+        {
+            Id = "wf-wait",
+            Name = "Wait Workflow",
+            Steps = [new WorkflowStep { Id = "wait", Name = "Wait", StepType = WorkflowStepType.Wait, Timeout = TimeSpan.FromSeconds(2) }]
+        };
+
+        var started = await _engine.StartAsync(TenantId, definition);
+        await Task.Delay(50);
+
+        var waiting = await _engine.GetExecutionAsync(TenantId, started.Id);
+        waiting!.Status.Should().Be(WorkflowExecutionStatus.Running);
+        waiting.StepExecutions.Should().ContainSingle().Which.Status.Should().Be(WorkflowExecutionStatus.Running);
+
+        await Task.Delay(2200);
+        var completed = await _engine.GetExecutionAsync(TenantId, started.Id);
+        completed!.Status.Should().Be(WorkflowExecutionStatus.Completed);
+    }
+
+    [Fact]
+    public async Task SubworkflowStep_FailsInsteadOfReturningFalseSuccess()
+    {
+        var definition = new WorkflowDefinition
+        {
+            Id = "wf-subworkflow",
+            Name = "Subworkflow",
+            Steps = [new WorkflowStep { Id = "child", Name = "Child", StepType = WorkflowStepType.Subworkflow }]
+        };
+
+        var started = await _engine.StartAsync(TenantId, definition);
+        await Task.Delay(100);
+
+        var completed = await _engine.GetExecutionAsync(TenantId, started.Id);
+        completed!.Status.Should().Be(WorkflowExecutionStatus.Failed);
+        completed.StepExecutions.Should().ContainSingle().Which.ErrorMessage.Should().Contain("not supported");
+    }
+
+    [Fact]
     public async Task StartAsync_WithParallelSteps_ShouldExecuteInParallel()
     {
         // Arrange
