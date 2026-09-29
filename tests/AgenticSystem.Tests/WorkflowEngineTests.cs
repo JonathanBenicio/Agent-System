@@ -35,6 +35,42 @@ public class WorkflowEngineTests
     }
 
     [Fact]
+    public async Task AgentStep_ReceivesSnapshotPromptDependencyOutputAndRestrictedRuntimeOptions()
+    {
+        var seen = new List<(string Input, UserContext Context, string Agent)>();
+        _agentExecutor.ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(),
+                Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                seen.Add((call.ArgAt<string>(1), call.ArgAt<UserContext>(2), call.ArgAt<string>(3)));
+                return new AgentResponse { Success = true, Content = seen.Count == 1 ? "Foto analisada" : "Banner pronto" };
+            });
+        var definition = new WorkflowDefinition
+        {
+            Id = "wf-banner-options", Name = "Banner", PromptTemplate = "Preço {{price}}; imagem {{imagePath}}",
+            Steps =
+            [
+                new WorkflowStep { Id = "vision", Name = "Vision", StepType = WorkflowStepType.Agent,
+                    AgentName = "VisionAnalyst", ModelOverride = "vision-model" },
+                new WorkflowStep { Id = "editor", Name = "Editor", StepType = WorkflowStepType.Agent,
+                    AgentName = "EditorChefe", DependsOn = ["vision"], ModelOverride = "editor-model",
+                    AllowedToolsOverride = ["CleanImageAsync", "RenderBannerAsync"] }
+            ]
+        };
+        var started = await _engine.StartAsync(TenantId, definition,
+            new Dictionary<string, object> { ["price"] = 650000, ["imagePath"] = "photo.png" }, "owner");
+        await ProcessClaimedExecutionAsync(started.Id);
+
+        seen.Should().HaveCount(2);
+        seen[0].Input.Should().Contain("Preço 650000; imagem photo.png");
+        seen[0].Context.WorkflowOptions!.Model.Should().Be("vision-model");
+        seen[1].Input.Should().Contain("Foto analisada");
+        seen[1].Context.WorkflowOptions!.Model.Should().Be("editor-model");
+        seen[1].Context.WorkflowOptions!.AllowedTools.Should().BeEquivalentTo(["CleanImageAsync", "RenderBannerAsync"]);
+        seen[1].Context.WorkflowOptions!.SessionId.Should().Be($"workflow:{started.Id}:editor");
+    }
+
+    [Fact]
     public async Task WorkflowLease_ExcludesConcurrentWorkerAndAllowsRecoveryAfterExpiry()
     {
         var execution = await _engine.StartAsync(TenantId, new WorkflowDefinition

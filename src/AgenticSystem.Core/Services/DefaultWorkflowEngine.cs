@@ -492,11 +492,21 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             {
                 if (!string.IsNullOrEmpty(step.AgentName))
                 {
-                    var agentInput = ApplyVariables(step.ActionDescription ?? step.Name, execution.Variables);
+                    if (string.IsNullOrWhiteSpace(execution.InitiatedBy))
+                        throw new UnauthorizedAccessException("An authenticated initiator is required for workflow agent steps.");
+                    var agentInput = ApplyVariables(
+                        step.ActionDescription ?? DefinitionPrompt(execution) ?? step.Name,
+                        execution.Variables);
+                    var dependencyOutputs = step.DependsOn.Select(id => execution.StepExecutions
+                        .FirstOrDefault(item => item.StepId == id)?.Output.GetValueOrDefault("content"))
+                        .Where(output => output is not null).Select(output => output!.ToString());
+                    agentInput = string.Join("\n", new[] { agentInput }.Concat(dependencyOutputs));
                     var context = new UserContext
                     {
-                        UserId = execution.InitiatedBy ?? "system",
-                        TenantId = tenantId
+                        UserId = execution.InitiatedBy,
+                        TenantId = tenantId,
+                        WorkflowOptions = new WorkflowAgentOptions($"workflow:{execution.Id}:{step.Id}", step.ModelOverride, step.AllowedToolsOverride,
+                            execution.Variables.GetValueOrDefault("imagePath")?.ToString())
                     };
                     context.Preferences["workflowIdempotencyKey"] = $"{execution.Id}:{step.Id}";
                     var response = await _agentExecutor.ExecuteAsync(execution.Id, agentInput, context, step.AgentName, ct);
@@ -600,6 +610,9 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             await HandleStepFailureAsync(tenantId, execution, step, stepExec, ex.Message, executionToken);
         }
     }
+
+    private static string? DefinitionPrompt(WorkflowExecution execution) =>
+        RestoreDefinitionSnapshot(execution).PromptTemplate;
 
     private async Task HandleStepFailureAsync(
         string tenantId,

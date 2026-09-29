@@ -137,12 +137,13 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
 
             // 3.6. Semeia agentes dinâmicos de Banner Production se não existirem
             var visionAgentExists = await _dbContext.DynamicAgents.IgnoreQueryFilters()
-                .AnyAsync(a => a.Name == "VisionAnalyst", cancellationToken);
+                .AnyAsync(a => a.Name == "VisionAnalyst" && a.TenantId == "admin", cancellationToken);
 
             if (!visionAgentExists)
             {
                 var visionAgent = new DynamicAgentEntity
                 {
+                    TenantId = "admin",
                     Name = "VisionAnalyst",
                     Description = "Analista Visual de Imóveis (Ollama Vision)",
                     Domain = "general",
@@ -159,12 +160,13 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
             }
 
             var editorAgentExists = await _dbContext.DynamicAgents.IgnoreQueryFilters()
-                .AnyAsync(a => a.Name == "EditorChefe", cancellationToken);
+                .AnyAsync(a => a.Name == "EditorChefe" && a.TenantId == "admin", cancellationToken);
 
             if (!editorAgentExists)
             {
                 var editorAgent = new DynamicAgentEntity
                 {
+                    TenantId = "admin",
                     Name = "EditorChefe",
                     Description = "Editor Chefe de Banner Publicitário",
                     Domain = "general",
@@ -183,6 +185,9 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
             // 3.7. Semeia/atualiza o workflow de banner dinâmico baseado em grafos do MAF
             var existingWorkflow = await _dbContext.WorkflowDefinitions.IgnoreQueryFilters()
                 .FirstOrDefaultAsync(w => w.Id == "banner-production", cancellationToken);
+
+            if (existingWorkflow is not null && existingWorkflow.TenantId != "admin")
+                throw new InvalidOperationException("The banner-production workflow ID belongs to another tenant.");
 
             if (existingWorkflow == null || existingWorkflow.Version < 4 || !existingWorkflow.DefinitionJson.Contains("Edges"))
             {

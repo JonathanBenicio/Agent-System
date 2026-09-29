@@ -79,12 +79,15 @@ public class AgentFrameworkFactory
         IAgent agent,
         IEnumerable<AITool>? additionalTools,
         string? modelOverride,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IReadOnlyCollection<string>? allowedToolNames = null)
     {
         ArgumentNullException.ThrowIfNull(agent);
 
         var tools = await GetUnifiedToolsAsync(ct);
         tools = MergeTools(tools, additionalTools);
+        if (allowedToolNames is not null)
+            tools = tools?.Where(tool => allowedToolNames.Contains(tool.Name, StringComparer.OrdinalIgnoreCase)).ToList();
 
         // Enriquecer as instruções do especialista usando as C# Skills!
         var enrichedInstructions = _skillManager != null
