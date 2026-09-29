@@ -10,8 +10,8 @@ Durante a atualização da arquitetura do AgenticSystem para suportar recursos m
 
 ## Decisão
 1. **Persistência Híbrida de Agentes:** Adicionamos a entidade `DynamicAgentEntity` ao contexto EF Core PostgreSQL (`AgenticDbContext`). O `HierarchicalAgentFactory` agora atua como uma fachada inteligente, que carrega as definições de `AgentSpecification` dinâmicas em memória, mas as persiste no banco de dados para garantir sobrevivência e resiliência entre deploys. O isolamento multi-tenant já existente (via Global Query Filters no EF Core) se aplica de forma imediata aos agentes customizados.
-2. **FIDES Data Protection Middleware:** Criamos o `FidesDataProtectionMiddleware.cs` encapsulando as mensagens no pipeline nativo do MAF (`builder.Use(...)` via `DelegatingAIAgent`). A validação foi alocada logo antes do envio para o modelo de linguagem, garantindo que CPFs, tokens, cartões de crédito e e-mails sejam identificados e substituídos por máscaras de ofuscação de forma determinística, sem depender do próprio LLM para ofuscação.
-3. **PowerFx RecalcEngine:** A fim de dar mais segurança para regras de comportamento definidas nos YAMLs, adicionamos a biblioteca nativa `Microsoft.PowerFx` e acoplamos o `RecalcEngine` ao `AgentYamlValidator`, substituindo a validação frágil de parênteses pela compilação real da Microsoft.
+2. **FIDES Data Protection Middleware:** `FidesDataProtectionMiddleware` atua no pipeline do MAF antes do provider. Decisão de produto (2026-09-29): usar regras built-in revisadas, sem regex definida pelo tenant; `Owner/Admin` controla toggles por tenant; tudo começa ativo e detectores obrigatórios de credenciais não podem ser desligados. A decisão é o alvo, não prova de que esses toggles ou toda a classificação estejam implementados.
+3. **PowerFx RecalcEngine:** `AgentYamlValidator` usa `RecalcEngine.Check` para validação sintática. Decisão de produto (2026-09-29): não executar expressões PowerFx em runtime até haver um caso de uso aprovado; avaliar regras exige uma nova decisão e threat model.
 
 ## Consequências
 
@@ -27,4 +27,4 @@ Durante a atualização da arquitetura do AgenticSystem para suportar recursos m
 
 ## Verificação de implementação — 2026-09-29
 
-O estado do runtime prevalece sobre afirmações aspiracionais do texto histórico. `FidesDataProtectionMiddleware` existe e é registrado; seu catálogo observado contém regex estáticas para CPF formatado, cartão, email e alguns tokens, sem configuração por tenant demonstrada. `AgentYamlValidator` usa `RecalcEngine.Check` para sintaxe; este ADR não prova avaliação de regra em runtime, whitelist de funções ou timeout de execução. Ver [especificações e lacunas das issues abertas](../../plan/open-issues-specification-audit-2026-09-29.md).
+O estado do runtime prevalece sobre afirmações aspiracionais do texto histórico. `FidesDataProtectionMiddleware` existe e é registrado; o catálogo observado contém regex estáticas para CPF formatado, cartão, email e alguns tokens, mas a política/toggles por tenant ainda não estão implementados. `AgentYamlValidator` usa `RecalcEngine.Check`; fórmulas não são avaliadas pelo runtime. Ver [decisões e especificações das issues abertas](../../plan/open-issues-specification-audit-2026-09-29.md#issue-106).

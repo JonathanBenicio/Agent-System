@@ -1313,6 +1313,8 @@ TriggerEngine.EvaluateAsync(rule)
 
 #### ML39 — FinOps & Auto-Melhoria
 
+Issue [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) · decisão de aprovação humana: [ADR-040](architecture/adr/040-self-improvement-human-approval.md) · [especificação/status](plan/open-issues-specification-audit-2026-09-29.md#issue-16).
+
 **Como** administrador do sistema,
 **quero** cotas proativas de uso de LLM e processamento em batch para auto-melhoria,
 **para que** os custos sejam controlados e o sistema aprenda sem impactar a latência das respostas em tempo real.
@@ -1326,7 +1328,8 @@ TriggerEngine.EvaluateAsync(rule)
 **Critérios de Aceite:**
 - [ ] Bloqueio de requisições que excedam a quota diária de tokens/custo.
 - [ ] Processamento diário de reflexões em background (Hosted Service).
-- [ ] Aplicação automática de melhorias com confiança acima do threshold.
+- [ ] Mudanças sugeridas são propostas tenant-scoped, persistidas e versionadas; `confidence` informa prioridade, mas nunca autoriza aplicação automática.
+- [ ] Uma pessoa autorizada revisa e aprova/rejeita a proposta antes de aplicar; aprovação, ator, versão anterior/nova, avaliação e rollback ficam auditáveis. Papel do aprovador ainda pendente de decisão.
 
 ---
 

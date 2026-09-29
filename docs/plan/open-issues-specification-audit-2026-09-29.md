@@ -20,6 +20,21 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 | 4 | Adicionar link para a ficha em cada uma das 46 issues sem fechar issues | Leitura posterior da API confirmou 46/46 links e bodies preservados | Concluída |
 | 5 | Sincronizar índices, validar links e publicar commits/PR documental separado | Checker: 160 arquivos, 799 links, 0 quebrados; PR #125 draft separado, base `feat/chat-session-user-settings` | Enviado; revisão/merge pendentes |
 
+## Decisões de produto registradas — 2026-09-29
+
+| Issue | Decisão do usuário | Limite da decisão / implementação |
+|---|---|---|
+| #104 PowerFx | Validar sintaxe apenas; não executar fórmulas até surgir um caso de uso aprovado. | Manter `RecalcEngine.Check`; remover linguagem que prometa avaliação de regras no runtime. |
+| #105 Hyperlight | Integrar o pacote .NET preview atrás de flag global, desligada por padrão e habilitável somente em laboratório; segurança deve ser testada. | Não declarar sandbox estável; implementação atual segue simulada até integração verificada. Sem filesystem/rede por padrão é requisito proposto. |
+| #106 FIDES | Usar regras built-in revisadas, com política/toggles por tenant; tudo ativo por padrão; detectores obrigatórios de credenciais não podem ser desligados. | Tenant não fornece regex. Owner/Admin gerencia os toggles; alterações devem ser auditáveis. |
+| #16 Auto-melhoria | Gerar proposta e exigir aprovação humana antes de aplicar; auto-aplicação por confidence threshold fica rejeitada. | Papel exato do aprovador ainda não foi respondido; Owner/Admin tenant é recomendação. Aprovação deve gerar versão/auditoria e rollback. |
+| #97 Tenant default | Remover fallbacks no runtime; tenant deve ser explícito; `default` fica restrito a fixture/migração. | Fallbacks encontrados na ficha #97 continuam gap de implementação. |
+| #99 Bootstrap | Bootstrap só com chave explicitamente configurada; não semear agentes Banner de produto; sem chave, não criar tenant. | A aplicação pode subir sem tenant e exigir provisionamento explícito; bootstrap não cria Platform Admin. |
+| #121 A2A/AG-UI | Manter E2E de protocolos preview despriorizado e separado. | Não declarar validado nem estável enquanto os hosts permanecerem preview/desligados. |
+| #109 Roadmap 10/10 | **Pendente**: decidir se a issue permanece visão/roadmap ou se será decomposta em épicos priorizados. | Nenhuma lista aspiracional autoriza implementação em lote. |
+
+As decisões estão documentadas; mudança de código, flags, APIs ou políticas ainda exige etapa de implementação e validação própria.
+
 ## Resumo do estado atual
 
 | Classe | Issues | Tratamento desta especificação |
@@ -74,7 +89,7 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 
 **Fontes:** [ADR-037](../architecture/adr/037-a2a-agui-preview-validation.md), story [BACK-PROTO-121](../USER-STORIES.md#back-proto-121--validar-a2a-e-ag-ui-sob-hosting-preview), [plano](a2a-agui-preview-validation.md), dependência #120 e critério residual de #117.
 
-**Decisão proposta:** manter prioridade baixa enquanto os hosts estiverem preview; se a validação não for requisito para release atual, registrar como follow-up e retirar o critério duplicado de #117 só depois de revisão humana. Nenhum E2E pode ser alegado enquanto o host estiver desativado.
+**Decisão do usuário:** manter a validação E2E de protocolos preview despriorizada e separada. O critério permanece explícito em #121 até revisão da issue #117; nenhum E2E pode ser alegado enquanto o host estiver desativado.
 
 ## issue-120
 
@@ -212,9 +227,9 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 
 **Estado de código observado:** regras são regex estáticas para CPF formatado, cartão, e-mail e alguns formatos de token; entram mensagens User/System; o accessor do tenant é usado no log. Isso não comprova regras configuráveis por tenant, classificação completa, auditoria segura, cobertura de formatos ou política para imagens/anexos.
 
-**Especificação pendente:** declarar quais dados e formatos são cobertos; se as regras são globais ou configuráveis por tenant; quando rejeitar versus mascarar; garantir que segredo original não apareça em log/trace/erro; definir observabilidade e performance; testar positivos e falsos positivos sem dados reais; definir se mensagens de sistema são mascaradas.
+**Decisão do usuário:** catálogo built-in revisado, sem regex fornecida pelo tenant; política/toggles por tenant; todos os detectores ativos por padrão; detectores obrigatórios de credenciais não podem ser desligados. Owner/Admin gerencia toggles. **Especificação restante:** auditar cada alteração; definir dados/media não cobertos e a resposta quando mascaramento falhar. A implementação dos toggles ainda não existe.
 
-**Aceite mínimo proposto:** entrada com CPF/cartão/email/token cobertos é mascarada antes do primeiro provider; outras roles/media têm comportamento explícito; tenant A não lê regras/config de B; logs não contêm original; falha do detector tem modo seguro documentado; corpus sintético e casos negativos cobrem false positive.
+**Especificação aprovada:** entrada com CPF/cartão/email/token cobertos é mascarada antes do primeiro provider; toggle é tenant-scoped e auditado; todos os padrões built-in iniciam ativos; categorias de credenciais obrigatórias não podem ser desativadas; tenant A não lê a política de B; logs não contêm o valor original; falha do detector tem modo seguro documentado; corpus sintético e falsos positivos são testados. Ainda faltam dados/media cobertos e a regra de falha do detector.
 
 **Fontes:** ADR-005 e ADR-027 hoje contêm afirmações que excedem a implementação; [plano histórico](maf-complete-migration-plan.md) também diz que não existe. Atualizar os três estados para uma única descrição vigente antes de tratar a issue como concluída.
 
@@ -226,21 +241,19 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 
 **Resultado seguro esperado:** nenhuma ferramenta ou UI deve representar esta simulação como isolamento real; o caminho simulado precisa estar marcado como Lab e não pode processar código confiável/segredos como se fosse sandbox. Pesquisa de disponibilidade do runtime oficial deve ser datada e usar fonte primária; disponibilidade de package não prova compatibilidade com .NET/Windows/Linux nem manutenção.
 
-**Aceite para manter simulação:** flag/registro de capacidade em modo `Simulated`; resposta e log identificam explicitamente simulação; documentação proíbe uso como boundary de segurança; caminho desativável sem execução de output fixo como resultado real; teste demonstra que payload arbitrário não é executado.
+**Decisão do usuário:** integrar o pacote .NET preview atrás de flag global, desligada por padrão e habilitável apenas em laboratório, com testes de segurança. Até isso ocorrer, nenhuma chamada pode ser apresentada como execução real. O mock/simulação não deve retornar sucesso/output fixo quando a flag estiver desligada; deve retornar feature desabilitada ou indisponível.
 
 **Aceite para futuro runtime real:** threat model; idiomas/ABI suportados; limites de CPU/memória/tempo, filesystem/rede/syscalls, cancelamento e teardown; escaping de stdout/stderr; isolamento entre tenants; versão pinada; prova negativa de acesso ao host; fallback fechado se runtime ausente. O pacote oficial `Microsoft.Agents.AI.Hyperlight` foi publicado em versões preview; a versão NuGet consultada em 2026-09-29 é `1.21.0-preview.260911.1`, com dependência de `Microsoft.Agents.AI.Abstractions >=1.21.0`, `Microsoft.Extensions.AI.Abstractions >=10.10.0` e `Hyperlight.HyperlightSandbox.Api >=0.6.0`; o SDK sandbox tem versão `0.7.0`. Ambos permanecem preview e sua compatibilidade com MAF 1.22/runtime/plataformas deste produto ainda não foi testada. Fontes primárias: [pacote do Agent Framework](https://www.nuget.org/packages/Microsoft.Agents.AI.Hyperlight/) · [README .NET oficial](https://github.com/microsoft/agent-framework/blob/main/dotnet/src/Microsoft.Agents.AI.Hyperlight/README.md) · [API do sandbox](https://www.nuget.org/packages/Hyperlight.HyperlightSandbox.Api/).
 
-**Fontes:** `HyperlightSandboxedExecutor.cs`, ADR-006 (decide manter stub, mas logs/tool description contradizem), ADR-027 e plano MAF histórico. A issue atual não pode ser concluída só por “package não disponível”: a pesquisa atual comprova pacote Preview público, não runtime estável; atualizar o critério para compatibilidade, threat model e decisão de ativação segura.
+**Fontes:** `HyperlightSandboxedExecutor.cs`, ADR-006, ADR-027 e plano MAF histórico. A integração preview é decisão tomada, mas permanece não implementada/não validada; critérios de segurança e ativação devem passar no teste antes de habilitar em laboratório.
 
 ## issue-104
 
 **PowerFx em manifests**
 
-**Classificação:** descrição está desatualizada/parcial: `AgentYamlValidator` usa `RecalcEngine.Check`, então parser/compilação sintática existe; isso não demonstra que expressions sejam avaliadas em runtime ou que functions/context/timeouts estejam limitados.
+**Decisão do usuário:** contrato atual é validação sintática; não executar fórmulas em runtime até um novo caso de uso ser aprovado. `RecalcEngine.Check` permanece no validador.
 
-**Especificação pendente:** separar validação de sintaxe de execução; decidir funções permitidas e variáveis de entrada; definir comportamento de erro/null/type; evitar acesso a dados/secrets de outro tenant; definir cancelamento/limite de avaliação; preservar manifests existentes e documentar versão de `Microsoft.PowerFx`.
-
-**Aceite proposto:** expressões inválidas falham com diagnóstico estável; expressões válidas passam validação; se runtime avaliar regra, somente funções e tipos aprovados ficam disponíveis; timeout/cancelamento são testados sem bloquear chat; nenhum objeto service/tenant completo chega ao motor; compatibility fixtures verificam manifests atuais.
+**Aceite revisado:** compilar/validar expressões existentes e retornar erro estável para fórmula inválida; preservar manifestos que já usam regras; não avaliar funções nem injetar contexto de tenant em runtime. Qualquer avaliação futura precisa de nova issue/decisão, allowlist, tipos, isolamento e limites explícitos.
 
 **Fontes:** código em `AgentYamlValidator.cs`; ADR-005 registra integração, ADR-027 e `maf-complete-migration-plan.md` ainda descrevem um estado antigo. Não promover a afirmação “execução PowerFx segura” até localizar/validar o ponto de runtime.
 
@@ -252,7 +265,9 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 
 **Classificação:** classe/serviço existe; o issue descreve criação automática do primeiro tenant e credencial inicial.
 
-**Aceite que precisa de confirmação por código/teste:** banco vazio bootstrap uma única vez; banco existente nunca recria tenant/key; configuração ausente/inválida falha sem criar credencial conhecida; não gerar segredo padrão nem colocar key em log; startup concorrente é idempotente; admin platform e membership tenant não se confundem.
+**Decisão do usuário:** bootstrap só é executado com segredo explicitamente configurado; não semear `VisionAnalyst`/`EditorChefe` nem outros agentes de produto; sem `AdminApiKey`, nenhum tenant é criado e o operador deve provisionar explicitamente. Bootstrap de tenant nunca cria Platform Admin.
+
+**Aceite revisado:** banco vazio + chave configurada provisiona uma vez; banco existente não reemite key; ausência de chave deixa banco sem tenant/credencial e exige setup explícito; startup concorrente é idempotente; não há segredo em log; membership Admin do tenant não é Platform Admin.
 
 **Fonte:** `SystemBootstrapService`, ADR-026, story de auth em `USER-STORIES.md`. A issue propõe SHA-256 e `AdminApiKey` estática; atualizar segurança contra baixa entropia/legacy antes de tratar como prescrição vigente. O serviço também semeia `VisionAnalyst` e `EditorChefe` com instruções específicas de banner/imóveis no tenant `admin`; especificar se isso é demo/lab ou comportamento de produto, e manter seeds de produto fora do bootstrap genérico.
 
@@ -272,7 +287,7 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 
 **Classificação:** especificação histórica de “expurgo total”; `default` pode continuar em fixture/config legado, mas não deve ser confundido com fallback de autorização.
 
-**Aceite refinado:** nenhum fluxo autenticado obtém tenant por fallback silencioso; dado legado só é migrado com tenant/role explícitos; entidades tenant-scoped inválidas falham; exceções dev/test ficam identificadas e isoladas; busca usa somente `src/tests` normativos, não cópias/histórico. A varredura atual ainda encontra `TenantId ?? "default"` em `DynamicOnnxProcessorTool`, `WebhooksController`, `ExternalQuotaSyncService`, `PostgresToolManager` e `PostgresSkillManager`; é preciso decidir e testar caso a caso se vira negação, contexto explícito ou compatibilidade apenas em migração/test fixture. Essa pendência impede marcar a especificação como atendida.
+**Decisão do usuário:** remover todos os fallbacks de tenant no runtime; tenant deve ser explícito; `default` pode ficar somente em migrações/fixtures. A varredura atual ainda encontra `TenantId ?? "default"` em `DynamicOnnxProcessorTool`, `WebhooksController`, `ExternalQuotaSyncService`, `PostgresToolManager` e `PostgresSkillManager`; cada ocorrência precisa migrar para contexto explícito ou falhar fechado antes de a issue poder ser concluída.
 
 **Fonte:** ADR-026, middleware/DBContext atual e testes. A frase “nenhuma ocorrência da palavra default” é critério excessivo e não mede isolamento; substituir por buscas comportamentais e referências de runtime.
 
@@ -518,7 +533,7 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 
 **Classificação:** descrição contém três capacidades distintas e não acceptance; story ML39 já existe mas trata controle de quota/budget e auto-melhoria de forma combinada.
 
-**Spec necessária:** quota proativa: ator, limite, forecast, prevenção/delivery; batch self-improvement: dataset/approval/privacy/version/rollback/eval; `DotNetExpertAgent`: usuário, tool scope, sources, quality eval, tenant access. Não implantar nenhum dos três sem casos e owners. Esclarecer se `DotNetExpertAgent` continua requisito ou exemplo antigo.
+**Decisão do usuário:** auto-melhoria gera uma proposta e exige aprovação humana; o confidence threshold nunca aprova/aplica sozinho. O papel exato do aprovador segue em consulta (recomendação: Owner/Admin tenant). Ver [ADR-040](../architecture/adr/040-self-improvement-human-approval.md). **Spec restante:** quota proativa precisa de forecast/alerta e de métricas verificáveis; batch deve persistir proposta, versão, avaliação, aprovação, rejeição e rollback; `DotNetExpertAgent` já existe, mas a inclusão futura como domínio de triagem precisa de acceptance próprio.
 
 **Fonte:** ML39 em `USER-STORIES.md`; `docs/backend/resources-rules.md`; issue #16. Dividir em stories/novas issues se todos permanecerem escopo.
 

@@ -65,3 +65,10 @@ Tomamos a decisão de arquitetar a transição para multitenancy estrito e auto-
 ### Desafios / Pontos de Atenção (Negativas)
 * **Ajuste na Suite de Testes**: Como o tenant `"default"` deixa de existir, todos os testes unitários e de integração (Playwright/Cypress/xUnit) que dependem de bancos vazios devem ser ajustados para incluir sementes (seeds) que cadastrem o tenant `admin` e chaves válidas.
 * **Gestão de Chaves de Agentes Externos**: Serviços ou plugins MCP externos que integram com o backend precisarão obter credenciais dinâmicas do banco ou receber um cabeçalho explícito de Tenant ID na sua autenticação.
+
+## Decisões de produto vigentes — 2026-09-29
+
+- O bootstrap de tenant só pode ocorrer quando `AdminApiKey` estiver explicitamente configurada. Banco vazio sem essa chave não cria tenant nem credencial; a aplicação pode iniciar sem tenants e o operador deve provisionar o primeiro acesso explicitamente.
+- O bootstrap não cria `Platform Admin` e não semeia agentes de produto/demo como `VisionAnalyst` ou `EditorChefe`. A inicialização de plataforma permanece separada do papel `Admin` do tenant.
+- Fallbacks `TenantId ?? "default"` em código de runtime devem ser removidos; o identificador `default` fica restrito a fixtures ou migrações legadas, nunca autorização/escopo de produção.
+- Este bloco substitui as partes da decisão original que implicavam criar tenant sem chave, semear agentes específicos do Banner ou aceitar fallback de tenant no runtime. A implementação atual ainda precisa ser atualizada para corresponder a essas decisões; veja [#97/#99](../../plan/open-issues-specification-audit-2026-09-29.md#issue-99).

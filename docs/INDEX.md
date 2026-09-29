@@ -16,6 +16,7 @@
 - [A2A/AG-UI preview: ADR-037](architecture/adr/037-a2a-agui-preview-validation.md), [story BACK-PROTO-121](USER-STORIES.md#back-proto-121--validar-a2a-e-ag-ui-sob-hosting-preview) e [plano](plan/a2a-agui-preview-validation.md)
 - [Orquestrador supervisor dinâmico: ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md), [story BACK-ORCH-122](USER-STORIES.md#back-orch-122--orquestrar-agentes-dinamicos-pelo-supervisor-maf) e [plano separado](plan/dynamic-orchestrator-implementation.md)
 - [Chat, sessões e configurações usadas: ADR-039](architecture/adr/039-chat-session-user-tenant-settings.md), [story BACK-CHAT-123](USER-STORIES.md#back-chat-123--chat-sessoes-e-configuracoes-efetivamente-usadas), [plano](plan/chat-session-user-settings.md) e [contratos/endpoints](backend/chat-sessions-settings.md)
+- [Decisão de aprovação humana para auto-melhoria: ADR-040](architecture/adr/040-self-improvement-human-approval.md) · Issue #16 / ML39 · [especificações das issues abertas](plan/open-issues-specification-audit-2026-09-29.md)
 
 Índice de navegação da documentação do projeto, organizado por papel documental.
 
