@@ -1,6 +1,6 @@
 # Plano — Chat, sessões e configurações usadas pelo runtime
 
-Status: fluxos de usuário/tenant implementados e integrados; falta sincronizar o PR draft e resolver o gate global de lint · [Issue #123](https://github.com/JonathanBenicio/Agent-System/issues/123) · [ADR-039](../architecture/adr/039-chat-session-user-tenant-settings.md) · Story BACK-CHAT-123 · [evidência](../backend/validation/chat-session-settings-2026-09-29.md).
+Status: escopo implementado, validado e enviado no [PR #124 draft](https://github.com/JonathanBenicio/Agent-System/pull/124); resta o gate global de ESLint em arquivos fora desta entrega · [Issue #123](https://github.com/JonathanBenicio/Agent-System/issues/123) · [ADR-039](../architecture/adr/039-chat-session-user-tenant-settings.md) · Story BACK-CHAT-123 · [evidência](../backend/validation/chat-session-settings-2026-09-29.md).
 
 Base: `fix/backend-core-tenancy` no commit `5701d51`; branch `feat/chat-session-user-settings`. PostgreSQL de validação: Compose `tests/backend-validation/compose.yml`, projeto `agent-system-backend-validation-20260929`, bind `127.0.0.1:55432`; não usar outro banco.
 
