@@ -1,3 +1,5 @@
+#pragma warning disable MAAI001 // The tests exercise the experimental MAF session-store contract used by the backend.
+
 using System.Text.Json;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -12,109 +14,124 @@ namespace AgenticSystem.Tests;
 
 public class SimpleSessionStoreAdapterTests
 {
-    private readonly ISessionStore _sessionStore;
-    private readonly ILogger<SimpleSessionStoreAdapter> _logger;
+    private readonly ISessionStore _sessionStore = Substitute.For<ISessionStore>();
+    private readonly ILogger<SimpleSessionStoreAdapter> _logger = Substitute.For<ILogger<SimpleSessionStoreAdapter>>();
 
-    public SimpleSessionStoreAdapterTests()
+    [Fact]
+    public async Task SaveSessionAsync_PersistsUnderAllSessionKeyPartitions()
     {
-        _sessionStore = Substitute.For<ISessionStore>();
-        _logger = Substitute.For<ILogger<SimpleSessionStoreAdapter>>();
+        var sessionData = OwnedSession();
+        _sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(sessionData);
+        var agent = CreateAgent("Orchestrator");
+        var sut = new SimpleSessionStoreAdapter(_sessionStore, _logger);
+        var key = new AgentSessionStoreKey("session-1")
+            .WithPartition("isolation", "tenant-a:user-1")
+            .WithPartition("room", "room-9");
+
+        await sut.SaveSessionAsync(agent, key, Substitute.For<AgentSession>(), CancellationToken.None);
+
+        var scopedState = sessionData.RuntimeSettings.Single(item => item.Key.StartsWith(
+            "frameworkSessionState:orchestrator:scope:", StringComparison.Ordinal));
+        scopedState.Value.Should().Be("{\"messages\":[]}");
+        await _sessionStore.Received(1).SaveAsync(sessionData, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task SaveSessionAsync_WhenSessionExists_PersistsUsingStableAgentNameKey()
+    public async Task GetSessionAsync_DoesNotReturnStateFromDifferentPartition()
     {
-        var sessionData = new SessionData { Id = "session-1" };
+        var sessionData = OwnedSession();
         _sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(sessionData);
-        _sessionStore.SaveAsync(sessionData, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
+        var agent = CreateAgent("Orchestrator");
+        var sut = new SimpleSessionStoreAdapter(_sessionStore, _logger);
+        var keyA = new AgentSessionStoreKey("session-1")
+            .WithPartition("isolation", "tenant-a:user-1")
+            .WithPartition("room", "room-a");
+        var keyB = new AgentSessionStoreKey("session-1")
+            .WithPartition("isolation", "tenant-a:user-1")
+            .WithPartition("room", "room-b");
+        await sut.SaveSessionAsync(agent, keyA, Substitute.For<AgentSession>(), CancellationToken.None);
 
-        var agent = Substitute.For<AIAgent>();
-        var frameworkSession = Substitute.For<AgentSession>();
-        agent.Name.Returns("Orchestrator");
+        var otherPartition = await sut.GetSessionAsync(agent, keyB, CancellationToken.None);
+        var originalPartition = await sut.GetSessionAsync(agent, keyA, CancellationToken.None);
+
+        otherPartition.Should().BeNull();
+        originalPartition.Should().NotBeNull();
+        originalPartition.Should().BeSameAs(agent.DeserializedSession);
+    }
+
+    [Fact]
+    public async Task GetSessionAsync_MigratesLegacyStateOnlyForMatchingOwner()
+    {
+        var sessionData = OwnedSession();
+        sessionData.RuntimeSettings["frameworkSessionState:orchestrator"] = "{\"messages\":[]}";
+        _sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(sessionData);
+        var agent = CreateAgent("Orchestrator");
+        var sut = new SimpleSessionStoreAdapter(_sessionStore, _logger);
+        var key = new AgentSessionStoreKey("session-1").WithPartition("isolation", "tenant-a:user-1");
+
+        var restored = await sut.GetSessionAsync(agent, key, CancellationToken.None);
+
+        restored.Should().BeSameAs(agent.DeserializedSession);
+        sessionData.RuntimeSettings.Should().NotContainKey("frameworkSessionState:orchestrator");
+        sessionData.RuntimeSettings.Keys.Should().ContainSingle(name => name.StartsWith(
+            "frameworkSessionState:orchestrator:scope:", StringComparison.Ordinal));
+        await _sessionStore.Received(1).SaveAsync(sessionData, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task GetSessionAsync_RejectsDifferentOwnerBeforeReadingMafState()
+    {
+        var sessionData = OwnedSession();
+        sessionData.RuntimeSettings["frameworkSessionState:orchestrator"] = "{\"messages\":[]}";
+        _sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(sessionData);
+        var agent = CreateAgent("Orchestrator");
+        var sut = new SimpleSessionStoreAdapter(_sessionStore, _logger);
+        var key = new AgentSessionStoreKey("session-1").WithPartition("isolation", "tenant-a:user-2");
+
+        var act = () => sut.GetSessionAsync(agent, key, CancellationToken.None).AsTask();
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
+        agent.DeserializeCalls.Should().Be(0);
+        sessionData.RuntimeSettings.Should().ContainKey("frameworkSessionState:orchestrator");
+    }
+
+    private static SessionData OwnedSession() => new()
+    {
+        Id = "session-1",
+        TenantId = "tenant-a",
+        UserId = "user-1"
+    };
+
+    private static TestAgent CreateAgent(string name)
+    {
+        var agent = Substitute.For<TestAgent>();
+        agent.Name.Returns(name);
         agent.SerializeSessionAsync(
-                frameworkSession,
-                Arg.Any<JsonSerializerOptions>(),
+                Arg.Any<AgentSession>(),
+                Arg.Any<JsonSerializerOptions?>(),
                 Arg.Any<CancellationToken>())
             .Returns(ValueTask.FromResult(ParseJson("{\"messages\":[]}")));
-
-        var sut = new SimpleSessionStoreAdapter(_sessionStore, _logger);
-
-        await sut.SaveSessionAsync(agent, "session-1", frameworkSession, CancellationToken.None);
-
-        sessionData.RuntimeSettings.Should().ContainKey("frameworkSessionState:orchestrator");
-        sessionData.RuntimeSettings["frameworkSessionState:orchestrator"].Should().Be("{\"messages\":[]}");
-        await _sessionStore.Received(1).SaveAsync(sessionData, Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task GetSessionAsync_WhenStableNameKeyExists_RestoresPersistedSession()
-    {
-        var restoredSession = Substitute.For<AgentSession>();
-        var sessionData = new SessionData
-        {
-            Id = "session-1",
-            RuntimeSettings = new Dictionary<string, string>
-            {
-                ["frameworkSessionState:orchestrator"] = "{}"
-            }
-        };
-        _sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(sessionData);
-
-        var agent = Substitute.For<AIAgent>();
-        agent.Name.Returns("Orchestrator");
         agent.DeserializeSessionAsync(
                 Arg.Any<JsonElement>(),
-                Arg.Any<JsonSerializerOptions>(),
+                Arg.Any<JsonSerializerOptions?>(),
                 Arg.Any<CancellationToken>())
-            .Returns(ValueTask.FromResult(restoredSession));
-
-        var sut = new SimpleSessionStoreAdapter(_sessionStore, _logger);
-
-        var result = await sut.GetSessionAsync(agent, "session-1", CancellationToken.None);
-
-        result.Should().BeSameAs(restoredSession);
-        await agent.Received(1).DeserializeSessionAsync(
-            Arg.Any<JsonElement>(),
-            Arg.Any<JsonSerializerOptions>(),
-            Arg.Any<CancellationToken>());
-        sessionData.RuntimeSettings.Should().ContainKey("frameworkSessionRestoredAt:orchestrator");
-        await _sessionStore.Received(1).SaveAsync(sessionData, Arg.Any<CancellationToken>());
-        await agent.DidNotReceive().CreateSessionAsync(Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task GetSessionAsync_WhenOnlyLegacyAgentIdKeyExists_CreatesNewSession()
-    {
-        var createdSession = Substitute.For<AgentSession>();
-        _sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(
-            new SessionData
+            .Returns(call =>
             {
-                Id = "session-1",
-                RuntimeSettings = new Dictionary<string, string>
-                {
-                    ["frameworkSessionState:agent-legacy"] = "{}"
-                }
+                agent.DeserializeCalls++;
+                return ValueTask.FromResult(agent.DeserializedSession);
             });
-
-        var agent = Substitute.For<AIAgent>();
-        agent.Name.Returns("Orchestrator");
-        agent.CreateSessionAsync(Arg.Any<CancellationToken>()).Returns(ValueTask.FromResult(createdSession));
-
-        var sut = new SimpleSessionStoreAdapter(_sessionStore, _logger);
-
-        var result = await sut.GetSessionAsync(agent, "session-1", CancellationToken.None);
-
-        result.Should().BeSameAs(createdSession);
-        await agent.DidNotReceive().DeserializeSessionAsync(
-            Arg.Any<JsonElement>(),
-            Arg.Any<JsonSerializerOptions>(),
-            Arg.Any<CancellationToken>());
-        await agent.Received(1).CreateSessionAsync(Arg.Any<CancellationToken>());
+        return agent;
     }
 
     private static JsonElement ParseJson(string json)
     {
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
+    }
+
+    public abstract class TestAgent : AIAgent
+    {
+        public AgentSession DeserializedSession { get; } = Substitute.For<AgentSession>();
+        public int DeserializeCalls { get; set; }
     }
 }

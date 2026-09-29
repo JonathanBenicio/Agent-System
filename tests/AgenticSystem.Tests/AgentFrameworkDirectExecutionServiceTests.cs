@@ -1,3 +1,5 @@
+#pragma warning disable MAAI001 // These tests exercise the experimental MAF session-store contract used by the backend.
+
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.AgentFramework;
@@ -86,7 +88,7 @@ public class AgentFrameworkDirectExecutionServiceTests
             .Returns(new AIChatResponse(new ChatMessage(ChatRole.Assistant, "framework success")));
 
         var sessionStore = Substitute.For<ISessionStore>();
-        var sessionData = new SessionData { Id = "session-1" };
+        var sessionData = new SessionData { Id = "session-1", UserId = "u1", TenantId = "tenant-a" };
         sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(sessionData);
         sessionStore.SaveAsync(sessionData, Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         var sessionManager = Substitute.For<ISessionManager>();
@@ -99,7 +101,7 @@ public class AgentFrameworkDirectExecutionServiceTests
 
         var agent = CreateAgent("TestAgent");
 
-        var result = await sut.ExecuteDirectAsync(agent, "session-1", "hello", new UserContext { UserId = "u1" });
+        var result = await sut.ExecuteDirectAsync(agent, "session-1", "hello", new UserContext { UserId = "u1", TenantId = "tenant-a" });
 
         result.Success.Should().BeTrue();
         result.Content.Should().Contain("framework success");
@@ -121,7 +123,7 @@ public class AgentFrameworkDirectExecutionServiceTests
             .Returns(Task.FromException<AIChatResponse>(new InvalidOperationException("boom")));
 
         var sessionStore = Substitute.For<ISessionStore>();
-        sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(new SessionData { Id = "session-1" });
+        sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(new SessionData { Id = "session-1", UserId = "u1", TenantId = "tenant-a" });
         var sessionManager = Substitute.For<ISessionManager>();
         var runtimeCoordinator = Substitute.For<IAgentRuntimeCoordinator>();
         var sut = new AgentFrameworkDirectExecutionService(
@@ -134,7 +136,7 @@ public class AgentFrameworkDirectExecutionServiceTests
 
         var agent = CreateAgent("TestAgent");
 
-        var result = await sut.ExecuteDirectAsync(agent, "session-1", "hello", new UserContext { UserId = "u1" });
+        var result = await sut.ExecuteDirectAsync(agent, "session-1", "hello", new UserContext { UserId = "u1", TenantId = "tenant-a" });
 
         result.Success.Should().BeFalse();
         result.Content.Should().Contain("Framework error: boom");

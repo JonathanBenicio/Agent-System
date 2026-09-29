@@ -1,3 +1,5 @@
+#pragma warning disable MAAI001 // Required experimental MAF session-store integration; reviewed under issue #120.
+
 using System.Text;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -5,6 +7,8 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using FrameworkAgent = Microsoft.Agents.AI.AIAgent;
 using FrameworkAgentResponse = Microsoft.Agents.AI.AgentResponse;
+using FrameworkSessionStore = Microsoft.Agents.AI.AgentSessionStore;
+using FrameworkSessionStoreKey = Microsoft.Agents.AI.AgentSessionStoreKey;
 
 namespace AgenticSystem.Infrastructure.AgentFramework;
 
@@ -15,7 +19,7 @@ namespace AgenticSystem.Infrastructure.AgentFramework;
 public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
 {
     private readonly AgentFrameworkFactory _frameworkFactory;
-    private readonly Microsoft.Agents.AI.Hosting.AgentSessionStore _sessionStore;
+    private readonly FrameworkSessionStore _sessionStore;
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<AgentFrameworkDirectExecutionService> _logger;
     private readonly IAgentRuntimeCoordinator? _runtimeCoordinator;
@@ -24,7 +28,7 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
 
     public AgentFrameworkDirectExecutionService(
         AgentFrameworkFactory frameworkFactory,
-        Microsoft.Agents.AI.Hosting.AgentSessionStore sessionStore,
+        FrameworkSessionStore sessionStore,
         ISessionManager sessionManager,
         ILogger<AgentFrameworkDirectExecutionService> logger,
         IServiceProvider serviceProvider,
@@ -50,6 +54,8 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
         ArgumentNullException.ThrowIfNull(agent);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(context.TenantId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(context.UserId);
 
         agent.UpdateLastUsed();
 
@@ -58,7 +64,10 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
         try
         {
             frameworkAgent = await _frameworkFactory.CreateFromAgentAsync(agent, ct);
-            var session = await _sessionStore.GetSessionAsync(frameworkAgent, sessionId, ct);
+            var sessionKey = new FrameworkSessionStoreKey(sessionId).WithPartition(
+                "isolation",
+                $"{context.TenantId}:{context.UserId}");
+            var session = await _sessionStore.GetOrCreateSessionAsync(frameworkAgent, sessionKey, ct);
 
             string content = string.Empty;
             FrameworkAgentResponse? frameworkResponse = null;
@@ -170,7 +179,7 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
             };
 
             await SyncResponseAsync(sessionId, input, agent.Name, result);
-            await _sessionStore.SaveSessionAsync(frameworkAgent, sessionId, session, ct);
+            await _sessionStore.SaveSessionAsync(frameworkAgent, sessionKey, session, ct);
 
             return result;
         }

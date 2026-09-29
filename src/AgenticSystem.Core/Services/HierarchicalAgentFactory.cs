@@ -10,24 +10,28 @@ namespace AgenticSystem.Core.Services;
 public class HierarchicalAgentFactory : IAgentFactory
 {
     private readonly ConcurrentDictionary<string, IAgent> _agentPool = new();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, IAgent>> _tenantAgentPools = new(StringComparer.OrdinalIgnoreCase);
     private readonly ISkillManager _skillManager;
     private readonly IAgentMemoryService? _agentMemoryService;
     private readonly IDynamicAgentRepository _dynamicAgentRepository;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<HierarchicalAgentFactory> _logger;
+    private readonly ITenantContextAccessor? _tenantContextAccessor;
 
     public HierarchicalAgentFactory(
         ISkillManager skillManager,
         IDynamicAgentRepository dynamicAgentRepository,
         ILoggerFactory loggerFactory,
         ILogger<HierarchicalAgentFactory> logger,
-        IAgentMemoryService? agentMemoryService = null)
+        IAgentMemoryService? agentMemoryService = null,
+        ITenantContextAccessor? tenantContextAccessor = null)
     {
         _skillManager = skillManager;
         _dynamicAgentRepository = dynamicAgentRepository;
         _agentMemoryService = agentMemoryService;
         _loggerFactory = loggerFactory;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
         InitializeDefaultAgents();
     }
 
@@ -46,27 +50,19 @@ public class HierarchicalAgentFactory : IAgentFactory
     private async Task<IAgent> ResolveAgentByIdentityAsync(string? requestedAgentName, string? fallbackDomain)
     {
         var agentName = ResolveAgentPoolKey(requestedAgentName, fallbackDomain);
+        var tenantPool = GetTenantAgentPool();
 
-        if (_agentPool.TryGetValue(agentName, out var existingAgent) && existingAgent.IsActive)
-        {
-            _logger.LogDebug("♻️ Reusing agent: {Agent}", agentName);
-            return existingAgent;
-        }
-
-        // Tentar carregar do banco se não estiver no pool
         var dynamicSpec = await _dynamicAgentRepository.GetByNameAsync(agentName);
         if (dynamicSpec != null)
         {
-            var dynamicAgent = new CustomAgent(
-                _skillManager,
-                _loggerFactory.CreateLogger<CustomAgent>(),
-                dynamicSpec,
-                _agentMemoryService);
-            
-            _agentPool[agentName] = dynamicAgent;
-            _logger.LogInformation("💾 Loaded dynamic agent from DB: {Agent}", agentName);
+            var dynamicAgent = CreateCustomAgent(dynamicSpec);
+            tenantPool[dynamicSpec.Name] = dynamicAgent;
             return dynamicAgent;
         }
+
+        tenantPool.TryRemove(agentName, out _);
+        if (_agentPool.TryGetValue(agentName, out var existingAgent) && existingAgent.IsActive)
+            return existingAgent;
 
         var agent = CreateAgentForDomain(agentName);
         _agentPool[agentName] = agent;
@@ -76,16 +72,12 @@ public class HierarchicalAgentFactory : IAgentFactory
 
     public async Task<IAgent> CreateCustomAgentAsync(AgentSpecification specification)
     {
-        var agent = new CustomAgent(
-            _skillManager,
-            _loggerFactory.CreateLogger<CustomAgent>(),
-            specification,
-            _agentMemoryService);
+        var agent = CreateCustomAgent(specification);
 
         // Persist to DB
         await _dynamicAgentRepository.SaveAsync(specification);
 
-        _agentPool[specification.Name] = agent;
+        GetTenantAgentPool()[specification.Name] = agent;
         _logger.LogInformation("🔧 Custom agent created and persisted: {Agent}", specification.Name);
         return agent;
     }
@@ -103,7 +95,7 @@ public class HierarchicalAgentFactory : IAgentFactory
     {
         await EnsureDynamicAgentsLoadedAsync();
 
-        var agents = _agentPool.Values
+        var agents = CurrentAgentPoolValues()
             .Where(a => a.Tier == tier && a.IsActive)
             .Select(a => new AgentInfo
             {
@@ -125,7 +117,7 @@ public class HierarchicalAgentFactory : IAgentFactory
     {
         await EnsureDynamicAgentsLoadedAsync();
 
-        var agents = _agentPool.Values
+        var agents = CurrentAgentPoolValues()
             .Where(a => a.IsActive)
             .Select(a => new AgentInfo
             {
@@ -146,20 +138,15 @@ public class HierarchicalAgentFactory : IAgentFactory
     private async Task EnsureDynamicAgentsLoadedAsync()
     {
         var dynamicSpecs = await _dynamicAgentRepository.GetAllAsync();
+        var tenantPool = GetTenantAgentPool();
+        var activeNames = new HashSet<string>(dynamicSpecs.Select(spec => spec.Name), StringComparer.OrdinalIgnoreCase);
         foreach (var spec in dynamicSpecs)
         {
-            if (!_agentPool.ContainsKey(spec.Name))
-            {
-                var dynamicAgent = new CustomAgent(
-                    _skillManager,
-                    _loggerFactory.CreateLogger<CustomAgent>(),
-                    spec,
-                    _agentMemoryService);
-                
-                _agentPool[spec.Name] = dynamicAgent;
-                _logger.LogDebug("💾 Pre-loaded dynamic agent from DB: {Agent}", spec.Name);
-            }
+            tenantPool[spec.Name] = CreateCustomAgent(spec);
         }
+
+        foreach (var cachedName in tenantPool.Keys)
+            if (!activeNames.Contains(cachedName)) tenantPool.TryRemove(cachedName, out _);
     }
 
 
@@ -168,7 +155,7 @@ public class HierarchicalAgentFactory : IAgentFactory
         if (string.IsNullOrWhiteSpace(agentName))
             return false;
 
-        var removed = _agentPool.TryRemove(agentName, out _);
+        var removed = GetTenantAgentPool().TryRemove(agentName, out _);
         var dbRemoved = await _dynamicAgentRepository.DeactivateAsync(agentName);
 
         if (removed || dbRemoved)
@@ -183,12 +170,13 @@ public class HierarchicalAgentFactory : IAgentFactory
         if (!string.IsNullOrEmpty(requestedAgentName))
         {
             // If it exists in the pool (dynamic or built-in), use it directly
-            if (_agentPool.ContainsKey(requestedAgentName))
+            if (_agentPool.ContainsKey(requestedAgentName)
+                || GetTenantAgentPool().ContainsKey(requestedAgentName))
                 return requestedAgentName;
         }
 
         // Check pool for domain-matching dynamic agents
-        var domainMatch = _agentPool.Values
+        var domainMatch = GetTenantAgentPool().Values
             .FirstOrDefault(a => a.IsActive &&
                 a.Domain.Equals(fallbackDomain, StringComparison.OrdinalIgnoreCase) &&
                 a is CustomAgent);
@@ -215,6 +203,35 @@ public class HierarchicalAgentFactory : IAgentFactory
             _ => "GeneralAgent"
         };
     }
+
+    private ConcurrentDictionary<string, IAgent> GetTenantAgentPool()
+    {
+        var tenantId = "__unscoped__";
+        try
+        {
+            if (_tenantContextAccessor is not null)
+                tenantId = _tenantContextAccessor.CurrentTenantId;
+        }
+        catch (InvalidOperationException)
+        {
+            // Unit and in-memory usages without tenant middleware remain isolated in a dedicated partition.
+        }
+
+        return _tenantAgentPools.GetOrAdd(tenantId, static _ => new ConcurrentDictionary<string, IAgent>(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private IEnumerable<IAgent> CurrentAgentPoolValues()
+    {
+        var tenantAgents = GetTenantAgentPool().Values.ToList();
+        var tenantAgentNames = tenantAgents.Select(agent => agent.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return tenantAgents.Concat(_agentPool.Values.Where(agent => !tenantAgentNames.Contains(agent.Name)));
+    }
+
+    private CustomAgent CreateCustomAgent(AgentSpecification specification) => new(
+        _skillManager,
+        _loggerFactory.CreateLogger<CustomAgent>(),
+        specification,
+        _agentMemoryService);
 
     private IAgent CreateAgentForDomain(string name)
     {

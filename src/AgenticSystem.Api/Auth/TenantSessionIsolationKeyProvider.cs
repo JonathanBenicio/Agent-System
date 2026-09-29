@@ -4,7 +4,7 @@ using Microsoft.Agents.AI.Hosting;
 namespace AgenticSystem.Api.Auth;
 
 /// <summary>Scopes hosted framework sessions to the authenticated principal inside a tenant.</summary>
-public sealed class TenantSessionIsolationKeyProvider : SessionIsolationKeyProvider
+public sealed class TenantSessionIsolationKeyProvider : AgentIsolationKeyProvider
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ITenantContextAccessor _tenantContextAccessor;
@@ -17,7 +17,7 @@ public sealed class TenantSessionIsolationKeyProvider : SessionIsolationKeyProvi
         _tenantContextAccessor = tenantContextAccessor;
     }
 
-    public override ValueTask<string?> GetSessionIsolationKeyAsync(CancellationToken cancellationToken)
+    public override ValueTask<string?> GetIsolationKeyAsync(CancellationToken cancellationToken = default)
     {
         var principal = _httpContextAccessor.HttpContext?.User;
         var identity = principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value

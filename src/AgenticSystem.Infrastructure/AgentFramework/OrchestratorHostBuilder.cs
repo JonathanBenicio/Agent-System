@@ -1,5 +1,4 @@
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
@@ -19,7 +18,6 @@ public class OrchestratorHostBuilder
     private readonly ILoggerFactory _loggerFactory;
     private readonly IServiceProvider _serviceProvider;
     private readonly OrchestratorMetadata _metadata;
-    private readonly IAgentFactory _agentFactory;
     private readonly OrchestratorInstructionService _instructionService;
     private readonly OrchestratorToolBindingService _toolBindingService;
     private readonly OrchestratorAuxiliaryToolService _auxiliaryToolService;
@@ -35,7 +33,6 @@ public class OrchestratorHostBuilder
         ILoggerFactory loggerFactory,
         IServiceProvider serviceProvider,
         OrchestratorMetadata metadata,
-        IAgentFactory agentFactory,
         OrchestratorInstructionService instructionService,
         OrchestratorToolBindingService toolBindingService,
         OrchestratorAuxiliaryToolService auxiliaryToolService,
@@ -50,7 +47,6 @@ public class OrchestratorHostBuilder
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
-        _agentFactory = agentFactory ?? throw new ArgumentNullException(nameof(agentFactory));
         _instructionService = instructionService ?? throw new ArgumentNullException(nameof(instructionService));
         _toolBindingService = toolBindingService ?? throw new ArgumentNullException(nameof(toolBindingService));
         _auxiliaryToolService = auxiliaryToolService ?? throw new ArgumentNullException(nameof(auxiliaryToolService));
@@ -74,6 +70,12 @@ public class OrchestratorHostBuilder
 
         var auxiliaryTools = _auxiliaryToolService.GetTools();
         var toolBindings = await _toolBindingService.CreateSpecialistBindingsAsync(activeAgents, sessionId, ct);
+        var boundAgentNames = toolBindings
+            .Select(binding => binding.Agent.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var availableSpecialists = activeAgents
+            .Where(agent => agent.IsActive && boundAgentNames.Contains(agent.Name))
+            .ToList();
         var allTools = new List<AITool>(toolBindings.Select(binding => binding.Tool));
         allTools.AddRange(auxiliaryTools);
 
@@ -84,7 +86,7 @@ public class OrchestratorHostBuilder
             state.SpecialistBindings = toolBindings;
         }
 
-        var instructions = _instructionService.GetInstructions(activeAgents, auxiliaryTools);
+        var instructions = _instructionService.GetInstructions(availableSpecialists, auxiliaryTools);
 
         // Enriquecer as instruções do orquestrador principal com as C# Skills contextuais!
         instructions = await _skillManager.BuildEnrichedPromptAsync(_metadata.Name, "orchestrator", instructions);
@@ -96,56 +98,6 @@ public class OrchestratorHostBuilder
 
         return CreateHostedOrchestratorAgent(instructions, allTools);
     }
-
-    /// <summary>
-    /// [PHASE 1] Constrói um workflow de Handoff nativo para orquestração dinâmica.
-    /// Permite que agentes especialistas transfiram o controle entre si autonomamente.
-    /// </summary>
-    public async Task<Workflow> BuildHandoffWorkflowAsync(
-        AIAgent orchestratorAgent,
-        IReadOnlyList<AgentInfo> activeAgents,
-        CancellationToken ct = default)
-    {
-        ArgumentNullException.ThrowIfNull(orchestratorAgent);
-        ArgumentNullException.ThrowIfNull(activeAgents);
-
-        // 2. Resolver as instâncias reais dos agentes especialistas
-        var specialistAgents = new List<AIAgent>();
-        foreach (var info in activeAgents)
-        {
-            var agent = await _agentFactory.ResolveAgentAsync(info);
-            if (agent is AIAgent frameworkAgent)
-            {
-                specialistAgents.Add(frameworkAgent);
-            }
-        }
-
-        // 3. Configurar o grafo de handoffs usando WorkflowBuilder nativo do MAF 1.6.1
-        var builder = new WorkflowBuilder(orchestratorAgent);
-
-        foreach (var specialist in specialistAgents)
-        {
-            builder.BindExecutor(specialist);
-            
-            // Orquestrador <-> Especialista
-            builder.AddEdge(orchestratorAgent, specialist, idempotent: true);
-            builder.AddEdge(specialist, orchestratorAgent, idempotent: true);
-
-            // Especialista <-> Outros Especialistas (Mesh Topology)
-            foreach (var otherSpecialist in specialistAgents.Where(a => a != specialist))
-            {
-                builder.AddEdge(specialist, otherSpecialist, idempotent: true);
-            }
-        }
-
-        _logger.LogInformation(
-            "Handoff workflow built with mesh topology: 1 Orchestrator <-> {SpecialistCount} Specialists",
-            specialistAgents.Count);
-
-        return builder.Build();
-    }
-
-
 
     private AIAgent CreateHostedOrchestratorAgent(
         string instructions,

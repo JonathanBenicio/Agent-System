@@ -1,25 +1,24 @@
+#pragma warning disable MAAI001 // Required experimental MAF session-store integration; reviewed under issue #120.
+
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using Microsoft.Agents.AI;
-using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace AgenticSystem.Infrastructure.AgentFramework;
 
-/// <summary>
-/// [PHASE 2] Adapter simplificado do store de sessão.
-/// Persiste estados do framework na sessão usando apenas agent name como chave (sem fallbacks legados).
-/// </summary>
+/// <summary>Persists MAF session snapshots inside the owning application session record.</summary>
 public sealed class SimpleSessionStoreAdapter : AgentSessionStore
 {
     private readonly ISessionStore _sessionStore;
     private readonly ILogger<SimpleSessionStoreAdapter> _logger;
     private const string FrameworkStateKey = "frameworkSessionState";
+    private const string IsolationPartition = "isolation";
 
-    public SimpleSessionStoreAdapter(
-        ISessionStore sessionStore,
-        ILogger<SimpleSessionStoreAdapter> logger)
+    public SimpleSessionStoreAdapter(ISessionStore sessionStore, ILogger<SimpleSessionStoreAdapter> logger)
     {
         _sessionStore = sessionStore ?? throw new ArgumentNullException(nameof(sessionStore));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -27,98 +26,142 @@ public sealed class SimpleSessionStoreAdapter : AgentSessionStore
 
     public override async ValueTask SaveSessionAsync(
         AIAgent agent,
-        string conversationId,
+        AgentSessionStoreKey key,
         AgentSession session,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(agent);
-        ArgumentException.ThrowIfNullOrWhiteSpace(conversationId);
+        ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(session);
 
+        var sessionData = await GetOwnedSessionDataAsync(key, cancellationToken)
+            ?? throw new InvalidOperationException($"Conversation '{key.SessionId}' does not exist in the session store.");
         var serialized = await agent.SerializeSessionAsync(session, cancellationToken: cancellationToken);
-        var stateJson = serialized.GetRawText();
-        var runtimeKey = BuildRuntimeKey(agent.Name);
+        var runtimeKey = BuildRuntimeKey(agent.Name, key);
+        sessionData.RuntimeSettings[runtimeKey] = serialized.GetRawText();
 
-        var persistenceSessionId = GetPersistenceSessionId(conversationId);
-        var sessionData = await _sessionStore.GetAsync(persistenceSessionId, cancellationToken)
-            ?? throw new InvalidOperationException($"Conversation '{persistenceSessionId}' does not exist in the session store.");
-        sessionData.RuntimeSettings[runtimeKey] = stateJson;
+        // The old hosting decorator prefixed a string ID and the adapter stripped it. Move a verified
+        // legacy snapshot to the partition-aware key on the first successful write.
+        if (CanReadLegacyState(key))
+            sessionData.RuntimeSettings.Remove(BuildLegacyRuntimeKey(agent.Name));
+
         await _sessionStore.SaveAsync(sessionData, cancellationToken);
-
         _logger.LogDebug(
-            "Framework session persisted: ConversationId={ConversationId}, Agent={AgentName}, Key={RuntimeKey}",
-            persistenceSessionId,
+            "Framework session persisted: SessionId={SessionId}, Agent={AgentName}, Key={RuntimeKey}",
+            key.SessionId,
             agent.Name,
             runtimeKey);
     }
 
-    public override async ValueTask<AgentSession> GetSessionAsync(
+    public override async ValueTask<AgentSession?> GetSessionAsync(
         AIAgent agent,
-        string conversationId,
-        CancellationToken cancellationToken)
+        AgentSessionStoreKey key,
+        CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(agent);
-        ArgumentException.ThrowIfNullOrWhiteSpace(conversationId);
+        ArgumentNullException.ThrowIfNull(key);
 
-        var runtimeKey = BuildRuntimeKey(agent.Name);
-        var persistenceSessionId = GetPersistenceSessionId(conversationId);
-        var sessionData = await _sessionStore.GetAsync(persistenceSessionId, cancellationToken);
-        var persistedState = sessionData?.RuntimeSettings.GetValueOrDefault(runtimeKey);
+        var sessionData = await GetOwnedSessionDataAsync(key, cancellationToken);
+        if (sessionData is null)
+            return null;
 
-        if (!string.IsNullOrWhiteSpace(persistedState))
+        var runtimeKey = BuildRuntimeKey(agent.Name, key);
+        var hasScopedState = sessionData.RuntimeSettings.TryGetValue(runtimeKey, out var persistedState)
+            && !string.IsNullOrWhiteSpace(persistedState);
+        var migrateLegacyState = false;
+
+        if (!hasScopedState && CanReadLegacyState(key)
+            && sessionData.RuntimeSettings.TryGetValue(BuildLegacyRuntimeKey(agent.Name), out var legacyState)
+            && !string.IsNullOrWhiteSpace(legacyState))
         {
-            try
-            {
-                using var doc = JsonDocument.Parse(persistedState);
-                var restored = await agent.DeserializeSessionAsync(doc.RootElement, cancellationToken: cancellationToken);
-
-                if (sessionData is not null)
-                {
-                    var restoredAtKey = runtimeKey.Replace(FrameworkStateKey, "frameworkSessionRestoredAt", StringComparison.Ordinal);
-                    sessionData.RuntimeSettings[restoredAtKey] = DateTime.UtcNow.ToString("O");
-                    await _sessionStore.SaveAsync(sessionData, cancellationToken);
-                }
-
-                _logger.LogInformation(
-                    "Framework session restored from persisted MAF state: ConversationId={ConversationId}, Agent={AgentName}",
-                    conversationId,
-                    agent.Name);
-                
-                return restored;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to restore framework session, creating new one. ConversationId={ConversationId}", persistenceSessionId);
-            }
+            persistedState = legacyState;
+            migrateLegacyState = true;
         }
 
-        var newSession = await agent.CreateSessionAsync(cancellationToken);
-        
-        _logger.LogDebug(
-            "New framework session created: ConversationId={ConversationId}, Agent={AgentName}",
-            conversationId,
-            agent.Name);
-        
-        return newSession;
+        if (string.IsNullOrWhiteSpace(persistedState))
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(persistedState);
+            var restored = await agent.DeserializeSessionAsync(
+                document.RootElement,
+                cancellationToken: cancellationToken);
+
+            if (migrateLegacyState)
+            {
+                sessionData.RuntimeSettings[runtimeKey] = persistedState;
+                sessionData.RuntimeSettings.Remove(BuildLegacyRuntimeKey(agent.Name));
+            }
+
+            var restoredAtKey = runtimeKey.Replace(
+                FrameworkStateKey,
+                "frameworkSessionRestoredAt",
+                StringComparison.Ordinal);
+            sessionData.RuntimeSettings[restoredAtKey] = DateTime.UtcNow.ToString("O");
+            await _sessionStore.SaveAsync(sessionData, cancellationToken);
+
+            _logger.LogInformation(
+                "Framework session restored from persisted MAF state: SessionId={SessionId}, Agent={AgentName}, LegacyMigrated={LegacyMigrated}",
+                key.SessionId,
+                agent.Name,
+                migrateLegacyState);
+            return restored;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to restore framework session. SessionId={SessionId}", key.SessionId);
+            return null;
+        }
     }
 
-    private static string BuildRuntimeKey(string? agentName)
+    private async Task<SessionData?> GetOwnedSessionDataAsync(AgentSessionStoreKey key, CancellationToken cancellationToken)
+    {
+        var sessionData = await _sessionStore.GetAsync(key.SessionId, cancellationToken);
+        if (sessionData is null)
+            return null;
+
+        if (key.Partitions is not null
+            && key.Partitions.TryGetValue(IsolationPartition, out var isolationKey)
+            && !MatchesOwner(sessionData, isolationKey))
+        {
+            throw new InvalidOperationException("The MAF session is not owned by the authenticated tenant and user.");
+        }
+
+        return sessionData;
+    }
+
+    private static bool MatchesOwner(SessionData sessionData, string isolationKey)
+    {
+        var expectedKey = $"{sessionData.TenantId}:{sessionData.UserId}";
+        return !string.IsNullOrWhiteSpace(sessionData.TenantId)
+            && !string.IsNullOrWhiteSpace(sessionData.UserId)
+            && string.Equals(expectedKey, isolationKey, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool CanReadLegacyState(AgentSessionStoreKey key) =>
+        key.Partitions is { Count: 1 }
+        && key.Partitions.ContainsKey(IsolationPartition);
+
+    private static string BuildRuntimeKey(string? agentName, AgentSessionStoreKey key)
+    {
+        var baseKey = BuildLegacyRuntimeKey(agentName);
+        if (key.Partitions is not { Count: > 0 })
+            return baseKey;
+
+        var canonicalPartitions = key.Partitions
+            .OrderBy(partition => partition.Key, StringComparer.Ordinal)
+            .Select(partition => new[] { partition.Key, partition.Value });
+        var canonicalJson = JsonSerializer.Serialize(canonicalPartitions);
+        var digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(canonicalJson))).ToLowerInvariant();
+        return $"{baseKey}:scope:{digest}";
+    }
+
+    private static string BuildLegacyRuntimeKey(string? agentName)
     {
         if (string.IsNullOrWhiteSpace(agentName))
             return $"{FrameworkStateKey}:default";
 
-        var normalized = agentName.Trim().ToLowerInvariant();
-        return $"{FrameworkStateKey}:{normalized}";
-    }
-
-    // The hosting isolation decorator prefixes the framework conversation id with
-    // "<tenant>:<principal>::". Application session records keep the original id;
-    // tenant and user ownership are enforced by the session API and store.
-    private static string GetPersistenceSessionId(string conversationId)
-    {
-        var separator = conversationId.LastIndexOf("::", StringComparison.Ordinal);
-        return separator >= 0 && separator + 2 < conversationId.Length
-            ? conversationId[(separator + 2)..]
-            : conversationId;
+        return $"{FrameworkStateKey}:{agentName.Trim().ToLowerInvariant()}";
     }
 }
