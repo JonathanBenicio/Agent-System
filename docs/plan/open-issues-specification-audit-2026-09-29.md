@@ -1,6 +1,6 @@
 # Especificações das issues abertas — snapshot 2026-09-29
 
-Status: auditoria e normalização em execução · Branch documental: `docs/open-issue-specifications`.
+Status: fichas das 46 issues elaboradas e vinculadas; checagem documental aprovada; PR documental será aberto como draft · Branch: `docs/open-issue-specifications` · Commit inicial: `ae0b6fb`.
 
 ## Objetivo, escopo e regra de atualização
 
@@ -15,10 +15,10 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 | Etapa | Entrega | Verificação | Estado |
 |---|---|---|---|
 | 1 | Conferir as 46 issues, 5 PRs, estado local, código e documentação canônica | API GitHub; árvore de trabalho; referências no código/docs | Concluída para o snapshot |
-| 2 | Dar a cada issue uma ficha com problema, escopo, aceite, dependências, fonte canônica e disposição recomendada | Nenhuma issue do snapshot sem ficha ou justificativa explícita | Em execução |
-| 3 | Corrigir especificações desatualizadas e criar apenas artefatos realmente ausentes | ADR/story/plano existentes reutilizados; decisões incertas marcadas como pendentes | Pendente |
-| 4 | Adicionar link para a ficha em cada uma das 46 issues sem fechar issues | GET de cada issue confirma link e body preservado | Pendente |
-| 5 | Sincronizar índices, validar links e publicar commits/PR documental separado | Checker sem links quebrados; diff/staging auditados | Pendente |
+| 2 | Dar a cada issue uma ficha com problema, escopo, aceite, dependências, fonte canônica e disposição recomendada | 46 âncoras verificadas no registro; gaps e duplicatas marcados | Concluída |
+| 3 | Corrigir especificações desatualizadas e criar apenas artefatos realmente ausentes | ADR/story/plano existentes reutilizados; decisões incertas marcadas como pendentes | Concluída como especificação; sem implementar decisões pendentes |
+| 4 | Adicionar link para a ficha em cada uma das 46 issues sem fechar issues | Leitura posterior da API confirmou 46/46 links e bodies preservados | Concluída |
+| 5 | Sincronizar índices, validar links e publicar commits/PR documental separado | Checker: 160 arquivos, 799 links, 0 quebrados; commit `ae0b6fb`; draft PR pendente | Em execução |
 
 ## Resumo do estado atual
 
