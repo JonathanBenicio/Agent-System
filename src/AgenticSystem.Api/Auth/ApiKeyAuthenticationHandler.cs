@@ -34,6 +34,17 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
             providedKey = apiKeyValues.FirstOrDefault()?.Trim();
         }
 
+        if (string.IsNullOrWhiteSpace(providedKey) &&
+            Request.Headers.TryGetValue("Authorization", out var authorizationValues))
+        {
+            var authorization = authorizationValues.FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(authorization) &&
+                authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            {
+                providedKey = authorization["Bearer ".Length..].Trim();
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(providedKey) && Request.Cookies.TryGetValue("agentic_api_key", out var cookieKey))
         {
             providedKey = cookieKey?.Trim();
