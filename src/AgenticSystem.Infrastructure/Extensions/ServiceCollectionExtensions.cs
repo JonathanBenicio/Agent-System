@@ -611,6 +611,7 @@ public static class ServiceCollectionExtensions
     {
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<IPlatformConfigStore, PostgresPlatformConfigStore>(services);
+        ReplaceSingleton<IChatSettingsStore, PostgresChatSettingsStore>(services);
         ReplaceSingleton<IDataConnectorStore, PostgresDataConnectorStore>(services);
         ReplaceSingleton<IAgentMarketplace, PostgresAgentMarketplace>(services);
         ReplaceSingleton<IMemoryLifecycleStore, PostgresMemoryLifecycleStore>(services);

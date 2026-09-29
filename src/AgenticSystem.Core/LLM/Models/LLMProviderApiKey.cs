@@ -5,7 +5,6 @@ public class LLMProviderApiKey
     public string Id { get; set; } = string.Empty;
     public string ProviderName { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public string DecryptedValue { get; set; } = string.Empty;
     public string LastFour { get; set; } = string.Empty;
     public bool IsEnabled { get; set; }
     public bool IsDefault { get; set; }

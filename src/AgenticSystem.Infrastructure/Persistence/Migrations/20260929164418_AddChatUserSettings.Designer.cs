@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using AgenticSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -14,9 +15,11 @@ using Pgvector;
 namespace AgenticSystem.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AgenticDbContext))]
-    partial class AgenticDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260929164418_AddChatUserSettings")]
+    partial class AddChatUserSettings
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1265,12 +1268,6 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                     b.Property<string>("FewShotExamples")
                         .HasColumnType("text")
                         .HasColumnName("few_shot_examples");
-
-                    b.Property<bool>("IsEnabled")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("is_enabled");
 
                     b.Property<bool>("IsSystem")
                         .ValueGeneratedOnAdd()

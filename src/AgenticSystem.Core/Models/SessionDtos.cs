@@ -8,7 +8,8 @@ public record SessionListItemDto(
     string Title,
     DateTime LastActivity,
     int MessageCount,
-    string? Summary);
+    string? Summary,
+    bool IsEnded = false);
 
 public record SessionDetailDto(
     string Id,
@@ -17,7 +18,9 @@ public record SessionDetailDto(
     DateTime? EndedAt,
     List<ChatMessageDto> Messages,
     SessionSummaryDto? Summary,
-    SessionInsightsDto? Insights);
+    SessionInsightsDto? Insights,
+    string? Provider = null,
+    string? Model = null);
 
 public record ChatMessageDto(
     string Id,
@@ -58,9 +61,11 @@ public static class SessionDtoMapper
         return new SessionListItemDto(
             session.Id,
             title,
-            session.EndedAt ?? session.StartedAt,
+            new[] { session.StartedAt, session.EndedAt ?? session.StartedAt,
+                session.Events.Count > 0 ? session.Events.Max(item => item.Timestamp) : session.StartedAt }.Max(),
             session.Events.Count,
-            summary);
+            summary,
+            session.EndedAt is not null);
     }
 
     public static SessionDetailDto ToDetail(SessionData session)
@@ -125,7 +130,9 @@ public static class SessionDtoMapper
             session.EndedAt,
             messages,
             summaryDto,
-            insightsDto);
+            insightsDto,
+            session.RuntimeSettings.GetValueOrDefault("llm.session.provider"),
+            session.RuntimeSettings.GetValueOrDefault("llm.session.model"));
     }
 
     public static SessionSummaryDto ToSummary(SessionSummary summary)

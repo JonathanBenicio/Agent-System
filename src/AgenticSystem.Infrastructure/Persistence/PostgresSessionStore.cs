@@ -26,7 +26,8 @@ public class PostgresSessionStore : ISessionStore
     public async Task SaveAsync(SessionData session, CancellationToken ct = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        var entity = await db.SessionRecords.FirstOrDefaultAsync(record => record.Id == session.Id, ct);
+        var entity = await db.SessionRecords.IgnoreQueryFilters()
+            .FirstOrDefaultAsync(record => record.Id == session.Id, ct);
         var serialized = JsonSerializer.Serialize(session, JsonOptions);
 
         if (entity is null)
@@ -44,8 +45,8 @@ public class PostgresSessionStore : ISessionStore
         }
         else
         {
-            entity.UserId = session.UserId;
-            entity.TenantId = session.TenantId;
+            if (entity.UserId != session.UserId || entity.TenantId != session.TenantId)
+                throw new InvalidOperationException("Session owner and tenant cannot be changed.");
             entity.DataJson = serialized;
             entity.StartedAt = session.StartedAt;
             entity.EndedAt = session.EndedAt;

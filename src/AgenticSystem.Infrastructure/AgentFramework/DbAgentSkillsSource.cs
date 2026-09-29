@@ -47,7 +47,7 @@ public class DbAgentSkillsSource
             // 2. Se a lista de skills do Tenant estiver vazia, dispara a rotina automática de Auto-Seeding
             entities = await SeedDefaultSkillsAsync(db, entities, ct);
 
-            return entities.Select(e => new DbBasedSkill(
+            return entities.Where(e => e.IsEnabled).Select(e => new DbBasedSkill(
                 e.Id,
                 e.Name,
                 e.Domain,

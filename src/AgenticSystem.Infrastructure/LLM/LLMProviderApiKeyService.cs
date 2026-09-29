@@ -76,8 +76,7 @@ public class LLMProviderApiKeyService : ILLMProviderApiKeyService
 
         _logger.LogInformation("Registered new API key '{KeyName}' for provider '{Provider}'.", request.Name, providerName);
 
-        // Decrypt so the returned model has the actual value (only locally for immediate use, UI shouldn't expose it usually)
-        return MapToDomainWithDecrypted(entity, request.ApiKey);
+        return MapToDomain(entity);
     }
 
     public async Task<LLMProviderApiKey> UpdateKeyAsync(string providerName, string id, UpdateApiKeyRequest request, CancellationToken ct = default)
@@ -134,8 +133,7 @@ public class LLMProviderApiKeyService : ILLMProviderApiKeyService
             _logger.LogInformation("Updated API key '{KeyId}' for provider '{Provider}'.", id, providerName);
         }
 
-        string decrypted = string.IsNullOrWhiteSpace(request.ApiKey) ? _encryptionService.Decrypt(entity.EncryptedValue) : request.ApiKey;
-        return MapToDomainWithDecrypted(entity, decrypted);
+        return MapToDomain(entity);
     }
 
     public async Task DeleteKeyAsync(string providerName, string id, CancellationToken ct = default)
@@ -157,29 +155,10 @@ public class LLMProviderApiKeyService : ILLMProviderApiKeyService
         await _dbContext.SaveChangesAsync(ct);
     }
 
-    public async Task<bool> TestKeyAsync(string providerName, string id, CancellationToken ct = default)
-    {
-        var entity = await GetEntityOrThrowAsync(providerName, id, ct);
-        var decryptedKey = _encryptionService.Decrypt(entity.EncryptedValue);
-        
-        // This should probably call the provider's IChatClient to test.
-        // For now, we will assume ILLMAdministrationService or similar will actually do the test.
-        // Wait, the DiscoverModels logic might be used to test. We can return true if it exists, but the Controller will handle it.
-        return true; 
-    }
-
     public async Task<string> GetDecryptedKeyAsync(string providerName, string id, CancellationToken ct = default)
     {
         var entity = await GetEntityOrThrowAsync(providerName, id, ct);
         return _encryptionService.Decrypt(entity.EncryptedValue);
-    }
-
-    public async Task<IReadOnlyList<string>> DiscoverModelsForKeyAsync(string providerName, string id, CancellationToken ct = default)
-    {
-        // This is typically handled by LLMManager where it has the LLM factory logic.
-        // So the controller will probably call LLMManager to discover models with this specific API key.
-        // We'll leave it simple here, or throw NotImplemented to force the Controller to use LLMManager.
-        throw new NotImplementedException("DiscoverModelsForKeyAsync should be orchestrated in the controller via LLMManager.");
     }
 
     private async Task<LLMProviderApiKeyEntity> GetEntityOrThrowAsync(string providerName, string id, CancellationToken ct)
@@ -222,10 +201,4 @@ public class LLMProviderApiKeyService : ILLMProviderApiKeyService
         };
     }
 
-    private LLMProviderApiKey MapToDomainWithDecrypted(LLMProviderApiKeyEntity entity, string decryptedValue)
-    {
-        var model = MapToDomain(entity);
-        model.DecryptedValue = decryptedValue;
-        return model;
-    }
 }

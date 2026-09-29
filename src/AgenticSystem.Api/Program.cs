@@ -27,6 +27,7 @@ builder.Host.UseDefaultServiceProvider((context, options) =>
 
 builder.Services.AddAgenticSystemCore();
 builder.Services.AddAgenticSystemInfrastructure(builder.Configuration);
+builder.Services.AddScoped<AgenticSystem.Api.Services.ChatConfigurationService>();
 builder.Services.AddHttpContextAccessor();
 // AG-UI hosting resolves this provider while MapAGUIServer builds routes from the root provider.
 // The implementation is safe as a singleton because it reads request/tenant data from ambient accessors.

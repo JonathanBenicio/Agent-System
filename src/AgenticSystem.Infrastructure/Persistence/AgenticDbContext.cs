@@ -19,6 +19,7 @@ public class AgenticDbContext : DbContext
     }
 
     public DbSet<SessionRecordEntity> SessionRecords => Set<SessionRecordEntity>();
+    public DbSet<ChatSettingsEntity> ChatSettings => Set<ChatSettingsEntity>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<VectorDocumentEntity> VectorDocuments => Set<VectorDocumentEntity>();
     public DbSet<CostEntryEntity> CostEntries => Set<CostEntryEntity>();

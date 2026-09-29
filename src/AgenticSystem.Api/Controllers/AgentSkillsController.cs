@@ -43,15 +43,18 @@ public class AgentSkillsController : ControllerBase
     [HttpGet("all")]
     public async Task<IActionResult> GetAllSkills()
     {
-        var skills = await _skillsSource.LoadSkillsAsync();
-        
+        await _skillsSource.LoadSkillsAsync();
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var skills = await db.AgentSkills.AsNoTracking().OrderBy(item => item.Name).ToListAsync();
         var summary = skills.Select(s => new
         {
             s.Id,
             s.Name,
             s.Domain,
-            type = s.Type.ToString(),
-            isSystem = s is DbBasedSkill dbSkill && dbSkill.IsSystem
+            type = s.Type,
+            isSystem = s.IsSystem,
+            isEnabled = s.IsEnabled,
+            canManage = User.IsInRole("Owner") || User.IsInRole("Admin")
         });
 
         return Ok(summary);
@@ -78,6 +81,8 @@ public class AgentSkillsController : ControllerBase
             entity.Domain,
             type = entity.Type,
             isSystem = entity.IsSystem,
+            isEnabled = entity.IsEnabled,
+            canManage = User.IsInRole("Owner") || User.IsInRole("Admin"),
             systemPrompt = entity.SystemPromptFragment,
             examples = entity.FewShotExamples,
             metadata = string.IsNullOrEmpty(entity.MetadataJson) 
@@ -90,6 +95,7 @@ public class AgentSkillsController : ControllerBase
     /// Cria uma nova skill customizada via formulário JSON na interface.
     /// </summary>
     [HttpPost]
+    [Authorize(Roles = "Owner,Admin")]
     public async Task<IActionResult> CreateSkill([FromBody] CreateSkillRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Id) || string.IsNullOrWhiteSpace(request.Name))
@@ -129,6 +135,7 @@ public class AgentSkillsController : ControllerBase
     /// Atualiza uma skill customizada existente. Bloqueia edições contra skills de Sistema.
     /// </summary>
     [HttpPut("{id}")]
+    [Authorize(Roles = "Owner,Admin")]
     public async Task<IActionResult> UpdateSkill(string id, [FromBody] UpdateSkillRequest request)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync();
@@ -163,7 +170,21 @@ public class AgentSkillsController : ControllerBase
     /// <summary>
     /// Exclui uma skill customizada. Bloqueia exclusões contra skills de Sistema.
     /// </summary>
+    [HttpPut("{id}/enabled")]
+    [Authorize(Roles = "Owner,Admin")]
+    public async Task<IActionResult> SetSkillEnabled(string id, [FromBody] SetSkillEnabledRequest request, CancellationToken ct)
+    {
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entity = await db.AgentSkills.FirstOrDefaultAsync(item => item.Id == id, ct);
+        if (entity is null) return NotFound(new { error = $"Skill '{id}' não encontrada." });
+        entity.IsEnabled = request.Enabled;
+        entity.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return Ok(new { entity.Id, isEnabled = entity.IsEnabled });
+    }
+
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Owner,Admin")]
     public async Task<IActionResult> DeleteSkill(string id)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync();
@@ -221,6 +242,7 @@ Agent: A margem bruta é calculada através da fórmula: `(Receita Bruta - Custo
     /// Rota que aceita o upload de arquivos Markdown, realiza o parsing e grava a skill no PostgreSQL.
     /// </summary>
     [HttpPost("upload")]
+    [Authorize(Roles = "Owner,Admin")]
     [Consumes("multipart/form-data")]
     public async Task<IActionResult> UploadSkill(IFormFile file)
     {
@@ -319,6 +341,8 @@ Agent: A margem bruta é calculada através da fórmula: `(Receita Bruta - Custo
         return match.Success ? match.Groups[1].Value.Trim().Trim('"', '\'') : null;
     }
 }
+
+public sealed record SetSkillEnabledRequest(bool Enabled);
 
 public class CreateSkillRequest
 {

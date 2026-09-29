@@ -37,6 +37,7 @@ public class DbSkillEntity : ITenantEntity
 
     [Required]
     public bool IsSystem { get; set; } = false; // TRUE = Semeada pelo sistema (Read-Only)
+    public bool IsEnabled { get; set; } = true;
 
     public string? MetadataJson { get; set; }
 

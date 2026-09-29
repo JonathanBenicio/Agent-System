@@ -5,6 +5,7 @@ using AgenticSystem.Api.SignalR;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using System.Security.Claims;
+using AgenticSystem.Api.Services;
 
 namespace AgenticSystem.Api.Hubs;
 
@@ -19,17 +20,20 @@ public class ChatHub : Hub
     private readonly ISessionStore _sessionStore;
     private readonly ILogger<ChatHub> _logger;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ChatConfigurationService _configuration;
 
     public ChatHub(
         IMetaAgent metaAgent, 
         ISessionStore sessionStore, 
         ILogger<ChatHub> logger,
-        ITenantContextAccessor tenantContextAccessor)
+        ITenantContextAccessor tenantContextAccessor,
+        ChatConfigurationService configuration)
     {
         _metaAgent = metaAgent;
         _sessionStore = sessionStore;
         _logger = logger;
         _tenantContextAccessor = tenantContextAccessor;
+        _configuration = configuration;
     }
 
     public async Task SendMessage(
@@ -78,6 +82,15 @@ public class ChatHub : Hub
             Language = "pt-BR",
             Preferences = preferences
         };
+        try
+        {
+            await _configuration.ApplyAsync(userContext, sessionId, provider, model, Context.ConnectionAborted);
+        }
+        catch (InvalidOperationException ex)
+        {
+            await Clients.Caller.SendAsync("ReceiveError", new { error = ex.Message, timestamp = DateTime.UtcNow }, Context.ConnectionAborted);
+            return;
+        }
 
         // Notify client that processing started
         await Clients.Caller.SendAsync("ProcessingStarted", new { timestamp = DateTime.UtcNow });
@@ -206,8 +219,6 @@ public class ChatHub : Hub
         if (!string.IsNullOrWhiteSpace(apiKey))
         {
             preferences["llm.request.apiKey"] = apiKey;
-            preferences["llm.session.apiKey"] = apiKey;
-            preferences["llm.apiKey"] = apiKey;
         }
 
         return preferences;

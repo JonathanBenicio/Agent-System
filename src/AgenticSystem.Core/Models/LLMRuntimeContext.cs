@@ -16,6 +16,5 @@ public sealed class LLMRuntimeContext
 
     public string? SessionProvider { get; init; }
     public string? SessionModel { get; init; }
-    public string? SessionApiKey { get; init; }
     public string? KnowledgeRoomId { get; init; }
 }
