@@ -2496,3 +2496,16 @@ O Issue #108 exigia especificamente `Microsoft.Agents.AI.DurableTask`. Essa esco
 - [x] Etapas Agent/Action executam; Action exige `Permission.Execute`, Approval restringe papéis, Wait retoma no prazo e Subworkflow falha explicitamente quando não suportado.
 - [x] `MaxRetries` é aplicado e a tool recebe chave idempotente estável por execução/etapa; handler externo precisa deduplicar. Semântica at-least-once, sem exactly-once.
 - [x] Testes PostgreSQL no Compose isolado cobrem claims concorrentes, lease expirado, Wait após reinício real, start/status de Banner, aprovação, isolamento e fencing. Efeito externo interrompido e imagem final de Banner seguem abertos.
+## BACK-CHAT-123 — Chat, sessões e configurações efetivamente usadas
+
+**Issue:** [#123](https://github.com/JonathanBenicio/Agent-System/issues/123) · [ADR-039](architecture/adr/039-chat-session-user-tenant-settings.md) · [Plano](plan/chat-session-user-settings.md).
+
+**Como** membro de um tenant, **quero** conversar, retomar minhas sessões e selecionar configurações permitidas, **para que** meu histórico e minhas escolhas sejam preservados e realmente governem a próxima resposta. Owner/Admin pode gerir chaves BYOK e ativação das skills do tenant.
+
+- [ ] Chat REST/SignalR retorna conteúdo, agente, erro e `sessionId` corretos; seleção explícita de provider/modelo permitidos chega ao LLM.
+- [ ] Sessões podem ser criadas, listadas, abertas, retomadas e encerradas com histórico persistido; usuário/tenant cruzados são negados.
+- [ ] Chave BYOK pode ser cadastrada, atualizada, validada de verdade e removida por Owner/Admin; a API jamais devolve o segredo salvo, e o chat usa a credencial selecionada/default do tenant.
+- [ ] Catálogo de provider/modelo está disponível a membros; preferência validada e persistida por usuário/tenant aparece e é aplicada à próxima execução.
+- [ ] Skills do tenant são listadas, habilitadas/desabilitadas por Owner/Admin e somente as ativas chegam às instruções do agente; tools exigem autorização própria.
+- [ ] Frontend, API e PostgreSQL confirmam separadamente configuração salva e configuração usada, incluindo restart e isolamento.
+
