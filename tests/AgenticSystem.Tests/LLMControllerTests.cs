@@ -1,5 +1,7 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using AgenticSystem.Api.Controllers;
@@ -16,6 +18,15 @@ public class LLMControllerTests
     {
         _llmAdministrationService = Substitute.For<ILLMAdministrationService>();
         _sut = new LLMController(_llmAdministrationService);
+        _sut.ControllerContext = new ControllerContext
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(new ClaimsIdentity(
+                    [new Claim(ClaimTypes.NameIdentifier, "platform-admin-1")],
+                    "test"))
+            }
+        };
     }
 
     [Fact]
@@ -98,7 +109,7 @@ public class LLMControllerTests
     public async Task UpdateProvider_WhenExists_ReturnsOkWithInfo()
     {
         var request = new UpdateProviderRequest { Enabled = false, Priority = 5 };
-        _llmAdministrationService.UpdateProviderAsync("OpenAI", request, Arg.Any<CancellationToken>()).Returns(
+        _llmAdministrationService.UpdateProviderAsync("OpenAI", request, Arg.Any<CancellationToken>(), "platform-admin-1").Returns(
             new LLMProviderInfo { Name = "OpenAI", DefaultModel = "gpt-4o", IsEnabled = false, Priority = 5 });
 
         var result = await _sut.UpdateProvider("OpenAI", request, CancellationToken.None);
@@ -113,7 +124,7 @@ public class LLMControllerTests
     public async Task UpdateProvider_WhenNotExists_ReturnsNotFound()
     {
         var request = new UpdateProviderRequest { Enabled = true };
-        _llmAdministrationService.UpdateProviderAsync("NonExistent", request, Arg.Any<CancellationToken>())
+        _llmAdministrationService.UpdateProviderAsync("NonExistent", request, Arg.Any<CancellationToken>(), "platform-admin-1")
             .Returns((LLMProviderInfo?)null);
 
         var result = await _sut.UpdateProvider("NonExistent", request, CancellationToken.None);

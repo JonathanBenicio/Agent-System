@@ -140,10 +140,8 @@ public class AuthController : ControllerBase
                                     prov.ProviderName, 
                                     new UpdateProviderRequest 
                                     { 
-                                        DiscoveredModels = response.DiscoveredModels, 
-                                        ApiKey = prov.ApiKey, 
-                                        Enabled = true 
-                                    });
+                                    DiscoveredModels = response.DiscoveredModels,
+                                });
                                 anyModelUpdated = true;
                             }
                             else

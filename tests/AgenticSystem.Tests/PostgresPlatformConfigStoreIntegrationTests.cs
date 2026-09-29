@@ -4,16 +4,21 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
 using AgenticSystem.Infrastructure.AgentFramework;
+using AgenticSystem.Infrastructure.Configuration;
+using AgenticSystem.Infrastructure.Gateway;
+using AgenticSystem.Infrastructure.LLM;
 using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.Persistence.Entities;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Agents.AI;
+using Microsoft.Extensions.AI;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Npgsql;
 using Pgvector.EntityFrameworkCore;
 
@@ -21,6 +26,211 @@ namespace AgenticSystem.Tests;
 
 public class PostgresPlatformConfigStoreIntegrationTests
 {
+    [RequiresPostgresAndOllamaFact]
+    public async Task PlatformProviderChange_NotifiesTwoIndependentLlmManagersAndGatewayRegistries()
+    {
+        var connectionString = GetIsolatedConnectionString();
+        var prefix = $"integration.multi-host.{Guid.NewGuid():N}";
+        var providerPrefix = "llm.providers.ollama";
+        var changedBy = $"validation-{Guid.NewGuid():N}";
+        var tenantContext = new TenantContextAccessor();
+        var options = new DbContextOptionsBuilder<AgenticDbContext>()
+            .UseNpgsql(connectionString, postgres => postgres.UseVector())
+            .Options;
+        var factory = new FakeDbContextFactory
+        {
+            ContextCreator = () => new AgenticDbContext(options, tenantContext)
+        };
+        var tenantStore = new InMemoryTenantStore();
+        await tenantStore.SaveAsync(new Tenant { Id = "provider-refresh-test-tenant", Name = "Provider refresh test" });
+        var providerConfigKeys = new[] { $"{providerPrefix}.enabled", $"{providerPrefix}.model", "llm.default.provider" };
+        var originalConfig = new Dictionary<string, PlatformConfigEntity?>();
+        await using (var baseline = factory.CreateDbContext())
+        {
+            foreach (var key in providerConfigKeys)
+            {
+                var entity = await baseline.PlatformConfigs.AsNoTracking().SingleOrDefaultAsync(item => item.Key == key);
+                originalConfig[key] = entity is null ? null : new PlatformConfigEntity
+                {
+                    Key = entity.Key,
+                    Value = entity.Value,
+                    EncryptedValue = entity.EncryptedValue,
+                    IsSecret = entity.IsSecret,
+                    ChangedBy = entity.ChangedBy,
+                    UpdatedAt = entity.UpdatedAt
+                };
+            }
+        }
+        var encryption = Substitute.For<IConfigEncryptionService>();
+        encryption.Encrypt(Arg.Any<string>()).Returns(call => $"cipher:{call.Arg<string>()}");
+        encryption.Decrypt(Arg.Any<string>()).Returns(call => call.Arg<string>()[7..]);
+        var host1Notifier = new ConfigReloadNotifier();
+        var host2Notifier = new ConfigReloadNotifier();
+        var platformStore = new PostgresPlatformConfigStore(
+            factory,
+            encryption,
+            host1Notifier,
+            NullLogger<PostgresPlatformConfigStore>.Instance);
+
+        using (tenantContext.BeginScope(new TenantContext { TenantId = "platform-config-test" }))
+        {
+            await platformStore.SetValuesAsync(
+            [
+                new PlatformConfigValue($"{providerPrefix}.enabled", bool.FalseString),
+                new PlatformConfigValue($"{providerPrefix}.model", "qwen2.5:0.5b"),
+                new PlatformConfigValue("llm.default.provider", "Ollama")
+            ],
+            changedBy);
+        }
+
+        var host1 = CreateHost("host-one", host1Notifier);
+        var host2 = CreateHost("host-two", host2Notifier);
+        var host1Configuration = await host1.Manager.GetConfigurationAsync();
+        var host2Configuration = await host2.Manager.GetConfigurationAsync();
+        host1Configuration.Providers.Single(provider => provider.Name == "Ollama").IsEnabled.Should().BeFalse();
+        host2Configuration.Providers.Single(provider => provider.Name == "Ollama").IsEnabled.Should().BeFalse();
+        (await host1.Gateway.GetAllServicesStatusAsync()).Should().BeEmpty();
+        (await host2.Gateway.GetAllServicesStatusAsync()).Should().BeEmpty();
+
+        var changedAtHost1 = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var changedAtHost2 = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var host1Subscription = host1Notifier.OnChange(key =>
+        {
+            if (key == $"{providerPrefix}.enabled") changedAtHost1.TrySetResult(key);
+        });
+        using var host2Subscription = host2Notifier.OnChange(key =>
+        {
+            if (key == $"{providerPrefix}.enabled") changedAtHost2.TrySetResult(key);
+        });
+
+        var listenerConnection1 = CreateListenerConnectionString(connectionString, prefix + ".one");
+        var listenerConnection2 = CreateListenerConnectionString(connectionString, prefix + ".two");
+        using var listener1 = CreateListener(host1.Services, listenerConnection1);
+        using var listener2 = CreateListener(host2.Services, listenerConnection2);
+        await listener1.StartAsync(CancellationToken.None);
+        await listener2.StartAsync(CancellationToken.None);
+
+        try
+        {
+            await WaitForListenerAsync(connectionString, listenerConnection1);
+            await WaitForListenerAsync(connectionString, listenerConnection2);
+            using (tenantContext.BeginScope(new TenantContext { TenantId = "platform-config-test" }))
+            {
+                await platformStore.SetValuesAsync(
+                [
+                    new PlatformConfigValue($"{providerPrefix}.enabled", bool.TrueString),
+                    new PlatformConfigValue($"{providerPrefix}.model", "qwen2.5:0.5b")
+                ],
+                changedBy);
+            }
+
+            (await changedAtHost1.Task.WaitAsync(TimeSpan.FromSeconds(10))).Should().Be($"{providerPrefix}.enabled");
+            (await changedAtHost2.Task.WaitAsync(TimeSpan.FromSeconds(10))).Should().Be($"{providerPrefix}.enabled");
+            var host1Updated = await host1.Manager.GetConfigurationAsync();
+            var host2Updated = await host2.Manager.GetConfigurationAsync();
+            host1Updated.Providers.Single(provider => provider.Name == "Ollama").IsEnabled.Should().BeTrue();
+            host2Updated.Providers.Single(provider => provider.Name == "Ollama").IsEnabled.Should().BeTrue();
+            (await host1.Gateway.GetServiceStatusAsync("Ollama")).IsEnabled.Should().BeTrue();
+            (await host2.Gateway.GetServiceStatusAsync("Ollama")).IsEnabled.Should().BeTrue();
+
+            var chatOptions = new ChatOptions { ModelId = "qwen2.5:0.5b", MaxOutputTokens = 64 };
+            var request = new[] { new ChatMessage(ChatRole.User, "Responda em português com uma frase curta: o provider local está ativo?") };
+            ChatResponse response1;
+            using (tenantContext.BeginScope(new TenantContext { TenantId = "provider-refresh-test-tenant" }))
+                response1 = await host1.ChatClient.GetResponseAsync(request, chatOptions);
+            ChatResponse response2;
+            using (tenantContext.BeginScope(new TenantContext { TenantId = "provider-refresh-test-tenant" }))
+                response2 = await host2.ChatClient.GetResponseAsync(request, chatOptions);
+            response1.Text.Should().NotBeNullOrWhiteSpace();
+            response2.Text.Should().NotBeNullOrWhiteSpace();
+            (await host1.Gateway.GetServiceStatusAsync("Ollama")).RequestCount.Should().Be(1);
+            (await host2.Gateway.GetServiceStatusAsync("Ollama")).RequestCount.Should().Be(1);
+        }
+        finally
+        {
+            await listener1.StopAsync(CancellationToken.None);
+            await listener2.StopAsync(CancellationToken.None);
+            await using var cleanup = factory.CreateDbContext();
+            foreach (var key in providerConfigKeys)
+            {
+                var current = await cleanup.PlatformConfigs.SingleOrDefaultAsync(item => item.Key == key);
+                if (current is not null)
+                    cleanup.PlatformConfigs.Remove(current);
+                if (originalConfig[key] is { } original)
+                    cleanup.PlatformConfigs.Add(original);
+            }
+            using (tenantContext.BeginScope(new TenantContext { TenantId = "platform-config-test" }))
+                await cleanup.SaveChangesAsync();
+            await cleanup.PlatformConfigAudits
+                .Where(entry => entry.ChangedBy == changedBy && providerConfigKeys.Contains(entry.Key))
+                .ExecuteDeleteAsync();
+        }
+
+        host1.Services.Dispose();
+        host2.Services.Dispose();
+
+        (ServiceProvider Services, LLMManager Manager, ServiceGateway Gateway, ContextAwareChatClient ChatClient) CreateHost(
+            string hostName,
+            IConfigReloadNotifier notifier)
+        {
+            var ollamaUrl = Environment.GetEnvironmentVariable("AGENTIC_TEST_OLLAMA_URL")!;
+            var settings = Options.Create(new AgenticSystemSettings
+            {
+                Ollama = new OllamaSettings
+                {
+                    Enabled = true,
+                    BaseUrl = ollamaUrl,
+                    DefaultModel = "qwen2.5:0.5b",
+                    Priority = 1
+                }
+            });
+            var gateway = new ServiceGateway(new CostTracker(10m), NullLogger<ServiceGateway>.Instance);
+            var registry = new GatewayProviderRegistry(gateway, settings);
+            var services = new ServiceCollection()
+                .AddHttpClient()
+                .AddSingleton<IConfigReloadNotifier>(notifier)
+                .AddSingleton<ITenantContextAccessor>(tenantContext)
+                .AddSingleton<IPlatformConfigStore>(platformStore)
+                .AddSingleton(registry)
+                .BuildServiceProvider();
+            var manager = new LLMManager(
+                settings,
+                NullLogger<LLMManager>.Instance,
+                NullLoggerFactory.Instance,
+                new LLMRuntimeContextAccessor(),
+                tenantStore,
+                new InMemorySessionStore(),
+                services,
+                notifier,
+                registry,
+                platformStore);
+            var chatClient = new ContextAwareChatClient(
+                manager,
+                new LLMRuntimeContextAccessor(),
+                Substitute.For<IQuotaEnforcer>(),
+                Substitute.For<ITokenAuditService>(),
+                NullLogger<ContextAwareChatClient>.Instance,
+                gateway);
+            _ = hostName;
+            return (services, manager, gateway, chatClient);
+        }
+
+        string CreateListenerConnectionString(string connection, string name) =>
+            new NpgsqlConnectionStringBuilder(connection) { ApplicationName = name }.ConnectionString;
+
+        RealTimeConfigReloadBackgroundService CreateListener(IServiceProvider services, string listenerConnection)
+        {
+            var config = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ConnectionStrings:SessionStore"] = listenerConnection
+            }).Build();
+            return new RealTimeConfigReloadBackgroundService(
+                services,
+                config,
+                NullLogger<RealTimeConfigReloadBackgroundService>.Instance);
+        }
+    }
+
     [RequiresPostgresFact]
     public async Task MafSessionSnapshotSurvivesAdapterRestartAndRejectsDifferentTenantOwner()
     {
@@ -279,5 +489,21 @@ public sealed class RequiresPostgresFactAttribute : FactAttribute
         if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AGENTIC_TEST_POSTGRES"))
             || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AGENTIC_EF_CONNECTION")))
             Skip = "Set both PostgreSQL connection variables to the isolated backend-validation Compose database.";
+    }
+}
+
+public sealed class RequiresPostgresAndOllamaFactAttribute : FactAttribute
+{
+    public RequiresPostgresAndOllamaFactAttribute()
+    {
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AGENTIC_TEST_POSTGRES"))
+            || string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AGENTIC_EF_CONNECTION")))
+        {
+            Skip = "Set both PostgreSQL connection variables to the isolated backend-validation Compose database.";
+        }
+        else if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AGENTIC_TEST_OLLAMA_URL")))
+        {
+            Skip = "Set AGENTIC_TEST_OLLAMA_URL to the isolated backend-validation Ollama endpoint.";
+        }
     }
 }
