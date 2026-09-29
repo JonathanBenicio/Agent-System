@@ -6,7 +6,7 @@
 - [API do núcleo](backend/api-core.md) e [inventário](backend/endpoint-inventory.md)
 - [Schemas dos DTOs](backend/request-schemas.md) e [OpenAPI Release](backend/openapi-release.json)
 - [Tenants/acesso](backend/access-tenants.md), [recursos](backend/resources-rules.md), [transportes](backend/transports.md)
-- [Operação](backend/operations.md), [validação](backend/validation/2026-09-28.md), [backlog](backend/backlog.md)
+- [Operação](backend/operations.md), [validação documental histórica](backend/validation/2026-09-28.md), [validação de correção #111–#117](backend/validation/backend-core-remediation.md), [backlog](backend/backlog.md)
 - [Correções e validação da revisão do PR #118](backend/validation/2026-09-28-review-fixes.md)
 - [ADR-034](architecture/adr/034-backend-contracts-and-access-target.md), [plano](plan/backend-documentation-validation.md), [templates](../templates/README.md)
 - [Correção dos bugs #111–#117: ADR-035](architecture/adr/035-backend-core-isolation-and-reliability.md), [plano](plan/backend-core-remediation.md) e [relatório/evidências](backend/validation/backend-core-remediation.md)

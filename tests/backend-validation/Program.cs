@@ -19,6 +19,7 @@ while (!Directory.Exists(Path.Combine(repositoryRoot, "src", "AgenticSystem.Api"
     repositoryRoot = Directory.GetParent(repositoryRoot)?.FullName ?? throw new InvalidOperationException("Repository root not found.");
 var validationOutputDirectory = Environment.GetEnvironmentVariable("BACKEND_VALIDATION_OUTPUT_DIR")
     ?? Path.Combine(repositoryRoot, "tests", "TestResults", "backend-core-remediation", "current");
+var coreResultsPath = Path.Combine(validationOutputDirectory, "core-results.json");
 var historicalOutputDirectory = Path.Combine(repositoryRoot, "tests", "TestResults", "backend-documentation", "current");
 if (Path.GetFullPath(validationOutputDirectory).Equals(Path.GetFullPath(historicalOutputDirectory), StringComparison.OrdinalIgnoreCase))
     throw new InvalidOperationException("Refusing to overwrite historical backend-documentation validation artifacts.");
@@ -55,9 +56,153 @@ if (args.Contains("--openapi"))
 
 // Deliberately fixed isolated database. No production connection string accepted.
 const string connection = "Host=127.0.0.1;Port=55432;Database=backend_validation;Username=validation;Password=validation_local_only";
+if (args.Contains("--legacy-backfill"))
+{
+    var databaseName = "backfill_" + Guid.NewGuid().ToString("N")[..12];
+    var adminConnection = new Npgsql.NpgsqlConnectionStringBuilder(connection) { Database = "postgres" };
+    var fixtureConnection = new Npgsql.NpgsqlConnectionStringBuilder(connection) { Database = databaseName };
+    await using (var admin = new Npgsql.NpgsqlConnection(adminConnection.ConnectionString))
+    {
+        await admin.OpenAsync();
+        await using var create = admin.CreateCommand();
+        create.CommandText = $"CREATE DATABASE \"{databaseName}\"";
+        await create.ExecuteNonQueryAsync();
+    }
+
+    try
+    {
+        var legacyAccessor = new TenantContextAccessor();
+        var legacyOptions = new DbContextOptionsBuilder<AgenticDbContext>()
+            .UseNpgsql(fixtureConnection.ConnectionString, provider => provider.UseVector()).Options;
+        var legacyFactory = new ValidationFactory(legacyOptions, legacyAccessor);
+        var legacyTenant = "legacy-tenant";
+        var legacyUser = "legacy-user";
+        var legacyApiKeyId = Guid.NewGuid();
+        using var legacyScope = legacyAccessor.BeginScope(new TenantContext { TenantId = legacyTenant });
+        await using (var db = legacyFactory.CreateDbContext())
+        {
+            var migrations = db.Database.GetMigrations().ToList();
+            if (migrations.Count < 2) throw new InvalidOperationException("Expected a pre-membership migration target.");
+            await db.Database.MigrateAsync(migrations[^2]);
+            db.Tenants.Add(new Tenant { Id = legacyTenant, Name = "Legacy fixture", Slug = legacyTenant, Limits = TenantLimits.FreeTier() });
+            await db.SaveChangesAsync();
+            db.RoleAssignments.Add(new RoleAssignmentEntity
+            {
+                Id = Guid.NewGuid().ToString("N"), UserId = legacyUser, RoleId = "Admin", TenantId = legacyTenant,
+                GrantedBy = "legacy-issuer", GrantedAt = DateTime.UtcNow.AddDays(-30)
+            });
+            db.AccessApiKeys.Add(new AccessApiKeyEntity
+            {
+                Id = legacyApiKeyId, TenantId = legacyTenant, KeyHash = new string('a', 64), Name = "Legacy Viewer",
+                Role = "Viewer", IsEnabled = true, CreatedAt = DateTime.UtcNow.AddDays(-20)
+            });
+            await db.SaveChangesAsync();
+            await db.Database.MigrateAsync();
+        }
+
+        using (legacyAccessor.BeginScope(new TenantContext { TenantId = legacyTenant }))
+        {
+            await using var db = legacyFactory.CreateDbContext();
+            var userMembership = await db.TenantMemberships.IgnoreQueryFilters()
+                .SingleAsync(item => item.SubjectId == legacyUser && item.SubjectType == "User");
+            var keyMembership = await db.TenantMemberships.IgnoreQueryFilters()
+                .SingleAsync(item => item.SubjectId == legacyApiKeyId.ToString() && item.SubjectType == "ApiKey");
+            if (userMembership.Role != "Admin" || userMembership.TenantId != legacyTenant || userMembership.GrantedBy != "legacy-issuer")
+                throw new InvalidOperationException("Legacy user membership did not preserve the tenant, role, or grant provenance.");
+            if (keyMembership.Role != "Viewer" || keyMembership.TenantId != legacyTenant)
+                throw new InvalidOperationException("Legacy API key membership did not preserve the tenant and role.");
+            if (await db.PlatformAdministrators.IgnoreQueryFilters().AnyAsync())
+                throw new InvalidOperationException("Legacy tenant roles were incorrectly promoted to platform administrators.");
+        }
+
+        Directory.CreateDirectory(validationOutputDirectory);
+        await File.WriteAllTextAsync(Path.Combine(validationOutputDirectory, "legacy-backfill.json"), JsonSerializer.Serialize(new
+        {
+            result = "passed",
+            appliedFrom = "pre-membership migration",
+            tenantId = legacyTenant,
+            userRole = "Admin",
+            apiKeyRole = "Viewer",
+            platformAdministrators = 0
+        }, new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine("Legacy membership backfill fixture passed.");
+    }
+    finally
+    {
+        await using var admin = new Npgsql.NpgsqlConnection(adminConnection.ConnectionString);
+        await admin.OpenAsync();
+        await using var drop = admin.CreateCommand();
+        drop.CommandText = $"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)";
+        await drop.ExecuteNonQueryAsync();
+    }
+
+    return;
+}
 var accessor = new TenantContextAccessor();
 var options = new DbContextOptionsBuilder<AgenticDbContext>().UseNpgsql(connection, o => o.UseVector()).Options;
 var factory = new ValidationFactory(options, accessor);
+if (args.Contains("--maf-session-fixture"))
+{
+    var directory = validationOutputDirectory;
+    using var core = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "core-results.json")));
+    var run = core.RootElement.GetProperty("run").GetString()!;
+    var sessionId = core.RootElement.GetProperty("chatSessionId").GetString();
+    if (string.IsNullOrWhiteSpace(sessionId)) throw new InvalidOperationException("No successful real chat session is recorded.");
+    var tenantId = run + "-a";
+    var userId = run + "-alice";
+    using var tenantScope = accessor.BeginScope(new TenantContext { TenantId = tenantId });
+    var store = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance);
+    var session = await store.GetAsync(sessionId)
+        ?? throw new InvalidOperationException("Real chat session was not persisted.");
+    if (session.UserId != userId || session.TenantId != tenantId)
+        throw new InvalidOperationException("Real chat session ownership does not match its JWT principal and tenant.");
+    var frameworkState = session.RuntimeSettings.FirstOrDefault(item => item.Key.StartsWith("frameworkSessionState:", StringComparison.Ordinal));
+    if (frameworkState.Value is not string stateJson || string.IsNullOrWhiteSpace(stateJson))
+        throw new InvalidOperationException("MAF serialized state was not persisted with the real chat session.");
+    var stateHash = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(stateJson))).ToLowerInvariant();
+    await File.WriteAllTextAsync(Path.Combine(directory, "maf-session-fixture.json"), JsonSerializer.Serialize(new
+    {
+        baseline = core.RootElement.GetProperty("baseline").GetString(),
+        run,
+        sessionId,
+        tenantId,
+        userId,
+        stateKey = frameworkState.Key,
+        stateHash,
+        stateLength = stateJson.Length
+    }, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine("Real MAF serialized session fixture persisted.");
+    return;
+}
+if (args.Contains("--maf-restore-verify"))
+{
+    var directory = validationOutputDirectory;
+    using var fixture = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(directory, "maf-session-fixture.json")));
+    using var core = JsonDocument.Parse(await File.ReadAllTextAsync(coreResultsPath));
+    var run = core.RootElement.GetProperty("run").GetString()!;
+    var sessionId = fixture.RootElement.GetProperty("sessionId").GetString()!;
+    var tenantId = fixture.RootElement.GetProperty("tenantId").GetString()!;
+    if (fixture.RootElement.GetProperty("run").GetString() != run ||
+        fixture.RootElement.GetProperty("baseline").GetString() != core.RootElement.GetProperty("baseline").GetString())
+        throw new InvalidOperationException("MAF fixture belongs to another validation run/revision.");
+
+    using var tenantScope = accessor.BeginScope(new TenantContext { TenantId = tenantId });
+    var store = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance);
+    var session = await store.GetAsync(sessionId) ?? throw new InvalidOperationException("Resumed MAF session is missing.");
+    if (!session.RuntimeSettings.TryGetValue("frameworkSessionRestoredAt:orchestrator", out var restoredAt))
+        throw new InvalidOperationException("The restarted API did not successfully deserialize the MAF orchestrator state.");
+
+    await File.WriteAllTextAsync(Path.Combine(directory, "maf-session-after-restore.json"), JsonSerializer.Serialize(new
+    {
+        result = "passed",
+        sessionId,
+        tenantId,
+        restoredAt,
+        stateLength = ((string)session.RuntimeSettings["frameworkSessionState:orchestrator"]).Length
+    }, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine("MAF serialized session restore after API restart passed.");
+    return;
+}
 if (args.Contains("--session-fixture"))
 {
     // Synthetic known messages via the real store, independent of failed LLM conversations.
@@ -86,6 +231,8 @@ if (args.Contains("--session-fixture"))
     Console.WriteLine("Known-message persistence fixture saved.");
     return;
 }
+using var diagnosticRun = JsonDocument.Parse(await File.ReadAllTextAsync(coreResultsPath));
+var sourceCommit = diagnosticRun.RootElement.GetProperty("baseline").GetString() ?? "unknown";
 var tenant = "store-" + Guid.NewGuid().ToString("N")[..8];
 var otherTenant = tenant + "-other";
 var results = new List<object>();
@@ -241,9 +388,29 @@ await Test("QUOTA-05", "saved quota cannot exceed the tenant plan ceiling", asyn
     }
     return "configured 1,000,000-token quota remained capped at Free plan limit";
 });
+await Test("QUOTA-06", "two independent repository and context-factory instances account concurrent updates", async () =>
+{
+    var multiTenant = tenant + "-multi-instance";
+    using (accessor.BeginScope(new TenantContext { TenantId = multiTenant }))
+    {
+        await using var db = factory.CreateDbContext();
+        db.Tenants.Add(new Tenant { Id = multiTenant, Name = "Multi-instance quota fixture", Slug = multiTenant, Limits = TenantLimits.FreeTier() });
+        await db.SaveChangesAsync();
+    }
+
+    var firstInstance = new TenantQuotaRepository(new ValidationFactory(options, accessor), NullLogger<TenantQuotaRepository>.Instance);
+    var secondInstance = new TenantQuotaRepository(new ValidationFactory(options, accessor), NullLogger<TenantQuotaRepository>.Instance);
+    await Task.WhenAll(Enumerable.Range(0, 32).Select(index =>
+        (index % 2 == 0 ? firstInstance : secondInstance).IncrementUsageAsync(multiTenant, 1, 0.01)));
+    var snapshot = await new TenantQuotaRepository(new ValidationFactory(options, accessor), NullLogger<TenantQuotaRepository>.Instance)
+        .GetOrCreateAsync(multiTenant);
+    Check(snapshot.CurrentDailyTokens == 32 && snapshot.CurrentDailyRequests == 32 && Math.Abs(snapshot.CurrentDailyCostUsd - 0.32) < 0.0001,
+        $"tokens={snapshot.CurrentDailyTokens} requests={snapshot.CurrentDailyRequests} cost={snapshot.CurrentDailyCostUsd}");
+    return "32 updates from two independent repository/context-factory instances persisted exactly once";
+});
 var output = Path.Combine(validationOutputDirectory, "store-results.json");
 Directory.CreateDirectory(validationOutputDirectory);
-await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new { baseline = "f8de7a6", services = "real PostgreSQL/pgvector and Ollama embeddings", results }, new JsonSerializerOptions { WriteIndented = true }));
+await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new { baseline = sourceCommit, services = "real PostgreSQL/pgvector and Ollama embeddings", results }, new JsonSerializerOptions { WriteIndented = true }));
 Environment.ExitCode = results.Any(r => JsonSerializer.Serialize(r).Contains("\"failed\"")) ? 1 : 0;
 
 sealed class ValidationFactory(DbContextOptions<AgenticDbContext> options, ITenantContextAccessor accessor) : IDbContextFactory<AgenticDbContext>

@@ -13,15 +13,18 @@ public class WorkflowController : ControllerBase
     private readonly IWorkflowStore _store;
     private readonly IWorkflowEngine _engine;
     private readonly ILogger<WorkflowController> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public WorkflowController(IWorkflowStore store, IWorkflowEngine engine, ILogger<WorkflowController> logger)
+    public WorkflowController(IWorkflowStore store, IWorkflowEngine engine, ILogger<WorkflowController> logger, ITenantContextAccessor tenantContextAccessor)
     {
         _store = store;
         _engine = engine;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
-    private string GetTenantId() => Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+    private string GetTenantId() => _tenantContextAccessor.CurrentTenantId
+        ?? throw new UnauthorizedAccessException("Tenant identity is required.");
 
     // ─── Definitions ───
 

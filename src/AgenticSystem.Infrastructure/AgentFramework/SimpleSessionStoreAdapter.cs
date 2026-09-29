@@ -62,7 +62,8 @@ public sealed class SimpleSessionStoreAdapter : AgentSessionStore
 
         var runtimeKey = BuildRuntimeKey(agent.Name);
         var persistenceSessionId = GetPersistenceSessionId(conversationId);
-        var persistedState = await GetPersistedStateAsync(persistenceSessionId, runtimeKey, cancellationToken);
+        var sessionData = await _sessionStore.GetAsync(persistenceSessionId, cancellationToken);
+        var persistedState = sessionData?.RuntimeSettings.GetValueOrDefault(runtimeKey);
 
         if (!string.IsNullOrWhiteSpace(persistedState))
         {
@@ -70,9 +71,16 @@ public sealed class SimpleSessionStoreAdapter : AgentSessionStore
             {
                 using var doc = JsonDocument.Parse(persistedState);
                 var restored = await agent.DeserializeSessionAsync(doc.RootElement, cancellationToken: cancellationToken);
-                
-                _logger.LogDebug(
-                    "Framework session restored: ConversationId={ConversationId}, Agent={AgentName}",
+
+                if (sessionData is not null)
+                {
+                    var restoredAtKey = runtimeKey.Replace(FrameworkStateKey, "frameworkSessionRestoredAt", StringComparison.Ordinal);
+                    sessionData.RuntimeSettings[restoredAtKey] = DateTime.UtcNow.ToString("O");
+                    await _sessionStore.SaveAsync(sessionData, cancellationToken);
+                }
+
+                _logger.LogInformation(
+                    "Framework session restored from persisted MAF state: ConversationId={ConversationId}, Agent={AgentName}",
                     conversationId,
                     agent.Name);
                 
@@ -92,20 +100,6 @@ public sealed class SimpleSessionStoreAdapter : AgentSessionStore
             agent.Name);
         
         return newSession;
-    }
-
-    private async Task<string?> GetPersistedStateAsync(
-        string conversationId,
-        string runtimeKey,
-        CancellationToken cancellationToken)
-    {
-        var sessionData = await _sessionStore.GetAsync(conversationId, cancellationToken);
-        if (sessionData?.RuntimeSettings.TryGetValue(runtimeKey, out var state) == true)
-        {
-            return state as string;
-        }
-
-        return null;
     }
 
     private static string BuildRuntimeKey(string? agentName)

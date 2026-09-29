@@ -50,15 +50,15 @@ public class SimpleSessionStoreAdapterTests
     public async Task GetSessionAsync_WhenStableNameKeyExists_RestoresPersistedSession()
     {
         var restoredSession = Substitute.For<AgentSession>();
-        _sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(
-            new SessionData
+        var sessionData = new SessionData
+        {
+            Id = "session-1",
+            RuntimeSettings = new Dictionary<string, string>
             {
-                Id = "session-1",
-                RuntimeSettings = new Dictionary<string, string>
-                {
-                    ["frameworkSessionState:orchestrator"] = "{}"
-                }
-            });
+                ["frameworkSessionState:orchestrator"] = "{}"
+            }
+        };
+        _sessionStore.GetAsync("session-1", Arg.Any<CancellationToken>()).Returns(sessionData);
 
         var agent = Substitute.For<AIAgent>();
         agent.Name.Returns("Orchestrator");
@@ -77,6 +77,8 @@ public class SimpleSessionStoreAdapterTests
             Arg.Any<JsonElement>(),
             Arg.Any<JsonSerializerOptions>(),
             Arg.Any<CancellationToken>());
+        sessionData.RuntimeSettings.Should().ContainKey("frameworkSessionRestoredAt:orchestrator");
+        await _sessionStore.Received(1).SaveAsync(sessionData, Arg.Any<CancellationToken>());
         await agent.DidNotReceive().CreateSessionAsync(Arg.Any<CancellationToken>());
     }
 

@@ -25,6 +25,9 @@ As rotas abaixo exigem autenticação e um registro explícito do `sub`/`NameIde
 |---|---|---|
 | `GET /api/platform/tenants` | — | Lista ID, nome, slug, plano, limites configurados e estado ativo. |
 | `PUT /api/platform/tenants/{tenantId}/plan` | `{ "plan": "Free" }` | Aceita `Free`, `Pro` ou `Enterprise`; altera plano e registra auditoria no tenant. Mantém `Tenant.Limits`, que podem restringir o teto do plano. |
+| `GET /api/platform/tenants/{tenantId}/memberships` | — | Lista memberships por tipo/identidade, papel e dados de concessão. |
+| `PUT /api/platform/tenants/{tenantId}/memberships/{subjectType}/{subjectId}` | `{ "role": "Viewer" }` | Cria ou altera membership. `subjectType` é `User` ou `ApiKey`; papéis aceitos: `Owner`, `Admin`, `Operator`, `Viewer`. API key precisa pertencer ao tenant. Para usuários, sincroniza `role_assignments`; para API keys, sincroniza o papel em `access_api_keys`. A operação é transacional e auditada. |
+| `DELETE /api/platform/tenants/{tenantId}/memberships/{subjectType}/{subjectId}` | — | Revoga a membership e a atribuição legada do usuário, quando aplicável; registra auditoria. Repetição retorna 204. API key sem membership deixa de autenticar no tenant. |
 | `GET /api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants` | — | Lista grants do escopo, incluindo expirados e revogados para auditoria operacional. |
 | `POST /api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants` | `{ "userId": "...", "reason": "...", "expiresAt": "2026-09-29T12:00:00Z" }` | Concede somente `Reader` a usuário que já seja membro do tenant. Motivo é obrigatório; expiração deve estar no futuro e no máximo sete dias. Grant ativo duplicado para a mesma sala/usuário retorna 409. |
 | `DELETE /api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants/{grantId}` | — | Revoga o grant, remove apenas a ACL temporária com o ID vinculado e registra auditoria. Revogação repetida retorna 204. |
@@ -37,18 +40,20 @@ Administração da plataforma não concede acesso implícito a salas, documentos
 
 Envie `X-Api-Key` ou `Authorization: Bearer`. Para rotas comuns, `X-Tenant-Id` precisa corresponder ao `tenant_id`/`app_metadata.tenant_id`; sem header, a claim é usada. Tenant desconhecido/inativo e membership ausente são negados antes do endpoint. Falha de credencial pode resultar em 401; seleção, atividade ou membership inválida resulta em 403.
 
-Nos hubs, tenant de query/header também precisa corresponder à claim e à membership. O filtro valida invocações e middleware valida a negociação/handshake. `OnnxHub`, `WorkflowHub`, `ExternalAgentHub` e `GatewayHub` prefixam grupos com o tenant; notificações de workflow/FinOps são direcionadas ao grupo tenant. Testes integrados exercitaram negociação Gateway e chat; entrega cruzada concorrente nos cinco hubs ainda não foi comprovada.
+Nos hubs, tenant de query/header precisa corresponder à claim e à membership. O filtro valida invocações e o middleware valida negociação/handshake. Grupos de chat, Gateway, Workflow, ExternalAgent e ONNX incluem tenant. Notificações de sessão são endereçadas ao grupo `{tenant}:{user}`, evitando `Clients.User` global para a mesma identidade em vários tenants. Workflow restaura `TenantId` persistido ao carregar execuções para manter o endereço do grupo após reload.
+
+Validação integrada conectou o mesmo subject simultaneamente em tenants A e B: SessionUpdated, resultado ExternalAgent, cancelamento de Workflow e evento ONNX chegaram somente à conexão do tenant A. Gateway verificou que `GetDashboard` respondeu apenas à conexão que invocou o método e confirmou grupos tenant-scoped no código; não havia serviço Gateway registrado para provocar um evento de broadcast real.
 
 ## Sessões MAF
 
-O store hospedado aplica `IsolationKeyScopedAgentSessionStore`; a chave da API combina tenant e `NameIdentifier`. Falta de identidade de isolamento falha fechada. O adaptador persiste no ID de sessão original e propaga falhas de escrita. REST/SSE geraram sucesso, SignalR chat foi exercitado, retomada para usuário/tenant diferente foi negada e os registros persistiram após reinício. Restauração do estado serializado interno do MAF após reinício ainda não tem teste isolado.
+O store hospedado aplica `IsolationKeyScopedAgentSessionStore`; a chave da API combina tenant e `NameIdentifier`. Falta de identidade de isolamento falha fechada. O adaptador persiste no ID de sessão original e propaga falhas de escrita. REST/SSE geraram sucesso, SignalR chat foi exercitado, retomada para usuário/tenant diferente foi negada e os registros persistiram após reinício. O diagnóstico também retomou chat real após restart, manteve o mesmo ID e confirmou que o estado MAF serializado foi desserializado e marcado no store.
 
 ## Planos, quotas e limites
 
 Free/Pro/Enterprise definem o teto de RPM, tokens/dia e custo/dia. `Tenant.Limits` e configuração de quota persistida podem restringir o teto; alterar o plano não sobrescreve limites configurados. Incremento/reset diário usam operações atômicas em PostgreSQL e a leitura de autorização não reutiliza snapshot diário em cache. RPM do chat também usa o menor limite efetivo para o tenant.
 
-Limites de sessões, agentes e armazenamento ainda têm fontes distintas em `TenantResourceLimits`; não estão unificados com `Tenant.Limits`. Veja [recursos e regras](resources-rules.md) para fonte, persistência e enforcement por recurso.
+`Tenant.Limits` é a única fonte de teto para sessões simultâneas, agentes dinâmicos, contagem de documentos e bytes de origem. `TenantResourceLimits` projeta esses campos para compatibilidade; o campo mensal legado é `MaxDailyCostUsd × 30`, não uma segunda quota. Veja [recursos e regras](resources-rules.md) para enforcement e limites das métricas de armazenamento.
 
 ## Evidência e lacunas
 
-PostgreSQL 16/pgvector isolado aplicou a migration. A suíte unitária passou 689 testes, ignorou um teste dependente de PostgreSQL e não teve falhas. Integração real passou auth/membership, ACL, grants auditados, expiração/revogação, quota, RAG entre 61 documentos candidatos, chat REST/SSE/SignalR e store/skills. Entrega cruzada negativa por hub, restore do estado MAF, backfill contra cópia de dados legados e unificação de limites de recursos permanecem pendentes. Evidência discriminada está no [relatório](validation/backend-core-remediation.md).
+PostgreSQL 16/pgvector/Ollama isolados validaram rotas de tenant, membership, ACL/grants, quotas, RAG e hubs. A execução mais recente passou 697 testes, ignorou um teste e não teve falhas; integração passou 39/39; store/quota/skills passou 10/10; fixture de backfill legado passou. A cobertura Cobertura medida ficou em 21,08%, abaixo da meta de 80% do CI. Evidência discriminada e limitações estão no [relatório](validation/backend-core-remediation.md).

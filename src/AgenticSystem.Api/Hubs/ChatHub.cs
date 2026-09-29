@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using AgenticSystem.Api.Helpers;
+using AgenticSystem.Api.SignalR;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using System.Security.Claims;
@@ -165,6 +166,10 @@ public class ChatHub : Hub
         // Add connection to tenant group for targeted notifications (like LlmCatalogUpdated)
         var tenantId = _tenantContextAccessor.CurrentTenantId;
         await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}");
+        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? Context.User?.FindFirst("sub")?.Value;
+        if (!string.IsNullOrWhiteSpace(userId))
+            await Groups.AddToGroupAsync(Context.ConnectionId, TenantSignalRGroups.User(tenantId, userId));
         
         await Clients.Caller.SendAsync("Connected", new
         {

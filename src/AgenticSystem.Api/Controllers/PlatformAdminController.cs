@@ -56,6 +56,151 @@ public sealed class PlatformAdminController : ControllerBase
         return Ok(new TenantSummary(tenant.Id, tenant.Name, tenant.Slug, tenant.Plan, tenant.Limits, tenant.IsActive));
     }
 
+    [HttpGet("tenants/{tenantId}/memberships")]
+    public async Task<IActionResult> ListMemberships(string tenantId, CancellationToken ct)
+    {
+        if (await GetPlatformAdministratorIdAsync(ct) is null) return Forbid();
+        if (!await _db.Tenants.IgnoreQueryFilters().AnyAsync(tenant => tenant.Id == tenantId, ct)) return NotFound();
+
+        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId });
+        var memberships = await _db.TenantMemberships.AsNoTracking()
+            .Where(item => item.TenantId == tenantId)
+            .OrderBy(item => item.SubjectType)
+            .ThenBy(item => item.SubjectId)
+            .Select(item => new TenantMembershipSummary(item.SubjectId, item.SubjectType, item.Role, item.GrantedAt, item.GrantedBy))
+            .ToListAsync(ct);
+        return Ok(memberships);
+    }
+
+    [HttpPut("tenants/{tenantId}/memberships/{subjectType}/{subjectId}")]
+    public async Task<IActionResult> AssignMembership(
+        string tenantId,
+        string subjectType,
+        string subjectId,
+        [FromBody] AssignTenantMembershipRequest request,
+        CancellationToken ct)
+    {
+        var actorId = await GetPlatformAdministratorIdAsync(ct);
+        if (actorId is null) return Forbid();
+        if (string.IsNullOrWhiteSpace(subjectId) || subjectId.Length > 128) return BadRequest(new { error = "SubjectId must contain 1-128 characters." });
+        if (!Enum.TryParse<MembershipSubjectType>(subjectType, true, out var parsedSubjectType))
+            return BadRequest(new { error = "SubjectType must be User or ApiKey." });
+
+        var role = BuiltInRoles.All.FirstOrDefault(item => item.Name.Equals(request.Role, StringComparison.OrdinalIgnoreCase));
+        if (role is null) return BadRequest(new { error = "Role must be Owner, Admin, Operator, or Viewer." });
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+        if (!await _db.Tenants.IgnoreQueryFilters().AnyAsync(tenant => tenant.Id == tenantId, ct)) return NotFound();
+        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId });
+
+        if (parsedSubjectType == MembershipSubjectType.ApiKey)
+        {
+            if (!Guid.TryParse(subjectId, out var apiKeyId)) return BadRequest(new { error = "API key subject ID must be a GUID." });
+            var apiKey = await _db.AccessApiKeys.IgnoreQueryFilters()
+                .FirstOrDefaultAsync(key => key.Id == apiKeyId && key.TenantId == tenantId, ct);
+            if (apiKey is null) return NotFound(new { error = "API key not found in this tenant." });
+            apiKey.Role = role.Name;
+        }
+
+        var subjectTypeValue = parsedSubjectType.ToString();
+        var existingMemberships = await _db.TenantMemberships.IgnoreQueryFilters()
+            .Where(item => item.TenantId == tenantId && item.SubjectType == subjectTypeValue && item.SubjectId == subjectId)
+            .ToListAsync(ct);
+        _db.TenantMemberships.RemoveRange(existingMemberships.Where(item => !item.Role.Equals(role.Name, StringComparison.OrdinalIgnoreCase)));
+        var membership = existingMemberships.FirstOrDefault(item => item.Role.Equals(role.Name, StringComparison.OrdinalIgnoreCase));
+        if (membership is null)
+        {
+            membership = new TenantMembershipEntity
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                SubjectId = subjectId,
+                SubjectType = subjectTypeValue,
+                Role = role.Name,
+                TenantId = tenantId,
+                GrantedAt = DateTime.UtcNow,
+                GrantedBy = actorId
+            };
+            _db.TenantMemberships.Add(membership);
+        }
+        else
+        {
+            membership.GrantedAt = DateTime.UtcNow;
+            membership.GrantedBy = actorId;
+        }
+
+        if (parsedSubjectType == MembershipSubjectType.User)
+        {
+            var legacyAssignments = await _db.RoleAssignments.IgnoreQueryFilters()
+                .Where(item => item.TenantId == tenantId && item.UserId == subjectId)
+                .ToListAsync(ct);
+            _db.RoleAssignments.RemoveRange(legacyAssignments.Where(item => !item.RoleId.Equals(role.Name, StringComparison.OrdinalIgnoreCase)));
+            var assignment = legacyAssignments.FirstOrDefault(item => item.RoleId.Equals(role.Name, StringComparison.OrdinalIgnoreCase));
+            if (assignment is null)
+            {
+                _db.RoleAssignments.Add(new RoleAssignmentEntity
+                {
+                    Id = Guid.NewGuid().ToString("N"),
+                    UserId = subjectId,
+                    RoleId = role.Name,
+                    TenantId = tenantId,
+                    GrantedBy = actorId,
+                    GrantedAt = membership.GrantedAt
+                });
+            }
+            else
+            {
+                assignment.GrantedBy = actorId;
+                assignment.GrantedAt = membership.GrantedAt;
+            }
+        }
+
+        _db.AuditEntries.Add(CreateAudit(tenantId, actorId, "TenantMembershipAssigned", new
+        {
+            subjectId,
+            subjectType = subjectTypeValue,
+            role = role.Name
+        }));
+        await _db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return Ok(ToMembershipSummary(membership));
+    }
+
+    [HttpDelete("tenants/{tenantId}/memberships/{subjectType}/{subjectId}")]
+    public async Task<IActionResult> RevokeMembership(string tenantId, string subjectType, string subjectId, CancellationToken ct)
+    {
+        var actorId = await GetPlatformAdministratorIdAsync(ct);
+        if (actorId is null) return Forbid();
+        if (!Enum.TryParse<MembershipSubjectType>(subjectType, true, out var parsedSubjectType))
+            return BadRequest(new { error = "SubjectType must be User or ApiKey." });
+        if (subjectId.Length > 128) return BadRequest(new { error = "SubjectId must contain at most 128 characters." });
+        if (!await _db.Tenants.IgnoreQueryFilters().AnyAsync(tenant => tenant.Id == tenantId, ct)) return NotFound();
+
+        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId });
+        var subjectTypeValue = parsedSubjectType.ToString();
+        var memberships = await _db.TenantMemberships.IgnoreQueryFilters()
+            .Where(item => item.TenantId == tenantId && item.SubjectType == subjectTypeValue && item.SubjectId == subjectId)
+            .ToListAsync(ct);
+        if (memberships.Count == 0) return NoContent();
+
+        _db.TenantMemberships.RemoveRange(memberships);
+        if (parsedSubjectType == MembershipSubjectType.User)
+        {
+            var assignments = await _db.RoleAssignments.IgnoreQueryFilters()
+                .Where(item => item.TenantId == tenantId && item.UserId == subjectId)
+                .ToListAsync(ct);
+            _db.RoleAssignments.RemoveRange(assignments);
+        }
+
+        _db.AuditEntries.Add(CreateAudit(tenantId, actorId, "TenantMembershipRevoked", new
+        {
+            subjectId,
+            subjectType = subjectTypeValue,
+            roles = memberships.Select(item => item.Role).ToArray()
+        }));
+        await _db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
     [HttpGet("tenants/{tenantId}/rooms/{roomId}/support-grants")]
     public async Task<IActionResult> ListSupportGrants(string tenantId, string roomId, CancellationToken ct)
     {
@@ -190,10 +335,21 @@ public sealed class PlatformAdminController : ControllerBase
     private static SupportGrantSummary ToSupportGrantSummary(TenantSupportGrantEntity grant) => new(
         grant.Id, grant.TenantId, grant.UserId, grant.Scope, grant.Reason,
         grant.GrantedAt, grant.GrantedBy, grant.ExpiresAt, grant.RevokedAt, grant.RevokedBy);
+
+    private static TenantMembershipSummary ToMembershipSummary(TenantMembershipEntity membership) => new(
+        membership.SubjectId, membership.SubjectType, membership.Role, membership.GrantedAt, membership.GrantedBy);
 }
 
 public sealed record TenantSummary(string Id, string Name, string Slug, TenantPlan Plan, TenantLimits Limits, bool IsActive);
 public sealed record UpdateTenantPlanRequest(string Plan);
+public sealed record AssignTenantMembershipRequest(string Role);
+public sealed record TenantMembershipSummary(string SubjectId, string SubjectType, string Role, DateTime GrantedAt, string? GrantedBy);
 public sealed record CreateSupportGrantRequest(string UserId, string Reason, DateTime ExpiresAt);
 public sealed record SupportGrantSummary(string Id, string TenantId, string UserId, string Scope, string Reason,
     DateTime GrantedAt, string GrantedBy, DateTime ExpiresAt, DateTime? RevokedAt, string? RevokedBy);
+
+internal enum MembershipSubjectType
+{
+    User,
+    ApiKey
+}

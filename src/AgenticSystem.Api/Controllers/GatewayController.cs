@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Api.Hubs;
 
 namespace AgenticSystem.Api.Controllers;
 
@@ -14,11 +16,15 @@ public class GatewayController : ControllerBase
 {
     private readonly IServiceGateway _gateway;
     private readonly ILogger<GatewayController> _logger;
+    private readonly IHubContext<GatewayHub> _hubContext;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public GatewayController(IServiceGateway gateway, ILogger<GatewayController> logger)
+    public GatewayController(IServiceGateway gateway, ILogger<GatewayController> logger, IHubContext<GatewayHub> hubContext, ITenantContextAccessor tenantContextAccessor)
     {
         _gateway = gateway;
         _logger = logger;
+        _hubContext = hubContext;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     /// <summary>
@@ -104,6 +110,7 @@ public class GatewayController : ControllerBase
     {
         await _gateway.EnableServiceAsync(name);
         _logger.LogInformation("✅ Service enabled via API: {Service}", name);
+        await BroadcastServiceStatusAsync(name, enabled: true);
         return NoContent();
     }
 
@@ -116,6 +123,17 @@ public class GatewayController : ControllerBase
     {
         await _gateway.DisableServiceAsync(name);
         _logger.LogWarning("⛔ Service disabled via API: {Service}", name);
+        await BroadcastServiceStatusAsync(name, enabled: false);
         return NoContent();
     }
+
+    private Task BroadcastServiceStatusAsync(string serviceName, bool enabled) =>
+        _hubContext.Clients.Group($"tenant:{_tenantContextAccessor.CurrentTenantId}:gateway")
+            .SendAsync("ServiceStatusChanged", new
+            {
+                serviceName,
+                enabled,
+                tenantId = _tenantContextAccessor.CurrentTenantId,
+                timestamp = DateTime.UtcNow
+            });
 }

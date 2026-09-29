@@ -11,10 +11,12 @@ namespace AgenticSystem.Api.Hubs;
 public class OnnxHub : Hub
 {
     private readonly ILogger<OnnxHub> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public OnnxHub(ILogger<OnnxHub> logger)
+    public OnnxHub(ILogger<OnnxHub> logger, ITenantContextAccessor tenantContextAccessor)
     {
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     public async Task SubscribeToTenant(string tenantId)
@@ -22,8 +24,9 @@ public class OnnxHub : Hub
         if (string.IsNullOrWhiteSpace(tenantId)) return;
 
         EnsureAuthorizedForTenant(tenantId, "subscribe to");
+        var authorizedTenantId = _tenantContextAccessor.CurrentTenantId;
 
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}");
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{authorizedTenantId}");
         _logger.LogInformation("🔌 Client {ConnectionId} subscribed to ONNX updates for tenant {TenantId}",
             Context.ConnectionId, tenantId);
     }
@@ -33,15 +36,16 @@ public class OnnxHub : Hub
         if (string.IsNullOrWhiteSpace(tenantId)) return;
 
         EnsureAuthorizedForTenant(tenantId, "unsubscribe from");
+        var authorizedTenantId = _tenantContextAccessor.CurrentTenantId;
 
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"tenant:{tenantId}");
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"tenant:{authorizedTenantId}");
         _logger.LogInformation("🔌 Client {ConnectionId} unsubscribed from ONNX updates for tenant {TenantId}",
             Context.ConnectionId, tenantId);
     }
 
     private void EnsureAuthorizedForTenant(string tenantId, string action)
     {
-        var userTenantId = Context.User?.FindFirst("tenant_id")?.Value;
+        var userTenantId = _tenantContextAccessor.CurrentTenantId;
         if (!string.Equals(tenantId?.Trim(), userTenantId?.Trim(), StringComparison.OrdinalIgnoreCase))
         {
             throw new HubException($"Unauthorized to {action} this tenant.");

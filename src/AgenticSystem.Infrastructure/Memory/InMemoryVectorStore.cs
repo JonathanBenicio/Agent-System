@@ -178,28 +178,27 @@ public class InMemoryVectorStore : IVectorStore
 
     public Task<VectorStoreStats> GetStatsAsync(string tenantId, CancellationToken ct = default)
     {
-        long docCount = 0;
-        long totalBytes = 0;
+        var tenantDocs = new List<EmbeddingDocument>();
 
         foreach (var (name, docs) in _collections)
         {
             lock (docs)
             {
-                var tenantDocs = docs.Where(d => d.TenantId == tenantId).ToList();
-                docCount += tenantDocs.Count;
-                totalBytes += tenantDocs.Sum(d => 
-                    d.Content.Length * 2 + 
-                    (d.Embedding?.Length ?? 0) * 4 + 
-                    (d.ContextualSummary?.Length ?? 0) * 2);
+                tenantDocs.AddRange(docs.Where(d => d.TenantId == tenantId));
             }
         }
 
-        return Task.FromResult(new VectorStoreStats
+        return Task.FromResult(VectorUsageCalculator.Calculate(tenantId, tenantDocs.Select(document =>
         {
-            TenantId = tenantId,
-            DocumentCount = docCount,
-            TotalBytes = totalBytes
-        });
+            var metadata = document.Metadata ?? new Dictionary<string, string>();
+            metadata.TryGetValue("document_id", out var documentId);
+            var sourceBytes = metadata.TryGetValue("source_bytes", out var rawBytes) && long.TryParse(rawBytes, out var parsedBytes)
+                ? parsedBytes
+                : (long?)null;
+            return new VectorDocumentUsage(document.Id, documentId, sourceBytes,
+                document.Content.Length * 2L + (document.ContextualSummary?.Length ?? 0) * 2L,
+                (document.Embedding?.Length ?? 0) * 4L);
+        })));
     }
 
     private static double CalculateRelevance(string query, EmbeddingDocument doc, float[]? queryEmbedding)

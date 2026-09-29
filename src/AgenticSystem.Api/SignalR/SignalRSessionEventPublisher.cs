@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Api.Hubs;
+using AgenticSystem.Api.SignalR;
 
 namespace AgenticSystem.Api.SignalR;
 
@@ -23,12 +24,12 @@ public class SignalRSessionEventPublisher : IEventPublisher
         {
             case SessionCreatedEvent e:
                 _logger.LogDebug("📡 Broadcasting SessionCreated for {SessionId} to user {UserId}", e.SessionId, e.UserId);
-                await _hubContext.Clients.User(e.UserId).SendAsync("SessionCreated", e.SessionId, ct);
+                await _hubContext.Clients.Group(TenantSignalRGroups.User(e.TenantId, e.UserId)).SendAsync("SessionCreated", e.SessionId, ct);
                 break;
 
             case SessionEndedEvent e:
                 _logger.LogDebug("📡 Broadcasting SessionEnded for {SessionId} to user {UserId}", e.SessionId, e.UserId);
-                await _hubContext.Clients.User(e.UserId).SendAsync("SessionEnded", e.SessionId, ct);
+                await _hubContext.Clients.Group(TenantSignalRGroups.User(e.TenantId, e.UserId)).SendAsync("SessionEnded", e.SessionId, ct);
                 break;
         }
     }

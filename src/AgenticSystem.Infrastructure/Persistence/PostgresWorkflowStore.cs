@@ -168,6 +168,7 @@ public class PostgresWorkflowStore : IWorkflowStore
         var execution = new WorkflowExecution
         {
             Id = execEntity.Id,
+            TenantId = execEntity.TenantId,
             WorkflowId = execEntity.WorkflowId,
             WorkflowName = execEntity.WorkflowName,
             Status = Enum.Parse<WorkflowExecutionStatus>(execEntity.Status),
@@ -216,6 +217,7 @@ public class PostgresWorkflowStore : IWorkflowStore
         return entities.Select(entity => new WorkflowExecution
         {
             Id = entity.Id,
+            TenantId = entity.TenantId,
             WorkflowId = entity.WorkflowId,
             WorkflowName = entity.WorkflowName,
             Status = Enum.Parse<WorkflowExecutionStatus>(entity.Status),

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using AgenticSystem.Core.Interfaces;
 
 namespace AgenticSystem.Api.Hubs;
 
@@ -11,10 +12,12 @@ namespace AgenticSystem.Api.Hubs;
 public class ExternalAgentHub : Hub
 {
     private readonly ILogger<ExternalAgentHub> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public ExternalAgentHub(ILogger<ExternalAgentHub> logger)
+    public ExternalAgentHub(ILogger<ExternalAgentHub> logger, ITenantContextAccessor tenantContextAccessor)
     {
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     /// <summary>
@@ -70,7 +73,7 @@ public class ExternalAgentHub : Hub
         _logger.LogInformation("👁️ Client joined as External Orchestrator: {ConnectionId}", Context.ConnectionId);
     }
 
-    private string RequireTenantId() => Context.User?.FindFirst("tenant_id")?.Value
+    private string RequireTenantId() => _tenantContextAccessor.CurrentTenantId
         ?? throw new HubException("Tenant identity is required.");
 
     public override async Task OnConnectedAsync()

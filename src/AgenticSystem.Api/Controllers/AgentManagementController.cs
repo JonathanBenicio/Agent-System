@@ -14,13 +14,19 @@ public class AgentManagementController : ControllerBase
 {
     private readonly IMetaAgent _metaAgent;
     private readonly IAgentFactory _agentFactory;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ITenantIsolationEnforcer _tenantIsolationEnforcer;
 
     public AgentManagementController(
         IMetaAgent metaAgent,
-        IAgentFactory agentFactory)
+        IAgentFactory agentFactory,
+        ITenantContextAccessor tenantContextAccessor,
+        ITenantIsolationEnforcer tenantIsolationEnforcer)
     {
         _metaAgent = metaAgent;
         _agentFactory = agentFactory;
+        _tenantContextAccessor = tenantContextAccessor;
+        _tenantIsolationEnforcer = tenantIsolationEnforcer;
     }
 
     [HttpGet("agents")]
@@ -40,6 +46,9 @@ public class AgentManagementController : ControllerBase
     [HttpPost("agents")]
     public async Task<IActionResult> CreateAgent([FromBody] AgentSpecification spec)
     {
+        if (!await _tenantIsolationEnforcer.CanCreateAgentAsync(_tenantContextAccessor.CurrentTenantId, spec.Name))
+            return Conflict(new { error = "O limite de agentes deste tenant foi atingido." });
+
         var agent = await _agentFactory.CreateCustomAgentAsync(spec);
         return Created($"api/agent/agents/{agent.Name}", new AgentInfo
         {
@@ -76,6 +85,9 @@ public class AgentManagementController : ControllerBase
         var existing = agents.FirstOrDefault(a => a.Name.Equals(name, System.StringComparison.OrdinalIgnoreCase));
         if (existing is null)
             return NotFound(new { error = $"Agent '{name}' not found." });
+
+        if (!await _tenantIsolationEnforcer.CanCreateAgentAsync(_tenantContextAccessor.CurrentTenantId, name))
+            return Conflict(new { error = "O limite de agentes deste tenant foi atingido." });
 
         await _agentFactory.RemoveAgentAsync(name);
         spec.Name = name;

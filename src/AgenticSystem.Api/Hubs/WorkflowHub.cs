@@ -13,15 +13,17 @@ namespace AgenticSystem.Api.Hubs;
 public class WorkflowHub : Hub
 {
     private readonly ILogger<WorkflowHub> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public WorkflowHub(ILogger<WorkflowHub> logger)
+    public WorkflowHub(ILogger<WorkflowHub> logger, ITenantContextAccessor tenantContextAccessor)
     {
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     public async Task SubscribeToWorkflow(string executionId)
     {
-        var tenantId = Context.User?.FindFirst("tenant_id")?.Value;
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         if (string.IsNullOrWhiteSpace(tenantId)) throw new HubException("Tenant identity is required.");
         await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}:workflow:{executionId}");
         _logger.LogDebug("Client {ConnectionId} subscribed to workflow {ExecutionId}",
@@ -30,7 +32,7 @@ public class WorkflowHub : Hub
 
     public async Task UnsubscribeFromWorkflow(string executionId)
     {
-        var tenantId = Context.User?.FindFirst("tenant_id")?.Value;
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         if (!string.IsNullOrWhiteSpace(tenantId))
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"tenant:{tenantId}:workflow:{executionId}");
     }

@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHmac } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { messageSnapshot, assertMessagesPersisted } from './evidence.mjs';
 const directory = process.env.BACKEND_VALIDATION_OUTPUT_DIR || resolve(import.meta.dirname, '../TestResults/backend-core-remediation/current');
 const protectedHistoricalOutput = resolve(import.meta.dirname, '../TestResults/backend-documentation/current');
@@ -15,8 +16,8 @@ function token(user, tenantId) {
   const body = b64({ alg: 'HS256', typ: 'JWT' }) + '.' + b64({ iss: 'AgenticSystem', aud: 'AgenticSystem', sub: user, tenant_id: tenantId, role: 'Viewer', exp: Math.floor(Date.now()/1000)+3600 });
   return body + '.' + createHmac('sha256', 'documentation-validation-jwt-secret-local-only-2026').update(body).digest('base64url');
 }
-async function req(path, user = alice, tenantId = tenant, method = 'GET', body) {
-  const r = await fetch('http://127.0.0.1:5188'+path, { method, headers: { Authorization:'Bearer '+token(user,tenantId),'Content-Type':'application/json' }, body:body?JSON.stringify(body):undefined, signal:AbortSignal.timeout(10000) });
+async function req(path, user = alice, tenantId = tenant, method = 'GET', body, timeoutMs = 10000) {
+  const r = await fetch('http://127.0.0.1:5188'+path, { method, headers: { Authorization:'Bearer '+token(user,tenantId),'Content-Type':'application/json' }, body:body?JSON.stringify(body):undefined, signal:AbortSignal.timeout(timeoutMs) });
   let data;try{data=await r.json();}catch{}return {status:r.status,data};
 }
 async function test(id, criterion, fn) {
@@ -54,6 +55,16 @@ await test('SESSION-MESSAGES-'+phase,'message ownership and nonempty content per
   check(own.data.some(m=>m.role==='user'&&m.content===fixture.prompt)&&own.data.some(m=>m.role==='assistant'&&m.content===fixture.answer),'known fixture messages missing');
   if (previous) assertMessagesPersisted(previous.messagesSnapshot, messagesSnapshot);
   return 'owner messages=200 other-user=404; count='+messagesSnapshot.count+(previous?'; content/IDs/order/timestamps survived restart':'; snapshot captured');
+});
+if(phase==='after-restart')await test('MAF-RESTORE','real chat resumes from persisted MAF state after API restart',async()=>{
+  const maf=JSON.parse(readFileSync(resolve(directory,'maf-session-fixture.json'),'utf8'));
+  if(maf.run!==core.run||maf.baseline!==core.baseline)throw new Error('MAF fixture belongs to another validation run/revision');
+  const resumed=await req('/api/chat',alice,tenant,'POST',{message:'Continue this same conversation. Reply briefly.',sessionId:maf.sessionId,provider:'Ollama',model:'qwen2.5:0.5b'},240000);
+  check(resumed.status===200&&resumed.data?.success===true&&resumed.data?.sessionId===maf.sessionId,'resume status='+resumed.status+' success='+resumed.data?.success+' session='+resumed.data?.sessionId);
+  execFileSync('dotnet',[resolve(import.meta.dirname,'bin/Release/net10.0/BackendDiagnostics.dll'),'--maf-restore-verify'],{encoding:'utf8'});
+  const restored=JSON.parse(readFileSync(resolve(directory,'maf-session-after-restore.json'),'utf8'));
+  check(restored.result==='passed'&&restored.sessionId===maf.sessionId&&restored.restoredAt,'persisted MAF restore marker is missing');
+  return 'same session resumed after process restart; MAF deserialization marker persisted; prior state hash='+maf.stateHash;
 });
 writeFileSync(resolve(directory,'session-'+phase+'.json'),JSON.stringify({baseline:core.baseline,run:core.run,sessionId:id,phase,messagesSnapshot,context:'known synthetic messages saved via real PostgreSQL store; validates persistence/CRUD, not successful LLM conversation',results},null,2)+'\n');
 if(results.some(r=>r.result==='failed'))process.exitCode=1;

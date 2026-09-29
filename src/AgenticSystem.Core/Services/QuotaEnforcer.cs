@@ -16,6 +16,7 @@ public class QuotaEnforcer : IQuotaEnforcer
     private readonly ITenantQuotaRepository _repository;
     private readonly ILogger<QuotaEnforcer> _logger;
     private readonly ITenantContextAccessor? _tenantContextAccessor;
+    private readonly IEventBus? _eventBus;
 
     /// <summary>
     /// In-memory per-minute sliding window counters. These are intentionally NOT persisted
@@ -28,12 +29,14 @@ public class QuotaEnforcer : IQuotaEnforcer
         IMemoryCache cache,
         ITenantQuotaRepository repository,
         ILogger<QuotaEnforcer> logger,
-        ITenantContextAccessor? tenantContextAccessor = null)
+        ITenantContextAccessor? tenantContextAccessor = null,
+        IEventBus? eventBus = null)
     {
         ArgumentNullException.ThrowIfNull(cache);
         _repository = repository;
         _logger = logger;
         _tenantContextAccessor = tenantContextAccessor;
+        _eventBus = eventBus;
     }
 
     /// <inheritdoc/>
@@ -113,6 +116,33 @@ public class QuotaEnforcer : IQuotaEnforcer
 
         // Persist to database — this is the source of truth for daily totals.
         await _repository.IncrementUsageAsync(ownerId, tokensUsed, costUsd, ct);
+
+        if (_eventBus is not null)
+        {
+            try
+            {
+                await _eventBus.PublishAsync(new SystemBusEvent
+                {
+                    EventType = "FinOps.TurnCostUpdated",
+                    Source = nameof(QuotaEnforcer),
+                    TenantId = ownerId,
+                    Payload = new Dictionary<string, object>
+                    {
+                        ["TurnCostSummary"] = new
+                        {
+                            tenantId = ownerId,
+                            tokens = tokensUsed,
+                            costUsd,
+                            recordedAt = DateTime.UtcNow
+                        }
+                    }
+                }, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish tenant cost summary for {TenantId}", ownerId);
+            }
+        }
 
         // Invalidate cache so the next check reflects real DB values immediately.
 

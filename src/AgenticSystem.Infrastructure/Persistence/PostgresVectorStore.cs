@@ -424,20 +424,40 @@ public class PostgresVectorStore : IVectorStore
     public async Task<VectorStoreStats> GetStatsAsync(string tenantId, CancellationToken ct = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        var stats = await db.VectorDocuments
-            .AsNoTracking()
-            .Where(x => x.TenantId == tenantId)
-            .GroupBy(x => x.TenantId)
-            .Select(g => new VectorStoreStats
-            {
-                TenantId = g.Key,
-                DocumentCount = g.Count(),
-                // Simplification for Postgres: length of text and embeddings roughly calculated
-                TotalBytes = g.Sum(x => x.Content.Length * 2 + (x.EmbeddingData != null ? x.EmbeddingData.Length : 0))
-            })
-            .FirstOrDefaultAsync(ct);
+        var connection = db.Database.GetDbConnection();
+        await db.Database.OpenConnectionAsync(ct);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT id, metadata->>'document_id', NULLIF(metadata->>'source_bytes', '')::bigint,
+                       length(content)::bigint * 2, COALESCE(vector_dims(embedding) * 4, 0)
+                FROM vector_documents
+                WHERE "TenantId" = @tenantId
+                """;
+            var tenantParameter = command.CreateParameter();
+            tenantParameter.ParameterName = "tenantId";
+            tenantParameter.Value = tenantId;
+            command.Parameters.Add(tenantParameter);
 
-        return stats ?? new VectorStoreStats { TenantId = tenantId, DocumentCount = 0, TotalBytes = 0 };
+            var documents = new List<VectorDocumentUsage>();
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                documents.Add(new VectorDocumentUsage(
+                    reader.GetString(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetInt64(2),
+                    reader.GetInt64(3),
+                    reader.GetInt32(4)));
+            }
+
+            return VectorUsageCalculator.Calculate(tenantId, documents);
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
+        }
     }
 
     private static EmbeddingDocument MapToModel(VectorDocumentEntity entity)
