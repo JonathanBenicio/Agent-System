@@ -1,5 +1,7 @@
 # CONSOLIDATED_DOCS.md
 
+> Snapshot 2026-09-29: [especificações das 46 issues abertas](docs/plan/open-issues-specification-audit-2026-09-29.md).
+
 > Contratos operacionais atuais: [hub do backend](docs/backend/README.md). Evidências: [validação](docs/backend/validation/2026-09-28.md).
 > Meta de chat, sessões e configurações efetivamente usadas: [Issue #123](https://github.com/JonathanBenicio/Agent-System/issues/123), [ADR-039](docs/architecture/adr/039-chat-session-user-tenant-settings.md), [story](docs/USER-STORIES.md#back-chat-123--chat-sessoes-e-configuracoes-efetivamente-usadas) e [plano](docs/plan/chat-session-user-settings.md).
 > Correções da revisão: [PR #118](docs/backend/validation/2026-09-28-review-fixes.md).

@@ -1,5 +1,7 @@
 # Plano de Migração Completa — MAF 1.6.2 (Revisado)
 
+> **Nota de estado (2026-09-29):** este é um artefato histórico da linha MAF 1.6.x; seus diagnósticos de PowerFx, FIDES e Hyperlight não representam o código atual. `AgentYamlValidator` usa `RecalcEngine.Check`; FIDES está registrado com regras regex estáticas; o executor Hyperlight ainda simula saída. Consulte as especificações atuais de [#104](open-issues-specification-audit-2026-09-29.md#issue-104-powerfx-em-manifests), [#105](open-issues-specification-audit-2026-09-29.md#issue-105-hyperlight--sandbox-real) e [#106](open-issues-specification-audit-2026-09-29.md#issue-106-fides--prote%C3%A7%C3%A3o-de-dados-sens%C3%ADveis).
+
 > **Status:** Planejamento  
 > **Data:** 25 de Maio de 2026  
 > **Princípio Arquitetural:** Tudo é criado dinamicamente pelo chat e persistido no PostgreSQL. Nada deve depender de arquivos em disco ou configuração estática em C#.

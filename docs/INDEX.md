@@ -1,5 +1,7 @@
 # Documentação — AgenticSystem
 
+- [Especificações das 46 issues abertas (snapshot 2026-09-29)](plan/open-issues-specification-audit-2026-09-29.md)
+
 ## Backend: contratos e evidências
 
 - [Hub](backend/README.md)
