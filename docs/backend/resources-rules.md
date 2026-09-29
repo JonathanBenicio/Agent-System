@@ -35,7 +35,7 @@ Os valores são definidos por `TenantLimits.FreeTier/ProTier/EnterpriseTier` em 
 | Controle | Comportamento efetivo | Limite da métrica |
 |---|---|---|
 | RPM do chat | Rate limiter por tenant usa o menor limite positivo entre plano/configuração aplicáveis. | Estado do limiter é local ao processo; sincronização de RPM entre réplicas não foi provada nesta entrega. |
-| Tokens e custo diário | Plano atua como teto e a quota configurada pode restringir. PostgreSQL persiste contadores, reset UTC e atualização atômica. | A integração de `RecordUsageAsync` publica resumo FinOps tenant-scoped após persistir, mas o uso disso por todos os caminhos de chat ainda precisa ser confirmado antes de tratar o evento como completo. |
+| Tokens e custo diário | Plano atua como teto e a quota configurada pode restringir. Cada chamada ao provider recebe preflight estimado; respostas persistem tokens/custo retornados pelo provider, com estimativa conservadora quando ele omite uso. PostgreSQL grava os totais por tenant e reset UTC atomicamente. | Quota excedida retorna 429 no chat REST e OpenAI-compatível; SSE termina com evento de erro. O ledger detalhado de auditoria é best-effort; o contador `tenant_quotas` é a fonte de enforcement. |
 | Sessões simultâneas | Usa `Tenant.Limits.MaxConcurrentSessions`; sessão nova é recusada quando o total ativo alcança o limite. | Conta sessões ativas persistidas. |
 | Agentes | `Tenant.Limits.MaxAgents` limita novas configurações dinâmicas e YAML. | Atualizações de agentes existentes não consomem novo slot. |
 | Documentos | `Tenant.Limits.MaxDocuments` limita documentos lógicos no vetor; várias partes/chunks do mesmo documento contam uma vez. | Documentos legados sem ID lógico usam fallback por registro. |
@@ -53,4 +53,4 @@ Uma chamada de chat pode selecionar uma sala pelo contexto `rag.knowledgeRoomId`
 
 ## Validação associada
 
-Na branch `fix/backend-core-tenancy`, os testes PostgreSQL/Ollama cobriram teto de agentes, ingestão com contagem/bytes lógicos e RAG de ponta a ponta; testes de quota cobriram 32 atualizações concorrentes em dois repositórios e factories de contexto. A cobertura total da suíte medida pela coleta Cobertura desta validação foi 21,08%, abaixo da meta de 80% do CI; veja [evidências e gaps](validation/backend-core-remediation.md).
+Na branch `fix/backend-core-tenancy`, os testes PostgreSQL/Ollama cobriram teto de agentes, ingestão/bytes lógicos, RAG de ponta a ponta, serviço Gateway habilitado/desabilitado com broadcast tenant-scoped e quotas reais após restart. 32 atualizações concorrentes por dois repositórios/factories persistiram exatamente uma vez. Skills A/B e estado MAF permaneceram estáveis após restart. O limiter de RPM é local ao processo; armazenamento físico total e consumo de hosts múltiplos não foram medidos. Veja [evidências e limites](validation/backend-core-remediation.md).

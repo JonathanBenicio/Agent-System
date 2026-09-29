@@ -6,7 +6,7 @@ Este documento descreve os contratos da branch `fix/backend-core-tenancy`. O est
 
 | Camada | Fonte | Regra |
 |---|---|---|
-| Identidade | API key ou JWT/Supabase | API keys são localizadas por SHA-256; JWT usa o handler configurado. |
+| Identidade | API key ou JWT/Supabase | API keys são localizadas por SHA-256; MVC normalmente recebe `X-Api-Key`, enquanto `/v1/chat/completions` recebe API key opaca no Bearer. JWT de tenant/Supabase usa o handler configurado. |
 | Tenant | `tenant_id`, `app_metadata.tenant_id`, `X-Tenant-Id` | Tenant precisa existir e estar ativo. Identidade autenticada não pode selecionar outro tenant pelo header. |
 | Membership | `tenant_memberships` | Liga principal, tenant, tipo de principal e papel. Papéis efetivos são carregados para o tenant selecionado. |
 | API key | `access_api_keys` + membership `ApiKey` | A role armazenada é usada; roles desconhecidas falham fechadas. |
@@ -38,11 +38,13 @@ Administração da plataforma não concede acesso implícito a salas, documentos
 
 ## HTTP e SignalR
 
-Envie `X-Api-Key` ou `Authorization: Bearer`. Para rotas comuns, `X-Tenant-Id` precisa corresponder ao `tenant_id`/`app_metadata.tenant_id`; sem header, a claim é usada. Tenant desconhecido/inativo e membership ausente são negados antes do endpoint. Falha de credencial pode resultar em 401; seleção, atividade ou membership inválida resulta em 403.
+Envie `X-Api-Key` ou `Authorization: Bearer <JWT>` nas rotas comuns; o compatível OpenAI aceita a API key opaca como Bearer. Para rotas comuns, `X-Tenant-Id` precisa corresponder ao `tenant_id`/`app_metadata.tenant_id`; sem header, a claim é usada. Tenant desconhecido/inativo e membership ausente são negados antes do endpoint. Falha de credencial pode resultar em 401; seleção, atividade ou membership inválida resulta em 403.
 
 Nos hubs, tenant de query/header precisa corresponder à claim e à membership. O filtro valida invocações e o middleware valida negociação/handshake. Grupos de chat, Gateway, Workflow, ExternalAgent e ONNX incluem tenant. Notificações de sessão são endereçadas ao grupo `{tenant}:{user}`, evitando `Clients.User` global para a mesma identidade em vários tenants. Workflow restaura `TenantId` persistido ao carregar execuções para manter o endereço do grupo após reload.
 
-Validação integrada conectou o mesmo subject simultaneamente em tenants A e B: SessionUpdated, resultado ExternalAgent, cancelamento de Workflow e evento ONNX chegaram somente à conexão do tenant A. Gateway verificou que `GetDashboard` respondeu apenas à conexão que invocou o método e confirmou grupos tenant-scoped no código; não havia serviço Gateway registrado para provocar um evento de broadcast real.
+O registry e os dashboards do Gateway são globais, portanto controller REST e hub exigem registro explícito em `platform_administrators`; role `Viewer`/`Admin` do tenant não autoriza essas operações. Serviço desconhecido retorna 404 e não emite mudança de estado. O hub só autoriza dashboard/status/subscribe para Platform Admin.
+
+Validação integrada conectou o mesmo Platform Admin em tenants A e B: `ServiceStatusChanged` de disable/enable foi entregue apenas à conexão A; um Viewer recebeu 403 no REST e negação explícita no hub; serviço inexistente retornou 404 sem broadcast. A fixture Gateway existe somente no ambiente `Validation`; ela valida controller e transporte SignalR, enquanto o produto ainda não registra serviços Gateway de providers na inicialização.
 
 ## Sessões MAF
 
@@ -50,10 +52,10 @@ O store hospedado aplica `IsolationKeyScopedAgentSessionStore`; a chave da API c
 
 ## Planos, quotas e limites
 
-Free/Pro/Enterprise definem o teto de RPM, tokens/dia e custo/dia. `Tenant.Limits` e configuração de quota persistida podem restringir o teto; alterar o plano não sobrescreve limites configurados. Incremento/reset diário usam operações atômicas em PostgreSQL e a leitura de autorização não reutiliza snapshot diário em cache. RPM do chat também usa o menor limite efetivo para o tenant.
+Free/Pro/Enterprise definem o teto de RPM, tokens/dia e custo/dia. `Tenant.Limits` e configuração de quota persistida podem restringir o teto; alterar o plano não sobrescreve limites configurados. Antes de cada chamada ao provider, o cliente mede uso estimado e consulta o teto; após resposta, registra tokens/custo reais (ou estimativa conservadora se o provider não enviar uso) no PostgreSQL. Falha por quota é HTTP 429 em REST e OpenAI-compatível; SSE envia evento de erro terminal. RPM do limiter continua local ao processo e usa o menor limite efetivo do tenant.
 
 `Tenant.Limits` é a única fonte de teto para sessões simultâneas, agentes dinâmicos, contagem de documentos e bytes de origem. `TenantResourceLimits` projeta esses campos para compatibilidade; o campo mensal legado é `MaxDailyCostUsd × 30`, não uma segunda quota. Veja [recursos e regras](resources-rules.md) para enforcement e limites das métricas de armazenamento.
 
 ## Evidência e lacunas
 
-PostgreSQL 16/pgvector/Ollama isolados validaram rotas de tenant, membership, ACL/grants, quotas, RAG e hubs. A execução mais recente passou 697 testes, ignorou um teste e não teve falhas; integração passou 39/39; store/quota/skills passou 10/10; fixture de backfill legado passou. A cobertura Cobertura medida ficou em 21,08%, abaixo da meta de 80% do CI. Evidência discriminada e limitações estão no [relatório](validation/backend-core-remediation.md).
+PostgreSQL 16/pgvector/Ollama isolados validaram rotas de tenant, membership, ACL/grants, quotas, RAG e hubs. A execução Release passou 701 testes, ignorou 1 e não teve falhas. Integração core passou 40/40, broadcast Gateway passou, store/quota/skills passou 10/10, backfill legado passou e os seis cenários pós-restart passaram, incluindo skills, quota tokens/custo e OpenAI-compatível por API key. Evidências e limitações estão no [relatório](validation/backend-core-remediation.md).

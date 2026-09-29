@@ -1,60 +1,56 @@
 # Validação — isolamento e funcionalidades centrais do backend
 
-Data: 2026-09-28/29 · Branch: `fix/backend-core-tenancy` · Plano: [backend-core-remediation](../../plan/backend-core-remediation.md) · ADR: [035](../../architecture/adr/035-backend-core-isolation-and-reliability.md). Este relatório registra a validação local da branch; não substitui o relatório histórico de [documentação](2026-09-28.md).
+Data: 2026-09-29 · Commit validado: `151e6d4` · Branch: `fix/backend-core-tenancy` · [Plano](../../plan/backend-core-remediation.md) · [ADR-035](../../architecture/adr/035-backend-core-isolation-and-reliability.md). O relatório histórico de documentação está em [2026-09-28](2026-09-28.md) e não foi sobrescrito.
 
-## Resultado atual
+## Resultado desta rodada
 
-API Release e harness de diagnóstico compilam com zero avisos e erros. PostgreSQL 16.15/pgvector 0.8.6 e Ollama foram executados localmente em ambiente isolado, com credenciais e dados sintéticos.
+Build Release da solução e harness: zero avisos e zero erros. Validação executada contra PostgreSQL 16.15/pgvector 0.8.6, API Release isolada em loopback e Ollama local; todas as identidades/chaves e os documentos da execução são sintéticos.
 
-| Verificação | Resultado | Evidência |
+| Verificação | Resultado | O que foi exercitado |
 |---|---:|---|
-| `AgenticSystem.Tests` Release | 697 aprovados, 1 ignorado, 0 falhas (698 total) | TRX em `tests/TestResults/backend-core-gap-closure/run-2026-09-28/coverage/backend-core-gap-closure.trx`. O teste ignorado depende de PostgreSQL no contexto de teste convencional. |
-| Cobertura Cobertura global da coleta | **21,08% de linhas** (12.729/60.359); 25,71% de branches | XML em `tests/TestResults/backend-core-gap-closure/run-2026-09-28/coverage/38b0c3b3-237d-4efd-9d3f-2dc19f0a475c/coverage.cobertura.xml`. A meta declarada no CI é 80% e não foi atendida. A PR deve permanecer draft até a meta ser alcançada ou o contrato de CI ser corrigido numa mudança aprovada. |
-| Integração HTTP/SignalR/PostgreSQL/Ollama | 39 aprovados, 0 falhas | `core-results.json`: auth e membership, ACL/support grants, agentes, quotas de sala/documento, ingestão, RAG real, sessão, REST/SSE, hubs e rate limit. |
-| Store, skills e quotas | 10 aprovados, 0 falhas | Inclui 32 atualizações concorrentes em dois repositórios e factories de contexto independentes; limites persistidos, reset UTC, busca vetorial/room. |
-| Backfill de membership legado | aprovado | Fixture inicia no schema anterior à migration, insere role assignment e API key, aplica migrations pendentes e verifica tenant/papel/grantor e ausência de Platform Admin. Banco temporário foi descartado ao final. |
-| Continuação de sessão após restart | aprovado | Chat real retomou o mesmo `sessionId`; o estado MAF persistido foi desserializado e o marcador de restauração sobreviveu no store. Mensagens e ownership também sobreviveram. |
-| Auditoria de dependências | sem pacotes vulneráveis conhecidos | `dotnet list AgenticSystem.sln package --vulnerable --include-transitive`, fontes NuGet atuais na execução. |
+| `AgenticSystem.Tests` | 701 aprovados, 1 ignorado, 0 falhas (702 total) | TRX em `tests/TestResults/backend-core-gap-closure/followup/backend-gap-followup.trx`. O único ignorado é a integração PostgreSQL do store no contexto de teste convencional. |
+| Integração core HTTP/SignalR | 40/40 aprovados | JWT/API key, memberships, ACL e grants, limites de agentes, upload, RAG real, REST/SSE e os cinco hubs; Gateway viewer/Platform Admin e chamadas cross-tenant. |
+| Gateway broadcaster | aprovado | Serviço de fixture no ambiente `Validation`: Platform Admin desabilitou/habilitou e `ServiceStatusChanged` chegou apenas ao grupo do tenant A; tenant B não recebeu os eventos. Viewer recebeu 403 e serviço inexistente retornou 404 sem emitir evento. |
+| Store/skills/quotas e backfill | 10/10; backfill aprovado | Busca/room em PostgreSQL, seeding isolado, 32 incrementos em duas factories de contexto/repositórios, bloqueio no teto, reset UTC, ceiling Free e migration partindo do schema legado. |
+| Após restart da API | 6/6 aprovados | Mensagens/ownership e estado MAF, quatro skills distintas por tenant, consumo diário persistido, bloqueio real de tokens/custo em REST e OpenAI-compatível (429) e erro terminal em SSE. Rejeições não aumentaram os contadores nem chamaram o LLM. |
+| OpenAPI/inventário/links | 204/204 actions visíveis correspondem; 209 rotas fonte sem duplicatas; 665 links sem falhas | OpenAPI inclui respostas 429 para chat REST/OpenAI-compatível e 404 para Gateway; inventário foi gerado novamente do código. |
+| Auditoria NuGet | sem vulnerabilidades conhecidas na última verificação | As dependências não mudaram nesta rodada final. |
 
-Artefatos de runtime ficam sob `tests/TestResults/backend-core-gap-closure/run-2026-09-28/` e são ignorados pelo Git. O baseline documental anterior permanece em `tests/TestResults/backend-documentation/current`; esses resultados não foram sobrescritos.
+Os artefatos brutos ficam sob `tests/TestResults/backend-core-gap-closure/run-2026-09-28/` e são ignorados pelo Git. Incluem `core-results.json`, `gateway-results.json`, `session-after-restart.json`, `skills-before-restart.json`, `skills-after-restart.json` e fixtures temporárias. A key usada pelo OpenAI-compatível é aleatória, sintética e fica somente nesse diretório isolado. O banco temporário do backfill foi descartado; volumes locais de validação foram preservados.
 
-## Critérios dos gaps
+## Resultado por gap
 
-| Gap | Estado | Evidência/limite |
+| Gap | Estado | Evidência e fronteira |
 |---|---|---|
-| #111 — identidade/API keys | Resolvido nesta branch | API key usa papel da membership no tenant, papel inválido falha fechado; seleção de tenant inválida é negada. |
-| #112 — isolamento HTTP e hubs | Parcial | O mesmo subject conectado em dois tenants recebeu eventos de Chat, ExternalAgent, Workflow e ONNX somente no tenant autorizado. Gateway confirmou resposta direta restrita à conexão invocadora e o grupo tenant-scoped no código; não havia serviço registrado para disparar o broadcast de estado real. |
-| #113 — RAG por sala | Resolvido nesta branch | Ingestão associada a sala com ACL; chat real recuperou o chunk autorizado, registrou referência de artefato ao chunk e respondeu a frase sintética indexada. Tenant B não viu chunks. |
-| #114 — estado MAF durável | Resolvido nesta branch | Continuação de conversa após restart restaurou estado MAF e conservou o mesmo ID; ownership tenant/usuário verificado. |
-| #115 — quota PostgreSQL | Resolvido para concorrência testada | 32 incrementos via duas instâncias independentes persistiram exatamente uma vez, além de limite, reset UTC e teto do plano. O teste usa duas instâncias de repositório/contexto no mesmo processo, não dois processos/hosts de API. |
-| #116 — catálogo de skills | Resolvido nesta branch | Defaults estáveis por tenant, IDs/customizações preservados e concorrência de catálogo exercitada. |
-| #117 — administração e migration | Resolvido para os cenários da fixture | Backfill legado preserva tenant e papel sem criar admin de plataforma. Rotas GET/PUT/DELETE de memberships são admin-only, auditadas e sincronizam compatibilidade de papel. Fixture é sintética e não uma cópia representativa de produção. |
-| Limites de recursos | Resolvido para controles cobertos | Sessões, agentes, documentos lógicos e bytes de origem usam `Tenant.Limits`; plano é teto e configuração pode restringir. Bytes não representam uso físico total em disco; custo mensal legado é projeção de custo diário × 30. |
-| Meta de cobertura CI | **Não resolvida** | Coleta completa mediu 21,08%, abaixo de 80%. Nenhum limite foi reduzido. A entrega não pode ser considerada integralmente pronta para merge enquanto esse gate continuar obrigatório. |
+| #111 — role/API key e seleção de tenant | Resolvido nos cenários exercitados | API key usa papel da membership e não recebe Admin implicitamente; identidade/tenant divergente é negada. O auth selector agora envia bearer opaco ao esquema API key, sem selecionar um handler Supabase inexistente. |
+| #112 — isolamento HTTP/SignalR e Gateway | Resolvido nos cenários exercitados | Mesmo subject simultâneo em A/B recebeu eventos de Chat, ExternalAgent, Workflow, ONNX e Gateway apenas no escopo esperado. Gateway REST/hub e mutações globais exigem Platform Admin explícito; Viewer é negado. Fixture valida a emissão real do hub/broadcaster, mas o runtime de produção ainda não registra providers em `IServiceGateway`. |
+| #113 — RAG com room ACL | Resolvido | Upload em sala autorizada, metadata lógica no PostgreSQL, zero chunks no tenant B e resposta real do chat contendo a frase do chunk autorizado. |
+| #114 — isolamento e persistência MAF | Resolvido | REST/SSE/SignalR funcionam; owner/tenant são validados. Após restart, chat retomou o mesmo `sessionId`, preservou mensagens e desserializou o estado MAF persistido. |
+| #115 — quota e concorrência | Resolvido para os limites testados | 32 incrementos foram contabilizados exatamente uma vez em duas instâncias de repositório/factory. Chat real persistiu tokens/custo e, após restart, REST e OpenAI-compatível responderam 429 para token/custo excedidos; SSE transmitiu a negação. O RPM do limiter é por processo e não foi testado em dois hosts. |
+| #116 — catálogo de skills por tenant | Resolvido | IDs/defaults distintos para tenants A/B, catálogo completo e estável antes/depois do restart, customização preservada. |
+| #117 — membership/plano/suporte/migration | Resolvido nos cenários da fixture | Backfill sintético preservou tenant/papel sem criar Platform Admin; GET/PUT/DELETE auditados, roles independentes, support grant expirável/revogável com ACL obrigatória e teto de plano/configuração aplicados. Não é cópia representativa da base de produção. |
+| Limites físicos e custo mensal | Limite de medição documentado | Armazenamento mede bytes de origem associados a documento lógico, não o espaço físico total (índices, overhead ou cópias). `MaxMonthlyBudgetUsd` legado continua sendo `MaxDailyCostUsd × 30`, não um acumulador mensal independente. |
 
-O evento FinOps `TurnCostUpdated` é emitido por `QuotaEnforcer.RecordUsageAsync` depois da persistência, com erro do publisher isolado; o diagnóstico unitário cobre esse comportamento, mas não foi provado que todos os caminhos de chat chamem `RecordUsageAsync`. A documentação não afirma que o evento esteja conectado a todo consumo real.
+O cliente quota-metered verifica um orçamento estimado antes de cada despacho via `IChatClient` e grava uso efetivo do provider após sucesso; se o provider não retornar tokens, usa estimativa conservadora. Abrange chat agentic REST/SSE/SignalR e OpenAI-compatível que usam o orquestrador. `TokenAuditService` é best-effort; `tenant_quotas` permanece a fonte de enforcement. Outros caminhos de chamada direta de provider, fora desse runtime de chat, não foram certificados por esta rodada.
+
+## Cobertura
+
+A última coleta Cobertura conhecida foi 21,08% (12.729/60.359 linhas; 25,71% branches), abaixo do gate de 80% do CI. Essa medição antecede este follow-up e não foi repetida nesta rodada: seguindo a prioridade definida pelo usuário, o trabalho focou em fechar os gaps funcionais e validar seus fluxos reais. O gate de cobertura permanece pendente e o PR continua draft; nenhum limite do CI foi reduzido.
 
 ## Reprodução
 
-Com os serviços locais de validação isolados ativos:
+Com o PostgreSQL/Ollama locais ativos e `BACKEND_VALIDATION_OUTPUT_DIR` apontando para uma pasta isolada:
 
 ```powershell
-$env:BACKEND_VALIDATION_OUTPUT_DIR = (Join-Path $PWD 'tests/TestResults/backend-core-gap-closure/run-2026-09-28')
 node tests/backend-validation/core-diagnostics.mjs
+node tests/backend-validation/gateway-diagnostics.mjs
 dotnet tests/backend-validation/bin/Release/net10.0/BackendDiagnostics.dll
 dotnet tests/backend-validation/bin/Release/net10.0/BackendDiagnostics.dll --legacy-backfill
-```
-
-Após a criação das fixtures de sessão, reinicie somente a API isolada e rode:
-
-```powershell
+dotnet tests/backend-validation/bin/Release/net10.0/BackendDiagnostics.dll --maf-session-fixture
+dotnet tests/backend-validation/bin/Release/net10.0/BackendDiagnostics.dll --session-fixture
+node tests/backend-validation/session-diagnostics.mjs
+# parar e iniciar somente a API isolada
 node tests/backend-validation/session-diagnostics.mjs --after-restart
 ```
 
-Suíte e cobertura:
-
-```powershell
-dotnet test tests/AgenticSystem.Tests/AgenticSystem.Tests.csproj --no-restore --configuration Release --logger 'trx;LogFileName=backend-core-gap-closure.trx' --collect:'XPlat Code Coverage' --results-directory 'tests/TestResults/backend-core-gap-closure/run-2026-09-28/coverage' --verbosity minimal
-```
-
-Os scripts usam PostgreSQL/Ollama do compose local de validação e a API isolada em `127.0.0.1:5188`; não usam dados nem endpoints de produção. `stop-api.ps1` interrompe somente o processo/API de validação e preserva serviços/volumes.
+Os scripts recusam o diretório histórico `tests/TestResults/backend-documentation/current`, conectam apenas ao compose local em `127.0.0.1:55432`/`127.0.0.1:11435` e usam a API em `127.0.0.1:5188`.
