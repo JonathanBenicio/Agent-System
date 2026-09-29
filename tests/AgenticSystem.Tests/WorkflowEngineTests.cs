@@ -13,6 +13,7 @@ public class WorkflowEngineTests
     private readonly IWorkflowStore _store;
     private readonly IDirectAgentRequestExecutor _agentExecutor;
     private readonly IToolManager _toolManager;
+    private readonly IPermissionService _permissionService;
     private readonly DefaultWorkflowEngine _engine;
     private const string TenantId = "default";
 
@@ -21,11 +22,136 @@ public class WorkflowEngineTests
         _store = new InMemoryWorkflowStore();
         _agentExecutor = Substitute.For<IDirectAgentRequestExecutor>();
         _toolManager = Substitute.For<IToolManager>();
+        _permissionService = Substitute.For<IPermissionService>();
+        _permissionService.HasPermissionAsync(
+                Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Permission>(), Arg.Any<CancellationToken>())
+            .Returns(true);
         _engine = new DefaultWorkflowEngine(
             _store,
             _agentExecutor,
             _toolManager,
-            Substitute.For<ILogger<DefaultWorkflowEngine>>());
+            Substitute.For<ILogger<DefaultWorkflowEngine>>(),
+            permissionService: _permissionService);
+    }
+
+    [Fact]
+    public async Task WorkflowLease_ExcludesConcurrentWorkerAndAllowsRecoveryAfterExpiry()
+    {
+        var execution = await _engine.StartAsync(TenantId, new WorkflowDefinition
+        {
+            Id = "wf-lease",
+            Name = "Lease test",
+            Steps = [new WorkflowStep { Id = "step", Name = "Step", StepType = WorkflowStepType.Wait, Timeout = TimeSpan.FromMinutes(1) }]
+        });
+
+        var firstClaim = await _store.ClaimNextExecutionAsync("worker-a", TimeSpan.FromMilliseconds(20));
+        firstClaim.Should().NotBeNull();
+        firstClaim!.ExecutionId.Should().Be(execution.Id);
+        (await _store.ClaimNextExecutionAsync("worker-b", TimeSpan.FromMinutes(1))).Should().BeNull();
+
+        await Task.Delay(40);
+
+        var recoveredClaim = await _store.ClaimNextExecutionAsync("worker-b", TimeSpan.FromMinutes(1));
+        recoveredClaim.Should().NotBeNull();
+        recoveredClaim!.WorkerId.Should().Be("worker-b");
+        (await _store.RenewExecutionLeaseAsync(firstClaim, TimeSpan.FromMinutes(1))).Should().BeFalse();
+        await _store.ReleaseExecutionLeaseAsync(recoveredClaim);
+    }
+
+    [Fact]
+    public async Task InMemoryWorkflowStore_ScopesDefinitionsAndRejectsCrossTenantIdReuse()
+    {
+        var definition = new WorkflowDefinition { Id = "shared-definition-id", Name = "Tenant A definition" };
+        await _store.SaveDefinitionAsync("tenant-a", definition);
+
+        (await _store.GetDefinitionAsync("tenant-b", definition.Id)).Should().BeNull();
+        (await _store.ListDefinitionsAsync("tenant-b")).Should().BeEmpty();
+        var crossTenantSave = () => _store.SaveDefinitionAsync(
+            "tenant-b",
+            new WorkflowDefinition { Id = definition.Id, Name = "Tenant B overwrite" });
+        await crossTenantSave.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Workflow definition tenant ownership cannot be changed.");
+
+        (await _store.GetDefinitionAsync("tenant-a", definition.Id))!.Name.Should().Be("Tenant A definition");
+    }
+
+    [Fact]
+    public async Task ToolStep_RequiresInitiatorPermissionAndPassesStableIdempotencyKey()
+    {
+        _toolManager.ExecuteToolAsync("external-tool", Arg.Any<ToolInput>(), Arg.Any<CancellationToken>())
+            .Returns(ToolResult.Ok("done"));
+        var definition = new WorkflowDefinition
+        {
+            Id = "wf-tool-auth",
+            Name = "Tool authorization",
+            Steps = [new WorkflowStep { Id = "publish", Name = "Publish", StepType = WorkflowStepType.Action, ToolName = "external-tool" }]
+        };
+
+        var started = await _engine.StartAsync(TenantId, definition, initiatedBy: "user-allowed");
+        await ProcessClaimedExecutionAsync(started.Id);
+
+        await _permissionService.Received(1).HasPermissionAsync(
+            "user-allowed", "tools/external-tool", Permission.Execute, Arg.Any<CancellationToken>());
+        await _toolManager.Received(1).ExecuteToolAsync(
+            "external-tool",
+            Arg.Is<ToolInput>(input => input.UserId == "user-allowed" && input.IdempotencyKey == $"{started.Id}:publish"),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ToolStep_WithoutExecutePermissionFailsWithoutCallingTool()
+    {
+        _permissionService.HasPermissionAsync(
+                "user-denied", "tools/external-tool", Permission.Execute, Arg.Any<CancellationToken>())
+            .Returns(false);
+        var started = await _engine.StartAsync(TenantId, new WorkflowDefinition
+        {
+            Id = "wf-tool-denied",
+            Name = "Denied tool",
+            Steps = [new WorkflowStep { Id = "publish", Name = "Publish", StepType = WorkflowStepType.Action, ToolName = "external-tool" }]
+        }, initiatedBy: "user-denied");
+
+        await ProcessClaimedExecutionAsync(started.Id);
+
+        (await _engine.GetExecutionAsync(TenantId, started.Id))!.Status.Should().Be(WorkflowExecutionStatus.Failed);
+        await _toolManager.DidNotReceive().ExecuteToolAsync(
+            Arg.Any<string>(), Arg.Any<ToolInput>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ToolStep_RetriesConfiguredAttemptsWithTheSameIdempotencyKey()
+    {
+        var keys = new List<string?>();
+        _toolManager.ExecuteToolAsync(
+                "external-tool",
+                Arg.Do<ToolInput>(input => keys.Add(input.IdempotencyKey)),
+                Arg.Any<CancellationToken>())
+            .Returns(
+                _ => ToolResult.Fail("transient failure"),
+                _ => ToolResult.Ok("completed"));
+        var started = await _engine.StartAsync(TenantId, new WorkflowDefinition
+        {
+            Id = "wf-tool-retry",
+            Name = "Retry idempotent action",
+            Steps =
+            [
+                new WorkflowStep
+                {
+                    Id = "publish",
+                    Name = "Publish",
+                    StepType = WorkflowStepType.Action,
+                    ToolName = "external-tool",
+                    MaxRetries = 1
+                }
+            ]
+        }, initiatedBy: "user-allowed");
+
+        await ProcessClaimedExecutionAsync(started.Id);
+
+        (await _engine.GetExecutionAsync(TenantId, started.Id))!.Status.Should().Be(WorkflowExecutionStatus.Completed);
+        await _toolManager.Received(2).ExecuteToolAsync(
+            "external-tool", Arg.Any<ToolInput>(), Arg.Any<CancellationToken>());
+        keys.Should().Equal($"{started.Id}:publish", $"{started.Id}:publish");
     }
 
     [Fact]
@@ -52,11 +178,11 @@ public class WorkflowEngineTests
         var execution = await _engine.StartAsync(TenantId, definition, initiatedBy: "user-1");
 
         // Assert
-        execution.Status.Should().Be(WorkflowExecutionStatus.Running);
+        execution.Status.Should().Be(WorkflowExecutionStatus.Pending);
         execution.WorkflowId.Should().Be("wf-1");
 
         // Give it some time to process background tasks
-        await Task.Delay(500);
+        await ProcessClaimedExecutionAsync(execution.Id);
 
         var finalState = await _engine.GetExecutionAsync(TenantId, execution.Id);
         finalState!.Status.Should().Be(WorkflowExecutionStatus.Completed);
@@ -92,7 +218,7 @@ public class WorkflowEngineTests
             .Returns(new AgentResponse { Success = true, Content = "Research complete" });
 
         var started = await _engine.StartAsync(TenantId, definition, initiatedBy: "user-1");
-        await Task.Delay(100);
+        await ProcessClaimedExecutionAsync(started.Id);
 
         var finalState = await _engine.GetExecutionAsync(TenantId, started.Id);
         finalState!.Status.Should().Be(WorkflowExecutionStatus.Completed);
@@ -132,7 +258,7 @@ public class WorkflowEngineTests
         await _store.SaveDefinitionAsync(TenantId, definition);
 
         var started = await _engine.StartAsync(TenantId, definition, initiatedBy: "user-1");
-        await Task.Delay(100);
+        await ProcessClaimedExecutionAsync(started.Id);
 
         var waiting = await _engine.GetExecutionAsync(TenantId, started.Id);
         waiting!.Status.Should().Be(WorkflowExecutionStatus.WaitingForApproval);
@@ -142,7 +268,7 @@ public class WorkflowEngineTests
             Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
 
         await _engine.ApproveAsync(TenantId, started.Id, "reviewer-1");
-        await Task.Delay(100);
+        await ProcessClaimedExecutionAsync(started.Id);
 
         var completed = await _engine.GetExecutionAsync(TenantId, started.Id);
         completed!.Status.Should().Be(WorkflowExecutionStatus.Completed);
@@ -178,7 +304,7 @@ public class WorkflowEngineTests
         await _store.SaveDefinitionAsync(TenantId, definition);
 
         var started = await _engine.StartAsync(TenantId, definition, initiatedBy: "user-1");
-        await Task.Delay(100);
+        await ProcessClaimedExecutionAsync(started.Id);
 
         var rejected = await _engine.RejectAsync(TenantId, started.Id, "reviewer-1", "Needs revision");
 
@@ -209,7 +335,7 @@ public class WorkflowEngineTests
             .Returns(new AgentResponse { Success = true, Content = "Done" });
 
         var started = await _engine.StartAsync(TenantId, original, initiatedBy: "user-1");
-        await Task.Delay(100);
+        await ProcessClaimedExecutionAsync(started.Id);
 
         var edited = new WorkflowDefinition
         {
@@ -225,7 +351,7 @@ public class WorkflowEngineTests
         await _store.SaveDefinitionAsync(TenantId, edited);
 
         await _engine.ApproveAsync(TenantId, started.Id, "reviewer-1");
-        await Task.Delay(100);
+        await ProcessClaimedExecutionAsync(started.Id);
 
         var completed = await _engine.GetExecutionAsync(TenantId, started.Id);
         completed!.Status.Should().Be(WorkflowExecutionStatus.Completed);
@@ -248,10 +374,11 @@ public class WorkflowEngineTests
         await _store.SaveDefinitionAsync(TenantId, definition);
 
         var started = await _engine.StartAsync(TenantId, definition);
-        await Task.Delay(100);
+        await ProcessClaimedExecutionAsync(started.Id);
         var waiting = await _engine.GetExecutionAsync(TenantId, started.Id);
         waiting!.WorkflowDefinitionSnapshotJson = waiting.WorkflowDefinitionSnapshotJson
             .Replace("Snapshot Integrity", "Tampered Integrity", StringComparison.Ordinal);
+        await _store.SaveExecutionAsync(TenantId, waiting);
 
         var act = () => _engine.ApproveAsync(TenantId, started.Id, "reviewer-1");
 
@@ -268,17 +395,20 @@ public class WorkflowEngineTests
         {
             Id = "wf-wait",
             Name = "Wait Workflow",
-            Steps = [new WorkflowStep { Id = "wait", Name = "Wait", StepType = WorkflowStepType.Wait, Timeout = TimeSpan.FromSeconds(2) }]
+            Steps = [new WorkflowStep { Id = "wait", Name = "Wait", StepType = WorkflowStepType.Wait, Timeout = TimeSpan.FromMilliseconds(300) }]
         };
 
         var started = await _engine.StartAsync(TenantId, definition);
-        await Task.Delay(50);
+        await ProcessClaimedExecutionAsync(started.Id);
 
         var waiting = await _engine.GetExecutionAsync(TenantId, started.Id);
-        waiting!.Status.Should().Be(WorkflowExecutionStatus.Running);
-        waiting.StepExecutions.Should().ContainSingle().Which.Status.Should().Be(WorkflowExecutionStatus.Running);
+        waiting!.Status.Should().Be(WorkflowExecutionStatus.Pending);
+        waiting.StepExecutions.Should().ContainSingle().Which.Status.Should().Be(WorkflowExecutionStatus.Pending);
+        waiting.StepExecutions.Single().WaitUntilUtc.Should().BeAfter(DateTime.UtcNow);
+        (await _store.ClaimNextExecutionAsync("early-worker", TimeSpan.FromMinutes(1))).Should().BeNull();
 
-        await Task.Delay(2200);
+        await Task.Delay(350);
+        await ProcessClaimedExecutionAsync(started.Id);
         var completed = await _engine.GetExecutionAsync(TenantId, started.Id);
         completed!.Status.Should().Be(WorkflowExecutionStatus.Completed);
     }
@@ -294,7 +424,7 @@ public class WorkflowEngineTests
         };
 
         var started = await _engine.StartAsync(TenantId, definition);
-        await Task.Delay(100);
+        await ProcessClaimedExecutionAsync(started.Id);
 
         var completed = await _engine.GetExecutionAsync(TenantId, started.Id);
         completed!.Status.Should().Be(WorkflowExecutionStatus.Failed);
@@ -336,7 +466,7 @@ public class WorkflowEngineTests
 
         // Act
         var execution = await _engine.StartAsync(TenantId, definition);
-        await Task.Delay(1000);
+        await ProcessClaimedExecutionAsync(execution.Id);
 
         // Assert
         var finalState = await _engine.GetExecutionAsync(TenantId, execution.Id);
@@ -376,7 +506,7 @@ public class WorkflowEngineTests
 
         // Act
         var execution = await _engine.StartAsync(TenantId, definition);
-        await Task.Delay(500);
+        await ProcessClaimedExecutionAsync(execution.Id);
 
         // Assert
         var finalState = await _engine.GetExecutionAsync(TenantId, execution.Id);
@@ -385,5 +515,20 @@ public class WorkflowEngineTests
         badStep.Status.Should().Be(WorkflowExecutionStatus.Failed);
         badStep.CompensationExecuted.Should().BeTrue();
         await _agentExecutor.Received(1).ExecuteAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<UserContext>(), "Cleaner", Arg.Any<CancellationToken>());
+    }
+
+    private async Task ProcessClaimedExecutionAsync(string executionId)
+    {
+        var claim = await _store.ClaimNextExecutionAsync("workflow-test-worker", TimeSpan.FromMinutes(1));
+        claim.Should().NotBeNull();
+        claim!.ExecutionId.Should().Be(executionId);
+        try
+        {
+            await _engine.ProcessClaimedExecutionAsync(claim);
+        }
+        finally
+        {
+            await _store.ReleaseExecutionLeaseAsync(claim);
+        }
     }
 }

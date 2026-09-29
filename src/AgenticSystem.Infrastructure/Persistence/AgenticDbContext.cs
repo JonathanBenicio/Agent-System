@@ -41,6 +41,8 @@ public class AgenticDbContext : DbContext
     public DbSet<RoleAssignmentEntity> RoleAssignments => Set<RoleAssignmentEntity>();
     public DbSet<TenantMembershipEntity> TenantMemberships => Set<TenantMembershipEntity>();
     public DbSet<PlatformAdministratorEntity> PlatformAdministrators => Set<PlatformAdministratorEntity>();
+    public DbSet<PlatformConfigEntity> PlatformConfigs => Set<PlatformConfigEntity>();
+    public DbSet<PlatformConfigAuditEntity> PlatformConfigAudits => Set<PlatformConfigAuditEntity>();
     public DbSet<TenantSupportGrantEntity> TenantSupportGrants => Set<TenantSupportGrantEntity>();
     public DbSet<OutboxMessageEntity> OutboxMessages => Set<OutboxMessageEntity>();
     public DbSet<AgentPolicyEntity> AgentPolicies => Set<AgentPolicyEntity>();

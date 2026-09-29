@@ -678,6 +678,8 @@ public class WorkflowExecutionConfiguration : IEntityTypeConfiguration<WorkflowE
         builder.Property(e => e.WorkflowDefinitionVersion).HasColumnName("workflow_definition_version");
         builder.Property(e => e.WorkflowDefinitionHash).HasColumnName("workflow_definition_hash").HasMaxLength(64);
         builder.Property(e => e.WorkflowDefinitionSnapshotJson).HasColumnName("workflow_definition_snapshot").HasColumnType("jsonb");
+        builder.Property(e => e.LeaseOwner).HasColumnName("lease_owner").HasMaxLength(128);
+        builder.Property(e => e.LeaseExpiresAt).HasColumnName("lease_expires_at");
         builder.Property(e => e.Status).HasColumnName("status").HasMaxLength(64).IsRequired();
         builder.Property(e => e.VariablesJson).HasColumnName("variables").HasColumnType("jsonb").IsRequired();
         builder.Property(e => e.InitiatedBy).HasColumnName("initiated_by").HasMaxLength(128);
@@ -688,6 +690,8 @@ public class WorkflowExecutionConfiguration : IEntityTypeConfiguration<WorkflowE
         builder.HasIndex(e => e.WorkflowId).HasDatabaseName("ix_workflow_executions_workflow_id");
         builder.HasIndex(e => e.Status).HasDatabaseName("ix_workflow_executions_status");
         builder.HasIndex(e => e.StartedAt).HasDatabaseName("ix_workflow_executions_started_at");
+        builder.HasIndex(e => new { e.Status, e.LeaseExpiresAt, e.StartedAt })
+            .HasDatabaseName("ix_workflow_executions_claim");
     }
 }
 
@@ -708,6 +712,7 @@ public class WorkflowStepExecutionConfiguration : IEntityTypeConfiguration<Workf
         builder.Property(s => s.CompensationExecuted).HasColumnName("compensation_executed");
         builder.Property(s => s.StartedAt).HasColumnName("started_at");
         builder.Property(s => s.CompletedAt).HasColumnName("completed_at");
+        builder.Property(s => s.WaitUntilUtc).HasColumnName("wait_until_utc");
 
         builder.HasIndex(s => s.ExecutionId).HasDatabaseName("ix_workflow_step_executions_execution_id");
         builder.HasIndex(s => new { s.ExecutionId, s.StepId }).IsUnique().HasDatabaseName("ix_workflow_step_executions_unique_step");

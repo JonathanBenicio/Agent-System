@@ -1,3 +1,5 @@
+#pragma warning disable MAAI001 // Required experimental MAF session-store integration; reviewed under issue #120.
+
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.Services;
@@ -29,9 +31,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.DurableTask.Client;
 using Pgvector.EntityFrameworkCore;
 using AgenticSystem.Core.Models;
-using Microsoft.DurableTask.Client;
 namespace AgenticSystem.Infrastructure.Extensions;
 
 public static class ServiceCollectionExtensions
@@ -47,7 +49,7 @@ public static class ServiceCollectionExtensions
             .AddAgenticLlmServices(configuration)
             .AddAgenticGateway()
             .AddAgenticQualityGates()
-            .AddAgenticMcpAndSkills(configuration)
+            .AddAgenticMcpAndSkills()
             .AddAgenticAgentFramework(configuration)
             .AddAgenticRagAndMemory(configuration)
             .AddAgenticDocumentServices()
@@ -121,7 +123,8 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<ILLMRuntimeContextAccessor>(),
             sp.GetRequiredService<IQuotaEnforcer>(),
             sp.GetRequiredService<ITokenAuditService>(),
-            sp.GetRequiredService<ILogger<ContextAwareChatClient>>()));
+            sp.GetRequiredService<ILogger<ContextAwareChatClient>>(),
+            sp.GetRequiredService<IServiceGateway>()));
         services.AddScoped<ILLMProviderApiKeyService, LLMProviderApiKeyService>();
 
         services.AddSingleton<IChatClient>(sp =>
@@ -157,6 +160,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<ICostTracker, CostTracker>();
         services.AddSingleton<IServiceGateway, ServiceGateway>();
+        services.AddSingleton<GatewayProviderRegistry>();
+        services.AddHostedService<GatewayProviderRegistrationHostedService>();
         services.AddSingleton<ITokenAuditService, AgenticSystem.Infrastructure.Observability.TokenAuditService>();
         return services;
     }
@@ -169,7 +174,7 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
-    private static IServiceCollection AddAgenticMcpAndSkills(this IServiceCollection services, IConfiguration configuration)
+    private static IServiceCollection AddAgenticMcpAndSkills(this IServiceCollection services)
     {
         services.AddSingleton<IMCPPluginManager, MCPPluginManager>();
         services.AddSingleton<McpToolsAIFunctionAdapter>();
@@ -178,19 +183,6 @@ public static class ServiceCollectionExtensions
 
         // Registros para Banner Production
         services.AddSingleton<AgenticSystem.Core.Skills.BannerProductionSkills>();
-        services.AddScoped<AgenticSystem.Infrastructure.AI.DynamicMafWorkflowCompiler>();
-        services.AddScoped<AgenticSystem.Infrastructure.AI.DurableWorkflowCompiler>();
-        
-        services.AddScoped<AgenticSystem.Core.Interfaces.IDynamicWorkflowCompiler>(sp =>
-        {
-            var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
-            if (string.Equals(storageMode, "PostgreSQL", StringComparison.OrdinalIgnoreCase))
-            {
-                return sp.GetRequiredService<AgenticSystem.Infrastructure.AI.DurableWorkflowCompiler>();
-            }
-            return sp.GetRequiredService<AgenticSystem.Infrastructure.AI.DynamicMafWorkflowCompiler>();
-        });
-
         services.AddSingleton<AgenticSystem.Core.Interfaces.ITool, AgenticSystem.Infrastructure.Tools.BannerProductionTool>();
 
         return services;
@@ -218,7 +210,7 @@ public static class ServiceCollectionExtensions
             services.AddSingleton<SimpleSessionStoreAdapter>();
             // AgentSessionStore: uses SimpleSessionStoreAdapter backed by PostgreSQL ISessionStore.
             // This covers all deployment modes (Docker, bare-metal, cloud) without Azure Functions dependency.
-            services.AddSingleton<Microsoft.Agents.AI.Hosting.AgentSessionStore>(
+            services.AddSingleton<Microsoft.Agents.AI.AgentSessionStore>(
                 sp => sp.GetRequiredService<SimpleSessionStoreAdapter>());
 
             services.AddSingleton<OrchestratorAuxiliaryToolService>();
@@ -249,7 +241,6 @@ public static class ServiceCollectionExtensions
                     sp.GetRequiredService<ILoggerFactory>(),
                     sp,
                     orchestratorMetadata,
-                    sp.GetRequiredService<IAgentFactory>(),
                     sp.GetRequiredService<OrchestratorInstructionService>(),
                     sp.GetRequiredService<OrchestratorToolBindingService>(),
                     sp.GetRequiredService<OrchestratorAuxiliaryToolService>(),
@@ -276,7 +267,7 @@ public static class ServiceCollectionExtensions
             services.AddScoped<AgentFrameworkDirectExecutionService>(sp =>
                 new AgentFrameworkDirectExecutionService(
                     sp.GetRequiredService<AgentFrameworkFactory>(),
-                    sp.GetRequiredService<Microsoft.Agents.AI.Hosting.AgentSessionStore>(),
+                    sp.GetRequiredService<Microsoft.Agents.AI.AgentSessionStore>(),
                     sp.GetRequiredService<ISessionManager>(),
                     sp.GetRequiredService<ILogger<AgentFrameworkDirectExecutionService>>(),
                     sp,
@@ -289,8 +280,8 @@ public static class ServiceCollectionExtensions
                 ServiceLifetime.Scoped);
 
             hostedOrchestratorBuilder.WithSessionStore(
-                static (sp, _) => sp.GetRequiredService<Microsoft.Agents.AI.Hosting.AgentSessionStore>(),
-                ServiceLifetime.Scoped);
+                static (sp, _) => sp.GetRequiredService<Microsoft.Agents.AI.AgentSessionStore>(),
+                ServiceLifetime.Singleton);
 
             services.AddSingleton<IFrameworkOrchestratorService, FrameworkOrchestratorService>();
         }
@@ -381,6 +372,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<SelfImprovementBackgroundJob>();
         services.AddHostedService<ExternalQuotaSyncHostedService>();
         services.AddHostedService<OnnxInferenceBackgroundWorker>();
+        services.AddHostedService<Persistence.WorkflowExecutionBackgroundService>();
         
         var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
         if (!string.Equals(storageMode, "SQLite", StringComparison.OrdinalIgnoreCase) && 
@@ -597,25 +589,14 @@ public static class ServiceCollectionExtensions
             AutoDeploySchema = true
         };
         services.AddDurableTaskPostgreSql(durableSettings);
-        services.ConfigureDurableWorkflows(options =>
-        {
-            // Ativa o suporte durável a workflows no Microsoft Agent Framework
-        });
-
-        services.AddDurableTaskClient(builder =>
-        {
-            builder.UseOrchestrationService();
-        });
-
-        // Registrar IWorkflowClient no contêiner de DI do Microsoft Agent Framework de forma resiliente e multi-tenant
-        services.AddSingleton<Microsoft.Agents.AI.DurableTask.Workflows.IWorkflowClient>(sp =>
-        {
-            var durableClient = sp.GetRequiredService<Microsoft.DurableTask.Client.DurableTaskClient>();
-            var clientType = typeof(Microsoft.Agents.AI.DurableTask.Workflows.IWorkflowClient).Assembly
-                .GetType("Microsoft.Agents.AI.DurableTask.Workflows.DurableWorkflowClient")
-                ?? throw new InvalidOperationException("Não foi possível resolver o tipo interno 'DurableWorkflowClient'.");
-            return (Microsoft.Agents.AI.DurableTask.Workflows.IWorkflowClient)Activator.CreateInstance(clientType, durableClient)!;
-        });
+        // Keep DurableTask for explicitly registered workflows only. Tenant-defined workflows
+        // run through IWorkflowEngine/IWorkflowStore; this static registry cannot resolve them.
+        var maxDurableWorkflowSupersteps = configuration.GetValue(
+            "AgenticSystem:LocalExecution:DurableWorkflowMaxSupersteps",
+            100);
+        services.ConfigureDurableWorkflows(
+            options => options.MaxSupersteps = maxDurableWorkflowSupersteps,
+            clientBuilder: static builder => builder.UseOrchestrationService());
 
 
         services.ConfigureDurableAgents(options =>
@@ -629,6 +610,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection UsePostgresPlatformStores(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IPlatformConfigStore, PostgresPlatformConfigStore>(services);
         ReplaceSingleton<IDataConnectorStore, PostgresDataConnectorStore>(services);
         ReplaceSingleton<IAgentMarketplace, PostgresAgentMarketplace>(services);
         ReplaceSingleton<IMemoryLifecycleStore, PostgresMemoryLifecycleStore>(services);

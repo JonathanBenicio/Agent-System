@@ -12,6 +12,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
     private readonly IWorkflowStore _store;
     private readonly IDirectAgentRequestExecutor _agentExecutor;
     private readonly IToolManager _toolManager;
+    private readonly IPermissionService? _permissionService;
     private readonly IWorkflowEventBroadcaster? _broadcaster;
     private readonly ILogger<DefaultWorkflowEngine> _logger;
 
@@ -20,11 +21,13 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         IDirectAgentRequestExecutor agentExecutor,
         IToolManager toolManager,
         ILogger<DefaultWorkflowEngine> logger,
-        IWorkflowEventBroadcaster? broadcaster = null)
+        IWorkflowEventBroadcaster? broadcaster = null,
+        IPermissionService? permissionService = null)
     {
         _store = store;
         _agentExecutor = agentExecutor;
         _toolManager = toolManager;
+        _permissionService = permissionService;
         _broadcaster = broadcaster;
         _logger = logger;
     }
@@ -44,7 +47,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             WorkflowId = workflow.Id,
             WorkflowName = workflow.Name,
             TenantId = tenantId,
-            Status = WorkflowExecutionStatus.Running,
+            Status = WorkflowExecutionStatus.Pending,
             WorkflowDefinitionVersion = workflow.Version,
             WorkflowDefinitionHash = HashDefinitionSnapshot(definitionSnapshot),
             WorkflowDefinitionSnapshotJson = definitionSnapshot,
@@ -56,11 +59,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         await _store.SaveExecutionAsync(tenantId, execution, ct);
 
         if (_broadcaster != null)
-        {
             await _broadcaster.BroadcastExecutionStarted(execution);
-        }
-
-        _ = Task.Run(() => ProcessExecutionAsync(tenantId, execution.Id, workflow));
 
         return execution;
     }
@@ -75,6 +74,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         if (execution == null) throw new ArgumentException("Execution not found", nameof(executionId));
 
         _logger.LogInformation("⏯️ Resuming workflow execution: {ExecutionId}", executionId);
+        _ = RestoreDefinitionSnapshot(execution);
 
         if (additionalInput != null)
         {
@@ -84,12 +84,8 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             }
         }
 
-        execution.Status = WorkflowExecutionStatus.Running;
+        execution.Status = WorkflowExecutionStatus.Pending;
         await _store.SaveExecutionAsync(tenantId, execution, ct);
-
-        var definition = RestoreDefinitionSnapshot(execution);
-
-        _ = Task.Run(() => ProcessExecutionAsync(tenantId, execution.Id, definition));
 
         return execution;
     }
@@ -109,13 +105,12 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         step.Output["approved"] = true;
         step.Output["approvedBy"] = approvedBy;
         step.CompletedAt = DateTime.UtcNow;
-        execution.Status = WorkflowExecutionStatus.Running;
+        execution.Status = WorkflowExecutionStatus.Pending;
         await _store.SaveExecutionAsync(tenantId, execution, ct);
 
         if (_broadcaster is not null)
             await _broadcaster.BroadcastStepCompleted(tenantId, executionId, step);
 
-        _ = Task.Run(() => ProcessExecutionAsync(tenantId, execution.Id, definition), ct);
         return execution;
     }
 
@@ -180,6 +175,21 @@ public class DefaultWorkflowEngine : IWorkflowEngine
 
     public Task<IReadOnlyList<WorkflowExecution>> ListExecutionsAsync(string tenantId, WorkflowExecutionStatus? statusFilter = null, int limit = 20, CancellationToken ct = default)
         => _store.ListExecutionsAsync(tenantId, statusFilter, limit, ct);
+
+    public async Task ProcessClaimedExecutionAsync(WorkflowExecutionClaim claim, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(claim);
+        var execution = await _store.GetExecutionAsync(claim.TenantId, claim.ExecutionId, ct)
+            ?? throw new ArgumentException("Execution not found", nameof(claim));
+        if (!string.Equals(execution.LeaseOwner, claim.WorkerId, StringComparison.Ordinal)
+            || execution.Status != WorkflowExecutionStatus.Running)
+        {
+            throw new WorkflowExecutionLeaseLostException(claim.ExecutionId);
+        }
+
+        var definition = RestoreDefinitionSnapshot(execution);
+        await ProcessExecutionAsync(claim.TenantId, claim.ExecutionId, claim.WorkerId, definition, ct);
+    }
 
     private async Task<WorkflowExecution> GetPendingApprovalExecutionAsync(
         string tenantId,
@@ -275,14 +285,22 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         }
     }
 
-    private async Task ProcessExecutionAsync(string tenantId, string executionId, WorkflowDefinition definition)
+    private async Task ProcessExecutionAsync(
+        string tenantId,
+        string executionId,
+        string workerId,
+        WorkflowDefinition definition,
+        CancellationToken ct)
     {
         try
         {
             while (true)
             {
-                var execution = await _store.GetExecutionAsync(tenantId, executionId);
+                var execution = await _store.GetExecutionAsync(tenantId, executionId, ct);
                 if (execution == null || execution.Status != WorkflowExecutionStatus.Running) break;
+                if (!string.Equals(execution.LeaseOwner, workerId, StringComparison.Ordinal)
+                    || execution.LeaseExpiresAt <= DateTime.UtcNow)
+                    throw new WorkflowExecutionLeaseLostException(executionId);
 
                 var readySteps = GetReadySteps(definition, execution);
                 if (readySteps.Count == 0)
@@ -311,28 +329,51 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                     }
                     else
                     {
-                        execution.Status = WorkflowExecutionStatus.Paused;
+                        var nextWait = execution.StepExecutions
+                            .Where(step => step.Status == WorkflowExecutionStatus.Pending && step.WaitUntilUtc.HasValue)
+                            .Select(step => step.WaitUntilUtc!.Value)
+                            .Where(waitUntil => waitUntil > DateTime.UtcNow)
+                            .OrderBy(waitUntil => waitUntil)
+                            .FirstOrDefault();
+                        execution.Status = nextWait == default
+                            ? WorkflowExecutionStatus.Paused
+                            : WorkflowExecutionStatus.Pending;
                         await _store.SaveExecutionAsync(tenantId, execution);
-                        _logger.LogInformation("⏸️ Workflow execution paused (waiting for dependencies): {ExecutionId}", executionId);
+                        _logger.LogInformation(
+                            nextWait == default
+                                ? "Workflow execution paused (waiting for dependencies): {ExecutionId}"
+                                : "Workflow execution scheduled to resume at {WaitUntilUtc}: {ExecutionId}",
+                            nextWait == default ? executionId : nextWait,
+                            executionId);
                     }
                     break;
                 }
 
-                var tasks = readySteps.Select(step => ExecuteStepAsync(tenantId, execution, step)).ToList();
+                var tasks = readySteps.Select(step => ExecuteStepAsync(tenantId, execution, step, ct)).ToList();
                 await Task.WhenAll(tasks);
 
-                await _store.SaveExecutionAsync(tenantId, execution);
+                await _store.SaveExecutionAsync(tenantId, execution, ct);
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            _logger.LogInformation("Workflow execution {ExecutionId} stopped because its worker lease or host was cancelled.", executionId);
+        }
+        catch (WorkflowExecutionLeaseLostException ex)
+        {
+            _logger.LogWarning(ex, "Workflow execution {ExecutionId} was observed by a worker that no longer owns its lease.", executionId);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "🚨 Critical error in workflow processor: {ExecutionId}", executionId);
-            var execution = await _store.GetExecutionAsync(tenantId, executionId);
-            if (execution != null)
+            var execution = await _store.GetExecutionAsync(tenantId, executionId, ct);
+            if (execution is { Status: WorkflowExecutionStatus.Running }
+                && string.Equals(execution.LeaseOwner, workerId, StringComparison.Ordinal)
+                && execution.LeaseExpiresAt > DateTime.UtcNow)
             {
                 execution.Status = WorkflowExecutionStatus.Failed;
                 execution.ErrorMessage = ex.Message;
-                await _store.SaveExecutionAsync(tenantId, execution);
+                await _store.SaveExecutionAsync(tenantId, execution, ct);
             }
         }
     }
@@ -341,7 +382,9 @@ public class DefaultWorkflowEngine : IWorkflowEngine
     {
         return definition.Steps.Where(step =>
         {
-            if (execution.StepExecutions.Any(se => se.StepId == step.Id)) return false;
+            var priorExecution = execution.StepExecutions.FirstOrDefault(se => se.StepId == step.Id);
+            if (priorExecution is not null && priorExecution.Status != WorkflowExecutionStatus.Pending) return false;
+            if (priorExecution?.WaitUntilUtc is { } waitUntil && waitUntil > DateTime.UtcNow) return false;
 
             return step.DependsOn.All(depId =>
                 execution.StepExecutions.Any(se => se.StepId == depId && se.Status == WorkflowExecutionStatus.Completed));
@@ -359,17 +402,26 @@ public class DefaultWorkflowEngine : IWorkflowEngine
         return execution.StepExecutions.Any(se => se.Status == WorkflowExecutionStatus.Failed);
     }
 
-    private async Task ExecuteStepAsync(string tenantId, WorkflowExecution execution, WorkflowStep step)
+    private async Task ExecuteStepAsync(string tenantId, WorkflowExecution execution, WorkflowStep step, CancellationToken executionToken)
     {
-        var stepExec = new WorkflowStepExecution
+        var stepExec = execution.StepExecutions.FirstOrDefault(existing =>
+            existing.StepId == step.Id && existing.Status == WorkflowExecutionStatus.Pending);
+        if (stepExec is null)
         {
-            StepId = step.Id,
-            StepName = step.Name,
-            Status = WorkflowExecutionStatus.Running,
-            StartedAt = DateTime.UtcNow
-        };
-        execution.StepExecutions.Add(stepExec);
-        await _store.SaveExecutionAsync(tenantId, execution);
+            stepExec = new WorkflowStepExecution { StepId = step.Id, StepName = step.Name };
+            execution.StepExecutions.Add(stepExec);
+        }
+        else
+        {
+            if (!stepExec.WaitUntilUtc.HasValue)
+                stepExec.RetryCount++;
+            stepExec.Output.Clear();
+            stepExec.ErrorMessage = null;
+        }
+        stepExec.Status = WorkflowExecutionStatus.Running;
+        stepExec.StartedAt = DateTime.UtcNow;
+        stepExec.CompletedAt = null;
+        await _store.SaveExecutionAsync(tenantId, execution, executionToken);
 
         if (_broadcaster != null)
         {
@@ -390,7 +442,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                     : TimeSpan.FromMinutes(30));
 
             using var stepCts = new CancellationTokenSource(stepTimeout);
-            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stepCts.Token);
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(stepCts.Token, executionToken);
             var ct = linkedCts.Token;
 
             _logger.LogDebug("🎬 Executing step: {StepName} ({StepId}) in workflow {ExecutionId} (timeout: {Timeout})",
@@ -404,10 +456,26 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             }
             else if (step.StepType == WorkflowStepType.Wait)
             {
-                var timeout = step.Timeout ?? TimeSpan.FromMinutes(5);
-                _logger.LogInformation("⏳ Waiting for {Timeout} on step: {StepName}", timeout, step.Name);
-                await Task.Delay(timeout, ct);
-                stepExec.Output["waited"] = timeout.ToString();
+                if (!stepExec.WaitUntilUtc.HasValue)
+                {
+                    var timeout = step.Timeout ?? TimeSpan.FromMinutes(5);
+                    stepExec.WaitUntilUtc = DateTime.UtcNow.Add(timeout);
+                    stepExec.Status = WorkflowExecutionStatus.Pending;
+                    execution.Status = WorkflowExecutionStatus.Pending;
+                    await _store.SaveExecutionAsync(tenantId, execution, ct);
+                    return;
+                }
+
+                if (stepExec.WaitUntilUtc.Value > DateTime.UtcNow)
+                {
+                    stepExec.Status = WorkflowExecutionStatus.Pending;
+                    execution.Status = WorkflowExecutionStatus.Pending;
+                    await _store.SaveExecutionAsync(tenantId, execution, ct);
+                    return;
+                }
+
+                stepExec.Output["waited"] = step.Timeout?.ToString() ?? TimeSpan.FromMinutes(5).ToString();
+                stepExec.WaitUntilUtc = null;
                 stepExec.Status = WorkflowExecutionStatus.Completed;
             }
             else if (step.StepType == WorkflowStepType.Approval)
@@ -430,6 +498,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                         UserId = execution.InitiatedBy ?? "system",
                         TenantId = tenantId
                     };
+                    context.Preferences["workflowIdempotencyKey"] = $"{execution.Id}:{step.Id}";
                     var response = await _agentExecutor.ExecuteAsync(execution.Id, agentInput, context, step.AgentName, ct);
 
                     stepExec.Output["content"] = response.Content;
@@ -438,11 +507,24 @@ public class DefaultWorkflowEngine : IWorkflowEngine
                 }
                 else if (!string.IsNullOrEmpty(step.ToolName))
                 {
+                    if (string.IsNullOrWhiteSpace(execution.InitiatedBy)
+                        || _permissionService is null
+                        || !await _permissionService.HasPermissionAsync(
+                            execution.InitiatedBy,
+                            $"tools/{step.ToolName}",
+                            Permission.Execute,
+                            ct))
+                    {
+                        throw new UnauthorizedAccessException(
+                            $"The workflow initiator is not authorized to execute tool '{step.ToolName}'.");
+                    }
+
                     var toolInput = new ToolInput
                     {
                         Action = step.ActionDescription ?? "execute",
                         Parameters = step.Input,
-                        UserId = execution.InitiatedBy
+                        UserId = execution.InitiatedBy,
+                        IdempotencyKey = $"{execution.Id}:{step.Id}"
                     };
                     var result = await _toolManager.ExecuteToolAsync(step.ToolName, toolInput, ct);
                     
@@ -467,7 +549,7 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             }
             else if (step.StepType == WorkflowStepType.Parallel && step.ParallelSteps.Count > 0)
             {
-                var parallelTasks = step.ParallelSteps.Select(ps => ExecuteStepAsync(tenantId, execution, ps)).ToList();
+                var parallelTasks = step.ParallelSteps.Select(ps => ExecuteStepAsync(tenantId, execution, ps, ct)).ToList();
                 await Task.WhenAll(parallelTasks);
                 stepExec.Status = WorkflowExecutionStatus.Completed;
             }
@@ -500,43 +582,57 @@ public class DefaultWorkflowEngine : IWorkflowEngine
 
             _logger.LogInformation("✅ Step {StepName} completed successfully", step.Name);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (!executionToken.IsCancellationRequested)
         {
             var timeoutDuration = step.Timeout ?? TimeSpan.FromMinutes(5);
             _logger.LogWarning("⏰ Step {StepName} timed out after {Timeout}", step.Name, timeoutDuration);
-            stepExec.Status = WorkflowExecutionStatus.Failed;
-            stepExec.ErrorMessage = $"Step timed out after {timeoutDuration.TotalMinutes:F0} minutes.";
-            stepExec.CompletedAt = DateTime.UtcNow;
-            await _store.SaveExecutionAsync(tenantId, execution);
-            if (_broadcaster != null) await _broadcaster.BroadcastStepFailed(tenantId, execution.Id, stepExec);
+            await HandleStepFailureAsync(
+                tenantId,
+                execution,
+                step,
+                stepExec,
+                $"Step timed out after {timeoutDuration.TotalMinutes:F0} minutes.",
+                executionToken);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ Step {StepName} failed: {Message}", step.Name, ex.Message);
-            stepExec.Status = WorkflowExecutionStatus.Failed;
-            stepExec.ErrorMessage = ex.Message;
-            stepExec.CompletedAt = DateTime.UtcNow;
+            await HandleStepFailureAsync(tenantId, execution, step, stepExec, ex.Message, executionToken);
+        }
+    }
 
-            await _store.SaveExecutionAsync(tenantId, execution);
+    private async Task HandleStepFailureAsync(
+        string tenantId,
+        WorkflowExecution execution,
+        WorkflowStep step,
+        WorkflowStepExecution stepExecution,
+        string errorMessage,
+        CancellationToken ct)
+    {
+        var retryScheduled = stepExecution.RetryCount < step.MaxRetries;
+        stepExecution.Status = retryScheduled ? WorkflowExecutionStatus.Pending : WorkflowExecutionStatus.Failed;
+        stepExecution.ErrorMessage = errorMessage;
+        stepExecution.CompletedAt = retryScheduled ? null : DateTime.UtcNow;
+        await _store.SaveExecutionAsync(tenantId, execution, ct);
 
-            if (_broadcaster != null)
-            {
-                await _broadcaster.BroadcastStepFailed(tenantId, execution.Id, stepExec);
-            }
+        if (retryScheduled)
+            return;
 
-            if (step.CompensationStep != null)
-            {
-                _logger.LogInformation("🔄 Running compensation for step: {StepName}", step.Name);
-                try
-                {
-                    await ExecuteStepAsync(tenantId, execution, step.CompensationStep);
-                    stepExec.CompensationExecuted = true;
-                }
-                catch (Exception compEx)
-                {
-                    _logger.LogError(compEx, "🚨 Compensation failed for step: {StepName}", step.Name);
-                }
-            }
+        if (_broadcaster is not null)
+            await _broadcaster.BroadcastStepFailed(tenantId, execution.Id, stepExecution);
+
+        if (step.CompensationStep is null)
+            return;
+
+        try
+        {
+            await ExecuteStepAsync(tenantId, execution, step.CompensationStep, ct);
+            stepExecution.CompensationExecuted = true;
+            await _store.SaveExecutionAsync(tenantId, execution, ct);
+        }
+        catch (Exception compensationException)
+        {
+            _logger.LogError(compensationException, "Compensation failed for step: {StepName}", step.Name);
         }
     }
 

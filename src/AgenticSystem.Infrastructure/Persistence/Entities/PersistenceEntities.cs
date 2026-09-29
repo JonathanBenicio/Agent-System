@@ -437,6 +437,8 @@ public class WorkflowExecutionEntity : ITenantEntity
     public int WorkflowDefinitionVersion { get; set; }
     public string? WorkflowDefinitionHash { get; set; }
     public string? WorkflowDefinitionSnapshotJson { get; set; }
+    public string? LeaseOwner { get; set; }
+    public DateTime? LeaseExpiresAt { get; set; }
     public string Status { get; set; } = string.Empty; // Core.Models.WorkflowExecutionStatus
     public string VariablesJson { get; set; } = "{}";
     public string? InitiatedBy { get; set; }
@@ -459,6 +461,7 @@ public class WorkflowStepExecutionEntity : ITenantEntity
     public bool CompensationExecuted { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public DateTime? WaitUntilUtc { get; set; }
 }
 
 public class ModelPerformanceEntity : ITenantEntity

@@ -75,6 +75,10 @@ public class WorkflowExecution
     public string WorkflowDefinitionHash { get; set; } = string.Empty;
     [JsonIgnore]
     public string WorkflowDefinitionSnapshotJson { get; set; } = string.Empty;
+    [JsonIgnore]
+    public string? LeaseOwner { get; set; }
+    [JsonIgnore]
+    public DateTime? LeaseExpiresAt { get; set; }
     public WorkflowExecutionStatus Status { get; set; } = WorkflowExecutionStatus.Pending;
     public List<WorkflowStepExecution> StepExecutions { get; init; } = [];
     public Dictionary<string, object> Variables { get; set; } = new();
@@ -99,6 +103,7 @@ public class WorkflowStepExecution
     public bool CompensationExecuted { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public DateTime? WaitUntilUtc { get; set; }
 }
 
 public enum WorkflowStepType
@@ -138,4 +143,14 @@ public enum WorkflowTriggerType
     Scheduled,
     Event,
     Webhook
+}
+
+public sealed record WorkflowExecutionClaim(string TenantId, string ExecutionId, string WorkerId);
+
+public sealed class WorkflowExecutionLeaseLostException : InvalidOperationException
+{
+    public WorkflowExecutionLeaseLostException(string executionId)
+        : base($"The worker lease for workflow execution '{executionId}' is no longer owned by this worker.")
+    {
+    }
 }

@@ -5,6 +5,7 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
 using AgenticSystem.Infrastructure.Persistence;
+using AgenticSystem.Infrastructure.Tools;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,6 +17,226 @@ namespace AgenticSystem.Tests;
 
 public class PostgresWorkflowExecutionStoreTests
 {
+    [RequiresPostgresFact]
+    public async Task WorkflowDefinitionStore_RejectsCrossTenantGlobalIdCollision()
+    {
+        var connectionString = GetIsolatedConnectionString();
+        var tenantContext = new TenantContextAccessor();
+        var options = new DbContextOptionsBuilder<AgenticDbContext>()
+            .UseNpgsql(connectionString, postgres => postgres.UseVector())
+            .Options;
+        var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+        var definition = new WorkflowDefinition
+        {
+            Id = $"tenant-definition-{Guid.NewGuid():N}",
+            Name = "Tenant A definition",
+            Steps = [new WorkflowStep { Id = "step", Name = "Step", StepType = WorkflowStepType.Wait }]
+        };
+
+        try
+        {
+            using (tenantContext.BeginScope(new TenantContext { TenantId = "tenant-definition-a" }))
+                await store.SaveDefinitionAsync("tenant-definition-a", definition);
+
+            using (tenantContext.BeginScope(new TenantContext { TenantId = "tenant-definition-b" }))
+            {
+                (await store.GetDefinitionAsync("tenant-definition-b", definition.Id)).Should().BeNull();
+                var overwrite = () => store.SaveDefinitionAsync(
+                    "tenant-definition-b",
+                    new WorkflowDefinition { Id = definition.Id, Name = "Tenant B overwrite" });
+                await overwrite.Should().ThrowAsync<InvalidOperationException>()
+                    .WithMessage("Workflow definition tenant ownership cannot be changed.");
+            }
+
+            using (tenantContext.BeginScope(new TenantContext { TenantId = "tenant-definition-a" }))
+                (await store.GetDefinitionAsync("tenant-definition-a", definition.Id))!.Name.Should().Be("Tenant A definition");
+        }
+        finally
+        {
+            using var tenantScope = tenantContext.BeginScope(new TenantContext { TenantId = "tenant-definition-a" });
+            await store.DeleteDefinitionAsync("tenant-definition-a", definition.Id);
+        }
+    }
+
+    [RequiresPostgresFact]
+    public async Task BannerTool_StartsPollableTenantWorkflowInCanonicalPostgresStore()
+    {
+        var connectionString = GetIsolatedConnectionString();
+        var tenantContext = new TenantContextAccessor();
+        var options = new DbContextOptionsBuilder<AgenticDbContext>()
+            .UseNpgsql(connectionString, postgres => postgres.UseVector())
+            .Options;
+        var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+        var engine = new DefaultWorkflowEngine(
+            store,
+            Substitute.For<IDirectAgentRequestExecutor>(),
+            Substitute.For<IToolManager>(),
+            NullLogger<DefaultWorkflowEngine>.Instance);
+        var tool = new BannerProductionTool(tenantContext, store, engine);
+        var definition = new WorkflowDefinition
+        {
+            Id = $"banner-production-{Guid.NewGuid():N}",
+            Name = "Banner Production Workflow",
+            Steps = [new WorkflowStep { Id = "render", Name = "Render", StepType = WorkflowStepType.Agent, AgentName = "BannerAgent" }]
+        };
+        string? executionId = null;
+
+        using var tenantScope = tenantContext.BeginScope(new TenantContext { TenantId = "tenant-banner" });
+        try
+        {
+            await store.SaveDefinitionAsync("tenant-banner", definition);
+            var result = await tool.ExecuteAsync(new ToolInput
+            {
+                Action = "generate",
+                UserId = "user-banner",
+                Parameters = new Dictionary<string, object>
+                {
+                    ["imagePath"] = "listing.jpg",
+                    ["price"] = 425000m,
+                    ["bedrooms"] = 3
+                }
+            });
+
+            result.Success.Should().BeTrue();
+            executionId = result.Metadata!["executionId"].ToString();
+            executionId.Should().NotBeNullOrWhiteSpace();
+            result.Metadata["statusUrl"].Should().Be($"/api/workflow/executions/{executionId}");
+            var execution = await store.GetExecutionAsync("tenant-banner", executionId!);
+            execution.Should().NotBeNull();
+            execution!.WorkflowId.Should().Be(definition.Id);
+            execution.InitiatedBy.Should().Be("user-banner");
+            (await store.GetExecutionAsync("tenant-other", executionId!)).Should().BeNull();
+        }
+        finally
+        {
+            if (executionId is not null)
+                await store.DeleteExecutionAsync("tenant-banner", executionId);
+            await store.DeleteDefinitionAsync("tenant-banner", definition.Id);
+        }
+    }
+
+    [RequiresPostgresFact]
+    public async Task PendingWait_IsPersistedAndIsNotClaimedBeforeItsScheduledTime()
+    {
+        var connectionString = GetIsolatedConnectionString();
+        var tenantContext = new TenantContextAccessor();
+        var options = new DbContextOptionsBuilder<AgenticDbContext>()
+            .UseNpgsql(connectionString, postgres => postgres.UseVector())
+            .Options;
+        var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+        var definition = new WorkflowDefinition
+        {
+            Id = $"scheduled-wait-{Guid.NewGuid():N}",
+            Name = "Scheduled wait",
+            Steps = [new WorkflowStep { Id = "wait", Name = "Wait", StepType = WorkflowStepType.Wait, Timeout = TimeSpan.FromMilliseconds(350) }]
+        };
+        var engine = new DefaultWorkflowEngine(
+            store,
+            Substitute.For<IDirectAgentRequestExecutor>(),
+            Substitute.For<IToolManager>(),
+            NullLogger<DefaultWorkflowEngine>.Instance);
+        string? executionId = null;
+
+        using var tenantScope = tenantContext.BeginScope(new TenantContext { TenantId = "tenant-wait" });
+        try
+        {
+            var started = await engine.StartAsync("tenant-wait", definition, initiatedBy: "user-wait");
+            executionId = started.Id;
+            var firstClaim = await store.ClaimNextExecutionAsync("first-process-worker", TimeSpan.FromMinutes(1));
+            firstClaim.Should().NotBeNull();
+            await engine.ProcessClaimedExecutionAsync(firstClaim!);
+            await store.ReleaseExecutionLeaseAsync(firstClaim!);
+
+            var restored = await store.GetExecutionAsync("tenant-wait", started.Id);
+            restored!.Status.Should().Be(WorkflowExecutionStatus.Pending);
+            restored.StepExecutions.Should().ContainSingle().Which.WaitUntilUtc.Should().BeAfter(DateTime.UtcNow);
+            (await store.ClaimNextExecutionAsync("early-worker", TimeSpan.FromMinutes(1))).Should().BeNull();
+
+            await Task.Delay(400);
+
+            // Recreate the store/engine objects to exercise persisted wait recovery.
+            var restartedStore = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+            var restartedEngine = new DefaultWorkflowEngine(
+                restartedStore,
+                Substitute.For<IDirectAgentRequestExecutor>(),
+                Substitute.For<IToolManager>(),
+                NullLogger<DefaultWorkflowEngine>.Instance);
+            var dueClaim = await restartedStore.ClaimNextExecutionAsync("restarted-worker", TimeSpan.FromMinutes(1));
+            dueClaim.Should().NotBeNull();
+            dueClaim!.ExecutionId.Should().Be(started.Id);
+            await restartedEngine.ProcessClaimedExecutionAsync(dueClaim);
+            await restartedStore.ReleaseExecutionLeaseAsync(dueClaim);
+            (await restartedStore.GetExecutionAsync("tenant-wait", started.Id))!.Status.Should().Be(WorkflowExecutionStatus.Completed);
+        }
+        finally
+        {
+            if (executionId is not null)
+                await store.DeleteExecutionAsync("tenant-wait", executionId);
+            await store.DeleteDefinitionAsync("tenant-wait", definition.Id);
+        }
+    }
+
+    [RequiresPostgresFact]
+    public async Task WorkflowLease_AllowsOnlyOneWorkerAndRecoversExpiredClaim()
+    {
+        var connectionString = GetIsolatedConnectionString();
+        var tenantContext = new TenantContextAccessor();
+        var options = new DbContextOptionsBuilder<AgenticDbContext>()
+            .UseNpgsql(connectionString, postgres => postgres.UseVector())
+            .Options;
+        var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+        var execution = new WorkflowExecution
+        {
+            Id = $"lease-{Guid.NewGuid():N}",
+            TenantId = "tenant-lease",
+            WorkflowId = "lease-definition",
+            WorkflowName = "Lease recovery",
+            WorkflowDefinitionSnapshotJson = "{}",
+            Status = WorkflowExecutionStatus.Pending
+        };
+
+        using var tenantScope = tenantContext.BeginScope(new TenantContext { TenantId = execution.TenantId });
+        try
+        {
+            await store.SaveExecutionAsync(execution.TenantId, execution);
+            var competingClaims = await Task.WhenAll(
+                store.ClaimNextExecutionAsync("worker-a", TimeSpan.FromMinutes(1)),
+                store.ClaimNextExecutionAsync("worker-b", TimeSpan.FromMinutes(1)));
+            var first = competingClaims.Should().ContainSingle(claim => claim != null).Which;
+            first!.ExecutionId.Should().Be(execution.Id);
+            var staleState = await store.GetExecutionAsync(execution.TenantId, execution.Id);
+
+            await using (var connection = new NpgsqlConnection(connectionString))
+            {
+                await connection.OpenAsync();
+                await using var expire = new NpgsqlCommand(
+                    "UPDATE workflow_executions SET lease_expires_at = @expired WHERE id = @id AND \"TenantId\" = @tenant",
+                    connection);
+                expire.Parameters.AddWithValue("expired", DateTime.UtcNow.AddSeconds(-1));
+                expire.Parameters.AddWithValue("id", execution.Id);
+                expire.Parameters.AddWithValue("tenant", execution.TenantId);
+                (await expire.ExecuteNonQueryAsync()).Should().Be(1);
+            }
+
+            var newWorkerId = first.WorkerId == "worker-a" ? "worker-b" : "worker-a";
+            var recovered = await store.ClaimNextExecutionAsync(newWorkerId, TimeSpan.FromMinutes(1));
+            recovered.Should().NotBeNull();
+            recovered!.WorkerId.Should().NotBe(first.WorkerId);
+            (await store.RenewExecutionLeaseAsync(first, TimeSpan.FromMinutes(1))).Should().BeFalse();
+            staleState!.Status = WorkflowExecutionStatus.Running;
+            var staleWrite = () => store.SaveExecutionAsync(execution.TenantId, staleState);
+            await staleWrite.Should().ThrowAsync<WorkflowExecutionLeaseLostException>();
+        }
+        finally
+        {
+            await store.DeleteExecutionAsync(execution.TenantId, execution.Id);
+        }
+    }
+
     [RequiresPostgresFact]
     public async Task SaveExecution_PreservesDefinitionSnapshotAndTenantOwnership()
     {
@@ -65,6 +286,7 @@ public class PostgresWorkflowExecutionStoreTests
                 await store.SaveDefinitionAsync("tenant-a", definition);
                 var started = await engine.StartAsync("tenant-a", definition, initiatedBy: "user-a");
                 executionId = started.Id;
+                await ProcessClaimedExecutionAsync(store, engine, started.Id);
                 var waiting = await WaitForExecutionAsync(store, "tenant-a", started.Id, WorkflowExecutionStatus.WaitingForApproval);
 
                 waiting.WorkflowDefinitionVersion.Should().Be(7);
@@ -93,6 +315,7 @@ public class PostgresWorkflowExecutionStoreTests
                 await store.SaveDefinitionAsync("tenant-a", editedDefinition);
 
                 await engine.ApproveAsync("tenant-a", started.Id, "approver-a");
+                await ProcessClaimedExecutionAsync(store, engine, started.Id);
                 var completed = await WaitForExecutionAsync(store, "tenant-a", started.Id, WorkflowExecutionStatus.Completed);
                 completed.WorkflowDefinitionVersion.Should().Be(7);
                 await agentExecutor.Received(1).ExecuteAsync(
@@ -122,6 +345,21 @@ public class PostgresWorkflowExecutionStoreTests
                     await store.DeleteExecutionAsync("tenant-a", executionId);
                 await store.DeleteDefinitionAsync("tenant-a", definition.Id);
             }
+        }
+    }
+
+    private static async Task ProcessClaimedExecutionAsync(IWorkflowStore store, IWorkflowEngine engine, string executionId)
+    {
+        var claim = await store.ClaimNextExecutionAsync("postgres-workflow-test", TimeSpan.FromMinutes(1));
+        claim.Should().NotBeNull();
+        claim!.ExecutionId.Should().Be(executionId);
+        try
+        {
+            await engine.ProcessClaimedExecutionAsync(claim);
+        }
+        finally
+        {
+            await store.ReleaseExecutionLeaseAsync(claim);
         }
     }
 
