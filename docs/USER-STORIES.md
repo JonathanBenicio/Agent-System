@@ -2502,10 +2502,12 @@ O Issue #108 exigia especificamente `Microsoft.Agents.AI.DurableTask`. Essa esco
 
 **Como** membro de um tenant, **quero** conversar, retomar minhas sessões e selecionar configurações permitidas, **para que** meu histórico e minhas escolhas sejam preservados e realmente governem a próxima resposta. Owner/Admin pode gerir chaves BYOK e ativação das skills do tenant.
 
-- [ ] Chat REST/SignalR retorna conteúdo, agente, erro e `sessionId` corretos; seleção explícita de provider/modelo permitidos chega ao LLM.
-- [ ] Sessões podem ser criadas, listadas, abertas, retomadas e encerradas com histórico persistido; usuário/tenant cruzados são negados.
-- [ ] Chave BYOK pode ser cadastrada, atualizada, validada de verdade e removida por Owner/Admin; a API jamais devolve o segredo salvo, e o chat usa a credencial selecionada/default do tenant.
-- [ ] Catálogo de provider/modelo está disponível a membros; preferência validada e persistida por usuário/tenant aparece e é aplicada à próxima execução.
-- [ ] Skills do tenant são listadas, habilitadas/desabilitadas por Owner/Admin e somente as ativas chegam às instruções do agente; tools exigem autorização própria.
-- [ ] Frontend, API e PostgreSQL confirmam separadamente configuração salva e configuração usada, incluindo restart e isolamento.
+- [x] Chat REST/SignalR devolve conteúdo, erro e `sessionId`; Cypress escolheu o agente direto e persistiu provider/modelo que o provider local recebeu.
+- [x] Sessões são criadas, listadas, abertas, retomadas e encerradas; Cypress recarregou o browser e abriu o mesmo histórico; usuário/tenant cruzados foram negados.
+- [x] Chave BYOK cadastrada, atualizada, validada no endpoint de modelos configurado, removida; DTOs não expuseram segredo; atualização/default foi confirmada no header do chat; Viewer recebeu 403.
+- [x] Catálogo e preferência provider/modelo por usuário/tenant foram salvos e a próxima execução recebeu a seleção efetiva; modelos de chave default descobertos integram as opções.
+- [x] Skills do tenant listadas e alternadas por Owner/Admin; a instrução ativa chegou ao provider e não chegou a uma sessão nova após desativar; tools continuam sujeitas a ACL própria.
+- [x] Frontend, API e PostgreSQL comprovaram em separado configuração persistida e usada, browser reload/session resume e isolamento. [Relatório](backend/validation/chat-session-settings-2026-09-29.md).
+
+**Validação:** build Release; suíte 763 aprovados/1 skip; Cypress 1/1, incluindo agente direto, provider/modelo, sessão e telas de chave/skills. ESLint global mantém 22 erros e 1 warning em arquivos fora da história; os arquivos alterados passam lint. Issue segue aberta até resolver ou separar o gate global.
 

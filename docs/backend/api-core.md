@@ -5,6 +5,8 @@ Fonte atual: controladores, DTOs e stores no follow-up de isolamento em `fix/bac
 Base URL configurada pelo host; exemplos usam http://localhost:5188. JSON dos controllers usa camelCase, enums camelCase e omite nulos. Não há envelope único: arrays, objetos, ProblemDetails, texto e respostas vazias coexistem. Exceções não tratadas retornam 500 com error/correlationId e X-Correlation-Id. 429 retorna error e Retry-After. Não assumir correlationId em todos os erros de validação.
 Credenciais: `X-Api-Key` para API key ou `Authorization: Bearer <JWT>` nas rotas autenticadas. O endpoint OpenAI-compatível `/v1/chat/completions` recebe a API key opaca no Bearer. Tenant/membership: [resolução e papéis](access-tenants.md). Auth/tenant/rate limiting ocorrem antes da action.
 
+`POST /api/auth/login` valida a API key, define cookie httpOnly e retorna `role`, `tenantId` e `userId` opaco da chave; o frontend usa esse subject para isolar as preferências/cache de chat. Login não atualiza nem descobre a configuração global de providers.
+
 ## Chat — POST /api/chat e POST /api/chat/stream
 [ChatController](../../src/AgenticSystem.Api/Controllers/ChatController.cs), [ChatRequest](../../src/AgenticSystem.Api/Models/ChatRequest.cs).
 | Campo | Obrigatório | Regra |
@@ -25,17 +27,30 @@ curl -X POST http://localhost:5188/api/chat \
 200 retorna [AgentResponse](../../src/AgenticSystem.Core/Models/AgentResponse.cs): content, agentName, agentTier, actionsPerformed, toolsUsed, success, metadata, timestamp, sessionId e opcionais errorMessage/confidence. Não retorna ChatResponse.response/agentUsed. HTTP 200 com success=false representa falha funcional; verificar ambos.
 400: message ausente/branco/grande ou binding inválido. 401/403: identidade/tenant/membership. 429: teto de token ou custo excedido; o body continua AgentResponse com `errorMessage`. 500: exceção não tratada. Efeitos: LLM, sessão/artifacts, tools e custo conforme fluxo; não é idempotente. SSE usa o mesmo request, mas após abrir o stream comunica quota excedida por evento `error`: [transportes](transports.md).
 
+Provider/model podem vir da preferência persistida do membro ou ser escolhidos explicitamente no request. Regras, credenciais e prova de execução: [Chat, sessões e configurações do tenant](chat-sessions-settings.md). Administração global em `/api/admin/llm` não é a interface de configuração do membro.
+
 ## Sessões — /api/session
 [SessionController](../../src/AgenticSystem.Api/Controllers/SessionController.cs).
 | Método/rota | Entrada | Resultado |
 |---|---|---|
-| GET /api/session | limit default 50, search opcional | 200 array ordenado por EndedAt/StartedAt; usuário atual |
+| POST /api/session | vazio | 201 e detalhe da sessão criada para a identidade atual |
+| GET /api/session | limit default 50 (1–100), search opcional (até 100 chars) | 200 array do usuário e tenant atuais, ordenado por LastActivity |
 | GET /api/session/{id} | id | 200 detalhe; 404 ausente ou outro dono |
 | GET /api/session/{id}/messages | id | 200 mensagens; 404 ausente/outro dono |
 | PUT /api/session/{id}/title | {"title":"Novo título"} | 200 id/title; 400 título branco; 404 ausente/outro dono |
 | DELETE /api/session/{id} | id | 204; apaga sessão e tenta apagar collection vetorial; erro da purga é logado |
+| POST /api/session/{id}/end | id | 200; marca encerrada, preserva mensagens e impede novo POST /api/chat nessa sessão |
 
 Identidade sem user id: 401 na action. Tenant em stores via context/filtros; testar mesmo id entre tenants e usuários. DTOs: [SessionDtoMapper](../../src/AgenticSystem.Core/Models/SessionDtos.cs). Alterar/apagar emite SessionUpdated/SessionDeleted por usuário no ChatHub. Falha da purga não muda o 204.
+
+Preferência/provider e modelo são metadados não secretos. Histórico pode ser consultado após encerramento; a sessão encerrada não pode retomar execução do chat.
+
+## Preferências, BYOK e skills
+
+- `GET/PUT /api/chat/configuration`: leitura para membro, gravação da própria preferência. Persistência `(tenantId,userId)`; modelos vêm do catálogo habilitado e de chaves BYOK default ativas. Cada mensagem valida a escolha e a executa no provider/modelo persistido ou explicitamente selecionado.
+- `/api/admin/llm/providers/{provider}/keys`: listagem no tenant atual; POST/PUT/DELETE/test/discover/default exigem Owner/Admin. DTOs nunca incluem o segredo; armazenam cifra e últimos quatro caracteres. Testa a credencial contra o endpoint de modelos configurado.
+- `/api/agent/skills`: catálogo de membros retorna `isEnabled`/`canManage`; escrita exige Owner/Admin. Só skills ativas relevantes entram no contexto MAF; a skill não concede permissão a ferramentas.
+- Fluxo integrado: [prova de configuração salva e usada](validation/chat-session-settings-2026-09-29.md).
 
 ## Salas — /api/knowledge/rooms
 [KnowledgeRoomController](../../src/AgenticSystem.Api/Controllers/KnowledgeRoomController.cs), [modelos](../../src/AgenticSystem.Core/Models/KnowledgeRoomModels.cs).
