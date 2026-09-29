@@ -114,18 +114,20 @@ public class ServiceGateway : IServiceGateway
 
     public Task EnableServiceAsync(string serviceName)
     {
-        if (_services.TryGetValue(serviceName, out var entry))
-        {
-            entry.IsEnabled = true;
-            entry.CircuitBreaker.Reset();
-        }
+        if (!_services.TryGetValue(serviceName, out var entry))
+            throw new KeyNotFoundException($"Service '{serviceName}' not found");
+
+        entry.IsEnabled = true;
+        entry.CircuitBreaker.Reset();
         return Task.CompletedTask;
     }
 
     public Task DisableServiceAsync(string serviceName)
     {
-        if (_services.TryGetValue(serviceName, out var entry))
-            entry.IsEnabled = false;
+        if (!_services.TryGetValue(serviceName, out var entry))
+            throw new KeyNotFoundException($"Service '{serviceName}' not found");
+
+        entry.IsEnabled = false;
         return Task.CompletedTask;
     }
 

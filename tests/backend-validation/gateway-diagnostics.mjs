@@ -9,23 +9,24 @@ const base = 'http://127.0.0.1:5188';
 const tenantA = core.run + '-a';
 const tenantB = core.run + '-b';
 const userId = core.run + '-alice';
+const platformAdminId = core.run + '-platform-admin';
 const serviceName = 'validation-gateway-fixture';
 const results = [];
 
-function token(tenantId) {
+function token(tenantId, subject = userId) {
   const b64 = value => Buffer.from(JSON.stringify(value)).toString('base64url');
   const body = b64({ alg: 'HS256', typ: 'JWT' }) + '.' + b64({
-    iss: 'AgenticSystem', aud: 'AgenticSystem', sub: userId,
+    iss: 'AgenticSystem', aud: 'AgenticSystem', sub: subject,
     tenant_id: tenantId, role: 'Viewer', exp: Math.floor(Date.now() / 1000) + 3600
   });
   return body + '.' + createHmac('sha256', 'documentation-validation-jwt-secret-local-only-2026')
     .update(body).digest('base64url');
 }
 
-async function request(route, tenantId, method = 'GET') {
+async function request(route, tenantId, method = 'GET', subject = userId) {
   const response = await fetch(base + route, {
     method,
-    headers: { Authorization: 'Bearer ' + token(tenantId) },
+    headers: { Authorization: 'Bearer ' + token(tenantId, subject) },
     signal: AbortSignal.timeout(15000)
   });
   let data;
@@ -129,18 +130,29 @@ async function openHubConnection(accessToken) {
 }
 
 async function verify() {
-  const initial = await request('/api/admin/gateway/services/' + serviceName, tenantA);
+  const viewerDashboard = await request('/api/admin/gateway/dashboard', tenantA);
+  check(viewerDashboard.status === 403,
+    'tenant Viewer accessed platform Gateway dashboard; status=' + viewerDashboard.status);
+  const viewerDenied = await request('/api/admin/gateway/services/' + serviceName + '/disable', tenantA, 'POST');
+  check(viewerDenied.status === 403, 'tenant Viewer changed a global Gateway service; status=' + viewerDenied.status);
+  const initial = await request('/api/admin/gateway/services/' + serviceName, tenantA, 'GET', platformAdminId);
   check(initial.status === 200 && initial.data?.isEnabled === true,
     'Validation Gateway fixture missing or not enabled; status=' + initial.status);
 
-  const a = await openHubConnection(token(tenantA));
-  const b = await openHubConnection(token(tenantB));
+  const a = await openHubConnection(token(tenantA, platformAdminId));
+  const b = await openHubConnection(token(tenantB, platformAdminId));
   try {
     const isServiceEvent = enabled => event =>
       event.arguments?.[0]?.serviceName === serviceName && event.arguments?.[0]?.enabled === enabled;
+    const missingA = a.expectNoEvent('ServiceStatusChanged', 300, event => event.arguments?.[0]?.serviceName === 'not-registered');
+    const missingB = b.expectNoEvent('ServiceStatusChanged', 300, event => event.arguments?.[0]?.serviceName === 'not-registered');
+    const missing = await request('/api/admin/gateway/services/not-registered/disable', tenantA, 'POST', platformAdminId);
+    check(missing.status === 404, 'unregistered Gateway service should return 404; status=' + missing.status);
+    check(await missingA && await missingB, 'unregistered service produced a status broadcast');
+
     const disabledA = a.waitForEvent('ServiceStatusChanged', 10000, isServiceEvent(false));
     const disabledB = b.expectNoEvent('ServiceStatusChanged', 1000, isServiceEvent(false));
-    const disable = await request('/api/admin/gateway/services/' + serviceName + '/disable', tenantA, 'POST');
+    const disable = await request('/api/admin/gateway/services/' + serviceName + '/disable', tenantA, 'POST', platformAdminId);
     check(disable.status === 204, 'Disable status=' + disable.status);
     const disabledEvent = await disabledA;
     check(await disabledB, 'Disable event crossed into tenant B');
@@ -148,13 +160,13 @@ async function verify() {
     check(disabledPayload.enabled === false && disabledPayload.tenantId === tenantA,
       'Disable event has wrong state/tenant: ' + JSON.stringify(disabledPayload));
 
-    const disabledStatus = await request('/api/admin/gateway/services/' + serviceName, tenantA);
+    const disabledStatus = await request('/api/admin/gateway/services/' + serviceName, tenantA, 'GET', platformAdminId);
     check(disabledStatus.status === 200 && disabledStatus.data?.isEnabled === false,
       'Gateway service did not persist disabled status');
 
     const enabledA = a.waitForEvent('ServiceStatusChanged', 10000, isServiceEvent(true));
     const enabledB = b.expectNoEvent('ServiceStatusChanged', 1000, isServiceEvent(true));
-    const enable = await request('/api/admin/gateway/services/' + serviceName + '/enable', tenantA, 'POST');
+    const enable = await request('/api/admin/gateway/services/' + serviceName + '/enable', tenantA, 'POST', platformAdminId);
     check(enable.status === 204, 'Enable status=' + enable.status);
     const enabledEvent = await enabledA;
     check(await enabledB, 'Enable event crossed into tenant B');
@@ -162,7 +174,7 @@ async function verify() {
     check(enabledPayload.enabled === true && enabledPayload.tenantId === tenantA,
       'Enable event has wrong state/tenant: ' + JSON.stringify(enabledPayload));
 
-    const enabledStatus = await request('/api/admin/gateway/services/' + serviceName, tenantA);
+    const enabledStatus = await request('/api/admin/gateway/services/' + serviceName, tenantA, 'GET', platformAdminId);
     check(enabledStatus.status === 200 && enabledStatus.data?.isEnabled === true,
       'Gateway service did not persist enabled status');
     return 'real Gateway service toggled; ServiceStatusChanged disable/enable reached tenant A only; tenant B received neither event';

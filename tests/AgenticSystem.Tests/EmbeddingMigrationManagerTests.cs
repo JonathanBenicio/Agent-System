@@ -50,8 +50,11 @@ public class EmbeddingMigrationManagerTests
         var job = await _sut.StartMigrationAsync(request);
 
         job.Should().NotBeNull();
-        job.Status.Should().Be(MigrationStatus.Pending);
+        job.Id.Should().NotBeNullOrWhiteSpace();
         job.SourceCollection.Should().Be("default");
+        var persisted = await _jobStore.GetAsync(job.Id);
+        persisted.Should().NotBeNull();
+        persisted!.SourceCollection.Should().Be("default");
     }
 
     [Fact]
