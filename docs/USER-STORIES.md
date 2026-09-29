@@ -15,6 +15,49 @@ Issues: [#111](https://github.com/JonathanBenicio/Agent-System/issues/111)–[#1
 
 Evidência unitária não substitui integração; critérios falhos/não executados permanecem abertos.
 
+## BACK-MAF-120 — MAF atualizado e providers integrados ao Gateway
+
+Como mantenedor do backend multi-tenant, quero atualizar o Microsoft Agent Framework com compatibilidade comprovada e encaminhar providers ativos pelo Gateway, para que o runtime de produção tenha execução e telemetria reais sob os controles existentes.
+
+Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [Plano](plan/maf-122-protocols-gateway.md).
+Status: implementação parcial; store global separado do tenant foi migrado e validado no PostgreSQL isolado. Suíte Release com Compose: 726 aprovados, 1 teste vetorial explicitamente ignorado, 0 falhas; build sem avisos/erros. Testes integrados verificaram criptografia/auditoria, leitura entre tenants, propagação do PostgreSQL NOTIFY pelo listener real até o notifier e persistência/retomada de snapshot MAF após recriar adapter, com negação para outro tenant. Provider LLM real, atualização efetiva entre dois hosts e restart real do host ainda pendem. DurableTask PostgreSQL não executa os grafos dinâmicos atuais: client agenda por nome, o worker só registra grafos no startup, o provider não oferece worker builder compatível e o endpoint de polling consulta outro engine; execução e consulta permanecem gaps. A2A/AG-UI permanecem preview e seguem em follow-up [#121](https://github.com/JonathanBenicio/Agent-System/issues/121).
+
+- Dada sessão pertencente a usuário/tenant, quando criada, serializada, retomada ou restaurada após restart, então seu owner, tenant, ID e estado MAF permanecem iguais; identidade de outro tenant recebe negação sem dados.
+- Dado provider de infraestrutura habilitado na configuração do host, quando a aplicação inicia e chama o modelo, então ele aparece no Gateway e chamadas completas/streaming atualizam status/circuito/limite; provider desabilitado não é registrado.
+- Dada API key BYOK pertencente a um tenant, quando esse tenant escolhe o provider, então sua rota e quota por tenant permanecem isoladas, sem compartilhar circuit/rate state global via Gateway.
+- Dado Platform Admin que atualiza provider global, quando dois tenants usam o runtime após restart ou em nós diferentes, então ambos veem os mesmos limites/modelos/chave global cifrada; mudança fica auditada pelo ator e a API retorna apenas presença da credencial.
+- Dado tenant com configuração BYOK existente, quando a configuração global é alterada, então o valor legado continua tenant-scoped e não é promovido nem sobrescrito; a chamada usa credencial do tenant antes da global.
+- Dado falha/cancelamento durante stream, quando ocorre, então recursos são liberados, falha é contabilizada e fallback só é usado antes de conteúdo ter sido entregue; quotas persistidas por tenant continuam aplicadas.
+- Dada mudança de pacote/API MAF ou migration explícita do store global, quando build/testes/EF são executados, então incompatibilidade é corrigida sem migrar dados tenant para globais, ou fica registrada como bloqueio verificável.
+- Dado workflow dinâmico compilado por tenant/request no modo PostgreSQL, quando iniciado, então existe um worker compatível e todas as instâncias conhecem a mesma versão da definição; caso contrário, o backend não deve retornar uma execução pendente como se a tivesse enfileirado com sucesso.
+
+## BACK-ORCH-122 — Orquestrar agentes dinamicos pelo supervisor MAF
+
+Como usuário da plataforma de agentes personalizáveis, quero que o orquestrador identifique e delegue a solicitação aos especialistas ativos configurados para meu tenant, para receber resposta consolidada sem perder o estado das sessões.
+
+Issue: [#122](https://github.com/JonathanBenicio/Agent-System/issues/122) · [ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md) · [Plano separado](plan/dynamic-orchestrator-implementation.md). Dependência: API de sessões MAF 1.22 em [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
+Status: implementação parcial; regressão funcional local cobre delegação multi-tool, binding indisponível, especialista não chamado, identificação do agente, resposta direta sem candidato, resposta vazia, provider error, cancelamento e persistência seletiva de sessões. Build Release e suíte completa passaram (726 aprovados com Compose, 1 skip vetorial explícito). Teste integrado validou snapshot MAF PostgreSQL após recriar adapter e negação de outro tenant; restart real do processo/host ainda pende.
+
+- Dada lista de specialists com bindings válidos, quando o modo “Intelligent Router” recebe input, então `ChatClientAgent` do MAF pode invocar um ou mais `AIFunction`s correspondentes e consolidar resposta útil.
+- Dado agente ativo cuja tool/binding falhou ou agente inativo, quando o prompt supervisor é construído, então ele não é apresentado como candidato delegável.
+- Dada alteração de descrição/domínio/tier/tools no catálogo, quando o próximo request constrói supervisor, então a instrução/cache reflete a nova configuração sem restart.
+- Dada execução com delegação, quando termina, então a sessão MAF do supervisor e de cada specialist invocado é persistida com partição tenant+usuário e retomável após restart.
+- Dada chamada direta por `targetAgent`, quando executada, então continua bypassando o orquestrador; respostas SignalR/REST continuam informando `agentName` real e `sessionId`.
+- Dada execução sem especialista aplicável, quando o supervisor não delega, então a resposta direta continua válida; quota, erro e cancelamento não produzem sucesso vazio.
+
+## BACK-PROTO-121 — Validar A2A e AG-UI sob hosting preview
+
+Como integrador de protocolos, quero validar A2A e AG-UI de ponta a ponta depois da atualização do core MAF, para saber se autenticação, tenant, sessão e streaming funcionam antes de tratar esses endpoints preview como suportados.
+
+Issue: [#121](https://github.com/JonathanBenicio/Agent-System/issues/121) · [ADR-037](architecture/adr/037-a2a-agui-preview-validation.md) · [Plano](plan/a2a-agui-preview-validation.md). Dependência: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
+Status: planejada; prioridade secundária, não bloqueia MAF core/Gateway.
+
+- Dado hosting preview compatível com o core atualizado, quando a flag habilita A2A/AG-UI, então endpoint e contrato básico iniciam no host de validação.
+- Dada identidade sem auth, tenant desconhecido/inativo ou sem membership, quando invoca qualquer protocolo, então a chamada é negada sem emitir conteúdo.
+- Dada sessão em tenant A, quando identidade de tenant B tenta criar/retomar ou subscrever stream, então recebe negação sem conteúdo de A.
+- Dada execução válida em cada protocolo, quando resposta ou stream ocorre e é cancelado, então formato esperado chega ao solicitante e recursos são encerrados.
+- Dada evidência com modelo local, fixture, skip ou indisponibilidade externa, quando registrada, então cada categoria fica distinguida e nenhuma é descrita como validação mais ampla.
+
 ## BACK-DOC-001 — Contratos claros e validação do núcleo
 
 Como mantenedor, quero contratos rastreáveis de endpoints, acesso e recursos, para distinguir funcionalidades comprovadas de lacunas.

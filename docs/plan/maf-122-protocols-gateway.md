@@ -1,0 +1,76 @@
+﻿# Plano — Atualizar MAF e integrar providers ao Gateway
+
+Status: em execução · Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](../architecture/adr/036-maf-122-protocols-and-gateway.md) · Story: BACK-MAF-120.
+
+Baseline: `f941198` · 2026-09-29 · Branch: `fix/backend-core-tenancy`. Este plano fica dedicado ao upgrade MAF/Gateway; a implementação semântica do supervisor está separada em [dynamic-orchestrator-implementation.md](dynamic-orchestrator-implementation.md), com regressões unitárias/funcionais locais aprovadas e validação PostgreSQL de sessão ainda pendente. A2A/AG-UI E2E está em #121/ADR-037. `.gitignore` staged e arquivos pessoais preexistentes continuam fora dos commits.
+
+Análise de breaking changes e matriz das APIs do repositório: [maf-122-compatibility-review.md](maf-122-compatibility-review.md). Concluída em 2026-09-29 antes do bump; restore/build Release com versões de destino passam.
+
+## Objetivo e escopo
+
+Atualizar os pacotes MAF efetivamente usados após revisar mudanças incompatíveis; preservar o contrato tenant-scoped de sessão; registrar e encaminhar providers globais pelo Gateway em produção. A implementação funcional do supervisor e a consolidação das sessões de especialistas ficam no plano separado do orquestrador. Para A2A/AG-UI, somente compatibilidade/build; E2E em #121. Sem merge, deploy, mudança no frontend ou redução do gate de cobertura.
+
+## Etapas
+
+| Entrega | Dependência | Verificação | Estado/evidência |
+|---|---|---|---|
+| Issue, ADR, story e rastreabilidade | Nenhuma | Links cruzados e índices sincronizados | #120 atualizado no GitHub com estado de execução, gap de registry DurableTask e evidência 724/2; #121 e #122 separados |
+| Matriz de compatibilidade 1.9.0 → 1.22.0 | Issue/ADR/story | APIs usadas comparadas às releases oficiais; requisitos NuGet registrados | Concluída em `maf-122-compatibility-review.md` |
+| Atualização coordenada dos pacotes e sessão | Matriz concluída | Restore/build Release, partições de sessão, migrations | MAF/session-store compilam; suíte completa Release com conexão PostgreSQL isolada: 726 aprovados, 1 skip vetorial explicitamente marcado, 0 falhas; build Release: 0 avisos/erros. Teste de sessão gravou snapshot MAF no PostgreSQL, reabriu em adapter novo e negou leitura de outro tenant. DurableTask/PostgreSQL ainda não é uma execução válida para os grafos dinâmicos: além do provider registrar apenas `IOrchestrationService`/client shim e faltar um worker builder compatível, `DurableWorkflowCompiler` cria grafos por request, mas `IWorkflowClient.RunAsync(Workflow, ...)` agenda pelo nome; o worker MAF registra apenas workflows de `DurableWorkflowOptions` no startup, coleção atualmente vazia. A chamada pode enfileirar sem workflow registrado para executar esses nomes dinâmicos. |
+| Compatibilidade de hosting A2A/AG-UI | Build atualizado | Mapeamento com `ValidateScopes=true`, sem alegar E2E | 2 testes de registro passaram; E2E em #121 |
+| Registry e caminho de execução Gateway | MAF atualizado | Startup/runtime, chamadas completas/streaming, falha/cancelamento/fallback; BYOK isolado | Caminho `ContextAwareChatClient` → Gateway → provider fake passou para resposta e streaming; startup consulta configuração global persistida antes de registrar providers. Provider LLM real e fallback de rede ainda não exercitados |
+| Separar configuração global de provider e BYOK | Decisão de escopo Platform Admin | Dois tenants veem o mesmo provider global após restart/nó novo; alteração global registrada com ator; chave BYOK de um tenant continua privada | Implementado parcialmente: entidades/store globais sem `TenantId`, segredos cifrados/auditados por hash, gravação transacional e NOTIFY. Teste no PostgreSQL do Compose confirmou leitura entre dois tenants, ciphertext/auditoria e propagação de NOTIFY pelo `RealTimeConfigReloadBackgroundService` até o notifier do host. Falta validar alteração efetiva do LLMManager entre dois hosts/provedores reais. Valores legados ficam tenant-scoped, sem promoção automática |
+| Verificação final | Etapas anteriores | Suíte, EF pending-model, PostgreSQL/Ollama e revisão de diff | Build Release: 0 avisos/erros; suíte completa Release com PostgreSQL isolado: 726 aprovados, 1 skip vetorial explicitamente marcado, 0 falhas. Link checker: 154 documentos/720 links sem quebras. Migrations aplicadas no volume descartável do projeto Compose `agent-system-backend-validation-20260929`; execução DurableTask segue não operacional para grafos dinâmicos. |
+
+## Limite com o plano do orquestrador
+
+Este plano não fecha o comportamento funcional do supervisor, o prompt dinâmico, a resolução do especialista chamado nem a persistência das sessões dos especialistas. Esses itens estão isolados em [BACK-ORCH-122](dynamic-orchestrator-implementation.md), com ADR-038 e story própria. Os arquivos de orquestrador já alterados no worktree permanecem parciais até concluir aquele plano; commits devem separar os dois contextos.
+
+## Critérios de aceite
+
+- [ ] Pacotes e APIs atualizados para conjunto compatível com MAF 1.22.0; `Microsoft.Extensions.AI` e dependências seguem mínimos exigidos pelos hosts efetivamente usados.
+- [ ] Sessões MAF continuam isoladas por todas as partições de AgentSessionStoreKey, serializam e retomam estado após restart; estado legado só migra após validar owner/tenant.
+- [ ] Hosting A2A/AG-UI compila com o grafo de dependências atualizado; validação E2E e certificação de autorização/isolamento permanecem como follow-up #121.
+- [ ] Providers de infraestrutura habilitados na configuração do host são registrados e usados via Gateway para chamadas completas e streaming; providers desabilitados não são registrados. Chaves BYOK mantêm a rota atual e quotas por tenant, sem circuit/rate state global compartilhado.
+- [ ] Falhas durante o stream, cancelamento e fallback atualizam métricas/estado de maneira consistente; quotas do PostgreSQL seguem a fonte do enforcement por tenant.
+- [ ] Só Platform Admin explícito pode alterar configuração/defaults globais dos providers; credenciais BYOK permanecem tenant-scoped.
+- [ ] Configuração global persistida usa armazenamento de plataforma sem `TenantId`, criptografa segredos e audita alterações. `ConfigEntryEntity` e `SystemStateEntity` são `ITenantEntity` e não servem como fonte global; restart e múltiplas instâncias resolvem o mesmo valor independentemente do tenant da primeira requisição.
+- [ ] Store global separa dados de provider (enabled/model/priority/model catalog/default) dos segredos BYOK guardados em `ProviderApiKeys`; atualizações exigem actor Platform Admin, auditoria guarda somente hashes e a API nunca retorna o valor em texto puro.
+- [ ] Precedência por request: chave/modelo explícito ou sessão, configuração BYOK/key legada tenant-scoped, depois configuração global; a chave tenant não altera nem compartilha circuit/rate state global.
+- [ ] Migration de plataforma é explícita, mantém segredos cifrados, não promove valores de tenants a globais e não altera BYOK; build e testes executados e resultados reais registrados.
+
+## Validação
+
+Usar testes unitários para regressões do contrato e host/harness integrado para protocolos/Gateway. Testes PostgreSQL devem apontar ambas as variáveis somente para `127.0.0.1:55432/backend_validation/validation` do Compose isolado; usar `-p` específico por execução para separar containers/volumes e conferir o mapeamento de porta antes de aplicar migrations. Registrar comandos, versão/ambiente, aprovação, falha, skip e não execução separadamente. Cobertura é reportada como métrica e gate existente, não como objetivo principal da entrega.
+
+## Riscos e gaps
+
+For the pinned `Microsoft.Agents.AI.DurableTask` 1.16.0-preview.260922.1, `DurableWorkflowOptions.MaxSupersteps` is configurable (host setting `AgenticSystem:LocalExecution:DurableWorkflowMaxSupersteps`, default 100), and exceeding it throws `MaxSuperstepsExceededException` when work remains. This avoids silent success on the installed package, but does not solve the missing PostgreSQL worker or static workflow registration mismatch.
+
+### Alternativa MAF para workflows dinâmicos
+
+Os samples .NET oficiais [CheckpointAndRehydrate](https://github.com/microsoft/agent-framework/tree/main/dotnet/samples/03-workflows/Checkpoint/CheckpointAndRehydrate) e [AotCheckpointing](https://github.com/microsoft/agent-framework/tree/main/dotnet/samples/03-workflows/Declarative/AotCheckpointing) mostram o modelo de checkpoint/rehydration do runtime MAF padrão. A [documentação do MAF](https://learn.microsoft.com/en-us/agent-framework/hosting/azure-functions) separa esse mecanismo da extensão Durable Task: checkpoints padrão retomam uma execução no runtime MAF; a extensão Durable Task acrescenta recuperação distribuída em workers duráveis e exige registrar os grafos que serão executados.
+
+O MAF 1.22 já fornece `CheckpointManager.CreateJson(ICheckpointStore<JsonElement>)` e `InProcessExecution.ResumeAsync`; em contrapartida, `CheckpointManager.Default` é explicitamente in-memory e não prova retomada após reinício. O produto já usa `CheckpointManager.Default` em execuções colaborativas avançadas, então hoje esse caminho só mantém checkpoints enquanto o processo que contém o manager continua ativo.
+
+Para definições criadas por tenant, avaliar checkpoint MAF com `ICheckpointStore<JsonElement>` persistido no PostgreSQL, guardando junto `tenantId`, `workflowId`, versão imutável/hash da definição e versão/configuração dos agentes. Na retomada, recompilar a mesma definição versionada antes de reidratar o checkpoint e validar a autorização do tenant antes de ler ou retomar. Isso preserva autoria dinâmica sem fingir que o worker conhece grafos novos. Validar serialização de executores/estado, compatibilidade após deploy e isolamento por tenant antes de escolher esse caminho; checkpoint por si só não cria fila, lease nem retomada automática após crash. Se for exigida retomada automática/distribuída, a extensão Durable Task pode continuar candidata, mas requer registry versionado sincronizado, integração do estado/status e worker/backend compatíveis.
+
+Há ainda um contrato de polling desalinhado a resolver: `DurableWorkflowCompiler` retorna `RunId` e promete consulta via `GET /api/workflow/executions/{id}`, mas `WorkflowController` consulta `IWorkflowEngine`/`IWorkflowStore`, não o client/estado DurableTask. Não apresentar o `RunId` como execução acompanhável até conectar ambos os lados e validar estados terminal, cancelamento e isolamento.
+
+Additional product-model finding: `DurableWorkflowCompiler` builds tenant/request-specific `Workflow` objects at execution time. The pinned MAF client schedules only the orchestration name derived from `workflow.Name` plus `DurableWorkflowInput<T>`; the worker runner resolves the `Workflow` by orchestration name from the `DurableWorkflowOptions.Workflows` registry built at host startup. `ConfigureDurableWorkflows(options => {})` currently leaves this registry empty, so dynamically compiled graphs are not sent to or registered with the worker. The project needs a versioned runtime registry that all workers refresh, or a generic durable executor/checkpoint design compatible with tenant-specific definitions; do not mark this path production-ready before selecting and validating that design.
+
+### Runtime e contrato de execução usados pela aplicação
+
+O backend tem dois caminhos distintos que hoje são descritos como se fossem um só:
+
+- `POST /api/workflow/executions/start/{id}` usa `DefaultWorkflowEngine`, que interpreta a definição tenant-scoped e grava execução/etapas em `IWorkflowStore`; o `GET /api/workflow/executions/{id}` consulta esse mesmo store. A definição executada não fica fixada por versão/hash e o start usa `Task.Run` no processo; não há worker de recuperação/lease que retome uma execução `Running` após crash.
+- `DurableWorkflowCompiler`, usado pela `BannerProductionTool` quando `StorageMode=PostgreSQL`, monta um grafo MAF por request e agenda com `IWorkflowClient`. Retorna um RunId e orienta polling pelo endpoint acima, mas esse controller consulta o engine customizado, não o estado DurableTask. Portanto nem o start/poll é ponta a ponta, além do registry vazio e do worker builder ausente.
+- `AgentCollaborationWorkflow` já usa `InProcessExecution` e checkpoints MAF quando habilitado, mas passa `CheckpointManager.Default`, documentado no pacote 1.22 como armazenamento in-memory. Isso serve à retomada dentro do processo, não a restart distribuído.
+
+Direção recomendada para o produto dinâmico: manter tenant, definição imutável/versionada, ACL, quotas, approval e idempotência sob controle da aplicação; usar MAF como runtime de agente/execução e checkpoint JSON como primitiva possível. DurableTask só volta a ser opção quando houver uma topologia genérica registrada que execute versões dinâmicas com segurança, scheduler/lease/recuperação e um contrato de status/poll que consulta o mesmo execution ID. Antes de implementar, fechar o desenho de recuperação e idempotência de etapas; checkpoint sozinho não resolve fila nem restart.
+
+MAF tem breaking changes após 1.9.0; hosting A2A/AG-UI continua preview e sua validação E2E não é gate desta issue. O pacote Microsoft.Agents.AI.DurableTask está na linha 1.16 preview sem publicação 1.22. O provider DurableTask PostgreSQL instalado descreve suporte PostgreSQL 17+, enquanto o Compose de validação usa PostgreSQL 16; portanto ele não serve para alegar compatibilidade do provider. Há também incompatibilidade funcional: o client agenda por nome de workflow e o worker constrói registry a partir das definições registradas no startup; os grafos dinâmicos por tenant/request não entram nesse registry, e o pacote PostgreSQL não fornece o worker builder para os tipos Durable Task atuais. Não declarar DurableTask como execução durável utilizável para a plataforma dinâmica até desenhar registry versionado ou uma execução/checkpoint baseada no workflow dinâmico e validar isolamento no harness. A validação de configuração global e persistência pode usar o Compose isolado de PostgreSQL 16. No pacote MAF 1.16.0-preview.260922.1, o limite de supersteps (100 por default) é configurável via `DurableWorkflowOptions.MaxSupersteps` e o runner lança `MaxSuperstepsExceededException` quando há trabalho restante; a configuração do backend expõe `AgenticSystem:LocalExecution:DurableWorkflowMaxSupersteps` com default 100. O provider global é mutável em singleton, mas sua persistência atual passa pela configuração tenant-scoped; isso conflita com gestão por Platform Admin, restart e múltiplas instâncias. Separar configuração global de plataforma e BYOK por tenant, sem reutilizar o mesmo registro. O Gateway contabiliza custo estimado fixo por chamada, separado da quota persistida de custo por tenant. Se provider Ollama real não estiver disponível, validar runtime com stub e registrar explicitamente que a evidência E2E real ficou pendente.
+
+## Entrega
+
+Commits separados por contexto (rastreabilidade, atualização MAF, Gateway/protocolos, evidências); staging alheio preservado. Criar/atualizar PR com resultado e limitações, mantê-lo draft se houver lacuna funcional ou gate obrigatório pendente. Não fazer merge/deploy.
