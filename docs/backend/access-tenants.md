@@ -58,4 +58,4 @@ Free/Pro/Enterprise definem o teto de RPM, tokens/dia e custo/dia. `Tenant.Limit
 
 ## Evidência e lacunas
 
-PostgreSQL 16/pgvector/Ollama isolados validaram rotas de tenant, membership, ACL/grants, quotas, RAG e hubs. A execução Release passou 701 testes, ignorou 1 e não teve falhas. Integração core passou 40/40, broadcast Gateway passou, store/quota/skills passou 10/10, backfill legado passou e os seis cenários pós-restart passaram, incluindo skills, quota tokens/custo e OpenAI-compatível por API key. Evidências e limitações estão no [relatório](validation/backend-core-remediation.md).
+PostgreSQL 16/pgvector/Ollama isolados validaram rotas de tenant, membership, ACL/grants, quotas, RAG e hubs. A execução Release passou 701 testes, ignorou 1 e não teve falhas. Integração core passou 43/43, broadcast Gateway passou, store/quota/skills passou 10/10, backfill legado passou e os seis cenários pós-restart passaram, incluindo skills, quota tokens/custo e OpenAI-compatível por API key. Evidências e limitações estão no [relatório](validation/backend-core-remediation.md).

@@ -1,6 +1,6 @@
 # Validação — isolamento e funcionalidades centrais do backend
 
-Data: 2026-09-29 · Commit validado: `151e6d4` · Branch: `fix/backend-core-tenancy` · [Plano](../../plan/backend-core-remediation.md) · [ADR-035](../../architecture/adr/035-backend-core-isolation-and-reliability.md). O relatório histórico de documentação está em [2026-09-28](2026-09-28.md) e não foi sobrescrito.
+Data: 2026-09-29 · Baseline da execução final: `008109e` · Branch: `fix/backend-core-tenancy` · [Plano](../../plan/backend-core-remediation.md) · [ADR-035](../../architecture/adr/035-backend-core-isolation-and-reliability.md). O relatório histórico de documentação está em [2026-09-28](2026-09-28.md) e não foi sobrescrito.
 
 ## Resultado desta rodada
 
@@ -9,7 +9,7 @@ Build Release da solução e harness: zero avisos e zero erros. Validação exec
 | Verificação | Resultado | O que foi exercitado |
 |---|---:|---|
 | `AgenticSystem.Tests` | 701 aprovados, 1 ignorado, 0 falhas (702 total) | TRX em `tests/TestResults/backend-core-gap-closure/followup/backend-gap-followup.trx`. O único ignorado é a integração PostgreSQL do store no contexto de teste convencional. |
-| Integração core HTTP/SignalR | 40/40 aprovados | JWT/API key, memberships, ACL e grants, limites de agentes, upload, RAG real, REST/SSE e os cinco hubs; Gateway viewer/Platform Admin e chamadas cross-tenant. |
+| Integração core HTTP/SignalR | 43/43 aprovados | JWT/API key, tenant ativo/inativo, memberships, ACL/grants, limites de agentes, upload, RAG real, REST/SSE, API key tenant spoof no handshake e os cinco hubs; Gateway Viewer/Platform Admin e chamadas cross-tenant. |
 | Gateway broadcaster | aprovado | Serviço de fixture no ambiente `Validation`: Platform Admin desabilitou/habilitou e `ServiceStatusChanged` chegou apenas ao grupo do tenant A; tenant B não recebeu os eventos. Viewer recebeu 403 e serviço inexistente retornou 404 sem emitir evento. |
 | Store/skills/quotas e backfill | 10/10; backfill aprovado | Busca/room em PostgreSQL, seeding isolado, 32 incrementos em duas factories de contexto/repositórios, bloqueio no teto, reset UTC, ceiling Free e migration partindo do schema legado. |
 | Após restart da API | 6/6 aprovados | Mensagens/ownership e estado MAF, quatro skills distintas por tenant, consumo diário persistido, bloqueio real de tokens/custo em REST e OpenAI-compatível (429) e erro terminal em SSE. Rejeições não aumentaram os contadores nem chamaram o LLM. |

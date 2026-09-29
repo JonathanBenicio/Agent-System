@@ -2,7 +2,7 @@
 
 Status: gaps funcionais #111–#117 implementados e validados nos cenários locais; gate global de cobertura continua abaixo do requisito de CI · Issues: #111–#117 · [ADR-035](../architecture/adr/035-backend-core-isolation-and-reliability.md) · Stories: BACK-FIX-111–117.
 
-Branch: `fix/backend-core-tenancy` · base do PR: `docs/backend-contracts-review` · último commit validado: `151e6d4`.
+Branch: `fix/backend-core-tenancy` · base do PR: `docs/backend-contracts-review` · baseline da execução final: `008109e`.
 
 ## Escopo e decisões
 
@@ -23,7 +23,7 @@ Implementar e documentar isolamento tenant, membership e papéis, grants de supo
 
 ## Verificação final
 
-Build Release da solução/harness: zero avisos e erros. Suíte: 701 aprovados, 1 ignorado, 0 falhas (702 total). Integração core: 40/40; Gateway broadcast: aprovado; store/quota/skills: 10/10; backfill legado: aprovado; sessão pós-restart: 6/6. PostgreSQL 16.15/pgvector 0.8.6 e Ollama reais, com tenants/identidades/documentos sintéticos.
+Build Release da solução/harness: zero avisos e erros. Suíte: 701 aprovados, 1 ignorado, 0 falhas (702 total). Integração core: 43/43; Gateway broadcast: aprovado; store/quota/skills: 10/10; backfill legado: aprovado; sessão pós-restart: 6/6. PostgreSQL 16.15/pgvector 0.8.6 e Ollama reais, com tenants/identidades/documentos sintéticos.
 
 Relatório discriminado: [backend-core-remediation](../backend/validation/backend-core-remediation.md). Validação documental histórica: [2026-09-28](../backend/validation/2026-09-28.md). Artefatos da execução: `tests/TestResults/backend-core-gap-closure/run-2026-09-28/`, ignorados pelo Git.
 
