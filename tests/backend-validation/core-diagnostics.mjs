@@ -12,7 +12,7 @@ const protectedHistoricalOutput = resolve(root, 'tests/TestResults/backend-docum
 if (resolve(outputDirectory).toLowerCase() === protectedHistoricalOutput.toLowerCase())
   throw new Error('Refusing to overwrite historical backend-documentation validation artifacts.');
 mkdirSync(outputDirectory, { recursive: true });
-const run = 'doc-' + randomUUID().slice(0, 8), tenantA = run + '-a', tenantB = run + '-b';
+const run = 'doc-' + randomUUID().slice(0, 8), tenantA = run + '-a', tenantB = run + '-b', tenantInactive = run + '-inactive';
 const key = randomUUID(), keyId = randomUUID(), apiKeyForCompatibility = randomUUID(), compatibilityKeyId = randomUUID();
 const alice = run + '-alice', bob = run + '-bob';
 writeFileSync(resolve(outputDirectory, 'validation-api-key.txt'), apiKeyForCompatibility + '\n', { mode: 0o600 });
@@ -172,7 +172,8 @@ await test('ENV-01', 'API liveness and migrated real PostgreSQL', async () => {
 });
 sql(`INSERT INTO tenants(id,name,slug,plan,is_active,created_at,limits,provider_api_keys,settings) VALUES
 ('${tenantA}','Validation A','${tenantA}','Free',true,now(),'{"maxRequestsPerMinute":10,"maxTokensPerDay":50000,"maxDailyCostUsd":1,"maxConcurrentSessions":3,"maxAgents":5,"maxDocumentsMb":100,"maxDocuments":10000}','{}','{}'),
-('${tenantB}','Validation B','${tenantB}','Free',true,now(),'{"maxRequestsPerMinute":10,"maxTokensPerDay":50000,"maxDailyCostUsd":1,"maxConcurrentSessions":3,"maxAgents":5,"maxDocumentsMb":100,"maxDocuments":10000}','{}','{}');
+('${tenantB}','Validation B','${tenantB}','Free',true,now(),'{"maxRequestsPerMinute":10,"maxTokensPerDay":50000,"maxDailyCostUsd":1,"maxConcurrentSessions":3,"maxAgents":5,"maxDocumentsMb":100,"maxDocuments":10000}','{}','{}'),
+('${tenantInactive}','Validation Inactive','${tenantInactive}','Free',false,now(),'{"maxRequestsPerMinute":10,"maxTokensPerDay":50000,"maxDailyCostUsd":1,"maxConcurrentSessions":3,"maxAgents":5,"maxDocumentsMb":100,"maxDocuments":10000}','{}','{}');
 INSERT INTO access_api_keys(id,tenant_id,key_hash,name,role,is_enabled,created_at) VALUES
 ('${keyId}','${tenantA}','${createHash('sha256').update(key).digest('hex')}','Validation Viewer','Viewer',true,now()),
 ('${compatibilityKeyId}','${tenantA}','${createHash('sha256').update(apiKeyForCompatibility).digest('hex')}','OpenAI Compatibility Validation Viewer','Viewer',true,now());`);
@@ -186,6 +187,7 @@ await test('AUTH-01', 'invalid key denied for known tenant', async () => { const
 await test('AUTH-02', 'JWT tenant fallback accepted', async () => { const r=await request('/api/session'); check(r.status===200&&Array.isArray(r.data),'status='+r.status); return '200 array'; });
 await test('AUTH-03', 'non-admin header override denied', async () => { const r=await request('/api/session',{tenant:tenantB}); check(r.status===403,'status='+r.status); return '403'; });
 await test('AUTH-04', 'unknown tenant JWT denied', async () => { const r=await request('/api/session',{token:jwt(alice,run+'-unknown')}); check(r.status===403,'status='+r.status); return '403'; });
+await test('AUTH-INACTIVE-01', 'inactive tenant JWT denied before controller execution', async () => { const r=await request('/api/session',{token:jwt(alice,tenantInactive)}); check(r.status===403,'status='+r.status); return '403 for inactive tenant'; });
 await test('AUTH-05', 'Viewer API key cannot override tenant', async () => { const r=await request('/api/session',{apiKey:key,tenant:tenantB}); check(r.status===403,'Viewer key accepted cross-tenant header: status='+r.status); return '403'; });
 let room;
 await test('ROOM-01', 'create private room and creator access', async () => { const r=await request('/api/knowledge/rooms',{method:'POST',body:{name:'Validation room'}}); check(r.status===201&&r.data?.id,'status='+r.status);room=r.data.id;return '201; creator owns room'; });
@@ -224,6 +226,7 @@ await test('HUB-ADMIN-01', 'explicit platform administrator can read the Gateway
 await test('HUB-02', 'query tenant override rejected for platform administrator', async () => { check(results.find(r=>r.id==='HUB-ADMIN-01')?.result==='passed','dependency HUB-ADMIN-01');return assertHubDenied(()=>hubInvoke(jwt(platformAdmin,tenantA),tenantB,'/hubs/gateway','GetDashboard',[])); });
 await test('HUB-KEY-01', 'API key tenant cannot be overridden at SignalR negotiation', async () => { const response=await fetch(base+'/hubs/chat/negotiate?negotiateVersion=1&X-Tenant-Id='+encodeURIComponent(tenantB),{method:'POST',headers:{'X-Api-Key':apiKeyForCompatibility},signal:AbortSignal.timeout(10000)});check(response.status===403,'API key selected another hub tenant; status='+response.status);return '403 on SignalR negotiation for a Viewer API key with mismatched tenant'; });
 await test('HUB-03', 'unknown query tenant rejected', async () => { check(results.find(r=>r.id==='HUB-ADMIN-01')?.result==='passed','dependency HUB-ADMIN-01');return assertHubDenied(()=>hubInvoke(jwt(platformAdmin,tenantA),run+'-unknown','/hubs/gateway','GetDashboard',[])); });
+await test('HUB-INACTIVE-01', 'inactive tenant is rejected during SignalR negotiation', async () => {return assertHubDenied(()=>hubInvoke(jwt(alice,tenantInactive),null,'/hubs/chat','SendMessage',['denied',null,'Ollama','qwen2.5:0.5b',null,null,null]));});
 await test('HUB-04', 'SignalR chat returns terminal success', async () => { const events=await hubInvoke(jwt(alice,tenantA),null,'/hubs/chat','SendMessage',['Olá.',null,'Ollama','qwen2.5:0.5b',null,null,null]);const terminal=events.find(e=>e.target==='ReceiveMessage');check(terminal?.arguments?.[0]?.success===true,'no successful ReceiveMessage; events='+events.map(e=>e.target).filter(Boolean));return 'ReceiveMessage success=true'; });
 await test('HUB-CROSS-CHAT', 'session notifications do not cross tenants for the same user', async () => {
   check(session, 'dependency CHAT-01');
