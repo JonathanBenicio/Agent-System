@@ -37,6 +37,7 @@ public class GatewayController : ControllerBase, IAsyncActionFilter
         _dbContext = dbContext;
     }
 
+    [NonAction]
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         if (!await PlatformAdminAuthorization.IsPlatformAdministratorAsync(
