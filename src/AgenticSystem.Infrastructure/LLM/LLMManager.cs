@@ -490,7 +490,9 @@ public class LLMManager : ILLMAdministrationService
             if (name.Equals("OpenAI", StringComparison.OrdinalIgnoreCase))
             {
                 httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", request.ApiKey);
-                using var response = await httpClient.GetAsync("https://api.openai.com/v1/models", ct);
+                var baseAddress = new Uri(_settings.OpenAI.BaseUrl.EndsWith('/')
+                    ? _settings.OpenAI.BaseUrl : _settings.OpenAI.BaseUrl + "/");
+                using var response = await httpClient.GetAsync(new Uri(baseAddress, "v1/models"), ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorText = await response.Content.ReadAsStringAsync(ct);
@@ -515,7 +517,9 @@ public class LLMManager : ILLMAdministrationService
             }
             else if (name.Equals("Gemini", StringComparison.OrdinalIgnoreCase))
             {
-                var url = $"https://generativelanguage.googleapis.com/v1beta/models?key={request.ApiKey}";
+                var baseAddress = new Uri(_settings.Gemini.BaseUrl.EndsWith('/')
+                    ? _settings.Gemini.BaseUrl : _settings.Gemini.BaseUrl + "/");
+                var url = new Uri(baseAddress, "v1beta/models") + $"?key={Uri.EscapeDataString(request.ApiKey)}";
                 using var response = await httpClient.GetAsync(url, ct);
                 if (!response.IsSuccessStatusCode)
                 {
@@ -560,7 +564,9 @@ public class LLMManager : ILLMAdministrationService
             {
                 httpClient.DefaultRequestHeaders.Add("x-api-key", request.ApiKey);
                 httpClient.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
-                using var response = await httpClient.GetAsync("https://api.anthropic.com/v1/models", ct);
+                var baseAddress = new Uri(_settings.Claude.BaseUrl.EndsWith('/')
+                    ? _settings.Claude.BaseUrl : _settings.Claude.BaseUrl + "/");
+                using var response = await httpClient.GetAsync(new Uri(baseAddress, "v1/models"), ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorText = await response.Content.ReadAsStringAsync(ct);
@@ -586,7 +592,9 @@ public class LLMManager : ILLMAdministrationService
             else if (name.Equals("OpenRouter", StringComparison.OrdinalIgnoreCase))
             {
                 httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", request.ApiKey);
-                using var response = await httpClient.GetAsync("https://openrouter.ai/api/v1/models", ct);
+                var baseAddress = new Uri(_settings.OpenRouter.BaseUrl.EndsWith('/')
+                    ? _settings.OpenRouter.BaseUrl : _settings.OpenRouter.BaseUrl + "/");
+                using var response = await httpClient.GetAsync(new Uri(baseAddress, "v1/models"), ct);
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorText = await response.Content.ReadAsStringAsync(ct);
@@ -885,8 +893,6 @@ public class LLMManager : ILLMAdministrationService
         {
             var tenantApiKey = FirstNonEmpty(
                 runtime?.RequestApiKey,
-                runtime?.SessionApiKey,
-                ReadSessionSetting(session, "llm.session.apiKey"),
                 ReadTenantApiKey(tenant, provider.Name));
             if (string.IsNullOrWhiteSpace(tenantApiKey) && _configManager is not null)
             {

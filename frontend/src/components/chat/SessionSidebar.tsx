@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
-import { MessageSquare, Plus, MoreHorizontal, Pencil, Trash2, Loader2, Search, X } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { MessageSquare, Plus, MoreHorizontal, Pencil, Trash2, Loader2, Search, X, CircleStop } from 'lucide-react'
 import { useSessions } from '@/hooks/useSessions'
 import { cn } from '@/lib/utils'
 import type { SessionListItem } from '@/types/api'
@@ -9,6 +9,7 @@ interface SessionSidebarProps {
   onSelectSession: (id: string) => void
   onNewSession: () => void
   onClearMessages: () => void
+  onEndSession: (id: string) => void
 }
 
 export function SessionSidebar({
@@ -16,21 +17,13 @@ export function SessionSidebar({
   onSelectSession,
   onNewSession,
   onClearMessages,
+  onEndSession,
 }: SessionSidebarProps) {
-  const { sessions, isLoading, error, deleteSession, renameSession, refresh } = useSessions()
+  const [searchQuery, setSearchQuery] = useState('')
+  const { sessions, isLoading, error, deleteSession, renameSession } = useSessions(searchQuery)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [menuId, setMenuId] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState('')
-
-  // Debounced search trigger
-  useEffect(() => {
-    const delayDebounceFn = setTimeout(() => {
-      void refresh()
-    }, 300)
-
-    return () => clearTimeout(delayDebounceFn)
-  }, [searchQuery, refresh])
 
   const handleNewSession = () => {
     onClearMessages()
@@ -92,7 +85,7 @@ export function SessionSidebar({
       }
     })
 
-    return Object.entries(groups).filter(([_, list]) => list.length > 0)
+    return Object.entries(groups).filter(entry => entry[1].length > 0)
   }, [])
 
   const groupedSessions = groupSessionsByDate(sessions)
@@ -159,6 +152,7 @@ export function SessionSidebar({
                   {groupItems.map(session => (
                     <div
                       key={session.id}
+                      data-session-id={session.id}
                       className={cn(
                         'group relative flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer text-sm transition-all border select-none',
                         activeSessionId === session.id
@@ -195,6 +189,7 @@ export function SessionSidebar({
                               {session.messageCount} msg
                             </span>
                           )}
+                          {session.isEnded && <span className="text-[9px] text-zinc-500">Encerrada</span>}
                         </div>
                       )}
 
@@ -234,6 +229,12 @@ export function SessionSidebar({
                               <Pencil className="w-3 h-3 text-zinc-400" />
                               Renomear
                             </button>
+                            {!session.isEnded && <button
+                              onClick={e => { e.stopPropagation(); onEndSession(session.id); setMenuId(null) }}
+                              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-zinc-350 hover:bg-zinc-800 hover:text-white"
+                            >
+                              <CircleStop className="w-3 h-3" /> Encerrar
+                            </button>}
                             <button
                               onClick={e => {
                                 e.stopPropagation()

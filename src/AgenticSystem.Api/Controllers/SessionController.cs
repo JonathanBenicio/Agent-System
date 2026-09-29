@@ -29,17 +29,59 @@ public class SessionController : ControllerBase
         _tenantContextAccessor = tenantContextAccessor;
     }
 
+    [HttpPost]
+    public async Task<IActionResult> CreateSession(CancellationToken ct = default)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+        var session = new SessionData
+        {
+            Id = $"session-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}",
+            UserId = userId,
+            TenantId = _tenantContextAccessor.CurrentTenantId,
+            StartedAt = DateTime.UtcNow
+        };
+        await _sessionStore.SaveAsync(session, ct);
+        await _hubContext.Clients.Group(TenantSignalRGroups.User(session.TenantId, userId))
+            .SendAsync("SessionCreated", session.Id, ct);
+        return CreatedAtAction(nameof(GetSession), new { id = session.Id }, SessionDtoMapper.ToDetail(session));
+    }
+
+    [HttpPost("{id}/end")]
+    public async Task<IActionResult> EndSession(string id, CancellationToken ct = default)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+        var session = await _sessionStore.GetAsync(id, ct);
+        if (session is null || session.UserId != userId || session.TenantId != _tenantContextAccessor.CurrentTenantId)
+            return NotFound(new { error = $"Session '{id}' not found." });
+        if (session.EndedAt is null)
+        {
+            session.EndedAt = DateTime.UtcNow;
+            await _sessionStore.SaveAsync(session, ct);
+        }
+        await _hubContext.Clients.Group(TenantSignalRGroups.User(session.TenantId, userId))
+            .SendAsync("SessionUpdated", session.Id, ct);
+        return Ok(SessionDtoMapper.ToDetail(session));
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetSessions([FromQuery] int limit = 50, [FromQuery] string? search = null, CancellationToken ct = default)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
 
-        var sessions = await _sessionStore.GetByTenantAsync(_tenantContextAccessor.CurrentTenantId, userId, limit, ct);
+        if (limit is < 1 or > 100) return BadRequest(new { error = "Limit must be between 1 and 100." });
+        if (search?.Length > 100) return BadRequest(new { error = "Search is too long." });
+        var sessions = await _sessionStore.GetByTenantAsync(_tenantContextAccessor.CurrentTenantId, userId, 100, ct);
 
         var items = sessions
-            .OrderByDescending(s => s.EndedAt ?? s.StartedAt)
             .Select(SessionDtoMapper.ToListItem)
+            .Where(item => string.IsNullOrWhiteSpace(search) ||
+                item.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (item.Summary?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+            .OrderByDescending(s => s.LastActivity)
+            .Take(limit)
             .ToList();
 
         return Ok(items);

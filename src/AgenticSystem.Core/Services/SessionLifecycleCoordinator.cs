@@ -57,15 +57,8 @@ public class SessionLifecycleCoordinator : ISessionLifecycleCoordinator
         return _runtimeCoordinator.BeginExecutionScope(sessionId, context);
     }
 
-    public async Task EndSessionAsync(string sessionId, UserContext context, CancellationToken ct = default)
-    {
-        await _sessionManager.EndSessionAsync(sessionId);
-
-        if (_eventPublisher != null)
-        {
-            await _eventPublisher.PublishAsync(new SessionEndedEvent(sessionId, context.UserId, context.TenantId), ct);
-        }
-    }
+    public Task CompleteTurnAsync(string sessionId, UserContext context, CancellationToken ct = default)
+        => Task.CompletedTask;
 
     public async Task PublishEventAsync(AgentStreamEvent streamEvent, CancellationToken ct = default)
     {

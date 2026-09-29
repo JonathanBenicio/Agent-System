@@ -15,7 +15,7 @@ internal static class SessionAccessValidator
             return true;
 
         var session = await sessionStore.GetAsync(sessionId, cancellationToken);
-        return session is not null &&
+        return session is not null && session.EndedAt is null &&
             string.Equals(session.UserId, userId, StringComparison.Ordinal) &&
             string.Equals(session.TenantId, tenantId, StringComparison.OrdinalIgnoreCase);
     }

@@ -21,11 +21,18 @@ export function useSkills() {
   }, [])
 
 
+  // Fetch the tenant catalog on mount, then persist subsequent edits through explicit actions.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { refresh() }, [refresh])
 
   const deleteSkill = useCallback(async (id: string) => {
     await skillApi.delete(id)
     setSkills(prev => prev.filter(s => s.id !== id))
+  }, [])
+
+  const setSkillEnabled = useCallback(async (id: string, enabled: boolean) => {
+    await skillApi.setEnabled(id, enabled)
+    setSkills(prev => prev.map(skill => skill.id === id ? { ...skill, isEnabled: enabled } : skill))
   }, [])
 
   const createSkill = useCallback(async (data: { id: string; name: string; domain: string; type: string; systemPromptFragment: string; fewShotExamples?: string; metadata?: Record<string, string> }) => {
@@ -46,5 +53,5 @@ export function useSkills() {
     return res
   }, [refresh])
 
-  return { skills, loading, error, refresh, deleteSkill, createSkill, updateSkill, uploadSkill }
+  return { skills, loading, error, refresh, deleteSkill, setSkillEnabled, createSkill, updateSkill, uploadSkill }
 }

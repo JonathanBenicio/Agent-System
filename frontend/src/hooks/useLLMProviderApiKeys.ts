@@ -26,29 +26,34 @@ export function useLLMProviderApiKeys(providerName: string) {
   }, [providerName])
 
   useEffect(() => {
-
+    // Fetching initializes the server-backed collection when its provider changes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchKeys()
   }, [fetchKeys])
 
   const registerKey = useCallback(async (req: RegisterApiKeyRequest) => {
     const key = await llmApi.registerKey(providerName, req)
     setKeys(prev => [...prev, key])
+    window.dispatchEvent(new Event('agentic:llm-config-updated'))
     return key
   }, [providerName])
 
   const updateKey = useCallback(async (id: string, req: UpdateApiKeyRequest) => {
     const updated = await llmApi.updateKey(providerName, id, req)
     setKeys(prev => prev.map(k => k.id === id ? updated : k))
+    window.dispatchEvent(new Event('agentic:llm-config-updated'))
     return updated
   }, [providerName])
 
   const deleteKey = useCallback(async (id: string) => {
     await llmApi.deleteKey(providerName, id)
     setKeys(prev => prev.filter(k => k.id !== id))
+    window.dispatchEvent(new Event('agentic:llm-config-updated'))
   }, [providerName])
 
   const setDefaultKey = useCallback(async (id: string) => {
     await llmApi.setDefaultKey(providerName, id)
+    window.dispatchEvent(new Event('agentic:llm-config-updated'))
     // Refresh list to update all default flags
     await fetchKeys()
   }, [providerName, fetchKeys])
@@ -59,6 +64,7 @@ export function useLLMProviderApiKeys(providerName: string) {
 
   const discoverModelsForKey = useCallback(async (id: string) => {
     const res = await llmApi.discoverModelsForKey(providerName, id)
+    window.dispatchEvent(new Event('agentic:llm-config-updated'))
     if (res.success) {
       await fetchKeys() // Fetch again to get updated models
     }

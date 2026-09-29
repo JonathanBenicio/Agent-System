@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'path'
 
+const backendValidationTarget = process.env.VITE_API_PROXY_TARGET || 'https://localhost:5001'
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -28,9 +30,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'https://localhost:5001',
+      '/api': backendValidationTarget,
       '/hubs': {
-        target: 'https://localhost:5001',
+        target: backendValidationTarget,
         ws: true,
         secure: false,
       },

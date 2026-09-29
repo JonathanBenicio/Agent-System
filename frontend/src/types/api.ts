@@ -155,6 +155,8 @@ export interface SkillSummary {
   type: string
   agentName?: string
   isSystem?: boolean
+  isEnabled?: boolean
+  canManage?: boolean
 }
 
 export interface SkillContent {
@@ -799,6 +801,7 @@ export interface SessionListItem {
   lastActivity: string
   messageCount: number
   summary?: string
+  isEnded?: boolean
 }
 
 export interface SessionDetail {
@@ -809,6 +812,8 @@ export interface SessionDetail {
   messages: ChatMessageDto[]
   summary?: SessionSummaryDto
   insights?: SessionInsightsDto
+  provider?: string
+  model?: string
 }
 
 export interface ChatMessageDto {

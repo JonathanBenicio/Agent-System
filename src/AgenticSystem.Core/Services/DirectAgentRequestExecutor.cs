@@ -187,12 +187,6 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
                 }
             }, ct);
 
-            if (context.WorkflowOptions is null)
-            {
-                try { await _sessionManager.EndSessionAsync(sessionId); }
-                catch (Exception endEx) { _logger.LogWarning(endEx, "Falha ao finalizar sessão {SessionId}", sessionId); }
-            }
-
             return AgentResponse.Error("Erro interno ao processar requisição direta.", nameof(DirectAgentRequestExecutor));
         }
     }

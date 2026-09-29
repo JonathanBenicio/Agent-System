@@ -22,6 +22,13 @@ import { ConfirmModal } from '@/components/shared/ConfirmModal'
 import { useToast } from '@/components/shared/Toast'
 import { skillApi } from '@/lib/api'
 
+type BrainstormSuggestion = {
+  suggestedId: string
+  suggestedName: string
+  systemPromptFragment: string
+  fewShotExamples?: string
+}
+
 // Componente simples para renderizar Markdown no Preview de forma legível
 function SimpleMarkdownPreview({ text }: { text: string }) {
   if (!text) return <em className="text-zinc-500 text-xs">Escreva algo no prompt para ver a pré-visualização...</em>
@@ -31,7 +38,7 @@ function SimpleMarkdownPreview({ text }: { text: string }) {
     .replace(/^### (.*$)/gim, '<h5 class="text-sm font-semibold text-teal-400 mt-3 mb-1">$1</h5>')
     .replace(/^## (.*$)/gim, '<h4 class="text-sm font-bold text-teal-400 mt-4 mb-2">$1</h4>')
     .replace(/^# (.*$)/gim, '<h3 class="text-base font-bold text-zinc-100 mt-4 mb-2 border-b border-zinc-800 pb-1">$1</h3>')
-    .replace(/^\-\s(.*$)/gim, '<li class="list-disc ml-4 text-xs text-zinc-300">$1</li>')
+    .replace(/^[-]\s(.*$)/gim, '<li class="list-disc ml-4 text-xs text-zinc-300">$1</li>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/`(.*?)`/g, '<code class="bg-zinc-800 px-1 py-0.5 rounded text-teal-300 font-mono text-[10px]">$1</code>')
     .split('\n').join('<br />')
@@ -40,7 +47,7 @@ function SimpleMarkdownPreview({ text }: { text: string }) {
 }
 
 export function SkillsPage() {
-  const { skills, loading, error, refresh, deleteSkill, createSkill, updateSkill, uploadSkill } = useSkills()
+  const { skills, loading, error, refresh, deleteSkill, setSkillEnabled, createSkill, updateSkill, uploadSkill } = useSkills()
   const { addToast } = useToast()
   
   // State de Controle de Telas
@@ -68,7 +75,7 @@ export function SkillsPage() {
   
   // Brainstorm Chat State
   const [brainstormDesc, setBrainstormDesc] = useState('')
-  const [brainstormLogs, setBrainstormLogs] = useState<Array<{ sender: 'user' | 'ai'; text: string; data?: any }>>([])
+  const [brainstormLogs, setBrainstormLogs] = useState<Array<{ sender: 'user' | 'ai'; text: string; data?: BrainstormSuggestion }>>([])
   const [isBrainstorming, setIsBrainstorming] = useState(false)
 
   // Reset de Formulário
@@ -181,8 +188,8 @@ export function SkillsPage() {
       }
       setModalOpen(false)
       resetForm()
-    } catch (err: any) {
-      addToast(err.message || 'Erro ao salvar habilidade', 'error')
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Erro ao salvar habilidade', 'error')
     }
   }
 
@@ -194,8 +201,8 @@ export function SkillsPage() {
       addToast('Skill importada com sucesso no PostgreSQL', 'success')
       setModalOpen(false)
       resetForm()
-    } catch (err: any) {
-      addToast(err.message || 'Erro ao realizar upload do arquivo', 'error')
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : 'Erro ao realizar upload do arquivo', 'error')
     }
   }
 
@@ -233,7 +240,7 @@ export function SkillsPage() {
     }
   }
 
-  const applyBrainstormResult = (data: any) => {
+  const applyBrainstormResult = (data: BrainstormSuggestion) => {
     setSkillId(data.suggestedId || 'generated-skill')
     setSkillName(data.suggestedName || 'Habilidade Gerada')
     setPromptText(data.systemPromptFragment || '')
@@ -277,12 +284,12 @@ export function SkillsPage() {
               <Download className="w-3.5 h-3.5" /> Template
             </a>
             
-            <button
+            {skills.some(skill => skill.canManage) && <button
               onClick={handleOpenCreate}
               className="px-4 py-2 text-xs bg-teal-600 hover:bg-teal-500 text-zinc-100 font-semibold rounded-lg flex items-center gap-1.5 shadow-md shadow-teal-950/40 transition-all"
             >
               <Plus className="w-4 h-4" /> Nova Skill
-            </button>
+            </button>}
           </div>
         </div>
 
@@ -303,6 +310,7 @@ export function SkillsPage() {
           {filtered.map(skill => (
             <div 
               key={skill.id} 
+              data-skill-id={skill.id}
               className="bg-zinc-900/40 border border-zinc-850 rounded-xl p-5 hover:border-zinc-700 hover:bg-zinc-900/60 transition-all flex flex-col justify-between"
             >
               <div>
@@ -319,6 +327,9 @@ export function SkillsPage() {
                   }`}>
                     {skill.isSystem ? 'Sistema' : 'Customizada'}
                   </span>
+                  <span className={`text-[10px] ${skill.isEnabled === false ? 'text-zinc-500' : 'text-teal-400'}`}>
+                    {skill.isEnabled === false ? 'Desativada' : 'Ativa'}
+                  </span>
                 </div>
 
                 <p className="text-[10px] font-mono text-zinc-500 mb-2 truncate">ID: {skill.id}</p>
@@ -334,7 +345,18 @@ export function SkillsPage() {
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  {!skill.isSystem ? (
+                  {skill.canManage && <button
+                    onClick={async () => {
+                      try {
+                        await setSkillEnabled(skill.id, skill.isEnabled === false)
+                        addToast(skill.isEnabled === false ? 'Skill ativada' : 'Skill desativada', 'success')
+                      } catch {
+                        addToast('Não foi possível alterar a skill', 'error')
+                      }
+                    }}
+                    className="rounded-lg border border-zinc-700 px-2 py-1 text-[10px] text-zinc-300 hover:bg-zinc-800"
+                  >{skill.isEnabled === false ? 'Ativar' : 'Desativar'}</button>}
+                  {!skill.isSystem && skill.canManage ? (
                     <>
                       <button
                         onClick={() => handleOpenEdit(skill.id)}
@@ -353,7 +375,7 @@ export function SkillsPage() {
                     </>
                   ) : (
                     <span className="text-[9px] text-zinc-600 font-mono tracking-wider uppercase bg-zinc-950 px-2 py-0.5 rounded border border-zinc-850">
-                      Protegida
+                      Somente leitura
                     </span>
                   )}
                 </div>
@@ -704,7 +726,7 @@ export function SkillsPage() {
                           
                           {log.data && (
                             <button
-                              onClick={() => applyBrainstormResult(log.data)}
+                              onClick={() => { if (log.data) applyBrainstormResult(log.data) }}
                               className="mt-2 px-3 py-1 bg-teal-600 hover:bg-teal-500 text-zinc-100 rounded text-[10px] font-semibold flex items-center gap-1 transition-all"
                             >
                               Aplicar e Editar no Formulário <ChevronRight className="w-3 h-3" />

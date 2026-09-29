@@ -1,4 +1,4 @@
-import { get, post, put, del } from './client'
+import { get, post, postForm, put, del } from './client'
 import type {
   AgentInfo,
   AgentSpecification,
@@ -38,6 +38,8 @@ export const toolApi = {
 
 export const skillApi = {
   listAll: () => get<SkillSummary[]>('/api/agent/skills/all'),
+  setEnabled: (id: string, enabled: boolean) =>
+    put<{ id: string; isEnabled: boolean }>(`/api/agent/skills/${encodeURIComponent(id)}/enabled`, { enabled }),
   get: (id: string) => get<SkillSummary & { systemPrompt?: string; examples?: string; metadata?: Record<string, string> }>(`/api/agent/skills/${encodeURIComponent(id)}`),
   create: (data: { id: string; name: string; domain: string; type: string; systemPromptFragment: string; fewShotExamples?: string; metadata?: Record<string, string> }) => 
     post<SkillSummary>('/api/agent/skills', data),
@@ -47,7 +49,7 @@ export const skillApi = {
   upload: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-    return post<{ message: string; id: string }>('/api/agent/skills/upload', formData)
+    return postForm<{ message: string; id: string }>('/api/agent/skills/upload', formData)
   },
   brainstorm: (description: string) => 
     post<{ suggestedId: string; suggestedName: string; systemPromptFragment: string; fewShotExamples?: string }>('/api/agent/skills/brainstorm', { description })

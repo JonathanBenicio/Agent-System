@@ -7,6 +7,7 @@ import type {
 } from '@/types/api'
 
 export const sessionApi = {
+  create: () => post<SessionDetail>('/api/session'),
   list: (limit?: number, search?: string) => {
     const params = new URLSearchParams()
     if (limit) params.set('limit', limit.toString())
@@ -15,6 +16,7 @@ export const sessionApi = {
     return get<SessionListItem[]>(`/api/session${qs ? `?${qs}` : ''}`)
   },
   get: (id: string) => get<SessionDetail>(`/api/session/${encodeURIComponent(id)}`),
+  end: (id: string) => post<SessionDetail>(`/api/session/${encodeURIComponent(id)}/end`),
   messages: (id: string) => get<ChatMessageDto[]>(`/api/session/${encodeURIComponent(id)}/messages`),
   delete: (id: string) => del(`/api/session/${encodeURIComponent(id)}`),
   updateTitle: (id: string, title: string) =>

@@ -119,7 +119,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         try
         {
             var response = await ProcessRequestCoreAsync(resolvedSessionId, input, context, CancellationToken.None);
-            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context);
+            await _sessionCoordinator.CompleteTurnAsync(resolvedSessionId, context);
             return response;
         }
         catch (Exception)
@@ -149,7 +149,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         }
         finally
         {
-            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context, ct);
+            await _sessionCoordinator.CompleteTurnAsync(resolvedSessionId, context, ct);
         }
     }
 
@@ -175,7 +175,7 @@ public class MetaAgentOrchestrator : IMetaAgent
         }
         finally
         {
-            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context, ct);
+            await _sessionCoordinator.CompleteTurnAsync(resolvedSessionId, context, ct);
         }
     }
 
@@ -251,7 +251,7 @@ public class MetaAgentOrchestrator : IMetaAgent
                 }
             }, ct);
 
-            try { await _sessionCoordinator.EndSessionAsync(sessionId, context, ct); }
+            try { await _sessionCoordinator.CompleteTurnAsync(sessionId, context, ct); }
             catch (Exception endEx) { _logger.LogWarning(endEx, "Falha ao finalizar sessão {SessionId}", sessionId); }
 
             var quotaError = QuotaExceededException.Find(ex);
@@ -298,12 +298,12 @@ public class MetaAgentOrchestrator : IMetaAgent
         try
         {
             var response = await ProcessDirectRequestCoreAsync(resolvedSessionId, input, context, targetAgent, CancellationToken.None);
-            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context);
+            await _sessionCoordinator.CompleteTurnAsync(resolvedSessionId, context);
             return response;
         }
         catch (Exception)
         {
-            await _sessionCoordinator.EndSessionAsync(resolvedSessionId, context);
+            await _sessionCoordinator.CompleteTurnAsync(resolvedSessionId, context);
             throw;
         }
     }

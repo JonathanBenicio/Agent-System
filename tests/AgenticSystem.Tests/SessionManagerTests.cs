@@ -92,14 +92,25 @@ public class SessionManagerTests
     }
 
     [Fact]
-    public async Task StartSessionAsync_WithValidSessionIdButDifferentUser_GeneratesNewSession()
+    public async Task StartSessionAsync_WithSessionOwnedByDifferentUser_RejectsAccess()
     {
         var context1 = new UserContext { UserId = "user1", TenantId = "tenant1" };
         var sessionId = await _sut.StartSessionAsync(context1);
 
         var context2 = new UserContext { UserId = "user2", TenantId = "tenant1" };
-        var reusedSessionId = await _sut.StartSessionAsync(context2, sessionId);
+        var act = () => _sut.StartSessionAsync(context2, sessionId);
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
 
-        reusedSessionId.Should().NotBe(sessionId);
+    [Fact]
+    public async Task StartSessionAsync_WithEndedSession_RejectsResume()
+    {
+        var context = new UserContext { UserId = "user1", TenantId = "tenant1" };
+        var sessionId = await _sut.StartSessionAsync(context);
+        await _sut.EndSessionAsync(sessionId);
+
+        var act = () => _sut.StartSessionAsync(context, sessionId);
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("Ended sessions cannot be resumed.");
     }
 }

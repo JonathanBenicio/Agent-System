@@ -24,7 +24,7 @@ public interface ISessionLifecycleCoordinator
     /// <summary>
     /// Ends the session and publishes completion events.
     /// </summary>
-    Task EndSessionAsync(string sessionId, UserContext context, CancellationToken ct = default);
+    Task CompleteTurnAsync(string sessionId, UserContext context, CancellationToken ct = default);
 
     /// <summary>
     /// Publishes a stream event through the runtime coordinator.

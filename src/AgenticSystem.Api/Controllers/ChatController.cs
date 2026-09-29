@@ -6,6 +6,7 @@ using AgenticSystem.Core.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using AgenticSystem.Api.Services;
 
 namespace AgenticSystem.Api.Controllers;
 
@@ -22,12 +23,15 @@ public class ChatController : ControllerBase
     private readonly IMetaAgent _metaAgent;
     private readonly ITenantContextAccessor _tenantContextAccessor;
     private readonly ISessionStore _sessionStore;
+    private readonly ChatConfigurationService _configuration;
 
-    public ChatController(IMetaAgent metaAgent, ITenantContextAccessor tenantContextAccessor, ISessionStore sessionStore)
+    public ChatController(IMetaAgent metaAgent, ITenantContextAccessor tenantContextAccessor, ISessionStore sessionStore,
+        ChatConfigurationService configuration)
     {
         _metaAgent = metaAgent;
         _tenantContextAccessor = tenantContextAccessor;
         _sessionStore = sessionStore;
+        _configuration = configuration;
     }
 
     /// <summary>
@@ -46,6 +50,14 @@ public class ChatController : ControllerBase
         var userContext = BuildUserContext(request);
         if (!await SessionAccessValidator.CanAccessAsync(_sessionStore, request.SessionId, userContext.UserId, userContext.TenantId))
             return NotFound(new { error = "Session not found." });
+        try
+        {
+            await _configuration.ApplyAsync(userContext, request.SessionId, request.Provider, request.Model, HttpContext.RequestAborted);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
 
         AgentResponse response;
         if (!string.IsNullOrWhiteSpace(request.TargetAgent))
@@ -78,6 +90,14 @@ public class ChatController : ControllerBase
         var userContext = BuildUserContext(request);
         if (!await SessionAccessValidator.CanAccessAsync(_sessionStore, request.SessionId, userContext.UserId, userContext.TenantId, HttpContext.RequestAborted))
             return Results.NotFound(new { error = "Session not found." });
+        try
+        {
+            await _configuration.ApplyAsync(userContext, request.SessionId, request.Provider, request.Model, HttpContext.RequestAborted);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.BadRequest(new { error = ex.Message });
+        }
 
         HttpContext.Response.StatusCode = StatusCodes.Status200OK;
         HttpContext.Response.Headers.Append("Cache-Control", "no-cache");

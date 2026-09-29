@@ -501,7 +501,7 @@ public class WorkflowEngineTests
         await _store.SaveDefinitionAsync(TenantId, definition);
 
         // Act
-        var execution = await _engine.StartAsync(TenantId, definition);
+        var execution = await _engine.StartAsync(TenantId, definition, initiatedBy: "user-1");
         await ProcessClaimedExecutionAsync(execution.Id);
 
         // Assert
@@ -541,7 +541,7 @@ public class WorkflowEngineTests
         await _store.SaveDefinitionAsync(TenantId, definition);
 
         // Act
-        var execution = await _engine.StartAsync(TenantId, definition);
+        var execution = await _engine.StartAsync(TenantId, definition, initiatedBy: "user-1");
         await ProcessClaimedExecutionAsync(execution.Id);
 
         // Assert

@@ -8,17 +8,24 @@ public sealed class TenantSessionIsolationKeyProvider : AgentIsolationKeyProvide
 {
     private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ILLMRuntimeContextAccessor _runtimeContextAccessor;
 
     public TenantSessionIsolationKeyProvider(
         IHttpContextAccessor httpContextAccessor,
-        ITenantContextAccessor tenantContextAccessor)
+        ITenantContextAccessor tenantContextAccessor,
+        ILLMRuntimeContextAccessor runtimeContextAccessor)
     {
         _httpContextAccessor = httpContextAccessor;
         _tenantContextAccessor = tenantContextAccessor;
+        _runtimeContextAccessor = runtimeContextAccessor;
     }
 
     public override ValueTask<string?> GetIsolationKeyAsync(CancellationToken cancellationToken = default)
     {
+        var runtime = _runtimeContextAccessor.Current;
+        if (!string.IsNullOrWhiteSpace(runtime?.TenantId) && !string.IsNullOrWhiteSpace(runtime.UserId))
+            return ValueTask.FromResult<string?>($"{runtime.TenantId}:{runtime.UserId}");
+
         var principal = _httpContextAccessor.HttpContext?.User;
         var identity = principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
             ?? principal?.FindFirst("sub")?.Value;
