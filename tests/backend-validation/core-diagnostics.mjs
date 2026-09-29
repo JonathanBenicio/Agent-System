@@ -11,8 +11,10 @@ const outputDirectory = process.env.BACKEND_VALIDATION_OUTPUT_DIR || resolve(roo
 const protectedHistoricalOutput = resolve(root, 'tests/TestResults/backend-documentation/current');
 if (resolve(outputDirectory).toLowerCase() === protectedHistoricalOutput.toLowerCase())
   throw new Error('Refusing to overwrite historical backend-documentation validation artifacts.');
+mkdirSync(outputDirectory, { recursive: true });
 const run = 'doc-' + randomUUID().slice(0, 8), tenantA = run + '-a', tenantB = run + '-b';
 const key = randomUUID(), keyId = randomUUID(), alice = run + '-alice', bob = run + '-bob';
+writeFileSync(resolve(outputDirectory, 'validation-api-key.txt'), key + '\n', { mode: 0o600 });
 const results = [];
 function sql(statement) {
   return execFileSync('docker', ['compose', '-f', compose, '-p', 'agent-system-backend-fix', 'exec', '-T', 'postgres', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'validation', '-d', 'backend_validation', '-At'], { input: statement, encoding: 'utf8' }).trim();

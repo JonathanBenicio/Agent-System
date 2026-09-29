@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
+using AgenticSystem.Core.Exceptions;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.Agents.AI.Workflows;
@@ -113,6 +114,10 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         catch (Exception ex)
         {
             _logger.LogError(ex, "Framework handoff orchestration failed");
+            var quotaError = QuotaExceededException.Find(ex);
+            if (quotaError is not null)
+                return CoreAgentResponse.Error(quotaError.Message, _orchestratorMetadata.Name);
+
             return CoreAgentResponse.Error(
                 "Erro ao processar via orquestrador de handoff do framework.", _orchestratorMetadata.Name);
         }

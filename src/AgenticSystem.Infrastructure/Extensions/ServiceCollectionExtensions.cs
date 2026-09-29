@@ -116,7 +116,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LLMManager>();
         services.AddSingleton<IExternalQuotaSyncService, ExternalQuotaSyncService>();
         services.AddSingleton<ILLMAdministrationService>(sp => sp.GetRequiredService<LLMManager>());
-        services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(sp.GetRequiredService<LLMManager>(), sp.GetRequiredService<ILogger<ContextAwareChatClient>>()));
+        services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(
+            sp.GetRequiredService<LLMManager>(),
+            sp.GetRequiredService<ILLMRuntimeContextAccessor>(),
+            sp.GetRequiredService<IQuotaEnforcer>(),
+            sp.GetRequiredService<ITokenAuditService>(),
+            sp.GetRequiredService<ILogger<ContextAwareChatClient>>()));
         services.AddScoped<ILLMProviderApiKeyService, LLMProviderApiKeyService>();
 
         services.AddSingleton<IChatClient>(sp =>

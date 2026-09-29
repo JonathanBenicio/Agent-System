@@ -142,6 +142,27 @@ builder.AddEnterpriseObservability("AgenticSystem.Api");
 
 var app = builder.Build();
 
+// This service exists only in the isolated validation host so that the
+// GatewayHub tenant-broadcast path can be exercised over a real SignalR socket.
+if (app.Environment.IsEnvironment("Validation"))
+{
+    var tenantContextAccessor = app.Services.GetRequiredService<AgenticSystem.Core.Interfaces.ITenantContextAccessor>();
+    using (tenantContextAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext
+    {
+        TenantId = "system-validation-gateway",
+        TenantName = "Validation Gateway Fixture"
+    }))
+    {
+        app.Services.GetRequiredService<AgenticSystem.Core.Interfaces.IServiceGateway>()
+            .RegisterService(new AgenticSystem.Core.Models.ServiceRegistration
+            {
+                Name = "validation-gateway-fixture",
+                Category = "validation",
+                DailyBudget = 1m
+            });
+    }
+}
+
 // Auto-migrate database on startup
 using (var scope = app.Services.CreateScope())
 {

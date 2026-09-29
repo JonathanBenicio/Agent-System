@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Exceptions;
 
 [assembly: InternalsVisibleTo("AgenticSystem.Tests")]
 
@@ -253,7 +254,11 @@ public class MetaAgentOrchestrator : IMetaAgent
             try { await _sessionCoordinator.EndSessionAsync(sessionId, context, ct); }
             catch (Exception endEx) { _logger.LogWarning(endEx, "Falha ao finalizar sessão {SessionId}", sessionId); }
 
-            return AgentResponse.Error("Erro interno ao processar a requisição.", "MetaAgentOrchestrator");
+            var quotaError = QuotaExceededException.Find(ex);
+            var publicError = quotaError is not null
+                ? quotaError.Message
+                : "Erro interno ao processar a requisição.";
+            return AgentResponse.Error(publicError, "MetaAgentOrchestrator");
         }
     }
 

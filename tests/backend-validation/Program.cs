@@ -141,6 +141,89 @@ if (args.Contains("--legacy-backfill"))
 var accessor = new TenantContextAccessor();
 var options = new DbContextOptionsBuilder<AgenticDbContext>().UseNpgsql(connection, o => o.UseVector()).Options;
 var factory = new ValidationFactory(options, accessor);
+if (args.Contains("--skills-before-restart") || args.Contains("--skills-after-restart"))
+{
+    var outputDirectory = validationOutputDirectory;
+    using var core = JsonDocument.Parse(await File.ReadAllTextAsync(coreResultsPath));
+    var run = core.RootElement.GetProperty("run").GetString()!;
+    var baseline = core.RootElement.GetProperty("baseline").GetString()!;
+    var tenantIds = new[] { run + "-a", run + "-b" };
+    var catalogs = new Dictionary<string, string[]>();
+    var skillsSource = new DbAgentSkillsSource(factory, NullLogger<DbAgentSkillsSource>.Instance);
+
+    foreach (var tenantId in tenantIds)
+    {
+        using var tenantScope = accessor.BeginScope(new TenantContext { TenantId = tenantId });
+        var skills = (await skillsSource.LoadSkillsAsync()).OrderBy(skill => skill.Id, StringComparer.Ordinal).ToArray();
+        if (skills.Length != 4)
+            throw new InvalidOperationException($"Tenant '{tenantId}' loaded {skills.Length} default skills; expected 4.");
+        catalogs[tenantId] = skills.Select(skill => skill.Id).ToArray();
+    }
+
+    var idsA = catalogs[tenantIds[0]].ToHashSet(StringComparer.Ordinal);
+    var idsB = catalogs[tenantIds[1]].ToHashSet(StringComparer.Ordinal);
+    if (idsA.Overlaps(idsB))
+        throw new InvalidOperationException("Default skill IDs were shared between validation tenants.");
+
+    var quotaRepository = new TenantQuotaRepository(factory, NullLogger<TenantQuotaRepository>.Instance);
+    TenantQuotaSnapshot quotaSnapshot;
+    using (accessor.BeginScope(new TenantContext { TenantId = tenantIds[0] }))
+        quotaSnapshot = await quotaRepository.GetOrCreateAsync(tenantIds[0]);
+
+    if (args.Contains("--skills-before-restart"))
+    {
+        await File.WriteAllTextAsync(Path.Combine(outputDirectory, "skills-before-restart.json"), JsonSerializer.Serialize(new
+        {
+            baseline,
+            run,
+            catalogs,
+            quota = new
+            {
+                quotaSnapshot.CurrentDailyTokens,
+                quotaSnapshot.CurrentDailyCostUsd,
+                quotaSnapshot.CurrentDailyRequests,
+                quotaSnapshot.MaxTokensPerDay
+            }
+        }, new JsonSerializerOptions { WriteIndented = true }));
+        Console.WriteLine("Tenant skill catalogs and quota snapshot saved before API restart.");
+        return;
+    }
+
+    using var previous = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(outputDirectory, "skills-before-restart.json")));
+    if (previous.RootElement.GetProperty("run").GetString() != run ||
+        previous.RootElement.GetProperty("baseline").GetString() != baseline)
+        throw new InvalidOperationException("Pre-restart skill fixture belongs to another diagnostic run or revision.");
+
+    foreach (var tenantId in tenantIds)
+    {
+        var before = previous.RootElement.GetProperty("catalogs").GetProperty(tenantId)
+            .EnumerateArray().Select(skill => skill.GetString()).OrderBy(skill => skill, StringComparer.Ordinal).ToArray();
+        var after = catalogs[tenantId].OrderBy(skill => skill, StringComparer.Ordinal).ToArray();
+        if (!before.SequenceEqual(after, StringComparer.Ordinal))
+            throw new InvalidOperationException($"Tenant '{tenantId}' skill IDs changed across API restart.");
+    }
+
+    var beforeTokens = previous.RootElement.GetProperty("quota").GetProperty("CurrentDailyTokens").GetInt64();
+    if (quotaSnapshot.CurrentDailyTokens <= beforeTokens)
+        throw new InvalidOperationException("The real post-restart chat did not persist additional tenant token usage.");
+
+    await File.WriteAllTextAsync(Path.Combine(outputDirectory, "skills-after-restart.json"), JsonSerializer.Serialize(new
+    {
+        result = "passed",
+        baseline,
+        run,
+        catalogs,
+        quota = new
+        {
+            beforeTokens,
+            afterTokens = quotaSnapshot.CurrentDailyTokens,
+            beforeRequests = previous.RootElement.GetProperty("quota").GetProperty("CurrentDailyRequests").GetInt64(),
+            afterRequests = quotaSnapshot.CurrentDailyRequests
+        }
+    }, new JsonSerializerOptions { WriteIndented = true }));
+    Console.WriteLine("Tenant skill catalogs and persisted quota were verified after API restart.");
+    return;
+}
 if (args.Contains("--maf-session-fixture"))
 {
     var directory = validationOutputDirectory;

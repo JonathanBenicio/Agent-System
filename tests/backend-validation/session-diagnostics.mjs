@@ -8,6 +8,7 @@ const protectedHistoricalOutput = resolve(import.meta.dirname, '../TestResults/b
 if (resolve(directory).toLowerCase() === protectedHistoricalOutput.toLowerCase())
   throw new Error('Refusing to overwrite historical backend-documentation validation artifacts.');
 const core = JSON.parse(readFileSync(resolve(directory, 'core-results.json'), 'utf8'));
+const compose = resolve(import.meta.dirname, 'compose.yml');
 const tenant = core.run + '-a', otherTenant = core.run + '-b', alice = core.run + '-alice';
 const phase = process.argv.includes('--after-restart') ? 'after-restart' : 'before-restart';
 const results = [];
@@ -18,7 +19,9 @@ function token(user, tenantId) {
 }
 async function req(path, user = alice, tenantId = tenant, method = 'GET', body, timeoutMs = 10000) {
   const r = await fetch('http://127.0.0.1:5188'+path, { method, headers: { Authorization:'Bearer '+token(user,tenantId),'Content-Type':'application/json' }, body:body?JSON.stringify(body):undefined, signal:AbortSignal.timeout(timeoutMs) });
-  let data;try{data=await r.json();}catch{}return {status:r.status,data};
+  const text = await r.text();
+  let data;try{data=JSON.parse(text);}catch{}
+  return {status:r.status,data,text,contentType:r.headers.get('content-type')};
 }
 async function test(id, criterion, fn) {
   try { const detail=await fn();results.push({id,criterion,result:'passed',detail}); }
@@ -26,6 +29,11 @@ async function test(id, criterion, fn) {
   console.log(id+': '+results.at(-1).result+' — '+results.at(-1).detail);
 }
 function check(value,detail){if(!value)throw new Error(detail);}
+function sql(statement) {
+  return execFileSync('docker', ['compose', '-f', compose, '-p', 'agent-system-backend-fix', 'exec', '-T', 'postgres',
+    'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'validation', '-d', 'backend_validation', '-At'],
+  { input: statement, encoding: 'utf8' }).trim();
+}
 const fixture = JSON.parse(readFileSync(resolve(directory, 'session-fixture.json'), 'utf8'));
 if (fixture.run !== core.run || fixture.baseline !== core.baseline) throw new Error('Fixture belongs to another run/revision');
 const previous=phase==='after-restart'?JSON.parse(readFileSync(resolve(directory,'session-before-restart.json'),'utf8')):null;
@@ -35,6 +43,9 @@ if (previous && (previous.run !== core.run || previous.baseline !== core.baselin
 const id = fixture.sessionId;
 if (previous && previous.sessionId !== id) throw new Error('Session changed between restart phases');
 let messagesSnapshot;
+if (!previous) {
+  execFileSync('dotnet', [resolve(import.meta.dirname, 'bin/Release/net10.0/BackendDiagnostics.dll'), '--skills-before-restart'], { encoding: 'utf8' });
+}
 await test('SESSION-READ-'+phase,'persisted session is visible only to its owner and tenant',async()=>{
   check(id,'no persisted session');
   const own=await req('/api/session/'+id),foreign=await req('/api/session/'+id,core.run+'-bob'),cross=await req('/api/session/'+id,alice,otherTenant);
@@ -66,5 +77,84 @@ if(phase==='after-restart')await test('MAF-RESTORE','real chat resumes from pers
   check(restored.result==='passed'&&restored.sessionId===maf.sessionId&&restored.restoredAt,'persisted MAF restore marker is missing');
   return 'same session resumed after process restart; MAF deserialization marker persisted; prior state hash='+maf.stateHash;
 });
+if (phase === 'after-restart') {
+  await test('SKILL-RESTORE', 'tenant skill catalogs remain complete, isolated, and stable after API restart', async () => {
+    execFileSync('dotnet', [resolve(import.meta.dirname, 'bin/Release/net10.0/BackendDiagnostics.dll'), '--skills-after-restart'], { encoding: 'utf8' });
+    const restored = JSON.parse(readFileSync(resolve(directory, 'skills-after-restart.json'), 'utf8'));
+    check(restored.result === 'passed' && restored.run === core.run, 'skill catalog snapshot did not match this diagnostic run');
+    check(restored.quota.afterTokens > restored.quota.beforeTokens, 'post-restart real chat usage was not persisted');
+    return 'four tenant-specific skill IDs per tenant survived restart; daily token total increased after resumed chat';
+  });
+
+  await test('QUOTA-RESTART', 'persisted tenant daily usage still blocks chat after API restart', async () => {
+    const quotaBefore = JSON.parse(readFileSync(resolve(directory, 'skills-before-restart.json'), 'utf8')).quota;
+    const state = sql(`SELECT "CurrentDailyTokens" || '|' || "CurrentDailyCostUsd" || '|' || "CurrentDailyRequests" || '|' || "MaxTokensPerDay" || '|' || "MaxDailyBudgetUsd" || '|' || "RequestsPerMinute" FROM tenant_quotas WHERE "TenantId"='${tenant}';`);
+    const [tokensText, costText, requestsText, oldTokenLimitText, oldBudgetText, oldRequestsPerMinuteText] = state.split('|');
+    const tokens = Number(tokensText), cost = Number(costText), requests = Number(requestsText), oldTokenLimit = Number(oldTokenLimitText);
+    check(tokens >= quotaBefore.CurrentDailyTokens + 1 && requests > 0 && tokens > 1, 'persisted quota state did not advance after restart; state=' + state);
+    const restrictiveLimit = tokens - 1;
+    sql(`UPDATE tenant_quotas SET "MaxTokensPerDay"=${restrictiveLimit}, "UpdatedAt"=now() WHERE "TenantId"='${tenant}';`);
+    try {
+      const blocked = await req('/api/chat', alice, tenant, 'POST', {
+        message: 'This request must be rejected by the persisted daily token ceiling.',
+        provider: 'Ollama', model: 'qwen2.5:0.5b'
+      }, 30000);
+      const error = String(blocked.data?.errorMessage || blocked.data?.error || '');
+      check(blocked.status === 429 && /Daily token quota exceeded/i.test(error),
+        'expected quota-denied chat; status=' + blocked.status + ' success=' + blocked.data?.success + ' error=' + error);
+      const apiKey = readFileSync(resolve(directory, 'validation-api-key.txt'), 'utf8').trim();
+      check(apiKey.length > 0, 'synthetic OpenAI-compatible API key fixture is empty');
+      const openAiResponse = await fetch('http://127.0.0.1:5188/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'agentic-system', user: 'quota-openai-' + core.run, stream: false,
+          messages: [{ role: 'user', content: 'This compatible API call must also be blocked by the persisted token ceiling.' }]
+        }),
+        signal: AbortSignal.timeout(30000)
+      });
+      let openAiData; try { openAiData = await openAiResponse.json(); } catch { openAiData = null; }
+      check(openAiResponse.status === 429 && openAiData?.error?.code === 'quota_exceeded' &&
+        /Daily token quota exceeded/i.test(openAiData?.error?.message || ''),
+      'OpenAI-compatible endpoint did not expose quota denial: status=' + openAiResponse.status + ' body=' + JSON.stringify(openAiData));
+      const streamBlocked = await req('/api/chat/stream', alice, tenant, 'POST', {
+        message: 'This streaming chat must also expose the persisted token quota denial.',
+        provider: 'Ollama', model: 'qwen2.5:0.5b'
+      }, 30000);
+      check(streamBlocked.status === 200 && streamBlocked.contentType?.startsWith('text/event-stream') &&
+        /Daily token quota exceeded/i.test(streamBlocked.text),
+      'SSE did not expose the persisted quota denial: status=' + streamBlocked.status + ' type=' + streamBlocked.contentType + ' body=' + streamBlocked.text);
+      const after = sql(`SELECT "CurrentDailyTokens" || '|' || "CurrentDailyRequests" FROM tenant_quotas WHERE "TenantId"='${tenant}';`);
+      check(after === `${tokens}|${requests}`, 'blocked request reached provider or changed persisted usage: before=' + state + ' after=' + after);
+      return 'persisted usage survived restart; REST/OpenAI-compat returned quota 429 and SSE emitted a quota denial before LLM dispatch';
+    } finally {
+      sql(`UPDATE tenant_quotas SET "MaxTokensPerDay"=${oldTokenLimit}, "MaxDailyBudgetUsd"=${Number(oldBudgetText)}, "RequestsPerMinute"=${Number(oldRequestsPerMinuteText)}, "UpdatedAt"=now() WHERE "TenantId"='${tenant}';`);
+    }
+  });
+
+  await test('QUOTA-BUDGET-RESTART', 'persisted daily cost ceiling blocks chat after API restart', async () => {
+    const state = sql(`SELECT "CurrentDailyTokens" || '|' || "CurrentDailyCostUsd" || '|' || "CurrentDailyRequests" || '|' || "MaxTokensPerDay" || '|' || "MaxDailyBudgetUsd" FROM tenant_quotas WHERE "TenantId"='${tenant}';`);
+    const [tokensText, costText, requestsText, tokenLimitText, oldBudgetText] = state.split('|');
+    const tokens = Number(tokensText), cost = Number(costText), requests = Number(requestsText);
+    check(cost > 0 && requests > 0, 'real chat did not persist cost and request counters; state=' + state);
+    const budgetLimit = Math.max(0.000001, Number((cost - 0.000001).toFixed(6)));
+    check(budgetLimit < cost, 'could not construct a stricter positive daily budget');
+    sql(`UPDATE tenant_quotas SET "MaxTokensPerDay"=${Number(tokenLimitText)}, "MaxDailyBudgetUsd"=${budgetLimit}, "UpdatedAt"=now() WHERE "TenantId"='${tenant}';`);
+    try {
+      const blocked = await req('/api/chat', alice, tenant, 'POST', {
+        message: 'This request must be rejected by the persisted daily budget ceiling.',
+        provider: 'Ollama', model: 'qwen2.5:0.5b'
+      }, 30000);
+      const error = String(blocked.data?.errorMessage || blocked.data?.error || '');
+      check(blocked.status === 429 && /Daily budget exceeded/i.test(error),
+        'expected daily budget denial; status=' + blocked.status + ' success=' + blocked.data?.success + ' error=' + error);
+      const after = sql(`SELECT "CurrentDailyTokens" || '|' || "CurrentDailyRequests" FROM tenant_quotas WHERE "TenantId"='${tenant}';`);
+      check(after === `${tokens}|${requests}`, 'budget-blocked request changed persisted usage: before=' + state + ' after=' + after);
+      return 'daily cost persisted across restart and the API rejected the next request before LLM dispatch';
+    } finally {
+      sql(`UPDATE tenant_quotas SET "MaxTokensPerDay"=${Number(tokenLimitText)}, "MaxDailyBudgetUsd"=${Number(oldBudgetText)}, "UpdatedAt"=now() WHERE "TenantId"='${tenant}';`);
+    }
+  });
+}
 writeFileSync(resolve(directory,'session-'+phase+'.json'),JSON.stringify({baseline:core.baseline,run:core.run,sessionId:id,phase,messagesSnapshot,context:'known synthetic messages saved via real PostgreSQL store; validates persistence/CRUD, not successful LLM conversation',results},null,2)+'\n');
 if(results.some(r=>r.result==='failed'))process.exitCode=1;

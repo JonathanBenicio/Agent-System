@@ -34,6 +34,7 @@ public class ChatController : ControllerBase
     /// Synchronous chat endpoint. Returns a single AgentResponse.
     /// </summary>
     [HttpPost]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Chat([FromBody] ChatRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Message))
@@ -55,6 +56,9 @@ public class ChatController : ControllerBase
         {
             response = await _metaAgent.ProcessRequestAsync(request.Message, userContext, request.SessionId);
         }
+
+        if (!response.Success && response.ErrorMessage?.StartsWith("Quota Exceeded:", StringComparison.Ordinal) == true)
+            return StatusCode(StatusCodes.Status429TooManyRequests, response);
 
         return Ok(response);
     }
