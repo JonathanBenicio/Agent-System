@@ -2,7 +2,7 @@
 
 Data: 2026-09-29 · Issue: [#122](https://github.com/JonathanBenicio/Agent-System/issues/122) · Story: BACK-ORCH-122 · [Plano](../../plan/dynamic-orchestrator-implementation.md). Dependência: MAF/session-store de [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
 
-Decisão: aceita · Implementação funcional concluída · Build Release; suíte PostgreSQL/Ollama 753 aprovados/1 skip. Binding, multi-tool, catálogo e cache tenant-scoped; sessão MAF reaberta após reinício real da API. O Wait do engine canônico também concluiu após encerramento forçado antes do prazo. [Evidência](../../backend/validation/maf-122-workflow-runtime-2026-09-29.md). A geração de Banner por essa rota ainda precisa de suporte a imagem, modelo e tools da definição.
+Decisão: aceita · Implementação funcional concluída · Build Release; suíte PostgreSQL/Ollama 755 aprovados/1 skip. Binding, multi-tool, catálogo e cache tenant-scoped; sessão MAF reaberta após reinício real da API. O Wait do engine canônico concluiu após encerramento forçado antes do prazo. Banner propagou imagem, modelo e tools da definição e gerou arquivo final com client determinístico. [Evidência](../../backend/validation/maf-122-workflow-runtime-2026-09-29.md).
 
 ## Contexto
 

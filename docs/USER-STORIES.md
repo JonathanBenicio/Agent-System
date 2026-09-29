@@ -20,7 +20,7 @@ Evidência unitária não substitui integração; critérios falhos/não executa
 Como mantenedor do backend multi-tenant, quero atualizar o Microsoft Agent Framework com compatibilidade comprovada e encaminhar providers ativos pelo Gateway, para que o runtime de produção tenha execução e telemetria reais sob os controles existentes.
 
 Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [Plano](plan/maf-122-protocols-gateway.md).
-Status: implementação MAF/Gateway validada; suíte 753 aprovados, 1 skip vetorial, 0 falhas; build limpo. PostgreSQL validou store global/NOTIFY, dois LLMManagers/Gateways com inferência Ollama, sessão MAF reaberta após reinício real da API e Wait recuperado após encerramento forçado. Handler externo ainda precisa deduplicar; geração final de Banner não foi demonstrada. A2A/AG-UI preview está separado em #121. [Evidência](backend/validation/maf-122-workflow-runtime-2026-09-29.md).
+Status: implementação MAF/Gateway validada; suíte 755 aprovados, 1 skip vetorial, 0 falhas; build limpo. PostgreSQL validou store global/NOTIFY, dois LLMManagers/Gateways com inferência Ollama, sessão MAF reaberta após reinício real da API e Wait recuperado após encerramento forçado. Banner gerou arquivo com client determinístico e skills reais; inferência vision/editor ainda não foi executada. Handler externo precisa deduplicar após crash. A2A/AG-UI preview está separado em #121. [Evidência](backend/validation/maf-122-workflow-runtime-2026-09-29.md).
 
 - Dada sessão pertencente a usuário/tenant, quando criada, serializada, retomada ou restaurada após restart, então seu owner, tenant, ID e estado MAF permanecem iguais; identidade de outro tenant recebe negação sem dados.
 - Dado provider de infraestrutura habilitado na configuração do host, quando a aplicação inicia e chama o modelo, então ele aparece no Gateway e chamadas completas/streaming atualizam status/circuito/limite; provider desabilitado não é registrado.
@@ -36,7 +36,7 @@ Status: implementação MAF/Gateway validada; suíte 753 aprovados, 1 skip vetor
 Como usuário da plataforma de agentes personalizáveis, quero que o orquestrador identifique e delegue a solicitação aos especialistas ativos configurados para meu tenant, para receber resposta consolidada sem perder o estado das sessões.
 
 Issue: [#122](https://github.com/JonathanBenicio/Agent-System/issues/122) · [ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md) · [Plano separado](plan/dynamic-orchestrator-implementation.md). Dependência: API de sessões MAF 1.22 em [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
-Status: implementação funcional do supervisor concluída; regressões cobrem multi-tool, binding, identidade, catálogo, persistência seletiva de sessões e cache tenant-scoped. Sessão MAF do supervisor reaberta após reinício real da API; especialistas só foram reabertos com novos adapters/contextos. Suíte: 753 aprovados/1 skip.
+Status: implementação funcional do supervisor concluída; regressões cobrem multi-tool, binding, identidade, catálogo, persistência seletiva de sessões e cache tenant-scoped. Sessão MAF do supervisor reaberta após reinício real da API; especialistas só foram reabertos com novos adapters/contextos. Suíte: 755 aprovados/1 skip.
 
 - Dada lista de specialists com bindings válidos, quando o modo “Intelligent Router” recebe input, então `ChatClientAgent` do MAF pode invocar um ou mais `AIFunction`s correspondentes e consolidar resposta útil.
 - Dado agente ativo cuja tool/binding falhou ou agente inativo, quando o prompt supervisor é construído, então ele não é apresentado como candidato delegável.
@@ -2485,7 +2485,7 @@ O backend oferece CRUD e execução de Golden Sets via REST. Esses endpoints nã
 |------|---------|
 | Runtime | `IWorkflowEngine`/`IWorkflowStore` como orquestrador da aplicação; MAF 1.22 como runtime de agentes e ferramentas |
 | Persistência | PostgreSQL com versão/hash imutável da definição, execução, etapas, aprovação/espera e lease de worker |
-| Status | Engine dinâmico canônico implementado: ID/status, snapshot/hash, approval/reject, Agent, Wait persistido, retries, RBAC de tool e lease/recovery. Wait concluiu após encerramento forçado antes do prazo. Banner compartilha start/status com o store, mas ainda não produz imagem pela rota canônica; handler externo precisa deduplicar a chave. Suíte 753 aprovados/1 skip. |
+| Status | Engine dinâmico canônico implementado: ID/status, snapshot/hash, approval/reject, Agent, Wait persistido, retries, RBAC de tool e lease/recovery. Wait concluiu após encerramento forçado antes do prazo. Banner compartilha start/status com o store e gerou arquivo final com client determinístico/skills reais; modelos vision/editor não foram exercitados. Handler externo precisa deduplicar a chave. Suíte 755 aprovados/1 skip. |
 
 O Issue #108 exigia especificamente `Microsoft.Agents.AI.DurableTask`. Essa escolha foi substituída na análise atual: a extensão agenda por nome com registry criado no startup, enquanto as definições do produto são tenant/request-specific e a API atual consulta `IWorkflowStore`. O valor de produto continua; o mecanismo não é requisito.
 

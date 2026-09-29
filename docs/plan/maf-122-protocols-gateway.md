@@ -1,6 +1,6 @@
 # Plano — Atualizar MAF e integrar providers ao Gateway
 
-Status: implementação MAF/Gateway concluída e validada; worker recuperou Wait após encerramento forçado da API. Restam a geração funcional de Banner no engine canônico, a deduplicação de efeitos externos e a publicação das evidências em #120. [Evidência de runtime](../backend/validation/maf-122-workflow-runtime-2026-09-29.md) · Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](../architecture/adr/036-maf-122-protocols-and-gateway.md) · Story: BACK-MAF-120.
+Status: implementação MAF/Gateway concluída e validada; worker recuperou Wait após encerramento forçado da API. A geração de Banner foi exercitada com MAF e client determinístico, com imagem, modelo e duas ferramentas reais. Faltam a deduplicação de efeitos externos sob crash e a publicação das evidências em #120. [Evidência de runtime](../backend/validation/maf-122-workflow-runtime-2026-09-29.md) · Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](../architecture/adr/036-maf-122-protocols-and-gateway.md) · Story: BACK-MAF-120.
 
 Baseline: `f941198` · 2026-09-29 · Branch: `fix/backend-core-tenancy`. Matriz de breaking changes MAF 1.9 para 1.22 concluída antes do bump; supervisor dinâmico implementado separadamente em [dynamic-orchestrator-implementation.md](dynamic-orchestrator-implementation.md). Compose PostgreSQL/Ollama isolado usado; A2A/AG-UI E2E permanece despriorizado em #121 por ser preview. `.gitignore` staged e arquivos pessoais foram preservados.
 
@@ -16,15 +16,15 @@ Atualizar os pacotes MAF efetivamente usados após revisar mudanças incompatív
 |---|---|---|---|
 | Issue, ADR, story e rastreabilidade | Nenhuma | Links cruzados e índices sincronizados | #120 continua aberto; o corpo público ainda precisa receber 753/1 e as novas evidências. O conector GitHub não está disponível nesta sessão. #121 (A2A/AG-UI preview) permanece separado/despriorizado. |
 | Matriz de compatibilidade 1.9.0 para 1.22.0 | Issue/ADR/story | APIs comparadas às releases oficiais; dependências NuGet registradas | Concluída antes do bump em `maf-122-compatibility-review.md`. |
-| Atualização coordenada dos pacotes e sessão | Matriz concluída | Restore/build Release, partições de sessão, migrations | MAF 1.22 e build limpo. Sessões MAF persistidas/reabertas no PostgreSQL, tenant cruzado negado e sessão do supervisor reaberta após reinício real da API. Suíte: 753 aprovados, 1 skip vetorial, 0 falhas. |
+| Atualização coordenada dos pacotes e sessão | Matriz concluída | Restore/build Release, partições de sessão, migrations | MAF 1.22 e build limpo. Sessões MAF persistidas/reabertas no PostgreSQL, tenant cruzado negado e sessão do supervisor reaberta após reinício real da API. Suíte: 755 aprovados, 1 skip vetorial, 0 falhas. |
 | Compatibilidade de hosting A2A/AG-UI | Build atualizado | Mapeamento com `ValidateScopes=true`, sem alegar E2E | 2 testes de registro passaram; E2E em #121 |
 | Registry e caminho de execução Gateway | MAF atualizado | Startup/runtime, resposta/stream, falha/cancelamento/fallback e BYOK | DI PostgreSQL inicia o hosted service de produção. Teste com dois graphos independentes de DI/LLMManager/Gateway recebeu PostgreSQL NOTIFY, habilitou o provider em ambos e fez inferência real qwen2.5:0.5b por cada Gateway; ambos registraram request saudável. Wrapper streaming/falha/cancelamento está coberto com client fake; refresh entre processos diferentes não foi testado. |
 | Separar configuração global de provider e BYOK | Decisão Platform Admin | Persistência global cifrada/auditada; BYOK isolado; reload em instâncias independentes | Implementado/validado no PostgreSQL: store global sem `TenantId`, segredo cifrado, auditoria por hash, NOTIFY, dois DI graphs independentes de LLMManager/Gateway. Ambos receberam enabled/model atualizado e fizeram inferência real Ollama saudável. Instâncias na mesma máquina de teste; processo/host reiniciado não testado. |
-| Verificação final | Etapas anteriores | Build, suíte PostgreSQL/Ollama, EF e links | Build Release 0 avisos/erros; suíte PostgreSQL/Ollama: 753 aprovados, 1 teste vetorial ignorado, 0 falhas; EF sem mudanças pendentes no último exame. Migrations de configuração/lease/Wait aplicadas. API reiniciada após sessão MAF e Wait; efeito externo interrompido não exercitado. |
+| Verificação final | Etapas anteriores | Build, suíte PostgreSQL/Ollama, EF e links | Build Release 0 avisos/erros; suíte PostgreSQL/Ollama: 755 aprovados, 1 teste vetorial ignorado, 0 falhas; EF sem mudanças pendentes; checker 155 documentos/735 links íntegros. API reiniciada após sessão MAF e Wait; Banner gerado com client determinístico e skills reais. Efeito externo interrompido não exercitado. |
 
 ## Limite com o plano do orquestrador
 
-O upgrade MAF/Gateway e o supervisor dinâmico estão implementados. O fechamento da entrega de workflow depende de resolver ou separar explicitamente a regressão da geração de Banner; start/status e a geração efetiva são critérios distintos.
+O upgrade MAF/Gateway e o supervisor dinâmico estão implementados. O Banner agora preserva o contrato de start/status e gera arquivo final com um client determinístico que usa as duas skills reais. A inferência multimodal completa com os modelos Ollama semeados não foi executada, pois esses modelos não estão instalados no Compose isolado.
 
 ## Critérios de aceite
 
@@ -55,7 +55,7 @@ O MAF 1.22 já fornece `CheckpointManager.CreateJson(ICheckpointStore<JsonElemen
 
 Para definições criadas por tenant, `ICheckpointStore<JsonElement>` continua uma opção para persistir o estado interno de uma execução MAF específica. Não foi escolhido como scheduler do produto: ainda seria necessário guardar `tenantId`, `workflowId`, hash imutável da definição/agentes, descobrir trabalho após crash, coordenar leases entre nós e expor o mesmo execution ID/status usado pela UI. Implementar esse checkpoint isoladamente duplicaria o estado do `IWorkflowStore` sem corrigir start/poll/approval/cancel; avaliar somente como detalhe interno do runner após o fluxo canônico app-owned estar recuperável.
 
-Banner não usa mais o client DurableTask separado: o start, status, cancelamento e eventos usam o `IWorkflowEngine` canônico e o mesmo ID persistido. A definição semeada ainda exige `PromptTemplate`, `ModelOverride`, `AllowedToolsOverride` e entrada multimodal, que o engine atual não aplica. Assim, start/status não prova geração do Banner; essa lacuna funcional impede declarar a tool concluída.
+Banner não usa mais o client DurableTask separado: start, status, cancelamento e eventos usam o `IWorkflowEngine` canônico e o mesmo ID persistido. O engine propaga `PromptTemplate`, `ModelOverride`, `AllowedToolsOverride`, output da etapa anterior e imagem da pasta de uploads do tenant. Um teste executou MAF com client determinístico, `CleanImageAsync` e `RenderBannerAsync` reais e confirmou o arquivo final; a inferência real com os modelos vision/editor semeados continua sem validação.
 
 A incompatibilidade do registry estático e do scheduling por nome motivou retirar os compiladores DurableTask da rota dinâmica. A tool de Banner passou a iniciar pelo engine canônico e a retornar o ID pollable do produto; `DurableTask` permanece fora dessa arquitetura.
 
@@ -75,11 +75,11 @@ A rota de Banner inicia pela aplicação de workflow canônica e devolve `id`, `
 
 | Etapa | Resultado verificável | Estado |
 |---|---|---|
-| Unificar o start da tool de Banner com o engine usado por `WorkflowController` | Mesmo ID persistido, consultável, cancelável e transmitido pelos eventos do engine; definição do tenant ativo | Start/status e isolamento implementados e validados; geração da imagem final permanece aberta porque o engine ignora recursos da definição semeada. |
+| Unificar o start da tool de Banner com o engine usado por `WorkflowController` | Mesmo ID persistido, consultável, cancelável e transmitido pelos eventos do engine; definição do tenant ativo | Start/status/isolamento e arquivo final validados. A geração usou MAF com client determinístico e skills reais; não substitui um teste de inferência com modelos Ollama vision/editor. |
 | Fixar a definição executada | Cada execução persiste versão/hash e snapshot imutável da definição; retomada não lê uma versão editada após o start. | Implementado no modelo/engine/PostgreSQL; migration `20260929120423_AddWorkflowExecutionDefinitionSnapshot`. Testes unitário e PostgreSQL provaram retomada da versão 7 após editar o registro vivo para versão 8; hash semântico tolera a normalização de JSONB e rejeita adulteração. |
 | Recuperar execução após falha | Claim/lease atômico entre workers e retomada após expiração | Implementado e validado em PostgreSQL: disputa simultânea fornece um único claim, lease expirada é recuperada por outro worker e o antigo não renova nem grava. Wait completou após encerramento forçado da API 59,5 s antes do prazo. Efeito externo interrompido segue não demonstrado. |
 | Definir semântica dos passos externos | `MaxRetries`, autorização `Permission.Execute`, chave estável por execução/step, Wait persistido, Subworkflow explícito | Implementado e testado. `ToolInput.IdempotencyKey` é entregue igual em retries; handler externo precisa deduplicar e não há promessa exactly-once. Wait foi retomado somente após seu prazo. |
-| Verificar o contrato completo | Compose isolado: start/status/approval/cancel, claims concorrentes, Wait retomado, Banner e isolamento tenant | Suíte: 753 aprovados/1 skip; PostgreSQL cobre claim concorrente, lease recovery/fencing, Wait após reinício real, start/status de Banner e proteção a colisão de ID tenant. Geração funcional de Banner e efeito externo interrompido continuam não validados. |
+| Verificar o contrato completo | Compose isolado: start/status/approval/cancel, claims concorrentes, Wait retomado, Banner e isolamento tenant | Suíte: 755 aprovados/1 skip; PostgreSQL cobre claim concorrente, lease recovery/fencing, Wait após reinício real, start/status de Banner e colisão de ID tenant. Arquivo final de Banner foi produzido por MAF/skills reais com client determinístico; efeito externo interrompido segue sem validação. |
 
 Semântica de efeitos externos será at-least-once: lease expirada pode repetir uma etapa cujo efeito ocorreu antes de o resultado ser persistido. Ferramentas com efeito externo precisam deduplicar pela chave idempotente ou oferecer compensação; o sistema não promete exactly-once. Reconsiderar DurableTask somente se um worker genérico MAF suportar a mesma definição versionada dinâmica, status/poll e integração PostgreSQL compatível.
 
@@ -92,3 +92,10 @@ O hosting A2A/AG-UI continua preview e sua validação E2E está separada em #12
 ## Entrega
 
 Commits separados por contexto (rastreabilidade, atualização MAF, Gateway/protocolos, evidências); staging alheio preservado. Criar/atualizar PR com resultado e limitações, mantê-lo draft se houver lacuna funcional ou gate obrigatório pendente. Não fazer merge/deploy.
+
+## Correção final da integração de Banner
+
+- [x] Propagar `PromptTemplate`, outputs das dependências, modelo e lista restritiva de ferramentas para a etapa Agent; teste do engine verificou os argumentos.
+- [x] Criar sessão persistida por execução/etapa com owner/tenant e escopos runtime/LLM no worker; teste MAF validou serialização e o acesso cruzado é negado pelo executor.
+- [x] Anexar imagem da pasta de uploads do tenant; limitar as tools de Banner ao catálogo do agente e a `Permission.Execute`, incluindo caminhos de entrada/saída do tenant.
+- [x] Validar criação de arquivo final com MAF e client determinístico que chama as skills reais; build, suíte, EF e links passaram. Resta publicar evidências e atualizar PR draft.

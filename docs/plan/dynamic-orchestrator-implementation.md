@@ -1,6 +1,6 @@
 # Plano — Implementar o orquestrador supervisor dinâmico
 
-Status: implementação funcional do supervisor dinâmico concluída; dois DI graphs/LLMManagers atualizaram via PostgreSQL NOTIFY e fizeram inferência Ollama. A API reabriu uma sessão MAF persistida após reinício real. Suíte: 753 aprovados, 1 skip vetorial, 0 falhas; build limpo. Evidência: [runtime](../backend/validation/maf-122-workflow-runtime-2026-09-29.md). Story: BACK-ORCH-122 · [ADR-038](../architecture/adr/038-dynamic-supervisor-orchestrator.md) · MAF/session-store 1.22 em [#120](maf-122-protocols-gateway.md).
+Status: implementação funcional do supervisor dinâmico concluída; dois DI graphs/LLMManagers atualizaram via PostgreSQL NOTIFY e fizeram inferência Ollama. A API reabriu uma sessão MAF persistida após reinício real. Suíte: 755 aprovados, 1 skip vetorial, 0 falhas; build limpo. Evidência: [runtime](../backend/validation/maf-122-workflow-runtime-2026-09-29.md). Story: BACK-ORCH-122 · [ADR-038](../architecture/adr/038-dynamic-supervisor-orchestrator.md) · MAF/session-store 1.22 em [#120](maf-122-protocols-gateway.md).
 
 ## Objetivo
 
@@ -19,7 +19,7 @@ O supervisor já é executado diretamente pelo `ChatClientAgent`, com bindings v
 | Persistir supervisor e todos os specialists chamados | Duas tools chamadas salvam cada sessão; tool não chamada não causa gravação | Teste verifica duas sessões chamadas persistidas e especialista bound mas não invocado ausente do store |
 | Corrigir resolução de agente usado/delegado | Resposta expõe nome de domínio do specialist e não nome técnico `AIFunction`; nenhum tool call mantém o supervisor como agente final | Teste confirma resposta consolidada, `AgentName` e `delegatedTo` com o nome do especialista |
 | Preservar roteamento direto e contratos existentes | `targetAgent` bypassa supervisor; REST/SSE/SignalR mantêm argumentos, resposta final, owner e `sessionId` | Regressão da rota direta existente e revisão estática do frontend confirmam contrato inalterado; teste do supervisor cobre resposta direta sem especialista |
-| Validar modelo e integração | Build Release, suíte completa e PostgreSQL isolado para sessão/tenant | Build limpo; suíte 753 aprovados/1 skip; sessão MAF reaberta após reinício real da API; snapshot/version/hash, claims concorrentes, Wait após encerramento forçado e catálogo por tenant validados. Efeito externo interrompido não foi exercitado. |
+| Validar modelo e integração | Build Release, suíte completa e PostgreSQL isolado para sessão/tenant | Build limpo; suíte 755 aprovados/1 skip; sessão MAF reaberta após reinício real da API; snapshot/version/hash, claims concorrentes, Wait após encerramento forçado e catálogo por tenant validados. Efeito externo interrompido não foi exercitado. |
 
 ## Pendências
 
