@@ -23,6 +23,11 @@ export function useSessions(search?: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] })
   })
 
+  const endMutation = useMutation({
+    mutationFn: (id: string) => sessionApi.end(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
+  })
+
   const loadSessionMessages = useCallback(async (id: string): Promise<ChatMessage[]> => {
     const messages = await sessionApi.messages(id)
     return messages.map((m: ChatMessageDto) => ({
@@ -48,11 +53,13 @@ export function useSessions(search?: string) {
     conn.on('SessionCreated', handleUpdate)
     conn.on('SessionDeleted', handleUpdate)
     conn.on('SessionUpdated', handleUpdate)
+    window.addEventListener('agentic:session-updated', handleUpdate)
 
     return () => {
       conn.off('SessionCreated', handleUpdate)
       conn.off('SessionDeleted', handleUpdate)
       conn.off('SessionUpdated', handleUpdate)
+      window.removeEventListener('agentic:session-updated', handleUpdate)
     }
   }, [queryClient])
 
@@ -63,6 +70,7 @@ export function useSessions(search?: string) {
     refresh: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
     loadSessionMessages,
     deleteSession: deleteMutation.mutateAsync,
+    endSession: endMutation.mutateAsync,
     renameSession: (id: string, title: string) => renameMutation.mutateAsync({ id, title }),
   }
 }

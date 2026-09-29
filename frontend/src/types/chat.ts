@@ -52,6 +52,19 @@ export interface ChatResponse {
   metadata?: Record<string, unknown>
 }
 
+export interface AgentResponse {
+  content: string
+  agentName: string
+  agentTier: number
+  actionsPerformed: string[]
+  toolsUsed: string[]
+  success: boolean
+  errorMessage?: string
+  sessionId?: string
+  timestamp: string
+  metadata?: Record<string, unknown>
+}
+
 export interface SignalRMessage {
   content: string
   agentName: string

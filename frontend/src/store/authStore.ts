@@ -2,9 +2,11 @@ import { create } from 'zustand'
 import { supabase } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
 import { useKnowledgeStore } from './useKnowledgeStore'
+import { clearAuthToken, setAuthToken } from '../lib/auth'
 
 interface AuthState {
   user: User | null
+  principalId: string | null
   token: string | null
   apiKey: string | null
   isAuthenticated: boolean
@@ -33,15 +35,22 @@ function parseJwt(token: string) {
   }
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
+  principalId: null,
   token: null,
   apiKey: null,
   isAuthenticated: false,
   isLoading: true,
 
   setUser: (user, token) => {
+    // Supabase emits an initial null session even when the user authenticated with a standalone JWT.
+    // Keep that independently managed bearer token until the explicit logout action clears it.
+    if (!user && !token && get().token && !get().user) return
     if (token) {
+      setAuthToken(token)
+      localStorage.removeItem('agentic_api_key')
+      localStorage.removeItem('agentic_api_key_subject')
       const decoded = parseJwt(token)
       const tenantId = decoded?.tenant_id || decoded?.app_metadata?.tenant_id
       if (tenantId) {
@@ -50,9 +59,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
     set((state) => {
       const hasApiKey = !!state.apiKey || !!localStorage.getItem('agentic_api_key')
+      const decoded = token ? parseJwt(token) : null
       return { 
         user, 
         token, 
+        apiKey: token ? null : state.apiKey,
+        principalId: user?.id ?? decoded?.nameid ?? decoded?.sub ?? null,
         isAuthenticated: !!user || hasApiKey,
         isLoading: false 
       }
@@ -60,14 +72,19 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   loginWithToken: (token) => {
+    let principalId: string | null = null
     if (token) {
+      setAuthToken(token)
+      localStorage.removeItem('agentic_api_key')
+      localStorage.removeItem('agentic_api_key_subject')
       const decoded = parseJwt(token)
+      principalId = decoded?.nameid ?? decoded?.sub ?? null
       const tenantId = decoded?.tenant_id || decoded?.app_metadata?.tenant_id
       if (tenantId) {
         useKnowledgeStore.getState().setActiveWorkspace(tenantId)
       }
     }
-    set({ token, isAuthenticated: true, isLoading: false })
+    set({ token, principalId, apiKey: null, isAuthenticated: true, isLoading: false })
   },
 
   loginWithApiKey: async (apiKey) => {
@@ -83,8 +100,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (tenantId) {
         useKnowledgeStore.getState().setActiveWorkspace(tenantId)
       }
+      clearAuthToken()
       localStorage.setItem('agentic_api_key', apiKey)
-      set({ apiKey, isAuthenticated: true, isLoading: false })
+      localStorage.setItem('agentic_api_key_subject', data.userId)
+      set({ apiKey, principalId: data.userId, token: null, isAuthenticated: true, isLoading: false })
       return true
     } catch {
       return false
@@ -96,8 +115,10 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
+        setAuthToken(session.access_token)
         set({ 
           user: session.user, 
+          principalId: session.user.id,
           token: session.access_token, 
           isAuthenticated: true 
         })
@@ -107,18 +128,38 @@ export const useAuthStore = create<AuthState>((set) => ({
           useKnowledgeStore.getState().setActiveWorkspace(tenantId)
         }
       } else {
+        const savedToken = localStorage.getItem('agentic_auth_token')
+        const savedClaims = savedToken ? parseJwt(savedToken) : null
+        if (savedToken && savedClaims?.exp > Math.floor(Date.now() / 1000)) {
+          const principalId = savedClaims.nameid ?? savedClaims.sub ?? null
+          const tenantId = savedClaims.tenant_id || savedClaims.app_metadata?.tenant_id
+          if (tenantId) useKnowledgeStore.getState().setActiveWorkspace(tenantId)
+          set({ token: savedToken, principalId, apiKey: null, isAuthenticated: true })
+          return
+        }
+        clearAuthToken()
         const savedApiKey = localStorage.getItem('agentic_api_key')
         if (savedApiKey) {
-          set({ apiKey: savedApiKey, isAuthenticated: true })
+          set({ apiKey: savedApiKey, principalId: localStorage.getItem('agentic_api_key_subject'), isAuthenticated: true })
         } else {
           set({ user: null, token: null, isAuthenticated: false })
         }
       }
     } catch (error) {
       console.error('Error checking auth:', error)
+      const savedToken = localStorage.getItem('agentic_auth_token')
+      const savedClaims = savedToken ? parseJwt(savedToken) : null
+      if (savedToken && savedClaims?.exp > Math.floor(Date.now() / 1000)) {
+        const principalId = savedClaims.nameid ?? savedClaims.sub ?? null
+        const tenantId = savedClaims.tenant_id || savedClaims.app_metadata?.tenant_id
+        if (tenantId) useKnowledgeStore.getState().setActiveWorkspace(tenantId)
+        set({ token: savedToken, principalId, apiKey: null, isAuthenticated: true })
+        return
+      }
+      clearAuthToken()
       const savedApiKey = localStorage.getItem('agentic_api_key')
       if (savedApiKey) {
-        set({ apiKey: savedApiKey, isAuthenticated: true })
+        set({ apiKey: savedApiKey, principalId: localStorage.getItem('agentic_api_key_subject'), isAuthenticated: true })
       } else {
         set({ user: null, token: null, isAuthenticated: false })
       }
@@ -133,9 +174,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await supabase.auth.signOut()
+    clearAuthToken()
     localStorage.removeItem('agentic_api_key')
+    localStorage.removeItem('agentic_api_key_subject')
     useKnowledgeStore.getState().setActiveWorkspace('')
-    set({ user: null, token: null, apiKey: null, isAuthenticated: false })
+    set({ user: null, principalId: null, token: null, apiKey: null, isAuthenticated: false })
   },
 }))
 

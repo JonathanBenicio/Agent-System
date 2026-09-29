@@ -19,6 +19,9 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
   const token = useAuthStore.getState().token
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
+  } else {
+    const apiKey = useAuthStore.getState().apiKey ?? localStorage.getItem('agentic_api_key')
+    if (apiKey) headers.set('X-Api-Key', apiKey)
   }
 
   // Enforce Tenant ID context from the Knowledge Store for Multi-tenancy isolation
@@ -49,7 +52,14 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
       })
     }
     const body = await res.text()
-    throw new ApiError(res.status, body || res.statusText)
+    let message = body || res.statusText
+    try {
+      const parsed = JSON.parse(body) as { error?: string; detail?: string; title?: string }
+      message = parsed.error ?? parsed.detail ?? parsed.title ?? message
+    } catch {
+      // Keep the provider's plain-text error when the response is not JSON.
+    }
+    throw new ApiError(res.status, message)
   }
 
   if (res.status === 204) return undefined as T

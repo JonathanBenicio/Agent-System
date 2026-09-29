@@ -1,13 +1,14 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useEffect, useCallback, useRef, type ReactNode } from 'react'
 import { getConnection, signalR } from '@/lib/signalr'
-import { getAuthHeaders } from '@/lib/auth'
+import { request, ApiError } from '@/lib/api/client'
 import type { 
   LLMProviderInfo, 
   SessionSummaryDto, 
-  SessionInsightsDto 
+  SessionInsightsDto,
+  WorkflowDefinition,
 } from '@/types/api'
-import type { ChatMessage, SignalRMessage, Citation } from '@/types/chat'
+import type { ChatMessage, SignalRMessage, AgentResponse } from '@/types/chat'
 
 // Specialized Hooks
 import { useLLMConfig } from './chat/useLLMConfig'
@@ -20,6 +21,9 @@ interface ChatContextValue {
   isProcessing: boolean
   connectionState: string
   sessionId: string
+  setSessionId: (id: string) => void
+  sessionEnded: boolean
+  setSessionEnded: (ended: boolean) => void
   activeSessionSummary?: SessionSummaryDto
   activeSessionInsights?: SessionInsightsDto
   providers: LLMProviderInfo[]
@@ -35,7 +39,7 @@ interface ChatContextValue {
   setSelectedRoomId: (roomId: string) => void
   setSelectedAgentId: (agentId: string) => void
   setAssociateToRoom: (associate: boolean) => void
-  refreshAiConfiguration: () => Promise<any>
+  refreshAiConfiguration: () => Promise<unknown>
   sendMessage: (text: string, targetAgent?: string) => Promise<void>
   clearMessages: () => Promise<void>
   loadHistory: (sessionId: string) => Promise<void>
@@ -48,13 +52,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const { isConnected, connectionState } = useSignalR()
   const { 
     providers, selectedProvider, selectedModel, 
-    setSelectedProvider, setSelectedModel, refreshAiConfiguration 
+    setSelectedProvider, setSelectedModel, setSessionSelection, refreshAiConfiguration
   } = useLLMConfig()
   
   const {
     messages, setMessages, isProcessing, setIsProcessing,
-    sessionId, setSessionId, activeSessionSummary, setActiveSessionSummary,
-    activeSessionInsights, setActiveSessionInsights, loadHistory,
+    sessionId, setSessionId, sessionEnded, setSessionEnded, activeSessionSummary, setActiveSessionSummary,
+    activeSessionInsights, setActiveSessionInsights, loadHistory: loadHistoryState,
     addLocalMessage, handleWorkflowGenerated, generateId,
     activeChannel, setActiveChannel, clearMessages: clearState
   } = useChatState()
@@ -64,9 +68,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [associateToRoom, setAssociateToRoom] = useState<boolean>(true)
   const sendingRef = useRef(false)
 
+  const loadHistory = useCallback(async (id: string) => {
+    const detail = await loadHistoryState(id)
+    if (detail) setSessionSelection(detail.provider, detail.model)
+  }, [loadHistoryState, setSessionSelection])
+
   // Safety Timeout US-25
   useEffect(() => {
-    let timeoutId: any = null
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
     if (isProcessing) {
       timeoutId = setTimeout(() => {
         setIsProcessing(false)
@@ -80,26 +89,29 @@ export function ChatProvider({ children }: { children: ReactNode }) {
             timestamp: new Date().toISOString(),
           }
         ])
-      }, 10000)
+      }, 120000)
     }
-    return () => timeoutId && clearTimeout(timeoutId)
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   }, [isProcessing, setIsProcessing, setMessages, generateId])
 
   // SignalR Event Handlers
   useEffect(() => {
     const conn = getConnection()
 
-    const onStreamEvent = (evt: any) => {
+    const onStreamEvent = (evt: { type?: number; data?: { artifactType?: string; definition?: WorkflowDefinition | string; workflowName?: string } }) => {
       if (evt?.type === 20) {
         const data = evt.data
         if (data?.artifactType === 'Plan' && data?.definition) {
-          const definition = typeof data.definition === 'string' ? JSON.parse(data.definition) : data.definition
-          handleWorkflowGenerated(definition, data.workflowName)
+          const definition = typeof data.definition === 'string'
+            ? JSON.parse(data.definition) as WorkflowDefinition : data.definition
+          handleWorkflowGenerated(definition, data.workflowName ?? 'Workflow')
         }
       }
     }
 
-    const onReceiveMessage = (msg: SignalRMessage & { memoryInjected?: boolean; citations?: Citation[] }) => {
+    const onReceiveMessage = (msg: SignalRMessage) => {
       if (!msg.content?.trim()) {
         setIsProcessing(false)
         return
@@ -149,7 +161,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setIsProcessing(false)
     }
 
-    const onSessionJoined = (data: any) => {
+    const onSessionJoined = (data: { summary?: SessionSummaryDto; insights?: SessionInsightsDto }) => {
       setActiveSessionSummary(data.summary)
       setActiveSessionInsights(data.insights)
     }
@@ -173,9 +185,8 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsProcessing(true)
     try {
       const activeAgent = targetAgent ?? selectedAgentId
-      const res = await fetch('/api/chat', {
+      const data = await request<AgentResponse>('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           message: text,
           targetAgent: activeAgent || null,
@@ -185,31 +196,33 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           context: selectedRoomId ? { 'rag.knowledgeRoomId': selectedRoomId } : null,
         }),
       })
-      const data = await res.json()
+      if (data.sessionId) {
+        setSessionId(data.sessionId)
+        window.dispatchEvent(new Event('agentic:session-updated'))
+      }
       setMessages(prev => [...prev, {
         id: generateId(),
-        role: 'assistant',
-        content: data.response,
-        agentName: data.agentUsed,
+        role: data.success ? 'assistant' : 'system',
+        content: data.success ? data.content : (data.errorMessage || data.content || 'O agente não conseguiu responder.'),
+        agentName: data.agentName,
         agentTier: data.agentTier,
-        actions: data.actionsPerformed ?? data.actions,
-        tools: data.toolsPerformed ?? data.tools,
+        actions: data.actionsPerformed,
+        tools: data.toolsUsed,
         success: data.success,
-        citations: data.citations,
-        memoryInjected: data.memoryInjected,
-        timestamp: new Date().toISOString(),
+        sessionId: data.sessionId,
+        timestamp: data.timestamp || new Date().toISOString(),
       }])
     } catch (err) {
       console.error('REST error:', err)
       setMessages(prev => [...prev, {
         id: generateId(),
         role: 'system',
-        content: 'Erro ao enviar mensagem.',
+        content: err instanceof ApiError ? `Erro ao enviar mensagem (${err.status}): ${err.message}` : 'Erro ao enviar mensagem.',
         timestamp: new Date().toISOString(),
       }])
     }
     setIsProcessing(false)
-  }, [selectedModel, selectedProvider, selectedAgentId, selectedRoomId, sessionId, setMessages, setIsProcessing, generateId])
+  }, [selectedModel, selectedProvider, selectedAgentId, selectedRoomId, sessionId, setSessionId, setMessages, setIsProcessing, generateId])
 
   const sendMessage = useCallback(async (text: string, targetAgent?: string) => {
     if (!text.trim() || sendingRef.current) return
@@ -249,15 +262,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const clearMessages = useCallback(async () => {
     await clearState()
+    setSessionSelection()
     setSelectedRoomId('')
     setSelectedAgentId('')
     setAssociateToRoom(true)
-  }, [clearState])
+  }, [clearState, setSessionSelection])
 
   return (
     <ChatContext.Provider
       value={{
-        messages, isConnected, isProcessing, connectionState, sessionId,
+        messages, isConnected, isProcessing, connectionState, sessionId, setSessionId, sessionEnded, setSessionEnded,
         activeSessionSummary, activeSessionInsights, providers,
         selectedProvider, selectedModel, selectedRoomId, selectedAgentId,
         associateToRoom, activeChannel, setActiveChannel,
@@ -274,10 +288,11 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 export function useChat(targetAgent?: string) {
   const ctx = useContext(ChatContext)
   if (!ctx) throw new Error('useChat must be used within <ChatProvider>')
+  const sendMessage = ctx.sendMessage
 
   const boundSend = useCallback(
-    (text: string) => ctx.sendMessage(text, targetAgent),
-    [ctx.sendMessage, targetAgent],
+    (text: string) => sendMessage(text, targetAgent),
+    [sendMessage, targetAgent],
   )
 
   return { ...ctx, sendMessage: boundSend }

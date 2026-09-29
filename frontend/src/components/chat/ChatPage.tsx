@@ -10,8 +10,9 @@ import { SessionInsights } from './SessionInsights'
 import { ChatConfigSidebar } from './ChatConfigSidebar'
 import { getConnection } from '@/lib/signalr'
 import { useChat } from '@/hooks/useChat'
+import { useSessions } from '@/hooks/useSessions'
 import { cn } from '@/lib/utils'
-import { ragApi } from '@/lib/api'
+import { ragApi, sessionApi } from '@/lib/api'
 import { toast } from 'sonner'
 
 interface ChatPageProps {
@@ -30,7 +31,6 @@ interface ChatPageProps {
 export function ChatPage({
   messages,
   isProcessing,
-  isConnected,
   onSend,
   providers,
   selectedProvider,
@@ -52,10 +52,24 @@ export function ChatPage({
     selectedRoomId,
     associateToRoom,
     sessionId,
+    setSessionId,
+    sessionEnded,
+    setSessionEnded,
     addLocalMessage,
     activeChannel,
     setActiveChannel
   } = useChat()
+  const { endSession } = useSessions()
+
+  const handleEndSession = useCallback(async (id: string) => {
+    try {
+      await endSession(id)
+      if (id === sessionId) setSessionEnded(true)
+    } catch (err) {
+      toast.error('Não foi possível encerrar a sessão')
+      console.error('Failed to end session:', err)
+    }
+  }, [endSession, sessionId, setSessionEnded])
 
   useEffect(() => {
     setActiveChannel('general')
@@ -74,11 +88,19 @@ export function ChatPage({
     })
   }, [onClearMessages, loadHistory])
 
-  const handleNewSession = useCallback(() => {
+  const handleNewSession = useCallback(async () => {
     setActiveSessionId(undefined)
     setShowInsights(false)
     setShowConfigSidebar(false)
-  }, [])
+    try {
+      const created = await sessionApi.create()
+      setSessionId(created.id)
+      setActiveSessionId(created.id)
+    } catch (err) {
+      toast.error('Não foi possível criar a sessão')
+      console.error('Failed to create session:', err)
+    }
+  }, [setSessionId])
   // Sync activeSessionId with the chat hook's sessionId once we have messages
   useEffect(() => {
     if (messages.length > 0 && activeSessionId !== sessionId) {
@@ -108,9 +130,15 @@ export function ChatPage({
     if (!files || files.length === 0) return
 
     setUploadingFiles(true)
-    const source = associateToRoom && selectedRoomId ? selectedRoomId : sessionId
+    let source = associateToRoom && selectedRoomId ? selectedRoomId : sessionId
     
     try {
+      if (!source) {
+        const created = await sessionApi.create()
+        source = created.id
+        setSessionId(created.id)
+        setActiveSessionId(created.id)
+      }
       const res = await ragApi.ingestBatch(files, source)
       toast.success("Documentos ingeridos com sucesso!", {
         description: `${res.succeeded} de ${res.total} arquivos foram indexados no Vector Store.`,
@@ -129,7 +157,7 @@ export function ChatPage({
     } finally {
       setUploadingFiles(false)
     }
-  }, [associateToRoom, selectedRoomId, sessionId, addLocalMessage])
+  }, [associateToRoom, selectedRoomId, sessionId, setSessionId, addLocalMessage])
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -139,6 +167,7 @@ export function ChatPage({
           onSelectSession={handleSelectSession}
           onNewSession={handleNewSession}
           onClearMessages={onClearMessages}
+          onEndSession={handleEndSession}
         />
       </div>
 
@@ -205,7 +234,7 @@ export function ChatPage({
             <MessageList messages={activeChannel === 'general' ? messages : []} isProcessing={isProcessing} />
             <ChatInput
               onSend={onSend}
-              disabled={!isConnected && messages.length > 0}
+              disabled={sessionEnded}
               isProcessing={isProcessing}
             />
           </div>

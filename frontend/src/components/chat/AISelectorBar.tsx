@@ -25,6 +25,8 @@ export function AISelectorBar({
   providers,
   selectedProvider,
   selectedModel,
+  onProviderChange,
+  onModelChange,
   showConfigSidebar = false,
   onToggleConfig,
   showInsights = false,
@@ -61,6 +63,21 @@ export function AISelectorBar({
 
       {/* Right Block: Sidebar Toggle Action Buttons */}
       <div className="flex items-center gap-2">
+        <label className="sr-only" htmlFor="chat-provider">Provedor</label>
+        <select id="chat-provider" value={activeProvider?.name ?? ''}
+          onChange={event => onProviderChange(event.target.value)}
+          className="h-9 max-w-32 rounded-lg border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-100"
+          disabled={providers.length === 0}>
+          {providers.map(item => <option key={item.name} value={item.name}>{item.name}</option>)}
+        </select>
+        <label className="sr-only" htmlFor="chat-model">Modelo</label>
+        <select id="chat-model" value={selectedModel}
+          onChange={event => onModelChange(event.target.value)}
+          className="h-9 max-w-40 rounded-lg border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-100"
+          disabled={!activeProvider}>
+          {Array.from(new Set([activeProvider?.defaultModel, ...(activeProvider?.models ?? [])].filter(Boolean)))
+            .map(model => <option key={model} value={model}>{model}</option>)}
+        </select>
         {/* Toggle Config Sidebar */}
         {onToggleConfig && (
           <button
