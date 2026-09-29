@@ -1,6 +1,6 @@
 # Especificações das issues abertas — snapshot 2026-09-29
 
-Status: fichas das 46 issues elaboradas e vinculadas; checagem documental aprovada; PR documental será aberto como draft · Branch: `docs/open-issue-specifications` · Commit inicial: `ae0b6fb`.
+Status: fichas das 46 issues elaboradas e vinculadas; checagem documental aprovada; [PR documental #125](https://github.com/JonathanBenicio/Agent-System/pull/125) aberto como draft · Branch: `docs/open-issue-specifications`.
 
 ## Objetivo, escopo e regra de atualização
 
@@ -18,7 +18,7 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 | 2 | Dar a cada issue uma ficha com problema, escopo, aceite, dependências, fonte canônica e disposição recomendada | 46 âncoras verificadas no registro; gaps e duplicatas marcados | Concluída |
 | 3 | Corrigir especificações desatualizadas e criar apenas artefatos realmente ausentes | ADR/story/plano existentes reutilizados; decisões incertas marcadas como pendentes | Concluída como especificação; sem implementar decisões pendentes |
 | 4 | Adicionar link para a ficha em cada uma das 46 issues sem fechar issues | Leitura posterior da API confirmou 46/46 links e bodies preservados | Concluída |
-| 5 | Sincronizar índices, validar links e publicar commits/PR documental separado | Checker: 160 arquivos, 799 links, 0 quebrados; commit `ae0b6fb`; draft PR pendente | Em execução |
+| 5 | Sincronizar índices, validar links e publicar commits/PR documental separado | Checker: 160 arquivos, 799 links, 0 quebrados; PR #125 draft separado, base `feat/chat-session-user-settings` | Enviado; revisão/merge pendentes |
 
 ## Resumo do estado atual
 
