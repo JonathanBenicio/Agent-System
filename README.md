@@ -1,6 +1,7 @@
 # 🤖 Sistema Agentic Generalista
 
 > Backend: [contratos, acesso, recursos e validação](docs/backend/README.md). Processo: [templates](templates/README.md).
+> Especificações e estado das 46 issues abertas (snapshot 2026-09-29): [registro canônico](docs/plan/open-issues-specification-audit-2026-09-29.md).
 > Revisão do PR: [correções e evidências](docs/backend/validation/2026-09-28-review-fixes.md).
 > Meta atual de chat, sessões e configurações de usuário/tenant: [ADR-039](docs/architecture/adr/039-chat-session-user-tenant-settings.md), [story](docs/USER-STORIES.md#back-chat-123--chat-sessoes-e-configuracoes-efetivamente-usadas) e [plano](docs/plan/chat-session-user-settings.md).
 > Correção ativa dos bugs #111–#117: [ADR-035](docs/architecture/adr/035-backend-core-isolation-and-reliability.md) · [plano/status](docs/plan/backend-core-remediation.md) · [evidências](docs/backend/validation/backend-core-remediation.md).

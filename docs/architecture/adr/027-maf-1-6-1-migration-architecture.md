@@ -1,5 +1,7 @@
 # ADR 027: Migração Completa para o Microsoft Agent Framework (MAF) 1.6.1
 
+> **Decisão vigente (2026-09-29):** PowerFx é usado apenas para validação sintática (`RecalcEngine.Check`). Não avaliar fórmulas em runtime até existir caso de uso aprovado e nova especificação de funções/contexto/limites. A integração Hyperlight desta ADR é aspiracional; a decisão atual é Preview atrás de flag global desligada, somente em Lab, conforme [ADR-006](006-manutencao-custom-session-e-sandbox.md). Não tratar o plano de migração 1.6.1 abaixo como descrição do runtime atual.
+
 **Status:** Aprovado  
 **Data:** 24 de Maio de 2026  
 **Autor(es):** Principal .NET Architect & Execution Lead

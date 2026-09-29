@@ -10,17 +10,21 @@ Durante a atualização da arquitetura do AgenticSystem para suportar recursos m
 
 ## Decisão
 1. **Persistência Híbrida de Agentes:** Adicionamos a entidade `DynamicAgentEntity` ao contexto EF Core PostgreSQL (`AgenticDbContext`). O `HierarchicalAgentFactory` agora atua como uma fachada inteligente, que carrega as definições de `AgentSpecification` dinâmicas em memória, mas as persiste no banco de dados para garantir sobrevivência e resiliência entre deploys. O isolamento multi-tenant já existente (via Global Query Filters no EF Core) se aplica de forma imediata aos agentes customizados.
-2. **FIDES Data Protection Middleware:** Criamos o `FidesDataProtectionMiddleware.cs` encapsulando as mensagens no pipeline nativo do MAF (`builder.Use(...)` via `DelegatingAIAgent`). A validação foi alocada logo antes do envio para o modelo de linguagem, garantindo que CPFs, tokens, cartões de crédito e e-mails sejam identificados e substituídos por máscaras de ofuscação de forma determinística, sem depender do próprio LLM para ofuscação.
-3. **PowerFx RecalcEngine:** A fim de dar mais segurança para regras de comportamento definidas nos YAMLs, adicionamos a biblioteca nativa `Microsoft.PowerFx` e acoplamos o `RecalcEngine` ao `AgentYamlValidator`, substituindo a validação frágil de parênteses pela compilação real da Microsoft.
+2. **FIDES Data Protection Middleware:** `FidesDataProtectionMiddleware` atua no pipeline do MAF antes do provider. Decisão de produto (2026-09-29): usar regras built-in revisadas, sem regex definida pelo tenant; `Owner/Admin` controla toggles por tenant; tudo começa ativo e detectores obrigatórios de credenciais não podem ser desligados. A decisão é o alvo, não prova de que esses toggles ou toda a classificação estejam implementados.
+3. **PowerFx RecalcEngine:** `AgentYamlValidator` usa `RecalcEngine.Check` para validação sintática. Decisão de produto (2026-09-29): não executar expressões PowerFx em runtime até haver um caso de uso aprovado; avaliar regras exige uma nova decisão e threat model.
 
 ## Consequências
 
 ### Positivas
 - Agentes personalizados agora sobrevivem ao reinício do sistema, permitindo que a promessa "multi-agent chat" seja um fluxo durável.
-- Dados sensíveis nunca mais serão transmitidos inadvertidamente ao LLM subjacente, reforçando o compliance de nível corporativo do AgenticSystem.
+- O middleware oferece mascaramento preventivo para os padrões estáticos implementados; cobertura abrangente de PII/compliance não foi comprovada.
 - Agentes gerados são devidamente isolados por inquilinos (`TenantId`).
-- Validação determinística do modelo YAML impede corrupção ou quebra da aplicação no runtime.
+- `RecalcEngine.Check` valida sintaxe das expressões YAML; a execução de regras, funções permitidas e limites de avaliação precisam de confirmação separada.
 
 ### Negativas / Riscos
-- Um acréscimo mínimo (sub-ms) na latência de geração de requisições de LLM devido à avaliação do RegEx para ofuscação (FIDES).
+- O custo de latência do FIDES ainda não foi medido; não afirmar overhead sub-ms sem benchmark.
 - Sobrecarga inicial (cold-start) ao carregar todos os agentes dinâmicos durante a primeira requisição do `HierarchicalAgentFactory`.
+
+## Verificação de implementação — 2026-09-29
+
+O estado do runtime prevalece sobre afirmações aspiracionais do texto histórico. `FidesDataProtectionMiddleware` existe e é registrado, mas a política/toggles por tenant e OCR ainda não estão implementados. Decisão do usuário (2026-09-29): usar regras built-in revisadas; Owner/Admin gerencia toggles tenant-scoped; todas ativas por padrão; detectores obrigatórios de credenciais não podem ser desligados; anexos/imagens entram no escopo OCR; mídia sensível que não puder ser redigida com confiança bloqueia a chamada e pede mídia redigida; falha/timeout de detector obrigatório também falha fechado e não envia o conteúdo original; não aceitar regex arbitrária de tenant. `AgentYamlValidator` usa `RecalcEngine.Check`; fórmulas não são avaliadas em runtime até novo caso aprovado. Ver [decisões e especificações das issues abertas](../../plan/open-issues-specification-audit-2026-09-29.md#issue-106).
