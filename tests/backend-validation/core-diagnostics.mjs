@@ -13,8 +13,9 @@ if (resolve(outputDirectory).toLowerCase() === protectedHistoricalOutput.toLower
   throw new Error('Refusing to overwrite historical backend-documentation validation artifacts.');
 mkdirSync(outputDirectory, { recursive: true });
 const run = 'doc-' + randomUUID().slice(0, 8), tenantA = run + '-a', tenantB = run + '-b';
-const key = randomUUID(), keyId = randomUUID(), alice = run + '-alice', bob = run + '-bob';
-writeFileSync(resolve(outputDirectory, 'validation-api-key.txt'), key + '\n', { mode: 0o600 });
+const key = randomUUID(), keyId = randomUUID(), apiKeyForCompatibility = randomUUID(), compatibilityKeyId = randomUUID();
+const alice = run + '-alice', bob = run + '-bob';
+writeFileSync(resolve(outputDirectory, 'validation-api-key.txt'), apiKeyForCompatibility + '\n', { mode: 0o600 });
 const results = [];
 function sql(statement) {
   return execFileSync('docker', ['compose', '-f', compose, '-p', 'agent-system-backend-fix', 'exec', '-T', 'postgres', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'validation', '-d', 'backend_validation', '-At'], { input: statement, encoding: 'utf8' }).trim();
@@ -41,7 +42,7 @@ function check(condition, detail) { if (!condition) throw new Error(detail); }
 async function test(id, criterion, fn) {
   const started = Date.now();
   try { const detail = await fn(); results.push({ id, criterion, result: 'passed', detail, durationMs: Date.now()-started }); }
-  catch (error) { results.push({ id, criterion, result: String(error.message).startsWith('dependency') ? 'not_executed' : 'failed', detail: String(error.message).replaceAll(key, '[redacted]'), durationMs: Date.now()-started }); }
+  catch (error) { results.push({ id, criterion, result: String(error.message).startsWith('dependency') ? 'not_executed' : 'failed', detail: String(error.message).replaceAll(key, '[redacted]').replaceAll(apiKeyForCompatibility, '[redacted]'), durationMs: Date.now()-started }); }
   console.log(id + ': ' + results.at(-1).result + ' — ' + results.at(-1).detail);
 }
 async function hubInvoke(token, tenantQuery, hub, target, args) {
@@ -173,12 +174,14 @@ sql(`INSERT INTO tenants(id,name,slug,plan,is_active,created_at,limits,provider_
 ('${tenantA}','Validation A','${tenantA}','Free',true,now(),'{"maxRequestsPerMinute":10,"maxTokensPerDay":50000,"maxDailyCostUsd":1,"maxConcurrentSessions":3,"maxAgents":5,"maxDocumentsMb":100,"maxDocuments":10000}','{}','{}'),
 ('${tenantB}','Validation B','${tenantB}','Free',true,now(),'{"maxRequestsPerMinute":10,"maxTokensPerDay":50000,"maxDailyCostUsd":1,"maxConcurrentSessions":3,"maxAgents":5,"maxDocumentsMb":100,"maxDocuments":10000}','{}','{}');
 INSERT INTO access_api_keys(id,tenant_id,key_hash,name,role,is_enabled,created_at) VALUES
-('${keyId}','${tenantA}','${createHash('sha256').update(key).digest('hex')}','Validation Viewer','Viewer',true,now());`);
+('${keyId}','${tenantA}','${createHash('sha256').update(key).digest('hex')}','Validation Viewer','Viewer',true,now()),
+('${compatibilityKeyId}','${tenantA}','${createHash('sha256').update(apiKeyForCompatibility).digest('hex')}','OpenAI Compatibility Validation Viewer','Viewer',true,now());`);
 sql(`INSERT INTO tenant_memberships(id,subject_id,subject_type,role,tenant_id,granted_at)
 VALUES ('${run}-alice-a','${alice}','User','Viewer','${tenantA}',now()),
 ('${run}-bob-a','${bob}','User','Viewer','${tenantA}',now()),
 ('${run}-alice-b','${alice}','User','Viewer','${tenantB}',now()),
-('${run}-alice-key','${keyId}','ApiKey','Viewer','${tenantA}',now());`);
+('${run}-alice-key','${keyId}','ApiKey','Viewer','${tenantA}',now()),
+('${run}-compatibility-key','${compatibilityKeyId}','ApiKey','Viewer','${tenantA}',now());`);
 await test('AUTH-01', 'invalid key denied for known tenant', async () => { const r=await request('/api/session',{apiKey:'invalid',tenant:tenantA}); check(r.status===401,'status='+r.status); return '401'; });
 await test('AUTH-02', 'JWT tenant fallback accepted', async () => { const r=await request('/api/session'); check(r.status===200&&Array.isArray(r.data),'status='+r.status); return '200 array'; });
 await test('AUTH-03', 'non-admin header override denied', async () => { const r=await request('/api/session',{tenant:tenantB}); check(r.status===403,'status='+r.status); return '403'; });
