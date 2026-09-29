@@ -1329,7 +1329,7 @@ Issue [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) · decis�
 - [ ] Bloqueio de requisições que excedam a quota diária de tokens/custo.
 - [ ] Processamento diário de reflexões em background (Hosted Service).
 - [ ] Mudanças sugeridas são propostas tenant-scoped, persistidas e versionadas; `confidence` informa prioridade, mas nunca autoriza aplicação automática.
-- [ ] Uma pessoa autorizada revisa e aprova/rejeita a proposta antes de aplicar; aprovação, ator, versão anterior/nova, avaliação e rollback ficam auditáveis. Papel do aprovador ainda pendente de decisão.
+- [ ] Owner/Admin do tenant revisa e aprova/rejeita a proposta antes de aplicar; aprovação, ator, versão anterior/nova, avaliação e rollback ficam auditáveis. `confidence` não substitui aprovação humana.
 
 ---
 

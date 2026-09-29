@@ -1,6 +1,6 @@
 # Especificações das issues abertas — snapshot 2026-09-29
 
-Status: fichas das 46 issues elaboradas e vinculadas; checagem documental aprovada; [PR documental #125](https://github.com/JonathanBenicio/Agent-System/pull/125) aberto como draft · Branch: `docs/open-issue-specifications`.
+Status: fichas das 46 issues elaboradas e vinculadas; decisões de produto registradas; checagem documental aprovada; [PR documental #125](https://github.com/JonathanBenicio/Agent-System/pull/125) aberto como draft · Branch: `docs/open-issue-specifications`.
 
 ## Objetivo, escopo e regra de atualização
 
@@ -26,12 +26,12 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 |---|---|---|
 | #104 PowerFx | Validar sintaxe apenas; não executar fórmulas até surgir um caso de uso aprovado. | Manter `RecalcEngine.Check`; remover linguagem que prometa avaliação de regras no runtime. |
 | #105 Hyperlight | Integrar o pacote .NET preview atrás de flag global, desligada por padrão e habilitável somente em laboratório; segurança deve ser testada. | Não declarar sandbox estável; implementação atual segue simulada até integração verificada. Sem filesystem/rede por padrão é requisito proposto. |
-| #106 FIDES | Usar regras built-in revisadas, com política/toggles por tenant; tudo ativo por padrão; detectores obrigatórios de credenciais não podem ser desligados. | Tenant não fornece regex. Owner/Admin gerencia os toggles; alterações devem ser auditáveis. |
-| #16 Auto-melhoria | Gerar proposta e exigir aprovação humana antes de aplicar; auto-aplicação por confidence threshold fica rejeitada. | Papel exato do aprovador ainda não foi respondido; Owner/Admin tenant é recomendação. Aprovação deve gerar versão/auditoria e rollback. |
+| #106 FIDES | Usar regras built-in revisadas, com política/toggles por tenant; tudo ativo por padrão; detectores obrigatórios de credenciais não podem ser desligados; incluir OCR de imagens/anexos. | Owner/Admin gerencia; mídia não redigível/falha de detector bloqueia a chamada e solicita versão redigida. Sem regex de tenant. |
+| #16 Auto-melhoria | Gerar proposta e exigir aprovação humana antes de aplicar; auto-aplicação por confidence threshold fica rejeitada. | Owner/Admin do tenant aprova; aprovação gera auditoria/versionamento/rollback. |
 | #97 Tenant default | Remover fallbacks no runtime; tenant deve ser explícito; `default` fica restrito a fixture/migração. | Fallbacks encontrados na ficha #97 continuam gap de implementação. |
-| #99 Bootstrap | Bootstrap só com chave explicitamente configurada; não semear agentes Banner de produto; sem chave, não criar tenant. | A aplicação pode subir sem tenant e exigir provisionamento explícito; bootstrap não cria Platform Admin. |
+| #99 Bootstrap | Bootstrap só com chave explicitamente configurada; não semear agentes Banner de produto; sem chave, não criar tenant. | A API inicia sem tenant e exige provisionamento explícito antes de uso; bootstrap não cria Platform Admin. |
 | #121 A2A/AG-UI | Manter E2E de protocolos preview despriorizado e separado. | Não declarar validado nem estável enquanto os hosts permanecerem preview/desligados. |
-| #109 Roadmap 10/10 | **Pendente**: decidir se a issue permanece visão/roadmap ou se será decomposta em épicos priorizados. | Nenhuma lista aspiracional autoriza implementação em lote. |
+| #109 Roadmap 10/10 | Manter como visão; só executar itens decompostos em issues priorizadas. | A visão não autoriza implementação em lote nem usa nota subjetiva como aceite. |
 
 As decisões estão documentadas; mudança de código, flags, APIs ou políticas ainda exige etapa de implementação e validação própria.
 
@@ -209,15 +209,15 @@ As decisões estão documentadas; mudança de código, flags, APIs ou políticas
 
 **Roteiro “10/10” de arquitetura e prontidão**
 
-**Classificação:** não é issue implementável como está; corpo de 42 KB é visão/roadmap, sem baseline atual, owner, limite de escopo ou DoD por entrega.
+**Classificação:** visão/roadmap; corpo de 42 KB não é uma única feature implementável e carece de baseline/DoD por entrega.
 
-**Especificação proposta para esta issue:** objetivo é manter um mapa de capacidades e dependências; cada iniciativa executável deve virar issue própria com baseline no código, outcome observável, prioridade justificável, ADR quando decisão nova, story/BDD, plano e critérios mensuráveis. “10/10” ou nota subjetiva não é critério de aceite.
+**Decisão do usuário:** manter a issue como visão; só executar capacidades que forem decompostas em issues priorizadas. Cada iniciativa executável deve ter baseline no código, outcome observável, prioridade, ADR quando nova decisão for necessária, story/BDD, plano e critérios mensuráveis. “10/10” ou nota subjetiva não é critério de aceite.
 
 **Não incluir na issue mestre:** autorizar implementação de todos os itens, migrar frameworks, adotar deploy, rebaixar gates ou assumir que lista aspiracional corresponde ao produto atual.
 
-**Aceite proposto:** visão classificada em atual/validar/futuro/duplicado; itens ativos apontam para issues específicas; dependências e exclusões claras; nenhum item sem dono/resultado fica implícito como aprovado.
+**Aceite:** manter mapa de capacidades/dependências; classificar itens atuais/validar/futuro/duplicado; capacidades a executar apontam para issue própria priorizada e especificada; nenhuma iniciativa sem owner/resultado vira trabalho implicitamente aprovado.
 
-**Fontes:** issue #109; [master roadmap](master-roadmap-2026.md); [overengineering assessment](../planejamento/overengineering-assessment.md). Mapear duplicações com #12–#16, #74–#80, #88, #104–#106 e #120–#123. A disposition recomendada é converter para roadmap/índice e não executar como feature única; decisão de fechamento fica com o usuário.
+**Fontes:** issue #109; [master roadmap](master-roadmap-2026.md); [overengineering assessment](../planejamento/overengineering-assessment.md). Mapear duplicações com #12–#16, #74–#80, #88, #104–#106 e #120–#123. Disposição decidida: usar como visão/index, não fechar nem executar como feature única.
 
 ## issue-106
 
@@ -227,9 +227,9 @@ As decisões estão documentadas; mudança de código, flags, APIs ou políticas
 
 **Estado de código observado:** regras são regex estáticas para CPF formatado, cartão, e-mail e alguns formatos de token; entram mensagens User/System; o accessor do tenant é usado no log. Isso não comprova regras configuráveis por tenant, classificação completa, auditoria segura, cobertura de formatos ou política para imagens/anexos.
 
-**Decisão do usuário:** catálogo built-in revisado, sem regex fornecida pelo tenant; política/toggles por tenant; todos os detectores ativos por padrão; detectores obrigatórios de credenciais não podem ser desligados. Owner/Admin gerencia toggles. **Especificação restante:** auditar cada alteração; definir dados/media não cobertos e a resposta quando mascaramento falhar. A implementação dos toggles ainda não existe.
+**Decisão do usuário:** catálogo built-in revisado, sem regex fornecida pelo tenant; política/toggles por tenant; todos os detectores ativos por padrão; detectores obrigatórios de credenciais não podem ser desligados. Owner/Admin gerencia toggles. Incluir OCR/scan de imagens e anexos; mídia que não possa ser redigida com confiança bloqueia a chamada e pede uma versão redigida; falha/timeout de detector obrigatório também falha fechado e não envia dado original. **Detalhes ainda técnicos:** formatos suportados, engine OCR, localização e métrica de confiança; política/toggles/OCR não estão implementados.
 
-**Especificação aprovada:** entrada com CPF/cartão/email/token cobertos é mascarada antes do primeiro provider; toggle é tenant-scoped e auditado; todos os padrões built-in iniciam ativos; categorias de credenciais obrigatórias não podem ser desativadas; tenant A não lê a política de B; logs não contêm o valor original; falha do detector tem modo seguro documentado; corpus sintético e falsos positivos são testados. Ainda faltam dados/media cobertos e a regra de falha do detector.
+**Especificação aprovada:** texto e OCR de imagens/anexos são inspecionados antes do provider; saída OCR sensível é redigida; se não houver redação com confiança ou detector obrigatório falhar/timeout, negar despacho e solicitar mídia redigida; toggles são tenant-scoped e auditados; todos os padrões built-in iniciam ativos; detectores obrigatórios não podem ser desligados; tenant A não lê política de B; logs não contêm originais; testes sintéticos cobrem positivos/falsos positivos/erro.
 
 **Fontes:** ADR-005 e ADR-027 hoje contêm afirmações que excedem a implementação; [plano histórico](maf-complete-migration-plan.md) também diz que não existe. Atualizar os três estados para uma única descrição vigente antes de tratar a issue como concluída.
 
@@ -265,9 +265,9 @@ As decisões estão documentadas; mudança de código, flags, APIs ou políticas
 
 **Classificação:** classe/serviço existe; o issue descreve criação automática do primeiro tenant e credencial inicial.
 
-**Decisão do usuário:** bootstrap só é executado com segredo explicitamente configurado; não semear `VisionAnalyst`/`EditorChefe` nem outros agentes de produto; sem `AdminApiKey`, nenhum tenant é criado e o operador deve provisionar explicitamente. Bootstrap de tenant nunca cria Platform Admin.
+**Decisão do usuário:** bootstrap só é executado com segredo explicitamente configurado; não semear `VisionAnalyst`/`EditorChefe` nem outros agentes de produto; sem `AdminApiKey`, nenhum tenant é criado e a API inicia sem tenant. O operador deve provisionar explicitamente antes de uso. Bootstrap de tenant nunca cria Platform Admin.
 
-**Aceite revisado:** banco vazio + chave configurada provisiona uma vez; banco existente não reemite key; ausência de chave deixa banco sem tenant/credencial e exige setup explícito; startup concorrente é idempotente; não há segredo em log; membership Admin do tenant não é Platform Admin.
+**Aceite revisado:** banco vazio + chave configurada provisiona uma vez; banco existente não reemite key; ausência de chave deixa banco sem tenant/credencial e a API sobe em modo sem tenant; startup concorrente é idempotente; não há segredo em log; membership Admin do tenant não é Platform Admin.
 
 **Fonte:** `SystemBootstrapService`, ADR-026, story de auth em `USER-STORIES.md`. A issue propõe SHA-256 e `AdminApiKey` estática; atualizar segurança contra baixa entropia/legacy antes de tratar como prescrição vigente. O serviço também semeia `VisionAnalyst` e `EditorChefe` com instruções específicas de banner/imóveis no tenant `admin`; especificar se isso é demo/lab ou comportamento de produto, e manter seeds de produto fora do bootstrap genérico.
 
@@ -533,7 +533,7 @@ As decisões estão documentadas; mudança de código, flags, APIs ou políticas
 
 **Classificação:** descrição contém três capacidades distintas e não acceptance; story ML39 já existe mas trata controle de quota/budget e auto-melhoria de forma combinada.
 
-**Decisão do usuário:** auto-melhoria gera uma proposta e exige aprovação humana; o confidence threshold nunca aprova/aplica sozinho. O papel exato do aprovador segue em consulta (recomendação: Owner/Admin tenant). Ver [ADR-040](../architecture/adr/040-self-improvement-human-approval.md). **Spec restante:** quota proativa precisa de forecast/alerta e de métricas verificáveis; batch deve persistir proposta, versão, avaliação, aprovação, rejeição e rollback; `DotNetExpertAgent` já existe, mas a inclusão futura como domínio de triagem precisa de acceptance próprio.
+**Decisão do usuário:** auto-melhoria gera uma proposta e exige aprovação humana; o confidence threshold nunca aprova/aplica sozinho. Aprovador: Owner/Admin do tenant. Ver [ADR-040](../architecture/adr/040-self-improvement-human-approval.md). **Spec restante:** quota proativa precisa de forecast/alerta e de métricas verificáveis; batch deve persistir proposta, versão, avaliação, aprovação, rejeição e rollback; `DotNetExpertAgent` já existe, mas a inclusão futura como domínio de triagem precisa de acceptance próprio.
 
 **Fonte:** ML39 em `USER-STORIES.md`; `docs/backend/resources-rules.md`; issue #16. Dividir em stories/novas issues se todos permanecerem escopo.
 
@@ -572,3 +572,5 @@ As decisões estão documentadas; mudança de código, flags, APIs ou políticas
 - Issues em PR draft #118, #119 e #124 permanecem abertas até revisão/merge e gates; issues com acceptance cumprida recebem recomendação, não fechamento automático.
 - Requisitos que contradizem código são marcados como drift, não copiados como alvo novo sem confirmação.
 - Propostas de arquitetura sem evidência permanecem `proposta` e precisam de decisão antes de virar implementação.
+- Decisões de produto tomadas em 2026-09-29: PowerFx sintaxe-only; Hyperlight Preview sob flag global off/Lab; FIDES built-in/toggles tenant + OCR e fail-closed; auto-melhoria com aprovação Owner/Admin; bootstrap só com key explícita sem seeds de produto; tenant runtime sem fallback; #109 permanece visão de roadmap.
+- A implementação dessas decisões permanece aberta em #97, #99, #105, #106 e #16. OCR engine/formats/confidence, testes de Hyperlight, persistência/UI de approval e remoção dos fallbacks são trabalho técnico; não foram declarados implementados.

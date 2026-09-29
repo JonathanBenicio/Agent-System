@@ -4,7 +4,7 @@ Data: 2026-09-29 · Issue: [#16](https://github.com/JonathanBenicio/Agent-System
 
 ## Status
 
-Aceito para a política de produto; papel específico do aprovador pendente. Implementação atual não cumpre esta decisão.
+Aceito. Implementação atual não cumpre esta decisão.
 
 ## Contexto
 
@@ -13,15 +13,15 @@ O job de Self-Improvement processa reflexões e usa `AutoApplyThreshold` para te
 ## Decisão
 
 - A análise em batch pode gerar uma **proposta** tenant-scoped; `confidence` serve para priorizar ou ordenar a revisão, nunca para autorizar mudança.
-- Toda mudança exige aprovação humana antes de aplicação. Aprovar cria uma nova versão do agente; rejeitar preserva a versão ativa.
+- Toda mudança exige aprovação humana antes de aplicação. O aprovador é Owner/Admin do tenant; aprovação cria uma nova versão do agente, rejeição preserva a versão ativa.
 - Registrar tenant, agente, autor/origem, aprovador, decisão, timestamp, versão anterior/nova, rationale, evidência de avaliação e rollback.
 - Nunca promover proposta ou mudança de um tenant para outro. Falha/timeout do job não pode aplicar conteúdo parcial.
 - Remover `AutoApplyThreshold` como mecanismo de autoplicação; eventual threshold futuro não substitui autorização humana.
 
-## Pontos ainda sem decisão
+## Fora do escopo desta decisão
 
-- Papel autorizado a aprovar: recomendação inicial é Owner/Admin do tenant. Confirmar se Operator também pode aprovar; Platform Admin não recebe acesso implícito ao conteúdo tenant.
-- O schema, endpoints e UX de revisão/aprovação serão especificados numa etapa de implementação própria, depois de confirmar o papel.
+- O schema, endpoints e UX de revisão/aprovação ainda serão especificados numa etapa de implementação própria.
+- Platform Admin não recebe acesso implícito ao conteúdo tenant; aprovação permanece sob papel Owner/Admin do tenant.
 
 ## Consequências
 
