@@ -25,6 +25,16 @@ curl -X POST http://localhost:5188/api/chat \
 200 retorna [AgentResponse](../../src/AgenticSystem.Core/Models/AgentResponse.cs): content, agentName, agentTier, actionsPerformed, toolsUsed, success, metadata, timestamp, sessionId e opcionais errorMessage/confidence. Não retorna ChatResponse.response/agentUsed. HTTP 200 com success=false representa falha funcional; verificar ambos.
 400: message ausente/branco/grande ou binding inválido. 401/403: identidade/tenant/membership. 429: teto de token ou custo excedido; o body continua AgentResponse com `errorMessage`. 500: exceção não tratada. Efeitos: LLM, sessão/artifacts, tools e custo conforme fluxo; não é idempotente. SSE usa o mesmo request, mas após abrir o stream comunica quota excedida por evento `error`: [transportes](transports.md).
 
+## Propostas de auto-melhoria — /api/agent/improvements
+[AgentSelfImprovementController](../../src/AgenticSystem.Api/Controllers/AgentSelfImprovementController.cs). Esta capacidade Lab exige `AgenticSystem:SelfImprovement:Enabled=true`, desligado por padrão. Com a flag habilitada, propostas e agentes são isolados pelo tenant atual. A geração apenas persiste uma proposta; confiança nunca aplica instruções automaticamente. Owner/Admin pode revisar, rejeitar, aprovar e reverter. Aprovação atualiza o agente do tenant, cria uma versão de agente e de prompt e registra auditoria; rollback grava novas versões com as instruções anteriores.
+
+| Método/rota | Resultado | Regra |
+|---|---|---|
+| GET /api/agent/improvements | lista propostas recentes | membership e filtro do tenant autenticado |
+| POST /api/agent/improvements/{proposalId}/approve | 204 | Owner/Admin; proposta pendente; cria versão de prompt |
+| POST /api/agent/improvements/{proposalId}/reject | 204 | Owner/Admin; proposta pendente |
+| POST /api/agent/improvements/{proposalId}/rollback | 204 ou 409 | Owner/Admin; somente proposta aplicada; registra versão com conteúdo anterior |
+
 ## Sessões — /api/session
 [SessionController](../../src/AgenticSystem.Api/Controllers/SessionController.cs).
 | Método/rota | Entrada | Resultado |

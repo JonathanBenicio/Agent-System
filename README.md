@@ -42,6 +42,8 @@ Capacidades experimentais (como protocolos extras, plugins MCP, workflows colabo
 - rollout opcional
 - fallback explícito para o comportamento atual
 
+Self-improvement (#16) permanece na trilha Lab: a flag `AgenticSystem:SelfImprovement:Enabled` fica desligada por padrão; quando habilitada em laboratório, mudanças de prompt viram propostas e exigem aprovação de Owner/Admin, com versão, auditoria e rollback. O contrato está em [API do backend](docs/backend/api-core.md).
+
 ### Critérios de incubação e descarte
 
 Toda capacidade experimental precisa nascer com hipótese, critério de sucesso e critério de remoção. A promoção para o core só ocorre com ganho recorrente comprovado contra baseline e sem abrir um segundo caminho principal de execução. Sem ganho mensurável ou com aumento de risco/custo operacional, a diretriz é rollback ou descarte.

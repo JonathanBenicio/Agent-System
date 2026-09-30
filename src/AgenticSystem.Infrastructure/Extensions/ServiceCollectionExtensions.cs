@@ -492,6 +492,7 @@ public static class ServiceCollectionExtensions
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<IAgentVersionStore, PostgresAgentVersionStore>(services);
         ReplaceSingleton<IPromptTemplateStore, PostgresPromptTemplateStore>(services);
+        ReplaceSingleton<ISelfImprovementProposalStore, PostgresSelfImprovementProposalStore>(services);
         ReplaceSingleton<IEvalResultStore, PostgresEvalResultStore>(services);
         return services;
     }

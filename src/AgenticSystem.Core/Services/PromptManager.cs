@@ -68,6 +68,7 @@ public class PromptManager : IPromptManager
             Id = template.Id,
             Name = template.Name,
             AgentName = template.AgentName,
+            TenantId = template.TenantId,
             TemplateBody = template.TemplateBody,
             Version = template.Version,
             Locale = template.Locale,
@@ -102,16 +103,42 @@ public class PromptManager : IPromptManager
 public class InMemoryPromptTemplateStore : IPromptTemplateStore
 {
     private readonly ConcurrentDictionary<string, PromptTemplate> _templates = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ITenantContextAccessor? _tenantContextAccessor;
+
+    public InMemoryPromptTemplateStore(ITenantContextAccessor? tenantContextAccessor = null)
+    {
+        _tenantContextAccessor = tenantContextAccessor;
+    }
 
     public Task SaveAsync(PromptTemplate template, CancellationToken ct = default)
     {
-        _templates[template.Id] = template;
+        var tenantId = template.TenantId;
+        if (string.IsNullOrWhiteSpace(tenantId) && _tenantContextAccessor is not null)
+            tenantId = _tenantContextAccessor.CurrentTenantId;
+
+        _templates[template.Id] = new PromptTemplate
+        {
+            Id = template.Id,
+            Name = template.Name,
+            AgentName = template.AgentName,
+            TenantId = tenantId,
+            TemplateBody = template.TemplateBody,
+            Version = template.Version,
+            Locale = template.Locale,
+            Variables = template.Variables,
+            Description = template.Description,
+            IsActive = template.IsActive,
+            CreatedAt = template.CreatedAt,
+            UpdatedAt = template.UpdatedAt,
+            CreatedBy = template.CreatedBy
+        };
         return Task.CompletedTask;
     }
 
     public Task<PromptTemplate?> GetActiveAsync(string agentName, string locale, CancellationToken ct = default)
     {
         var active = _templates.Values
+            .Where(IsInCurrentTenant)
             .Where(t => t.AgentName.Equals(agentName, StringComparison.OrdinalIgnoreCase))
             .Where(t => t.Locale.Equals(locale, StringComparison.OrdinalIgnoreCase))
             .Where(t => t.IsActive)
@@ -124,10 +151,18 @@ public class InMemoryPromptTemplateStore : IPromptTemplateStore
     public Task<IReadOnlyList<PromptTemplate>> GetAllForAgentAsync(string agentName, CancellationToken ct = default)
     {
         var templates = _templates.Values
+            .Where(IsInCurrentTenant)
             .Where(t => t.AgentName.Equals(agentName, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(t => t.Version)
             .ToList();
 
         return Task.FromResult<IReadOnlyList<PromptTemplate>>(templates);
+    }
+
+    private bool IsInCurrentTenant(PromptTemplate template)
+    {
+        if (_tenantContextAccessor is null)
+            return true;
+        return string.Equals(template.TenantId, _tenantContextAccessor.CurrentTenantId, StringComparison.Ordinal);
     }
 }

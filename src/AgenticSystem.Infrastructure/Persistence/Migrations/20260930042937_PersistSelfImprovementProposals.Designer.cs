@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using AgenticSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -14,9 +15,11 @@ using Pgvector;
 namespace AgenticSystem.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(AgenticDbContext))]
-    partial class AgenticDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260930042937_PersistSelfImprovementProposals")]
+    partial class PersistSelfImprovementProposals
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2951,10 +2954,6 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("character varying(150)");
-
-                    b.Property<string>("AppliedAgentVersionId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
 
                     b.Property<int?>("AppliedPromptVersion")
                         .HasColumnType("integer");

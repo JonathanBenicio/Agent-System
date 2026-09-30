@@ -19,8 +19,6 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
     private readonly ICitationEngine? _citationEngine;
     private readonly IAgentEvaluationService? _evaluationService;
     private readonly ISelfImprovementEngine? _selfImprovementEngine;
-    private readonly IPromptManager? _promptManager;
-    private readonly IAgentVersioningService? _versioningService;
     private readonly IWorkflowStore? _workflowStore;
     private readonly ILogger<AgentExecutionPostProcessingPipeline> _logger;
 
@@ -53,8 +51,8 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
         _citationEngine = citationEngine;
         _evaluationService = evaluationService;
         _selfImprovementEngine = selfImprovementEngine;
-        _promptManager = promptManager;
-        _versioningService = versioningService;
+        _ = promptManager;
+        _ = versioningService;
         _workflowStore = workflowStore;
     }
 
@@ -114,32 +112,10 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
             reflections: reflectionOutcome.Reflections,
             toolAvailability: null);
 
-        // 2. Self-Improvement & Versioning (Phase 3 Integration)
-        if (_selfImprovementEngine != null && reflectionOutcome.LatestReflection != null && _promptManager != null && _versioningService != null)
+        // Self-improvement may propose a change, but only a tenant Owner/Admin can approve it.
+        if (_selfImprovementEngine != null && reflectionOutcome.LatestReflection != null)
         {
-            var improvement = await _selfImprovementEngine.AnalyzeAndImproveAsync(response.AgentName, ct);
-            if (improvement.Status == "Proposed" && improvement.ProposedChanges.TryGetValue("instructions_update", out var newInstructions))
-            {
-                _logger.LogInformation("Proposed improvement found for {Agent}. Updating template.", response.AgentName);
-                
-                await _promptManager.SaveTemplateAsync(new PromptTemplate
-                {
-                    AgentName = response.AgentName,
-                    TemplateBody = newInstructions,
-                    Name = "Auto-improved Template",
-                    Description = $"Improved based on reflection in session {context.SessionId}",
-                    CreatedBy = "SelfImprovementEngine"
-                }, ct);
-
-                await _versioningService.CreateVersionAsync(
-                    response.AgentName, 
-                    description: $"Auto-improved via reflection in session {context.SessionId}", 
-                    changeLog: improvement.Rationale, 
-                    createdBy: "System", 
-                    ct: ct);
-
-                await _selfImprovementEngine.ApplyImprovementAsync(improvement.Id, ct);
-            }
+            await _selfImprovementEngine.AnalyzeAndImproveAsync(response.AgentName, ct);
         }
 
         var approvalResponse = await ApplyFinalApprovalAsync(context, ct);

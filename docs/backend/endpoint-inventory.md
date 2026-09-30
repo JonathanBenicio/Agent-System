@@ -2,7 +2,7 @@
 
 Gerado com `node scripts/backend-contract-inventory.mjs`. Cada rota aponta para sua assinatura atual; parâmetros C# não substituem schema/obrigatoriedade de binding. Autorizações adicionais e flags exigem leitura da fonte. Endpoints fora do núcleo ainda não possuem prova integrada.
 
-211 combinações método/rota, incluindo aliases. Consulte [contratos do núcleo](api-core.md) e [hubs/protocolos](transports.md).
+215 combinações método/rota, incluindo aliases. Consulte [contratos do núcleo](api-core.md) e [hubs/protocolos](transports.md).
 
 | Método | Rota | Ação/entrada C# | Autorização declarada | Fonte |
 |---|---|---|---|---|
@@ -111,6 +111,10 @@ Gerado com `node scripts/backend-contract-inventory.mjs`. Cada rota aponta para 
 | POST | /api/agent/approvals/{approvalId}/reject | RejectToolRequest(string approvalId, [FromBody] ApprovalDecisionRequest request, CancellationToken ct) | Authorize (roles/policy: see source) | [AgentRuntimeController.cs:71](../../src/AgenticSystem.Api/Controllers/AgentRuntimeController.cs) |
 | POST | /api/agent/final-approvals/{approvalId}/approve | ApproveFinalResponse(string approvalId, [FromBody] ApprovalDecisionRequest request, CancellationToken ct) | Authorize (roles/policy: see source) | [AgentRuntimeController.cs:88](../../src/AgenticSystem.Api/Controllers/AgentRuntimeController.cs) |
 | POST | /api/agent/final-approvals/{approvalId}/reject | RejectFinalResponse(string approvalId, [FromBody] ApprovalDecisionRequest request, CancellationToken ct) | Authorize (roles/policy: see source) | [AgentRuntimeController.cs:98](../../src/AgenticSystem.Api/Controllers/AgentRuntimeController.cs) |
+| GET | /api/agent/improvements | List(CancellationToken ct) | Authorize (roles/policy: see source) | [AgentSelfImprovementController.cs:26](../../src/AgenticSystem.Api/Controllers/AgentSelfImprovementController.cs) |
+| POST | /api/agent/improvements/{proposalId}/approve | Approve(string proposalId, CancellationToken ct) | Authorize (roles/policy: see source) | [AgentSelfImprovementController.cs:35](../../src/AgenticSystem.Api/Controllers/AgentSelfImprovementController.cs) |
+| POST | /api/agent/improvements/{proposalId}/reject | Reject(string proposalId, CancellationToken ct) | Authorize (roles/policy: see source) | [AgentSelfImprovementController.cs:49](../../src/AgenticSystem.Api/Controllers/AgentSelfImprovementController.cs) |
+| POST | /api/agent/improvements/{proposalId}/rollback | Rollback(string proposalId, CancellationToken ct) | Authorize (roles/policy: see source) | [AgentSelfImprovementController.cs:63](../../src/AgenticSystem.Api/Controllers/AgentSelfImprovementController.cs) |
 | POST | /api/agent/maintenance/cleanup | CleanupInactiveAgents() | Authorize (roles/policy: see source) | [AgentManagementController.cs:116](../../src/AgenticSystem.Api/Controllers/AgentManagementController.cs) |
 | GET | /api/agent/runtime/artifacts/query | QueryArtifacts([FromQuery] string? sessionId, [FromQuery] string? type, [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int limit = 100, CancellationToken ct = default) | Authorize (roles/policy: see source) | [AgentRuntimeController.cs:115](../../src/AgenticSystem.Api/Controllers/AgentRuntimeController.cs) |
 | GET | /api/agent/runtime/evaluate | EvaluateRuntime([FromQuery] string? sessionId, [FromQuery] string? agentName, CancellationToken ct = default) | Authorize (roles/policy: see source) | [AgentRuntimeController.cs:161](../../src/AgenticSystem.Api/Controllers/AgentRuntimeController.cs) |
@@ -213,7 +217,7 @@ Gerado com `node scripts/backend-contract-inventory.mjs`. Cada rota aponta para 
 | GET | /api/workflow/executions/{id} | GetExecution(string id, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:96](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
 | POST | /api/workflow/executions/{id}/approve | ApproveExecution(string id, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:129](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
 | POST | /api/workflow/executions/{id}/cancel | CancelExecution(string id, [FromQuery] string? reason, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:113](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
-| POST | /api/workflow/executions/{id}/reject | RejectExecution(string id, [FromQuery] string? reason, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:152](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
+| POST | /api/workflow/executions/{id}/reject | RejectExecution(string id, [FromQuery] string? reason, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:153](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
 | POST | /api/workflow/executions/start/{definitionId} | StartWorkflow(string definitionId, [FromBody] Dictionary<string, object>? variables, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:66](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
 | POST | /v1/chat/completions | CreateChatCompletion([FromBody] ChatCompletionRequest request, CancellationToken ct) | no Authorize attribute; inspect action | [OpenAIChatCompletionController.cs:46](../../src/AgenticSystem.Api/Controllers/OpenAI/OpenAIChatCompletionController.cs) |
 | GET | /v1/models | ListModels() | no Authorize attribute; inspect action | [OpenAIChatCompletionController.cs:217](../../src/AgenticSystem.Api/Controllers/OpenAI/OpenAIChatCompletionController.cs) |

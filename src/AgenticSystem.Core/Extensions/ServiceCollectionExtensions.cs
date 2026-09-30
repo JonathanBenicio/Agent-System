@@ -210,6 +210,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICitationEngine, DefaultCitationEngine>();
         services.AddSingleton<IExplainabilityService, DefaultExplainabilityService>();
         services.AddSingleton<IAgentSimulationEngine, AgentSimulationService>();
+        services.AddSingleton<ISelfImprovementProposalStore, InMemorySelfImprovementProposalStore>();
         services.AddSingleton<ISelfImprovementEngine, SelfImprovementService>();
 
         // Phase 4 — Platform & Data Connectors

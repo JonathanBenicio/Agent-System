@@ -552,6 +552,27 @@ public class AgentVersionConfiguration : IEntityTypeConfiguration<AgentVersionEn
     }
 }
 
+public class SelfImprovementProposalConfiguration : IEntityTypeConfiguration<SelfImprovementProposalEntity>
+{
+    public void Configure(EntityTypeBuilder<SelfImprovementProposalEntity> builder)
+    {
+        builder.ToTable("self_improvement_proposals");
+        builder.HasKey(proposal => proposal.Id);
+        builder.Property(proposal => proposal.Id).HasMaxLength(64);
+        builder.Property(proposal => proposal.TenantId).HasMaxLength(100).IsRequired();
+        builder.Property(proposal => proposal.AgentName).HasMaxLength(150).IsRequired();
+        builder.Property(proposal => proposal.Type).HasMaxLength(50).IsRequired();
+        builder.Property(proposal => proposal.Status).HasMaxLength(32).IsRequired();
+        builder.Property(proposal => proposal.Rationale).IsRequired();
+        builder.Property(proposal => proposal.ProposedChangesJson).HasColumnType("jsonb").IsRequired();
+        builder.Property(proposal => proposal.CreatedBy).HasMaxLength(200);
+        builder.Property(proposal => proposal.ReviewedBy).HasMaxLength(200);
+        builder.Property(proposal => proposal.AppliedAgentVersionId).HasMaxLength(64);
+        builder.HasIndex(proposal => new { proposal.TenantId, proposal.Status, proposal.CreatedAt });
+        builder.HasIndex(proposal => new { proposal.TenantId, proposal.AgentName, proposal.CreatedAt });
+    }
+}
+
 public class PromptTemplateConfiguration : IEntityTypeConfiguration<PromptTemplateEntity>
 {
     public void Configure(EntityTypeBuilder<PromptTemplateEntity> builder)
