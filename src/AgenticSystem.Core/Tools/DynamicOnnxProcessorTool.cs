@@ -79,7 +79,10 @@ public class DynamicOnnxProcessorTool : ITool
 
             if (filesList.Count > 0)
             {
-                var tenantId = (string)(model.TenantId ?? "default");
+                if (string.IsNullOrWhiteSpace(model.TenantId))
+                    return ToolResult.Fail("Model has no tenant ownership; refusing to write tenant-scoped files.");
+
+                var tenantId = model.TenantId;
                 var tempDir = Path.Combine(Path.GetTempPath(), "agentic-onnx", tenantId, modelId);
                 Directory.CreateDirectory(tempDir);
 
