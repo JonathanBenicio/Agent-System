@@ -30,6 +30,7 @@ using Microsoft.Agents.AI.DurableTask.Workflows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Microsoft.DurableTask.Client;
 using Pgvector.EntityFrameworkCore;
@@ -72,6 +73,7 @@ public static class ServiceCollectionExtensions
         services.Configure<DynamicSkillsOptions>(configuration.GetSection("AgenticSystem:Skills"));
         services.Configure<SemanticCacheOptions>(configuration.GetSection("AgenticSystem:SemanticCache"));
         services.Configure<SelfImprovementSettings>(configuration.GetSection("AgenticSystem:SelfImprovement"));
+        services.Configure<HyperlightExecutionSettings>(configuration.GetSection("AgenticSystem:Hyperlight"));
 
         return services;
     }
@@ -219,6 +221,7 @@ public static class ServiceCollectionExtensions
 
             services.AddSingleton<DbAgentSkillsSource>();
             services.AddSingleton<AgentSkillsProvider>();
+            services.AddSingleton<Security.IHyperlightCodeActRunner, Security.HyperlightCodeActRunner>();
             services.AddSingleton<Security.HyperlightSandboxedExecutor>();
 
             services.AddScoped<RAGContextProvider>(sp =>
@@ -747,9 +750,20 @@ public static class ServiceCollectionExtensions
         var httpClient = httpClientFactory.CreateClient("AgenticTools");
         toolManager.RegisterTool(new HttpTool(httpClient, logger));
 
-        // Registrar Hyperlight WASM Sandbox Tool (Fase 5)
-        var executor = serviceProvider.GetRequiredService<Security.HyperlightSandboxedExecutor>();
-        toolManager.RegisterTool(new Security.HyperlightExecuteCodeTool(executor));
+        var hyperlightSettings = serviceProvider.GetRequiredService<IOptions<HyperlightExecutionSettings>>().Value;
+        var environment = serviceProvider.GetRequiredService<IHostEnvironment>();
+        if (hyperlightSettings.Enabled && environment.IsEnvironment("Lab"))
+        {
+            var executor = serviceProvider.GetRequiredService<Security.HyperlightSandboxedExecutor>();
+            var tool = new Security.HyperlightExecuteCodeTool(executor);
+            if (executor.IsAvailable)
+                toolManager.RegisterTool(tool);
+        }
+        else if (hyperlightSettings.Enabled)
+        {
+            serviceProvider.GetRequiredService<ILogger<Security.HyperlightSandboxedExecutor>>()
+                .LogWarning("Hyperlight was requested outside Lab; the execution tool remains unavailable.");
+        }
 
         return serviceProvider;
     }

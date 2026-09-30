@@ -43,6 +43,7 @@ Capacidades experimentais (como protocolos extras, plugins MCP, workflows colabo
 - fallback explícito para o comportamento atual
 
 Self-improvement (#16) permanece na trilha Lab: a flag `AgenticSystem:SelfImprovement:Enabled` fica desligada por padrão; quando habilitada em laboratório, mudanças de prompt viram propostas e exigem aprovação de Owner/Admin, com versão, auditoria e rollback. O contrato está em [API do backend](docs/backend/api-core.md).
+O executor Hyperlight CodeAct é uma capacidade Lab: a flag global começa desligada, e o tool só aparece com `AgenticSystem:Hyperlight:Enabled=true` no ambiente `Lab`.
 
 ### Critérios de incubação e descarte
 

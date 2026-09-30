@@ -16,6 +16,10 @@ StorageMode PostgreSQL e VectorStoreType PostgreSQL selecionam persistência; In
 
 `/api/admin/llm` é restrito a Platform Admin. Modelos, habilitação, prioridade, default e chaves globais ficam em `platform_configs`; segredos são cifrados, e `platform_config_audits` registra ator e hashes sem gravar segredo. Configure `AgenticSystem:Encryption:Key` fora de Development antes de habilitar armazenamento persistido. BYOK continua em credenciais/configuração tenant-scoped e mantém quota por tenant; esses valores não são promovidos ao store global. Chamadas com chave global passam pelo Gateway; chamadas BYOK preservam o isolamento do tenant.
 
+## Hyperlight CodeAct (Lab)
+
+Hyperlight usa o pacote preview `Microsoft.Agents.AI.Hyperlight` e permanece desligado por padrão. O tool só é registrado quando `AgenticSystem:Hyperlight:Enabled=true` e `ASPNETCORE_ENVIRONMENT=Lab`. A integração atual executa JavaScript; Python/C# não são anunciados como suportados. Não configura montagens de filesystem nem allowlist de rede. Com a flag desligada ou fora de Lab, o tool não é registrado; falhas reais da sandbox retornam erro, sem saída simulada.
+
 ## Compose existente
 API 8080, PostgreSQL host 5433, Ollama 11434. Compose ativa alguns providers externos e pede GPU NVIDIA; revisar ambiente antes de usar. Para diagnóstico deste plano, usar [compose isolado](../../tests/backend-validation/compose.yml), sem providers externos, sem GPU obrigatória.
 
