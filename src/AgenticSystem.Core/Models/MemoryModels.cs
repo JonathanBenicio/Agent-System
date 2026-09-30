@@ -84,3 +84,27 @@ public class SearchMatch
     public string? ContextualSummary { get; set; }
     public DateTime IndexedAt { get; set; }
 }
+
+public sealed record VectorDocumentUsage(string Id, string? DocumentId, long? SourceBytes, long ContentBytes, long EmbeddingBytes);
+
+public static class VectorUsageCalculator
+{
+    public static VectorStoreStats Calculate(string tenantId, IEnumerable<VectorDocumentUsage> documents)
+    {
+        var groups = documents.GroupBy(document => string.IsNullOrWhiteSpace(document.DocumentId) ? document.Id : document.DocumentId,
+            StringComparer.Ordinal);
+        long documentCount = 0;
+        long totalBytes = 0;
+
+        foreach (var group in groups)
+        {
+            documentCount++;
+            var sourceBytes = group.Max(document => document.SourceBytes ?? 0);
+            totalBytes += sourceBytes > 0
+                ? sourceBytes
+                : group.Sum(document => document.ContentBytes + document.EmbeddingBytes);
+        }
+
+        return new VectorStoreStats { TenantId = tenantId, DocumentCount = documentCount, TotalBytes = totalBytes };
+    }
+}

@@ -18,7 +18,9 @@ public class ApiKeyAuthenticationTests
 {
     private static ApiKeyAuthenticationHandler CreateHandler(
         string? configuredKey,
-        string? providedKey)
+        string? providedKey,
+        string role = "Admin",
+        bool useBearerToken = false)
     {
         var dbName = $"apikey-auth-tests-{Guid.NewGuid():N}";
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
@@ -43,6 +45,7 @@ public class ApiKeyAuthenticationTests
                 Name = "Admin Key",
                 TenantId = "admin",
                 KeyHash = keyHash,
+                Role = role,
                 IsEnabled = true,
                 CreatedAt = DateTime.UtcNow
             });
@@ -67,7 +70,12 @@ public class ApiKeyAuthenticationTests
         var context = new DefaultHttpContext();
 
         if (providedKey is not null)
-            context.Request.Headers["X-Api-Key"] = providedKey;
+        {
+            if (useBearerToken)
+                context.Request.Headers.Authorization = "Bearer " + providedKey;
+            else
+                context.Request.Headers["X-Api-Key"] = providedKey;
+        }
 
         handler.InitializeAsync(scheme, context).GetAwaiter().GetResult();
 
@@ -83,6 +91,29 @@ public class ApiKeyAuthenticationTests
 
         result.Succeeded.Should().BeTrue();
         result.Principal!.Identity!.Name.Should().Be("Admin Key");
+    }
+
+    [Fact]
+    public async Task Authenticate_WithBearerApiKey_ReturnsSuccess()
+    {
+        var handler = CreateHandler("openai-compatible-key", "openai-compatible-key", useBearerToken: true);
+
+        var result = await handler.AuthenticateAsync();
+
+        result.Succeeded.Should().BeTrue();
+        result.Principal!.FindFirst(System.Security.Claims.ClaimTypes.Role)!.Value.Should().Be("Admin");
+    }
+
+    [Fact]
+    public async Task Authenticate_UsesStoredRoleInsteadOfPromotingEveryKeyToAdmin()
+    {
+        var handler = CreateHandler("viewer-key", "viewer-key", "Viewer");
+
+        var result = await handler.AuthenticateAsync();
+
+        result.Succeeded.Should().BeTrue();
+        result.Principal!.IsInRole("Viewer").Should().BeTrue();
+        result.Principal.IsInRole("Admin").Should().BeFalse();
     }
 
     [Fact]

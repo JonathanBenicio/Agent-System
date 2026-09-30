@@ -4,7 +4,7 @@
 
 > **Documento canônico de arquitetura de software (SST - Single Source of Truth)**. Este arquivo consolida todas as decisões arquiteturais, topologias, fluxos de execução do backend e frontend, substituindo e unificando o antigo `TECHNICAL_ARCHITECTURE_GUIDE.md`.
 >
-> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.9.0** como runtime do fluxo principal (isso não comprova estabilidade integrada), com suporte a fluxos colaborativos e múltiplos canais de interface.
+> O checkout está migrando o runtime para **Microsoft Agent Framework 1.22.0**. Restore/build Release passaram após adaptar `AgentSessionStore`, chave de sessão particionada e nomes AG-UI; testes de protocolo e workflows DurableTask PostgreSQL ainda não provaram operação integrada. A2A/AG-UI continuam preview. A rastreabilidade e limites atuais ficam no [plano #120](../plan/maf-122-protocols-gateway.md), na [análise de compatibilidade](../plan/maf-122-compatibility-review.md) e no [follow-up de protocolos #121](../plan/a2a-agui-preview-validation.md).
 
 ---
 
@@ -42,7 +42,7 @@
 
 ## 1. Visão Geral da Arquitetura
 
-O AgenticSystem é uma plataforma corporativa multi-agent construída sobre o **.NET 10** e o **Microsoft Agent Framework (MAF) 1.9.0**. O sistema expõe agentes de inteligência artificial especializados por domínio (Personal, Work, Learning, Creative, Finance, Health, etc.) que são coordenados por um orquestrador central usando o padrão **Supervisor-with-Tools**.
+O AgenticSystem é uma plataforma multi-agent .NET 10 que usa o **Microsoft Agent Framework (MAF) 1.22.0** como runtime e mantém catálogo, configuração e acesso de agentes/workflows no domínio da aplicação. O sistema expõe especialistas por domínio coordenados pelo orquestrador. Os metadados dinâmicos e a autorização são do produto; `ChatClientAgent`, `AIFunction` e `WorkflowBuilder` do MAF executam a definição materializada.
 
 O LLM do orquestrador decide dinamicamente para qual especialista delegar a tarefa com base no input do usuário, eliminando as antigas regras imperativas de roteamento do fluxo principal. Cada especialista é encapsulado e exposto como uma `AIFunction` do orquestrador por meio do método nativo `.AsAIFunction()`.
 
@@ -84,7 +84,7 @@ O LLM do orquestrador decide dinamicamente para qual especialista delegar a tare
 │                                                                  │
 │  Protocol Hosting:                                               │
 │       ├─ AddA2AServer() / MapA2AHttpJson()                       │
-│       ├─ AddAGUI() / MapAGUI()                                   │
+│       ├─ AddAGUIServer() / MapAGUIServer()                       │
 │       └─ OpenAI-compatible via controller custom                 │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -117,7 +117,8 @@ Capacidades em fase experimental ou protótipos de pesquisa não devem alterar o
 | **Camada** | **Tecnologia** | **Escopo / Papel** |
 |---|---|---|
 | **Runtime** | .NET 10 | ASP.NET Core Runtime para o Backend |
-| **Framework de Agentes** | Microsoft Agent Framework 1.9.0 | `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Hosting`, `Microsoft.Agents.AI.Workflows` |
+| **Framework de Agentes** | Microsoft Agent Framework 1.22.0 | Core/Workflows 1.22.0; hosting A2A/AG-UI/DevUI preview 1.22.0 |
+| **DurableTask MAF** | 1.16.0-preview.260922.1 | Não há pacote DurableTask 1.22 publicado; workflow PostgreSQL ainda requer validação integrada |
 | **Abstração LLM** | `IChatClient` (M.E.AI) | Abstração comum de chat (Microsoft.Extensions.AI) |
 | **Geração de Embeddings**| `IEmbeddingGenerator<string, Embedding<float>>` | Abstração comum de vetores (Microsoft.Extensions.AI) |
 | **Vector Store** | In-Memory / PostgreSQL (pgvector) | Armazenamento de embeddings semânticos |
@@ -196,7 +197,7 @@ if (a2aEnabled || agUiEnabled)
 {
     builder.Services.AddKeyedSingleton<AIAgent>("AgenticSystem", /* ScopedAgentProxy */);
     if (a2aEnabled) builder.Services.AddA2AServer("AgenticSystem");
-    if (agUiEnabled) builder.Services.AddAGUI();
+    if (agUiEnabled) builder.Services.AddAGUIServer();
 }
 
 // 3. Autenticação, SignalR, Rate Limiting, CORS
@@ -208,10 +209,12 @@ No pipeline de execução (`app`):
 ```csharp
 // Protocol endpoints — mapeados condicionalmente
 if (a2aEnabled) app.MapA2AHttpJson("AgenticSystem", "/a2a").RequireAuthorization();
-if (agUiEnabled) app.MapAGUI("AgenticSystem", "/agui").RequireAuthorization();
+if (agUiEnabled) app.MapAGUIServer("AgenticSystem", "/agui").RequireAuthorization();
 ```
 
 ### 5.3 IChatClient Pipeline (Microsoft.Extensions.AI)
+**Pipeline revalidado na migração MAF 1.22.0:** após `ContextAwareChatClient`, cada chamada é envolvida por `TenantQuotaChatClient`; somente clients com credencial de provider global também passam por `GatewayChatClient`. A configuração e métricas de circuit/rate do Gateway são globais por provider; BYOK mantém controle isolado por tenant. O custo mostrado no Gateway é estimativa fixa por request. O `RoutePersistingRoutingChatClient` do MAF pode persistir troca de client por `AgentSession`, mas não substitui a seleção de credencial, fallback, quota e auditoria tenant-scoped do `LLMManager`. Análise: [compatibilidade MAF 1.22](../plan/maf-122-compatibility-review.md).
+
 Para garantir governança, custos previsíveis e flexibilidade de provedores, o `IChatClient` é registrado como um pipeline decorator de múltiplas camadas:
 
 ```

@@ -17,6 +17,7 @@ public class DocumentController : ControllerBase
     private readonly AgenticSystem.Infrastructure.RAG.IRerankingSettingsAccessor _rerankingSettingsAccessor;
     private readonly ITenantContextAccessor _tenantContextAccessor;
     private readonly Microsoft.AspNetCore.Hosting.IWebHostEnvironment _env;
+    private readonly IKnowledgeRoomService _roomService;
 
     public DocumentController(
         IDocumentIngestionPipeline ingestionPipeline,
@@ -24,6 +25,7 @@ public class DocumentController : ControllerBase
         AgenticSystem.Infrastructure.Persistence.AgenticDbContext dbContext,
         AgenticSystem.Infrastructure.RAG.IRerankingSettingsAccessor rerankingSettingsAccessor,
         ITenantContextAccessor tenantContextAccessor,
+        IKnowledgeRoomService roomService,
         Microsoft.AspNetCore.Hosting.IWebHostEnvironment env)
     {
         _ingestionPipeline = ingestionPipeline;
@@ -31,6 +33,7 @@ public class DocumentController : ControllerBase
         _dbContext = dbContext;
         _rerankingSettingsAccessor = rerankingSettingsAccessor;
         _tenantContextAccessor = tenantContextAccessor;
+        _roomService = roomService;
         _env = env;
     }
 
@@ -73,6 +76,7 @@ public class DocumentController : ControllerBase
     public async Task<IActionResult> IngestDocument(
         IFormFile file,
         [FromQuery] string? source = null,
+        [FromQuery] string? roomId = null,
         CancellationToken ct = default)
     {
         if (file == null || file.Length == 0)
@@ -104,10 +108,13 @@ public class DocumentController : ControllerBase
         var tenantId = _tenantContextAccessor.CurrentTenantId 
             ?? throw new UnauthorizedAccessException("Tenant não identificado no contexto.");
 
+        if (!await CanWriteRoomAsync(roomId, tenantId, ct)) return NotFound(new { error = "Knowledge room not found." });
+
         var config = new ChunkingConfig 
         { 
             TenantId = tenantId,
-            Collection = source ?? string.Empty 
+            Collection = source ?? string.Empty,
+            RoomId = roomId
         };
 
         var result = await _ingestionPipeline.IngestAsync(rawDocument, config: config, ct);
@@ -161,6 +168,7 @@ public class DocumentController : ControllerBase
     public async Task<IActionResult> IngestBatch(
         [FromForm] IFormFileCollection files,
         [FromQuery] string? source = null,
+        [FromQuery] string? roomId = null,
         CancellationToken ct = default)
     {
         if (files == null || files.Count == 0)
@@ -202,10 +210,13 @@ public class DocumentController : ControllerBase
         var tenantId = _tenantContextAccessor.CurrentTenantId 
             ?? throw new UnauthorizedAccessException("Tenant não identificado no contexto.");
 
+        if (!await CanWriteRoomAsync(roomId, tenantId, ct)) return NotFound(new { error = "Knowledge room not found." });
+
         var config = new ChunkingConfig 
         { 
             TenantId = tenantId,
-            Collection = source ?? string.Empty 
+            Collection = source ?? string.Empty,
+            RoomId = roomId
         };
 
         var results = await _ingestionPipeline.IngestBatchAsync(rawDocuments, config: config, ct);
@@ -275,5 +286,13 @@ public class DocumentController : ControllerBase
             ".mp3" or ".wav" or ".ogg" or ".webm" or ".mpeg" => DocumentType.Audio,
             _ => null
         };
+    }
+
+    private async Task<bool> CanWriteRoomAsync(string? roomId, string tenantId, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(roomId)) return true;
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? User.FindFirst("sub")?.Value;
+        return userId is not null && await _roomService.GetRoomAsync(roomId, tenantId, userId, ct) is not null;
     }
 }

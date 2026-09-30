@@ -1,4 +1,8 @@
+#pragma warning disable MAAI001 // Required experimental MAF session-store integration; reviewed under issue #120.
+
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using System.Text;
@@ -25,7 +29,7 @@ public class AgentFrameworkFactory
     private readonly ISkillManager? _skillManager;
     private readonly UnifiedAIToolProvider? _toolProvider;
     private readonly McpToolsAIFunctionAdapter? _mcpToolsAdapter;
-    private readonly Microsoft.Agents.AI.Hosting.AgentSessionStore? _sessionStore;
+    private readonly AgentSessionStore? _sessionStore;
     private readonly RAGContextProvider? _ragContextProvider;
     private readonly AgentSkillsProvider? _skillsProvider;
 
@@ -41,7 +45,7 @@ public class AgentFrameworkFactory
         ISkillManager? skillManager = null,
         UnifiedAIToolProvider? toolProvider = null,
         McpToolsAIFunctionAdapter? mcpToolsAdapter = null,
-        Microsoft.Agents.AI.Hosting.AgentSessionStore? sessionStore = null,
+        AgentSessionStore? sessionStore = null,
         RAGContextProvider? ragContextProvider = null,
         AgentSkillsProvider? skillsProvider = null)
     {
@@ -75,12 +79,15 @@ public class AgentFrameworkFactory
         IAgent agent,
         IEnumerable<AITool>? additionalTools,
         string? modelOverride,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IReadOnlyCollection<string>? allowedToolNames = null)
     {
         ArgumentNullException.ThrowIfNull(agent);
 
         var tools = await GetUnifiedToolsAsync(ct);
         tools = MergeTools(tools, additionalTools);
+        if (allowedToolNames is not null)
+            tools = tools?.Where(tool => allowedToolNames.Contains(tool.Name, StringComparer.OrdinalIgnoreCase)).ToList();
 
         // Enriquecer as instruções do especialista usando as C# Skills!
         var enrichedInstructions = _skillManager != null
@@ -188,7 +195,8 @@ public class AgentFrameworkFactory
         }
 
         var frameworkAgent = await CreateFromAgentAsync(agent, ct);
-        var session = await _sessionStore.GetSessionAsync(frameworkAgent, sessionId, ct);
+        var sessionKey = await CreateSessionStoreKeyAsync(sessionId, ct);
+        var session = await _sessionStore.GetOrCreateSessionAsync(frameworkAgent, sessionKey, ct);
         var tool = frameworkAgent.AsAIFunction(
             new AIFunctionFactoryOptions
             {
@@ -207,7 +215,8 @@ public class AgentFrameworkFactory
             throw new InvalidOperationException("AgentSessionStore is not available.");
         }
 
-        return await _sessionStore.GetSessionAsync(agent, sessionId, ct);
+        var sessionKey = await CreateSessionStoreKeyAsync(sessionId, ct);
+        return await _sessionStore.GetOrCreateSessionAsync(agent, sessionKey, ct);
     }
 
     public async Task PersistSessionAsync(string sessionId, FrameworkAgent agent, FrameworkAgentSession session, CancellationToken ct = default)
@@ -217,7 +226,22 @@ public class AgentFrameworkFactory
             return;
         }
 
-        await _sessionStore.SaveSessionAsync(agent, sessionId, session, ct);
+        var sessionKey = await CreateSessionStoreKeyAsync(sessionId, ct);
+        await _sessionStore.SaveSessionAsync(agent, sessionKey, session, ct);
+    }
+
+    internal async ValueTask<AgentSessionStoreKey> CreateSessionStoreKeyAsync(string sessionId, CancellationToken ct)
+    {
+        var key = new AgentSessionStoreKey(sessionId);
+        var isolationProvider = _serviceProvider.GetService<AgentIsolationKeyProvider>();
+        if (isolationProvider is null)
+            return key;
+
+        var isolationKey = await isolationProvider.GetIsolationKeyAsync(ct);
+        if (string.IsNullOrWhiteSpace(isolationKey))
+            throw new InvalidOperationException("Authenticated tenant/user isolation is required for MAF session access.");
+
+        return key.WithPartition("isolation", isolationKey);
     }
 
     private async Task<IList<AITool>?> GetUnifiedToolsAsync(CancellationToken ct)

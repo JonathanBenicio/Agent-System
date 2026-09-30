@@ -1,40 +1,56 @@
 # Recursos, regras e limites
-Estado por leitura da baseline; aplicação integrada não presumida.
 
-## Recursos
-| Recurso | Escopo/identidade | Persistência/configuração | Regra relevante |
-|---|---|---|---|
-| Tenant | organização | PostgreSQL tenants | ativo, plano e limits JSON |
-| Sessão | tenant e usuário | ISessionStore; StorageMode | GET/PUT/DELETE exigem dono; retomada no chat precisa teste negativo |
-| Sala | tenant e ACL de usuário | knowledge rooms/permissions | criador recebe Admin da sala; leitura só salas permitidas |
-| Documento/chunk | tenant, collection e metadata de sala | vector_documents, pgvector | room_id/roomId em filtros de segurança; uploads físicos separados |
-| Agente/tool/skill | configuração e runtime | registros/arquivos/DB conforme recurso | catálogo não equivale a autorização de execução |
-| Workflow | tenant e definição/execução | engine nativo + compiler Durable coexistem | não declarar retomada automática/multiinstância comprovada |
-| Golden set/run | tenant, agente e casos | sets PostgreSQL; run cache local | <=20 casos síncrono; >20 async; cache 30min sem durabilidade |
+Este documento descreve os limites aplicados pelo backend. A fonte dos limites por tenant é `Tenant.Limits`; `TenantResourceLimits` é apenas uma projeção compatível desses mesmos valores. Evidências da branch de correção estão em [validação #111–#117](validation/backend-core-remediation.md).
 
-## Planos declarados
-Fonte: [TenantLimits](../../src/AgenticSystem.Core/Models/Tenant.cs). Estes valores não são promessa de enforcement uniforme.
-| Plano | req/min | tokens/dia | USD/dia | sessões simultâneas | agentes | documentos MB |
-|---|---:|---:|---:|---:|---:|---:|
-| Free | 10 | 50.000 | 1 | 3 | 5 | 100 |
-| Pro | 60 | 500.000 | 25 | 20 | 50 | 5.000 |
-| Enterprise | 300 | 5.000.000 | 500 | 100 | 500 | 50.000 |
+## Recursos e escopo
 
-## Limites efetivos e conflitos
-| Regra | Fonte/enforcement | Persistência | Evidência/limitação |
-|---|---|---|---|
-| Chat 30 req/60s, quatro segmentos, fila zero | [rate limiter](../../src/AgenticSystem.Api/Extensions/RateLimitingServiceCollectionExtensions.cs), ChatController | memória por processo | claim tenant_id antes do header, diferente de TenantMiddleware; não usa plano |
-| Protocolos 60/60s default | mesmo registro; ProtocolHosting:RateLimiting | memória | configurável; A2A/AGUI aplicam policy |
-| Quota de LLM | [QuotaEnforcer](../../src/AgenticSystem.Core/Services/QuotaEnforcer.cs), gateway/interceptor | minuto em memória; diário em repository | Gateway budget default 50 USD é outro modelo |
-| Persistência diária | [TenantQuotaRepository](../../src/AgenticSystem.Infrastructure/Persistence/TenantQuotaRepository.cs) | PostgreSQL | EF SaveChanges com concorrência otimista; não UPDATE RETURNING direto |
-| Reset diário | [background service](../../src/AgenticSystem.Infrastructure/BackgroundServices/DailyQuotaResetBackgroundService.cs) | repository | não atribuir ao Quartz sem evidência |
-| Sessões/documentos | [TenantIsolationService](../../src/AgenticSystem.Core/Services/TenantIsolationService.cs) | estatísticas dos stores | usa novo TenantResourceLimits, não tenant.Limits; tenant ausente permite operação |
-| Upload/storage | pipeline + controller | vetores e arquivo físico | checagem não recebe tamanho real; arquivo de mesmo nome sobrescreve cópia física |
-| Estatística ONNX | DocumentController.GetStats | configuração/artifacts | loaded inferido de config/paths; avgLatencyMs literal 12.4, não medida real |
+| Recurso | Escopo e persistência | Regra de autorização/uso |
+|---|---|---|
+| Tenant | `tenants` | Precisa existir e estar ativo. `X-Tenant-Id` precisa corresponder ao tenant associado à identidade; membership ativa no tenant é exigida. |
+| Membership | `tenant_memberships` (com compatibilidade para `role_assignments`) | Cada usuário/API key tem um papel no tenant. Papéis administrativos de tenant não promovem a administrador da plataforma. |
+| Papel de plataforma | `platform_administrators` | Registro explícito independente. Administração de tenants e grants não concede acesso aos dados do tenant. |
+| Sessão/chat | `session_records` e estado serializado do MAF | A chave MAF é isolada por tenant + usuário. REST exige proprietário e tenant; eventos de usuário são enviados a grupo SignalR que também inclui tenant. |
+| Knowledge room | `knowledge_rooms`, `knowledge_room_permissions` | Tenant e ACL de sala são necessários. Reader pode ler, mas não editar. |
+| Concessão de suporte | `tenant_support_grants` e ACL ligada ao ID do grant | Somente para usuário já membro, escopo de uma sala, papel Reader, motivo obrigatório, duração máxima de 7 dias, revogável e auditada. A ACL normal continua sendo verificada. |
+| Documento/vetor | `vector_documents` + pgvector | `tenant_id` e `room_id` são persistidos. Busca PostgreSQL pré-filtra tenant/salas permitidas antes do ranking. Sem salas permitidas, retorna zero resultados. |
+| Agente dinâmico | Repositório de agentes e configuração YAML | Criação respeita `MaxAgents`; atualizar um agente existente continua permitido quando o tenant atingiu o teto. |
+| Quota diária | `tenant_quotas` | Contadores por tenant/data UTC são atualizados atomicamente no PostgreSQL e compartilhados por conexões/repositórios independentes. |
+| Skill | `agent_skills` | Defaults são preparados por tenant; seed preenche ausentes e conserva customizações/IDs existentes. |
+| Workflow | Definições e execuções PostgreSQL | Tenant vem do contexto validado, é persistido e acompanha os eventos; ID de execução sozinho não autoriza acesso. |
 
-TenantResourceLimits é um terceiro conjunto: defaults sessões 10, storage 1000MB, documentos 10000, agentes 20, budget mensal 100USD. Unificação é trabalho futuro; não somar limites como se formassem uma política única.
+## Limites por plano
 
-## Isolamento e RAG
-[PostgresVectorStore](../../src/AgenticSystem.Infrastructure/Persistence/PostgresVectorStore.cs) tenta pré-filtrar IDs por sala antes do scoring. Na validação real, o SQL falhou: usa metadata_json, mas a coluna é metadata; room_ids vazio retornou documentos. O filtro EF de tenant passou no cenário vetorial executado. Outros filtros de metadata podem ocorrer em memória. Ver [#113](https://github.com/JonathanBenicio/Agent-System/issues/113). DocumentController.ingest define Collection por source, sem parâmetro de sala específico; ingestão por outros fluxos pode anexar metadata. Não assumir que todo upload pertence a uma sala.
+O plano fornece o teto nominal. Limites configurados em `Tenant.Limits` podem ser menores; alterar o plano não apaga essa configuração. Valores `0` são interpretados conforme a regra do enforcer e não devem ser usados para representar um teto positivo.
 
-[Backlog](backlog.md) registra lacunas e prioridade.
+| Plano | Requisições/min | Tokens/dia | Custo/dia (USD) | Sessões simultâneas | Agentes | Documentos | Origem por tenant (MB) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Free | 10 | 50.000 | 1 | 3 | 5 | 10.000 | 100 |
+| Pro | 60 | 500.000 | 25 | 20 | 50 | 100.000 | 5.000 |
+| Enterprise | 300 | 5.000.000 | 500 | 100 | 500 | 1.000.000 | 50.000 |
+
+Os valores são definidos por `TenantLimits.FreeTier/ProTier/EnterpriseTier` em [`Tenant.cs`](../../src/AgenticSystem.Core/Models/Tenant.cs). A coluna de custo é limite diário da quota de tokens/LLM. O campo legado `TenantResourceLimits.MaxMonthlyBudgetUsd` é uma projeção aritmética `MaxDailyCostUsd × 30`; não é um orçamento mensal independente nem um acumulador de gasto mensal.
+
+## Enforcement e métricas
+
+| Controle | Comportamento efetivo | Limite da métrica |
+|---|---|---|
+| RPM do chat | Rate limiter por tenant usa o menor limite positivo entre plano/configuração aplicáveis. | Estado do limiter é local ao processo; sincronização de RPM entre réplicas não foi provada nesta entrega. |
+| Tokens e custo diário | Plano atua como teto e a quota configurada pode restringir. Cada chamada ao provider recebe preflight estimado; respostas persistem tokens/custo retornados pelo provider, com estimativa conservadora quando ele omite uso. PostgreSQL grava os totais por tenant e reset UTC atomicamente. | Quota excedida retorna 429 no chat REST e OpenAI-compatível; SSE termina com evento de erro. O ledger detalhado de auditoria é best-effort; o contador `tenant_quotas` é a fonte de enforcement. |
+| Sessões simultâneas | Usa `Tenant.Limits.MaxConcurrentSessions`; sessão nova é recusada quando o total ativo alcança o limite. | Conta sessões ativas persistidas. |
+| Agentes | `Tenant.Limits.MaxAgents` limita novas configurações dinâmicas e YAML. | Atualizações de agentes existentes não consomem novo slot. |
+| Documentos | `Tenant.Limits.MaxDocuments` limita documentos lógicos no vetor; várias partes/chunks do mesmo documento contam uma vez. | Documentos legados sem ID lógico usam fallback por registro. |
+| Armazenamento de origem | `Tenant.Limits.MaxDocumentsMb` é comparado com bytes de origem do upload, contabilizados uma vez por documento lógico. | É uma métrica de tamanho da origem associada aos vetores, não o espaço físico total em disco; não inclui overhead do banco, índice vetorial ou cópias/arquivos físicos. |
+| Limite de entrada | Ingestão confere bytes brutos recebidos e total de documentos lógicos antes de persistir. | O número de bytes representa conteúdo de origem recebido; não mede a expansão gerada pelo chunking. |
+| Budget do gateway | `Gateway:DefaultDailyBudget` e configuração do gateway continuam sendo um controle separado. | Não é somado nem tratado como a quota diária de tokens do tenant. |
+| Estatísticas ONNX | `GET /api/document/stats` expõe contagens e status do runtime. | Latência exibida não é uma medição de inferência real. |
+| A2A/AG-UI | `ProtocolHosting:RateLimiting` | Política separada da partição de RPM do chat. |
+
+## Upload e RAG por sala
+
+`POST /api/document/ingest` e `POST /api/document/batch` aceitam `roomId` opcional. Quando informado, o controller exige uma sala existente e permissão de escrita; os chunks recebem `room_id`, `document_id` e `source_bytes` nos metadados. A busca só inclui salas autorizadas pelo chamador. Sem `roomId`, o documento permanece no escopo do tenant/collection de origem e não é implicitamente concedido a uma sala.
+
+Uma chamada de chat pode selecionar uma sala pelo contexto `rag.knowledgeRoomId`. A resposta de recuperação precisa continuar sujeita ao tenant e à ACL; a integração de validação confirma que a resposta usa um chunk da sala autorizada e contém a frase sintética indexada.
+
+## Validação associada
+
+Na branch `fix/backend-core-tenancy`, os testes PostgreSQL/Ollama cobriram teto de agentes, ingestão/bytes lógicos, RAG de ponta a ponta, serviço Gateway habilitado/desabilitado com broadcast tenant-scoped e quotas reais após restart. 32 atualizações concorrentes por dois repositórios/factories persistiram exatamente uma vez. Skills A/B e estado MAF permaneceram estáveis após restart. O limiter de RPM é local ao processo; armazenamento físico total e consumo de hosts múltiplos não foram medidos. Veja [evidências e limites](validation/backend-core-remediation.md).

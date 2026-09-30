@@ -1042,7 +1042,7 @@ public class AgentCollaborationWorkflow : IAgentCollaborationWorkflow
             {
                 if (ev.GetType().Name == "AgentResponseUpdateEvent")
                 {
-                    string text = ev.Update?.Text;
+                    string? text = ev.Update?.Text;
                     if (!string.IsNullOrWhiteSpace(text))
                     {
                         contentParts.Add(text.Trim());

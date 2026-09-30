@@ -8,14 +8,12 @@ namespace AgenticSystem.Infrastructure.Persistence;
 
 /// <summary>
 /// EF Core implementation of <see cref="ITenantQuotaRepository"/>.
-/// Uses optimistic concurrency via <c>RowVersion</c> and retries on conflict
-/// to safely handle concurrent usage increments without serializing all requests.
+/// Uses single-statement PostgreSQL upserts so concurrent instances cannot lose usage updates.
 /// </summary>
 public sealed class TenantQuotaRepository : ITenantQuotaRepository
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<TenantQuotaRepository> _logger;
-    private const int MaxRetries = 3;
 
     public TenantQuotaRepository(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
@@ -37,23 +35,17 @@ public sealed class TenantQuotaRepository : ITenantQuotaRepository
 
         if (entity is null)
         {
-            entity = new TenantQuotaEntity { TenantId = tenantId };
-            db.TenantQuotas.Add(entity);
-            try
-            {
-                await db.SaveChangesAsync(ct);
-                _logger.LogInformation("Created default quota record for tenant {TenantId}", tenantId);
-            }
-            catch (DbUpdateException)
-            {
-                // Race: another instance already created it — reload.
-                db.ChangeTracker.Clear();
-                entity = await db.TenantQuotas
-                    .IgnoreQueryFilters()
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(q => q.TenantId == tenantId, ct)
-                    ?? new TenantQuotaEntity { TenantId = tenantId };
-            }
+            var today = DateTime.UtcNow.Date;
+            await db.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO tenant_quotas ("TenantId", "RequestsPerMinute", "MaxTokensPerDay", "MaxDailyBudgetUsd",
+                    "CurrentDailyTokens", "CurrentDailyCostUsd", "CurrentDailyRequests", "LastResetAt", "UpdatedAt")
+                VALUES ({tenantId}, 30, 1000000, 50.0, 0, 0, 0, {today}, {DateTime.UtcNow})
+                ON CONFLICT ("TenantId") DO NOTHING
+                """, ct);
+            entity = await db.TenantQuotas.IgnoreQueryFilters().AsNoTracking()
+                .FirstOrDefaultAsync(q => q.TenantId == tenantId, ct)
+                ?? throw new InvalidOperationException($"Quota row for tenant '{tenantId}' could not be created or loaded.");
+            _logger.LogInformation("Created default quota record for tenant {TenantId}", tenantId);
         }
 
         // Reset stale daily counters in-memory before returning snapshot.
@@ -70,46 +62,20 @@ public sealed class TenantQuotaRepository : ITenantQuotaRepository
     /// <inheritdoc/>
     public async Task IncrementUsageAsync(string tenantId, int tokens, double costUsd, CancellationToken ct = default)
     {
-        for (var attempt = 0; attempt < MaxRetries; attempt++)
-        {
-            try
-            {
-                await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-
-                var entity = await db.TenantQuotas
-                    .IgnoreQueryFilters()
-                    .FirstOrDefaultAsync(q => q.TenantId == tenantId, ct);
-
-                if (entity is null)
-                {
-                    entity = new TenantQuotaEntity { TenantId = tenantId };
-                    db.TenantQuotas.Add(entity);
-                }
-
-                // Reset counters if the day has rolled over.
-                if (entity.LastResetAt.Date < DateTime.UtcNow.Date)
-                {
-                    entity.CurrentDailyTokens = 0;
-                    entity.CurrentDailyCostUsd = 0;
-                    entity.CurrentDailyRequests = 0;
-                    entity.LastResetAt = DateTime.UtcNow.Date;
-                }
-
-                entity.CurrentDailyTokens += tokens;
-                entity.CurrentDailyCostUsd += costUsd;
-                entity.CurrentDailyRequests++;
-                entity.UpdatedAt = DateTime.UtcNow;
-
-                await db.SaveChangesAsync(ct);
-                return;
-            }
-            catch (DbUpdateConcurrencyException ex)
-            {
-                _logger.LogDebug(ex, "Optimistic concurrency conflict incrementing quota for {TenantId} (attempt {Attempt})", tenantId, attempt + 1);
-                if (attempt == MaxRetries - 1) throw;
-                await Task.Delay(TimeSpan.FromMilliseconds(50 * (attempt + 1)), ct);
-            }
-        }
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var today = DateTime.UtcNow.Date;
+        var now = DateTime.UtcNow;
+        await db.Database.ExecuteSqlInterpolatedAsync($"""
+            INSERT INTO tenant_quotas ("TenantId", "RequestsPerMinute", "MaxTokensPerDay", "MaxDailyBudgetUsd",
+                "CurrentDailyTokens", "CurrentDailyCostUsd", "CurrentDailyRequests", "LastResetAt", "UpdatedAt")
+            VALUES ({tenantId}, 30, 1000000, 50.0, {tokens}, {costUsd}, 1, {today}, {now})
+            ON CONFLICT ("TenantId") DO UPDATE SET
+                "CurrentDailyTokens" = CASE WHEN tenant_quotas."LastResetAt" < {today} THEN {tokens} ELSE tenant_quotas."CurrentDailyTokens" + {tokens} END,
+                "CurrentDailyCostUsd" = CASE WHEN tenant_quotas."LastResetAt" < {today} THEN {costUsd} ELSE tenant_quotas."CurrentDailyCostUsd" + {costUsd} END,
+                "CurrentDailyRequests" = CASE WHEN tenant_quotas."LastResetAt" < {today} THEN 1 ELSE tenant_quotas."CurrentDailyRequests" + 1 END,
+                "LastResetAt" = CASE WHEN tenant_quotas."LastResetAt" < {today} THEN {today} ELSE tenant_quotas."LastResetAt" END,
+                "UpdatedAt" = {now}
+            """, ct);
     }
 
     /// <inheritdoc/>
@@ -143,24 +109,13 @@ public sealed class TenantQuotaRepository : ITenantQuotaRepository
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var today = DateTime.UtcNow.Date;
 
-        var stale = await db.TenantQuotas
-            .IgnoreQueryFilters()
-            .Where(q => q.LastResetAt < today)
-            .ToListAsync(ct);
-
-        if (stale.Count == 0) return;
-
-        foreach (var entity in stale)
-        {
-            entity.CurrentDailyTokens = 0;
-            entity.CurrentDailyCostUsd = 0;
-            entity.CurrentDailyRequests = 0;
-            entity.LastResetAt = today;
-            entity.UpdatedAt = DateTime.UtcNow;
-        }
-
-        await db.SaveChangesAsync(ct);
-        _logger.LogInformation("Daily quota counters reset for {Count} tenant(s)", stale.Count);
+        var updated = await db.Database.ExecuteSqlInterpolatedAsync($"""
+            UPDATE tenant_quotas
+            SET "CurrentDailyTokens" = 0, "CurrentDailyCostUsd" = 0, "CurrentDailyRequests" = 0,
+                "LastResetAt" = {today}, "UpdatedAt" = {DateTime.UtcNow}
+            WHERE "LastResetAt" < {today}
+            """, ct);
+        _logger.LogInformation("Daily quota counters reset for {Count} tenant(s)", updated);
     }
 
     private static TenantQuotaSnapshot ToSnapshot(TenantQuotaEntity e) => new(

@@ -21,17 +21,20 @@ public class ChatController : ControllerBase
 {
     private readonly IMetaAgent _metaAgent;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ISessionStore _sessionStore;
 
-    public ChatController(IMetaAgent metaAgent, ITenantContextAccessor tenantContextAccessor)
+    public ChatController(IMetaAgent metaAgent, ITenantContextAccessor tenantContextAccessor, ISessionStore sessionStore)
     {
         _metaAgent = metaAgent;
         _tenantContextAccessor = tenantContextAccessor;
+        _sessionStore = sessionStore;
     }
 
     /// <summary>
     /// Synchronous chat endpoint. Returns a single AgentResponse.
     /// </summary>
     [HttpPost]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Chat([FromBody] ChatRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Message))
@@ -41,6 +44,8 @@ public class ChatController : ControllerBase
             return BadRequest(new { error = "Message exceeds maximum length of 10000 characters." });
 
         var userContext = BuildUserContext(request);
+        if (!await SessionAccessValidator.CanAccessAsync(_sessionStore, request.SessionId, userContext.UserId, userContext.TenantId))
+            return NotFound(new { error = "Session not found." });
 
         AgentResponse response;
         if (!string.IsNullOrWhiteSpace(request.TargetAgent))
@@ -51,6 +56,9 @@ public class ChatController : ControllerBase
         {
             response = await _metaAgent.ProcessRequestAsync(request.Message, userContext, request.SessionId);
         }
+
+        if (!response.Success && response.ErrorMessage?.StartsWith("Quota Exceeded:", StringComparison.Ordinal) == true)
+            return StatusCode(StatusCodes.Status429TooManyRequests, response);
 
         return Ok(response);
     }
@@ -68,6 +76,8 @@ public class ChatController : ControllerBase
             return Results.BadRequest(new { error = "Message exceeds maximum length of 10000 characters." });
 
         var userContext = BuildUserContext(request);
+        if (!await SessionAccessValidator.CanAccessAsync(_sessionStore, request.SessionId, userContext.UserId, userContext.TenantId, HttpContext.RequestAborted))
+            return Results.NotFound(new { error = "Session not found." });
 
         HttpContext.Response.StatusCode = StatusCodes.Status200OK;
         HttpContext.Response.Headers.Append("Cache-Control", "no-cache");

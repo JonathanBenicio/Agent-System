@@ -1,5 +1,6 @@
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using AgenticSystem.Core.Interfaces;
 
 namespace AgenticSystem.Infrastructure.LLM;
 
@@ -10,13 +11,27 @@ namespace AgenticSystem.Infrastructure.LLM;
 public sealed class ContextAwareChatClient : IChatClient
 {
     private readonly LLMManager _llmManager;
+    private readonly ILLMRuntimeContextAccessor _runtimeContextAccessor;
+    private readonly IQuotaEnforcer _quotaEnforcer;
+    private readonly ITokenAuditService _tokenAuditService;
     private readonly ILogger<ContextAwareChatClient> _logger;
+    private readonly IServiceGateway? _serviceGateway;
     private bool _disposed;
 
-    public ContextAwareChatClient(LLMManager llmManager, ILogger<ContextAwareChatClient> logger)
+    public ContextAwareChatClient(
+        LLMManager llmManager,
+        ILLMRuntimeContextAccessor runtimeContextAccessor,
+        IQuotaEnforcer quotaEnforcer,
+        ITokenAuditService tokenAuditService,
+        ILogger<ContextAwareChatClient> logger,
+        IServiceGateway? serviceGateway = null)
     {
         _llmManager = llmManager;
+        _runtimeContextAccessor = runtimeContextAccessor;
+        _quotaEnforcer = quotaEnforcer;
+        _tokenAuditService = tokenAuditService;
         _logger = logger;
+        _serviceGateway = serviceGateway;
     }
 
     public async Task<ChatResponse> GetResponseAsync(
@@ -24,15 +39,18 @@ public sealed class ContextAwareChatClient : IChatClient
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        var messageList = messages as IList<ChatMessage> ?? messages.ToList();
         var clients = await _llmManager.GetFallbackChatClientsAsync(options?.ModelId, cancellationToken);
         var exceptions = new List<Exception>();
 
-        foreach (var (chatClient, resolvedModel, providerName) in clients)
+        foreach (var (chatClient, resolvedModel, providerName, tenantCredential) in clients)
         {
             try
             {
                 var effectiveOptions = BuildEffectiveOptions(options, resolvedModel);
-                var response = await chatClient.GetResponseAsync(messages, effectiveOptions, cancellationToken);
+                var routedClient = RouteThroughGateway(chatClient, providerName, tenantCredential);
+                var meteredClient = CreateMeteredClient(routedClient, providerName, resolvedModel);
+                var response = await meteredClient.GetResponseAsync(messageList, effectiveOptions, cancellationToken);
                 
                 if (exceptions.Count > 0)
                 {
@@ -55,18 +73,21 @@ public sealed class ContextAwareChatClient : IChatClient
         ChatOptions? options = null,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        var messageList = messages as IList<ChatMessage> ?? messages.ToList();
         var clients = await _llmManager.GetFallbackChatClientsAsync(options?.ModelId, cancellationToken);
         var exceptions = new List<Exception>();
         bool success = false;
 
-        foreach (var (chatClient, resolvedModel, providerName) in clients)
+        foreach (var (chatClient, resolvedModel, providerName, tenantCredential) in clients)
         {
             IAsyncEnumerator<ChatResponseUpdate>? enumerator = null;
             ChatResponseUpdate? firstUpdate = null;
             try
             {
                 var effectiveOptions = BuildEffectiveOptions(options, resolvedModel);
-                enumerator = chatClient.GetStreamingResponseAsync(messages, effectiveOptions, cancellationToken).GetAsyncEnumerator(cancellationToken);
+                var routedClient = RouteThroughGateway(chatClient, providerName, tenantCredential);
+                var meteredClient = CreateMeteredClient(routedClient, providerName, resolvedModel);
+                enumerator = meteredClient.GetStreamingResponseAsync(messageList, effectiveOptions, cancellationToken).GetAsyncEnumerator(cancellationToken);
                 if (await enumerator.MoveNextAsync())
                 {
                     firstUpdate = enumerator.Current;
@@ -144,4 +165,12 @@ public sealed class ContextAwareChatClient : IChatClient
 
         return source;
     }
+
+    private TenantQuotaChatClient CreateMeteredClient(IChatClient client, string provider, string model) =>
+        new(client, provider, model, _runtimeContextAccessor, _quotaEnforcer, _tokenAuditService, _logger);
+
+    private IChatClient RouteThroughGateway(IChatClient client, string providerName, bool tenantCredential) =>
+        _serviceGateway is null || tenantCredential
+            ? client
+            : new GatewayChatClient(client, _serviceGateway, providerName);
 }

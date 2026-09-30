@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Models;
@@ -24,7 +26,7 @@ public class OrchestratorInstructionService(ILogger<OrchestratorInstructionServi
         ArgumentNullException.ThrowIfNull(activeAgents);
         ArgumentNullException.ThrowIfNull(auxiliaryTools);
 
-        var cacheKey = BuildCacheKey(activeAgents);
+        var cacheKey = BuildCacheKey(activeAgents, auxiliaryTools);
         return _cache.GetOrAdd(cacheKey, _ =>
         {
             _logger.LogInformation(
@@ -94,11 +96,28 @@ public class OrchestratorInstructionService(ILogger<OrchestratorInstructionServi
         return sb.ToString();
     }
 
-    private static string BuildCacheKey(IReadOnlyList<AgentInfo> activeAgents)
+    private static string BuildCacheKey(
+        IReadOnlyList<AgentInfo> activeAgents,
+        IReadOnlyList<AITool> auxiliaryTools)
     {
-        var names = activeAgents
+        var agentDescriptors = activeAgents
             .OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(a => a.Name);
-        return string.Join("|", names);
+            .Select(agent => new
+            {
+                agent.Name,
+                agent.Description,
+                agent.Domain,
+                agent.Tier,
+                Tools = agent.AvailableTools.OrderBy(tool => tool, StringComparer.OrdinalIgnoreCase).ToArray()
+            });
+        var auxiliaryDescriptors = auxiliaryTools
+            .OrderBy(tool => tool.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(tool => new
+            {
+                tool.Name,
+                Description = (tool as AIFunction)?.Description ?? tool.Name
+            });
+        var descriptor = JsonSerializer.Serialize(new { Agents = agentDescriptors, AuxiliaryTools = auxiliaryDescriptors });
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(descriptor)));
     }
 }

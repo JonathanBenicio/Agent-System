@@ -1,6 +1,10 @@
 $ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$taskRuntime = Join-Path $taskRoot 'tests/TestResults/backend-documentation/runtime'
+$taskRuntime = if ($env:BACKEND_VALIDATION_OUTPUT_DIR) { $env:BACKEND_VALIDATION_OUTPUT_DIR } else { Join-Path $taskRoot 'tests/TestResults/backend-core-remediation/current' }
+$taskHistoricalOutput = [System.IO.Path]::GetFullPath((Join-Path $taskRoot 'tests/TestResults/backend-documentation/current')).TrimEnd('\', '/')
+if ([System.IO.Path]::GetFullPath($taskRuntime).TrimEnd('\', '/') -ieq $taskHistoricalOutput) {
+  throw 'Refusing to write API logs into historical backend-documentation validation artifacts.'
+}
 New-Item -ItemType Directory -Path $taskRuntime -Force | Out-Null
 $taskDll = Join-Path $taskRoot 'src/AgenticSystem.Api/bin/Release/net10.0/AgenticSystem.Api.dll'
 if (!(Test-Path -LiteralPath $taskDll)) { throw 'Build Release da API necessário.' }

@@ -1,6 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.SignalR;
+using AgenticSystem.Api.Auth;
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Api.Hubs;
+using AgenticSystem.Infrastructure.Persistence;
 
 namespace AgenticSystem.Api.Controllers;
 
@@ -10,15 +15,39 @@ namespace AgenticSystem.Api.Controllers;
 [Authorize]
 [ApiController]
 [Route("api/admin/gateway")]
-public class GatewayController : ControllerBase
+public class GatewayController : ControllerBase, IAsyncActionFilter
 {
     private readonly IServiceGateway _gateway;
     private readonly ILogger<GatewayController> _logger;
+    private readonly IHubContext<GatewayHub> _hubContext;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly AgenticDbContext _dbContext;
 
-    public GatewayController(IServiceGateway gateway, ILogger<GatewayController> logger)
+    public GatewayController(
+        IServiceGateway gateway,
+        ILogger<GatewayController> logger,
+        IHubContext<GatewayHub> hubContext,
+        ITenantContextAccessor tenantContextAccessor,
+        AgenticDbContext dbContext)
     {
         _gateway = gateway;
         _logger = logger;
+        _hubContext = hubContext;
+        _tenantContextAccessor = tenantContextAccessor;
+        _dbContext = dbContext;
+    }
+
+    [NonAction]
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        if (!await PlatformAdminAuthorization.IsPlatformAdministratorAsync(
+                _dbContext, context.HttpContext.User, context.HttpContext.RequestAborted))
+        {
+            context.Result = Forbid();
+            return;
+        }
+
+        await next();
     }
 
     /// <summary>
@@ -100,10 +129,19 @@ public class GatewayController : ControllerBase
     /// </summary>
     [HttpPost("services/{name}/enable")]
     [ProducesResponseType(204)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> EnableService(string name)
     {
-        await _gateway.EnableServiceAsync(name);
+        try
+        {
+            await _gateway.EnableServiceAsync(name);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { error = $"Service '{name}' not found" });
+        }
         _logger.LogInformation("✅ Service enabled via API: {Service}", name);
+        await BroadcastServiceStatusAsync(name, enabled: true);
         return NoContent();
     }
 
@@ -112,10 +150,29 @@ public class GatewayController : ControllerBase
     /// </summary>
     [HttpPost("services/{name}/disable")]
     [ProducesResponseType(204)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> DisableService(string name)
     {
-        await _gateway.DisableServiceAsync(name);
+        try
+        {
+            await _gateway.DisableServiceAsync(name);
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound(new { error = $"Service '{name}' not found" });
+        }
         _logger.LogWarning("⛔ Service disabled via API: {Service}", name);
+        await BroadcastServiceStatusAsync(name, enabled: false);
         return NoContent();
     }
+
+    private Task BroadcastServiceStatusAsync(string serviceName, bool enabled) =>
+        _hubContext.Clients.Group($"tenant:{_tenantContextAccessor.CurrentTenantId}:gateway")
+            .SendAsync("ServiceStatusChanged", new
+            {
+                serviceName,
+                enabled,
+                tenantId = _tenantContextAccessor.CurrentTenantId,
+                timestamp = DateTime.UtcNow
+            });
 }

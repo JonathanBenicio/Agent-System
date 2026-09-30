@@ -13,18 +13,24 @@ public class AgentConfigurationService : IAgentConfigurationService
     private readonly IAgentYamlValidator _yamlValidator;
     private readonly IAgentFactory _agentFactory;
     private readonly IAgentVersioningService? _versioningService;
+    private readonly ITenantContextAccessor? _tenantContextAccessor;
+    private readonly ITenantIsolationEnforcer? _tenantIsolationEnforcer;
     private readonly ILogger<AgentConfigurationService> _logger;
 
     public AgentConfigurationService(
         IAgentYamlValidator yamlValidator,
         IAgentFactory agentFactory,
         ILogger<AgentConfigurationService> logger,
-        IAgentVersioningService? versioningService = null)
+        IAgentVersioningService? versioningService = null,
+        ITenantContextAccessor? tenantContextAccessor = null,
+        ITenantIsolationEnforcer? tenantIsolationEnforcer = null)
     {
         _yamlValidator = yamlValidator ?? throw new ArgumentNullException(nameof(yamlValidator));
         _agentFactory = agentFactory ?? throw new ArgumentNullException(nameof(agentFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _versioningService = versioningService;
+        _tenantContextAccessor = tenantContextAccessor;
+        _tenantIsolationEnforcer = tenantIsolationEnforcer;
     }
 
     public async Task<AgentConfigurationResult> SaveAgentFromYamlAsync(string yaml, string requestedBy = "System", CancellationToken ct = default)
@@ -37,6 +43,13 @@ public class AgentConfigurationService : IAgentConfigurationService
         }
 
         var spec = result.Specification;
+
+        var tenantId = _tenantContextAccessor?.CurrentTenantId;
+        if (_tenantIsolationEnforcer is not null && !string.IsNullOrWhiteSpace(tenantId) &&
+            !await _tenantIsolationEnforcer.CanCreateAgentAsync(tenantId, spec.Name, ct))
+        {
+            return new AgentConfigurationResult(false, "O limite de agentes deste tenant foi atingido.");
+        }
         
         // Remove agente existente se houver
         var agents = await _agentFactory.GetAllAgentsAsync();

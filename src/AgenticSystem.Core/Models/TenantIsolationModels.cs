@@ -11,7 +11,8 @@ public class TenantIsolationConfig
 {
     public string TenantId { get; init; } = string.Empty;
     public TenantIsolationLevel IsolationLevel { get; init; } = TenantIsolationLevel.Shared;
-    public TenantResourceLimits ResourceLimits { get; init; } = new();
+    public TenantLimits Limits { get; init; } = TenantLimits.FreeTier();
+    public TenantResourceLimits ResourceLimits => TenantResourceLimits.From(Limits);
     public TenantStorageConfig Storage { get; init; } = new();
     public List<string> AllowedRegions { get; init; } = [];
     public bool DataEncryptionAtRest { get; init; } = true;
@@ -30,11 +31,20 @@ public enum TenantIsolationLevel
 /// </summary>
 public class TenantResourceLimits
 {
-    public int MaxConcurrentSessions { get; init; } = 10;
-    public int MaxStorageMb { get; init; } = 1000;
-    public int MaxDocuments { get; init; } = 10000;
-    public int MaxAgents { get; init; } = 20;
-    public double MaxMonthlyBudgetUsd { get; init; } = 100;
+    public int MaxConcurrentSessions { get; init; }
+    public int MaxStorageMb { get; init; }
+    public int MaxDocuments { get; init; }
+    public int MaxAgents { get; init; }
+    public double MaxMonthlyBudgetUsd { get; init; }
+
+    public static TenantResourceLimits From(TenantLimits limits) => new()
+    {
+        MaxConcurrentSessions = limits.MaxConcurrentSessions,
+        MaxStorageMb = limits.MaxDocumentsMb,
+        MaxDocuments = limits.MaxDocuments,
+        MaxAgents = limits.MaxAgents,
+        MaxMonthlyBudgetUsd = (double)(limits.MaxDailyCostUsd * 30m)
+    };
 }
 
 /// <summary>

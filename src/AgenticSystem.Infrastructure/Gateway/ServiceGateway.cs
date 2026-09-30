@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -36,8 +37,13 @@ public class ServiceGateway : IServiceGateway
         };
 
         _services[registration.Name] = entry;
-        _costTracker.SetBudget(registration.Name, registration.DailyBudget);
         _logger.LogInformation("🔌 Service registered: {Service} [{Category}]", registration.Name, registration.Category);
+    }
+
+    public void UnregisterService(string serviceName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        _services.TryRemove(serviceName, out _);
     }
 
     public async Task<GatewayResponse<T>> ExecuteAsync<T>(string serviceName, Func<CancellationToken, Task<T>> action, CancellationToken ct = default)
@@ -60,6 +66,7 @@ public class ServiceGateway : IServiceGateway
 
         try
         {
+            _costTracker.SetBudget(serviceName, entry.Registration.DailyBudget);
             var result = await action(ct);
             sw.Stop();
 
@@ -75,6 +82,11 @@ public class ServiceGateway : IServiceGateway
 
             return GatewayResponse<T>.Ok(result, serviceName, sw.Elapsed, cost);
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            RecordCancellation(entry, sw);
+            return GatewayResponse<T>.Fail("Request cancelled", serviceName);
+        }
         catch (Exception ex)
         {
             sw.Stop();
@@ -88,6 +100,135 @@ public class ServiceGateway : IServiceGateway
             _logger.LogWarning(ex, "⚠️ Gateway request failed for '{Service}': {Error}", serviceName, ex.Message);
             return GatewayResponse<T>.Fail(ex.Message, serviceName);
         }
+    }
+
+    public async IAsyncEnumerable<T> ExecuteStreamingAsync<T>(
+        string serviceName,
+        Func<CancellationToken, IAsyncEnumerable<T>> action,
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(serviceName);
+        ArgumentNullException.ThrowIfNull(action);
+
+        if (!_services.TryGetValue(serviceName, out var entry))
+            throw new HttpRequestException($"Service '{serviceName}' not registered");
+        if (!entry.IsEnabled)
+            throw new HttpRequestException($"Service '{serviceName}' is disabled");
+        if (!entry.CircuitBreaker.AllowRequest())
+            throw new HttpRequestException($"Circuit breaker OPEN for '{serviceName}'");
+        if (!entry.RateLimiter.AllowRequest())
+            throw new HttpRequestException($"Rate limit exceeded for '{serviceName}'");
+
+        var stopwatch = Stopwatch.StartNew();
+        Interlocked.Increment(ref _totalRequests);
+        entry.IncrementRequests();
+
+        try
+        {
+            _costTracker.SetBudget(serviceName, entry.Registration.DailyBudget);
+        }
+        catch (Exception ex)
+        {
+            RecordFailure(serviceName, entry, stopwatch, ex);
+            throw;
+        }
+
+        IAsyncEnumerator<T> enumerator;
+        try
+        {
+            enumerator = action(ct).GetAsyncEnumerator(ct);
+        }
+        catch (Exception ex)
+        {
+            RecordFailure(serviceName, entry, stopwatch, ex);
+            throw;
+        }
+
+        var completed = false;
+        var failureRecorded = false;
+        try
+        {
+            while (true)
+            {
+                bool hasNext;
+                try
+                {
+                    hasNext = await enumerator.MoveNextAsync();
+                }
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    RecordFailure(serviceName, entry, stopwatch, ex);
+                    failureRecorded = true;
+                    throw;
+                }
+
+                if (!hasNext)
+                {
+                    completed = true;
+                    break;
+                }
+
+                yield return enumerator.Current;
+            }
+        }
+        finally
+        {
+            Exception? disposalFailure = null;
+            try
+            {
+                await enumerator.DisposeAsync();
+            }
+            catch (Exception ex)
+            {
+                disposalFailure = ex;
+            }
+
+            if (disposalFailure is not null && !failureRecorded && !ct.IsCancellationRequested)
+            {
+                RecordFailure(serviceName, entry, stopwatch, disposalFailure);
+                failureRecorded = true;
+            }
+
+            if (completed && !failureRecorded && disposalFailure is null)
+                RecordSuccess(serviceName, entry, stopwatch);
+            else if (!failureRecorded)
+                RecordCancellation(entry, stopwatch);
+        }
+    }
+
+    private void RecordSuccess(string serviceName, ServiceEntry entry, Stopwatch stopwatch)
+    {
+        stopwatch.Stop();
+        entry.CircuitBreaker.RecordSuccess();
+        entry.RateLimiter.RecordRequest();
+        entry.RecordLatency(stopwatch.Elapsed);
+        entry.IsHealthy = true;
+        entry.LastChecked = DateTime.UtcNow;
+        _costTracker.RecordCost(serviceName, entry.Registration.Category, 0.001m);
+    }
+
+    private void RecordFailure(string serviceName, ServiceEntry entry, Stopwatch stopwatch, Exception exception)
+    {
+        stopwatch.Stop();
+        Interlocked.Increment(ref _totalFailures);
+        entry.IncrementFailures();
+        entry.CircuitBreaker.RecordFailure();
+        entry.RecordLatency(stopwatch.Elapsed);
+        entry.IsHealthy = false;
+        entry.LastError = exception.Message;
+        entry.LastChecked = DateTime.UtcNow;
+        _logger.LogWarning(exception, "Gateway streaming request failed for '{Service}': {Error}", serviceName, exception.Message);
+    }
+
+    private static void RecordCancellation(ServiceEntry entry, Stopwatch stopwatch)
+    {
+        stopwatch.Stop();
+        entry.RecordLatency(stopwatch.Elapsed);
+        entry.LastChecked = DateTime.UtcNow;
     }
 
     public Task<ServiceStatus> GetServiceStatusAsync(string serviceName)
@@ -114,18 +255,20 @@ public class ServiceGateway : IServiceGateway
 
     public Task EnableServiceAsync(string serviceName)
     {
-        if (_services.TryGetValue(serviceName, out var entry))
-        {
-            entry.IsEnabled = true;
-            entry.CircuitBreaker.Reset();
-        }
+        if (!_services.TryGetValue(serviceName, out var entry))
+            throw new KeyNotFoundException($"Service '{serviceName}' not found");
+
+        entry.IsEnabled = true;
+        entry.CircuitBreaker.Reset();
         return Task.CompletedTask;
     }
 
     public Task DisableServiceAsync(string serviceName)
     {
-        if (_services.TryGetValue(serviceName, out var entry))
-            entry.IsEnabled = false;
+        if (!_services.TryGetValue(serviceName, out var entry))
+            throw new KeyNotFoundException($"Service '{serviceName}' not found");
+
+        entry.IsEnabled = false;
         return Task.CompletedTask;
     }
 

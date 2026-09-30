@@ -5,7 +5,7 @@ O **AgenticSystem Backend** constitui a arquitetura core do sistema. É desenvol
 ## 🚀 Tecnologias e Camadas
 
 - **Core**: .NET 10, ASP.NET Core 10, SignalR 10
-- **Inteligência e Orquestração**: Microsoft Agent Framework 1.4+, Microsoft.Extensions.AI
+- **Inteligência e Orquestração**: Microsoft Agent Framework 1.22.0, Microsoft.Extensions.AI 10.10.0 (hosting A2A/AG-UI em preview)
 - **Camada de Dados**: PostgreSQL com `pgvector` (via EF Core)
 - **Modelos Homologados**: OpenAI (GPTs, Embeddings), Google Gemini, Anthropic Claude, Ollama locais.
 - **RAG e Memória**: Hybrid Chunking Strategy, Heuristic Re-Ranker, ML.NET + ONNX, Obsidian vault.

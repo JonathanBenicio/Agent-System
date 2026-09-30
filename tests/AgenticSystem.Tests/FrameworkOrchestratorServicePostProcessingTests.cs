@@ -12,6 +12,36 @@ namespace AgenticSystem.Tests;
 public class FrameworkOrchestratorServicePostProcessingTests
 {
     [Fact]
+    public async Task PostProcessHostedResponseAsync_MarksEmptyFrameworkOutputAsFailure()
+    {
+        var postProcessingPipeline = Substitute.For<IAgentExecutionPostProcessingPipeline>();
+        postProcessingPipeline.ProcessAsync(Arg.Any<AgentExecutionPostProcessingContext>(), Arg.Any<CancellationToken>())
+            .Returns(call => call.Arg<AgentExecutionPostProcessingContext>().Response);
+        var sut = new FrameworkOrchestratorService(
+            OrchestratorMetadata.Default,
+            Substitute.For<IServiceScopeFactory>(),
+            Substitute.For<IAgentExecutionPreProcessingPipeline>(),
+            Substitute.For<IAgentRuntimeCoordinator>(),
+            Substitute.For<ILLMRuntimeContextAccessor>(),
+            postProcessingPipeline,
+            Substitute.For<ILogger<FrameworkOrchestratorService>>());
+
+        var result = await sut.PostProcessHostedResponseAsync(
+            "session-empty",
+            "question",
+            new UserContext { UserId = "user-a", TenantId = "tenant-a" },
+            string.Empty,
+            calledAgent: null,
+            calledAgentName: null,
+            frameworkAgentId: "orchestrator-id",
+            latency: TimeSpan.Zero);
+
+        result.Success.Should().BeFalse();
+        result.Content.Should().Contain("não retornou conteúdo textual");
+        result.ErrorMessage.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
     public async Task PostProcessHostedResponseAsync_DelegatesToSharedPostProcessingPipeline()
     {
         var calledAgent = Substitute.For<IAgent>();

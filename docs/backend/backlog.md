@@ -1,7 +1,21 @@
 # Backlog da auditoria do backend
-Baseline f8de7a6; [epic #110](https://github.com/JonathanBenicio/Agent-System/issues/110). [Evidências executadas](validation/2026-09-28.md). Correções de produção estão fora desta entrega.
+Baseline f8de7a6; [epic #110](https://github.com/JonathanBenicio/Agent-System/issues/110). A auditoria original permanece em [evidências históricas](validation/2026-09-28.md); os resultados da remediação na branch estão em [backend-core-remediation](validation/backend-core-remediation.md). A branch permanece em PR draft.
 
-## Prioridade de correção
+## Estado da remediação #111–#117 — 2026-09-29
+
+| Issue | Estado nesta branch | Limite restante |
+|---|---|---|
+| #111 | Corrigida nos cenários testados; API key e bearer opaco conservam o papel da membership. | Revisão da issue permanece aberta; sem promoção automática a Platform Admin. |
+| #112 | Seleção/handshake e eventos dos cinco hubs testados; Gateway REST/hub exige Platform Admin e publica no tenant autorizado. | Gateway de produção ainda não registra providers no `IServiceGateway`; o evento foi acionado por fixture Validation. |
+| #113 | SQL fail-closed e resposta RAG real com sala ACL passaram. | Fixture usa documentos/frases sintéticos. |
+| #114 | Sessão REST/SSE/SignalR, ownership, MAF serialized state e retomada após restart passaram. | — |
+| #115 | 32 increments concorrentes persistiram; uso real tokens/custo e bloqueio REST/SSE/OpenAI-compatível após restart passaram. | RPM é por processo; dois hosts de API não foram testados. |
+| #116 | Catálogo completo/tenant-scoped, customizações e IDs estáveis após restart. | — |
+| #117 | Membership endpoints, backfill, grants ACL/audit, planos e limites foram exercitados. | Backfill é fixture sintética; A2A/AG-UI e cópia representativa de produção ficaram fora. |
+
+As issues permanecem abertas para revisão conjunta; status de implementação neste backlog não fecha issues automaticamente.
+
+## Baseline da auditoria — prioridades originais
 | Prioridade | Lacuna | Evidência | Issue |
 |---|---|---|---|
 | P0 | API key Viewer promovida a Admin e troca de tenant aceita | AUTH-05, HTTP 200 | [#111](https://github.com/JonathanBenicio/Agent-System/issues/111) |
@@ -17,12 +31,12 @@ P0 indica bloqueio de boundary/segurança; não implica que todos os caminhos de
 ## Pendências adicionais e trabalho existente
 | Frente | Estado/evidência | Acompanhamento |
 |---|---|---|
-| Cobertura | 22,39% versus 80% exigidos | [#88](https://github.com/JonathanBenicio/Agent-System/issues/88), [#84](https://github.com/JonathanBenicio/Agent-System/issues/84) |
-| Streaming e grupos | chat funcional falhou; outros hubs/protocolos não profundamente validados | [#86](https://github.com/JonathanBenicio/Agent-System/issues/86), #112/#114 |
-| Upload/limpeza de documentos | overwrite físico por mesmo nome, exposição fileDiskPath e quota sem bytes reais inferidos por leitura; purga completa não testada | [#93](https://github.com/JonathanBenicio/Agent-System/issues/93), #117 |
+| Cobertura | Última medição disponível antes do follow-up: 21,08% versus 80% exigidos; não foi prioridade desta rodada | [#88](https://github.com/JonathanBenicio/Agent-System/issues/88), [#84](https://github.com/JonathanBenicio/Agent-System/issues/84) |
+| Streaming e grupos | chat REST/SSE/SignalR e isolamento dos cinco hubs foram exercitados; A2A/AG-UI não foram habilitados no host de validação | [#86](https://github.com/JonathanBenicio/Agent-System/issues/86), #112/#114 |
+| Upload/limpeza de documentos | quota conta bytes lógicos de origem; fileDiskPath continua exposto, cópia física pode ser sobrescrita por mesmo nome e purga completa não foi comprovada | [#93](https://github.com/JonathanBenicio/Agent-System/issues/93), #117 |
 | ONNX stats | loaded inferido de paths/config, avgLatencyMs=12.4 literal | [#74](https://github.com/JonathanBenicio/Agent-System/issues/74); [matriz](resources-rules.md) |
 | Durable/workflows/evaluation | retomada multiinstância, RunId/polling e cache não comprovados | [#108](https://github.com/JonathanBenicio/Agent-System/issues/108), [revisão anterior](../plan/pending-changes-review-2026-09-28.md) |
-| Dependências | restore reportou NU1903 em Microsoft.OpenApi2.4.1 e SQLitePCLRaw2.1.11, transitive da baseline | registrar atualização/testes em iniciativa de dependências; sem mudança automática nesta auditoria |
+| Dependências | Microsoft.OpenApi, SQLitePCLRaw e ImageSharp foram atualizados; última auditoria NuGet não encontrou vulnerabilidades conhecidas | validar novamente quando o lockfile/pacotes mudarem |
 | Voice e contratos fora do núcleo | inventariados por fonte; identidade enviada pelo cliente e timeout exigem auditoria específica | inventário e futuras stories; não validados em execução |
 | Licença | README declara MIT mas LICENSE não existe | formalização pendente; não criar licença sem decisão do mantenedor |
 

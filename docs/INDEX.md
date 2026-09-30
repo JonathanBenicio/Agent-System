@@ -6,9 +6,15 @@
 - [API do núcleo](backend/api-core.md) e [inventário](backend/endpoint-inventory.md)
 - [Schemas dos DTOs](backend/request-schemas.md) e [OpenAPI Release](backend/openapi-release.json)
 - [Tenants/acesso](backend/access-tenants.md), [recursos](backend/resources-rules.md), [transportes](backend/transports.md)
-- [Operação](backend/operations.md), [validação](backend/validation/2026-09-28.md), [backlog](backend/backlog.md)
+- [Operação](backend/operations.md), [validação documental histórica](backend/validation/2026-09-28.md), [validação de correção #111–#117](backend/validation/backend-core-remediation.md), [backlog](backend/backlog.md)
 - [Correções e validação da revisão do PR #118](backend/validation/2026-09-28-review-fixes.md)
 - [ADR-034](architecture/adr/034-backend-contracts-and-access-target.md), [plano](plan/backend-documentation-validation.md), [templates](../templates/README.md)
+- [Correção dos bugs #111–#117: ADR-035](architecture/adr/035-backend-core-isolation-and-reliability.md), [plano](plan/backend-core-remediation.md) e [relatório/evidências](backend/validation/backend-core-remediation.md)
+- [MAF 1.22 e Gateway: ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md), [story BACK-MAF-120](USER-STORIES.md#back-maf-120--maf-atualizado-e-providers-integrados-ao-gateway), [análise de compatibilidade](plan/maf-122-compatibility-review.md), [plano](plan/maf-122-protocols-gateway.md) e [evidência de runtime](backend/validation/maf-122-workflow-runtime-2026-09-29.md)
+- [A2A/AG-UI preview: ADR-037](architecture/adr/037-a2a-agui-preview-validation.md), [story BACK-PROTO-121](USER-STORIES.md#back-proto-121--validar-a2a-e-ag-ui-sob-hosting-preview) e [plano](plan/a2a-agui-preview-validation.md)
+- [Issue #105 — Hyperlight CodeAct em Lab, desligado por padrão](backend/operations.md)
+- [Orquestrador supervisor dinâmico: ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md), [story BACK-ORCH-122](USER-STORIES.md#back-orch-122--orquestrar-agentes-dinamicos-pelo-supervisor-maf) e [plano separado](plan/dynamic-orchestrator-implementation.md)
+- [Issue #16 — auto-melhoria exige aprovação humana e permanece na trilha Lab](backend/api-core.md)
 
 Índice de navegação da documentação do projeto, organizado por papel documental.
 
@@ -87,6 +93,8 @@ Documento canônico de arquitetura atual:
 | [architecture/adr/031-pgvector-sql-filter-tenant-quota-persistence.md](architecture/adr/031-pgvector-sql-filter-tenant-quota-persistence.md) | ADR 031: Filtro SQL-Nativo no PGVector e Persistência de Quotas de Tenant |
 | [architecture/adr/032-evaluation-golden-sets-rest-api.md](architecture/adr/032-evaluation-golden-sets-rest-api.md) | ADR 032: Contratos REST para CRUD de Golden Sets da Evaluation Suite |
 | [architecture/adr/033-maf-190-upgrade-di-cleanup.md](architecture/adr/033-maf-190-upgrade-di-cleanup.md) | ADR 033: Migração do Microsoft Agent Framework para 1.9.0 e Saneamento de DI |
+| [architecture/adr/036-maf-122-protocols-and-gateway.md](architecture/adr/036-maf-122-protocols-and-gateway.md) | ADR 036: Atualização do MAF e integração de protocolos e Gateway |
+| [architecture/adr/037-a2a-agui-preview-validation.md](architecture/adr/037-a2a-agui-preview-validation.md) | ADR 037: Despriorizar validação E2E A2A/AG-UI enquanto hosting for preview |
 | [architecture/adr/ADR-004-MAF-Native-LLM-Clients.md](architecture/adr/ADR-004-MAF-Native-LLM-Clients.md) | ADR 004: Migração para Clientes Nativos do Microsoft Agent Framework (MAF 1.6+) |
 | [architecture/adr/ADR-005-MAF-Native-Workflows.md](architecture/adr/ADR-005-MAF-Native-Workflows.md) | ADR 005: Migração para Workflows Nativos do Microsoft Agent Framework (MAF 1.6+) |
 | [architecture/adr/ADR-006-MAF-Native-Skills.md](architecture/adr/ADR-006-MAF-Native-Skills.md) | ADR 006: Padronização do Skills Framework com MAF Nativo |

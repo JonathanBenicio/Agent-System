@@ -448,6 +448,58 @@ public class RoleAssignmentConfiguration : IEntityTypeConfiguration<RoleAssignme
     }
 }
 
+public class TenantMembershipConfiguration : IEntityTypeConfiguration<TenantMembershipEntity>
+{
+    public void Configure(EntityTypeBuilder<TenantMembershipEntity> builder)
+    {
+        builder.ToTable("tenant_memberships");
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(item => item.SubjectId).HasColumnName("subject_id").HasMaxLength(128).IsRequired();
+        builder.Property(item => item.SubjectType).HasColumnName("subject_type").HasMaxLength(32).IsRequired();
+        builder.Property(item => item.Role).HasColumnName("role").HasMaxLength(64).IsRequired();
+        builder.Property(item => item.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(item => item.GrantedAt).HasColumnName("granted_at");
+        builder.Property(item => item.GrantedBy).HasColumnName("granted_by").HasMaxLength(128);
+        builder.HasIndex(item => new { item.SubjectId, item.SubjectType, item.TenantId, item.Role })
+            .IsUnique().HasDatabaseName("ix_tenant_memberships_subject_tenant_role");
+        builder.HasIndex(item => item.TenantId).HasDatabaseName("ix_tenant_memberships_tenant_id");
+    }
+}
+
+public class PlatformAdministratorConfiguration : IEntityTypeConfiguration<PlatformAdministratorEntity>
+{
+    public void Configure(EntityTypeBuilder<PlatformAdministratorEntity> builder)
+    {
+        builder.ToTable("platform_administrators");
+        builder.HasKey(item => item.UserId);
+        builder.Property(item => item.UserId).HasColumnName("user_id").HasMaxLength(128);
+        builder.Property(item => item.GrantedAt).HasColumnName("granted_at");
+        builder.Property(item => item.GrantedBy).HasColumnName("granted_by").HasMaxLength(128);
+    }
+}
+
+public class TenantSupportGrantConfiguration : IEntityTypeConfiguration<TenantSupportGrantEntity>
+{
+    public void Configure(EntityTypeBuilder<TenantSupportGrantEntity> builder)
+    {
+        builder.ToTable("tenant_support_grants");
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(item => item.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(item => item.UserId).HasColumnName("user_id").HasMaxLength(128).IsRequired();
+        builder.Property(item => item.Scope).HasColumnName("scope").HasMaxLength(256).IsRequired();
+        builder.Property(item => item.Reason).HasColumnName("reason").HasMaxLength(2000).IsRequired();
+        builder.Property(item => item.GrantedAt).HasColumnName("granted_at");
+        builder.Property(item => item.GrantedBy).HasColumnName("granted_by").HasMaxLength(128).IsRequired();
+        builder.Property(item => item.ExpiresAt).HasColumnName("expires_at");
+        builder.Property(item => item.RevokedAt).HasColumnName("revoked_at");
+        builder.Property(item => item.RevokedBy).HasColumnName("revoked_by").HasMaxLength(128);
+        builder.HasIndex(item => new { item.TenantId, item.UserId, item.ExpiresAt })
+            .HasDatabaseName("ix_tenant_support_grants_active_lookup");
+    }
+}
+
 public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessageEntity>
 {
     public void Configure(EntityTypeBuilder<OutboxMessageEntity> builder)
@@ -497,6 +549,27 @@ public class AgentVersionConfiguration : IEntityTypeConfiguration<AgentVersionEn
 
         builder.HasIndex(v => v.AgentName).HasDatabaseName("ix_agent_versions_agent_name");
         builder.HasIndex(v => new { v.AgentName, v.VersionNumber }).IsUnique().HasDatabaseName("ix_agent_versions_agent_version_unique");
+    }
+}
+
+public class SelfImprovementProposalConfiguration : IEntityTypeConfiguration<SelfImprovementProposalEntity>
+{
+    public void Configure(EntityTypeBuilder<SelfImprovementProposalEntity> builder)
+    {
+        builder.ToTable("self_improvement_proposals");
+        builder.HasKey(proposal => proposal.Id);
+        builder.Property(proposal => proposal.Id).HasMaxLength(64);
+        builder.Property(proposal => proposal.TenantId).HasMaxLength(100).IsRequired();
+        builder.Property(proposal => proposal.AgentName).HasMaxLength(150).IsRequired();
+        builder.Property(proposal => proposal.Type).HasMaxLength(50).IsRequired();
+        builder.Property(proposal => proposal.Status).HasMaxLength(32).IsRequired();
+        builder.Property(proposal => proposal.Rationale).IsRequired();
+        builder.Property(proposal => proposal.ProposedChangesJson).HasColumnType("jsonb").IsRequired();
+        builder.Property(proposal => proposal.CreatedBy).HasMaxLength(200);
+        builder.Property(proposal => proposal.ReviewedBy).HasMaxLength(200);
+        builder.Property(proposal => proposal.AppliedAgentVersionId).HasMaxLength(64);
+        builder.HasIndex(proposal => new { proposal.TenantId, proposal.Status, proposal.CreatedAt });
+        builder.HasIndex(proposal => new { proposal.TenantId, proposal.AgentName, proposal.CreatedAt });
     }
 }
 
@@ -623,6 +696,11 @@ public class WorkflowExecutionConfiguration : IEntityTypeConfiguration<WorkflowE
         builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
         builder.Property(e => e.WorkflowId).HasColumnName("workflow_id").HasMaxLength(64).IsRequired();
         builder.Property(e => e.WorkflowName).HasColumnName("workflow_name").HasMaxLength(256).IsRequired();
+        builder.Property(e => e.WorkflowDefinitionVersion).HasColumnName("workflow_definition_version");
+        builder.Property(e => e.WorkflowDefinitionHash).HasColumnName("workflow_definition_hash").HasMaxLength(64);
+        builder.Property(e => e.WorkflowDefinitionSnapshotJson).HasColumnName("workflow_definition_snapshot").HasColumnType("jsonb");
+        builder.Property(e => e.LeaseOwner).HasColumnName("lease_owner").HasMaxLength(128);
+        builder.Property(e => e.LeaseExpiresAt).HasColumnName("lease_expires_at");
         builder.Property(e => e.Status).HasColumnName("status").HasMaxLength(64).IsRequired();
         builder.Property(e => e.VariablesJson).HasColumnName("variables").HasColumnType("jsonb").IsRequired();
         builder.Property(e => e.InitiatedBy).HasColumnName("initiated_by").HasMaxLength(128);
@@ -633,6 +711,8 @@ public class WorkflowExecutionConfiguration : IEntityTypeConfiguration<WorkflowE
         builder.HasIndex(e => e.WorkflowId).HasDatabaseName("ix_workflow_executions_workflow_id");
         builder.HasIndex(e => e.Status).HasDatabaseName("ix_workflow_executions_status");
         builder.HasIndex(e => e.StartedAt).HasDatabaseName("ix_workflow_executions_started_at");
+        builder.HasIndex(e => new { e.Status, e.LeaseExpiresAt, e.StartedAt })
+            .HasDatabaseName("ix_workflow_executions_claim");
     }
 }
 
@@ -653,6 +733,7 @@ public class WorkflowStepExecutionConfiguration : IEntityTypeConfiguration<Workf
         builder.Property(s => s.CompensationExecuted).HasColumnName("compensation_executed");
         builder.Property(s => s.StartedAt).HasColumnName("started_at");
         builder.Property(s => s.CompletedAt).HasColumnName("completed_at");
+        builder.Property(s => s.WaitUntilUtc).HasColumnName("wait_until_utc");
 
         builder.HasIndex(s => s.ExecutionId).HasDatabaseName("ix_workflow_step_executions_execution_id");
         builder.HasIndex(s => new { s.ExecutionId, s.StepId }).IsUnique().HasDatabaseName("ix_workflow_step_executions_unique_step");
@@ -853,6 +934,39 @@ public class SystemStateConfiguration : IEntityTypeConfiguration<SystemStateEnti
         builder.Property(s => s.UpdatedAt).HasColumnName("updated_at");
 
         builder.HasIndex(s => s.TenantId).HasDatabaseName("ix_system_states_tenant_id");
+    }
+}
+
+public class PlatformConfigConfiguration : IEntityTypeConfiguration<PlatformConfigEntity>
+{
+    public void Configure(EntityTypeBuilder<PlatformConfigEntity> builder)
+    {
+        builder.ToTable("platform_configs");
+        builder.HasKey(setting => setting.Key);
+        builder.Property(setting => setting.Key).HasColumnName("key").HasMaxLength(256);
+        builder.Property(setting => setting.Value).HasColumnName("value").IsRequired();
+        builder.Property(setting => setting.EncryptedValue).HasColumnName("encrypted_value");
+        builder.Property(setting => setting.IsSecret).HasColumnName("is_secret");
+        builder.Property(setting => setting.ChangedBy).HasColumnName("changed_by").HasMaxLength(256).IsRequired();
+        builder.Property(setting => setting.UpdatedAt).HasColumnName("updated_at");
+    }
+}
+
+public class PlatformConfigAuditConfiguration : IEntityTypeConfiguration<PlatformConfigAuditEntity>
+{
+    public void Configure(EntityTypeBuilder<PlatformConfigAuditEntity> builder)
+    {
+        builder.ToTable("platform_config_audits");
+        builder.HasKey(entry => entry.Id);
+        builder.Property(entry => entry.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(entry => entry.Key).HasColumnName("key").HasMaxLength(256).IsRequired();
+        builder.Property(entry => entry.Action).HasColumnName("action").HasMaxLength(64).IsRequired();
+        builder.Property(entry => entry.ChangedBy).HasColumnName("changed_by").HasMaxLength(256).IsRequired();
+        builder.Property(entry => entry.PreviousValueHash).HasColumnName("previous_value_hash").HasMaxLength(128);
+        builder.Property(entry => entry.NewValueHash).HasColumnName("new_value_hash").HasMaxLength(128);
+        builder.Property(entry => entry.ChangedAt).HasColumnName("changed_at");
+        builder.HasIndex(entry => new { entry.Key, entry.ChangedAt })
+            .HasDatabaseName("ix_platform_config_audits_key_changed_at");
     }
 }
 

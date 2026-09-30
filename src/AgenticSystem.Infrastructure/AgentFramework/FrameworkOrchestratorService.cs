@@ -1,10 +1,12 @@
+#pragma warning disable MAAI001 // Required experimental MAF session-store integration; reviewed under issue #120.
+
 using System;
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
+using AgenticSystem.Core.Exceptions;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
-using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -77,10 +79,10 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
 
         var orchestratorCtx = scopedServices.GetRequiredService<OrchestratorContext>();
         var orchestrator = scopedServices.GetRequiredKeyedService<AIAgent>(_orchestratorMetadata.Name);
-        var sessionStore = scopedServices.GetRequiredKeyedService<AgentSessionStore>(_orchestratorMetadata.Name);
+        var frameworkFactory = scopedServices.GetRequiredService<AgentFrameworkFactory>();
 
         // 2. Obter ou criar sessão do framework via AgentSessionStore do hosting
-        var session = await sessionStore.GetSessionAsync(orchestrator, sessionId, ct);
+        var session = await frameworkFactory.GetOrCreateSessionAsync(orchestrator, sessionId, ct);
         var preProcessingResult = await PreProcessHostedInputAsync(sessionId, input, context, ct);
 
         await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
@@ -95,24 +97,20 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             }
         }, ct);
 
-        // 3. Executar via framework — Handoff Workflow (Adoção Agressiva)
+        // 3. O supervisor chama especialistas como AIFunctions dentro do ChatClientAgent.
         FrameworkAgentResponse frameworkResponse;
         try
         {
-            var workflow = await serviceScope.ServiceProvider.GetRequiredService<OrchestratorHostBuilder>()
-                .BuildHandoffWorkflowAsync(orchestratorAgent, activeAgents, ct);
-
             var messages = new List<ChatMessage> { new(ChatRole.User, preProcessingResult.EffectiveInput) };
-            
-            // Usar InProcessExecution para rodar o workflow de Handoff
-            await using var run = await InProcessExecution.RunAsync(workflow, messages, sessionId, ct);
-            
-            // O resultado final do workflow de handoff é capturado dos eventos ou da mensagem final
-            frameworkResponse = ExtractResponseFromWorkflowRun(run);
+            frameworkResponse = await orchestrator.RunAsync(messages, session, cancellationToken: ct);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Framework handoff orchestration failed");
+            var quotaError = QuotaExceededException.Find(ex);
+            if (quotaError is not null)
+                return CoreAgentResponse.Error(quotaError.Message, _orchestratorMetadata.Name);
+
             return CoreAgentResponse.Error(
                 "Erro ao processar via orquestrador de handoff do framework.", _orchestratorMetadata.Name);
         }
@@ -127,11 +125,11 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         // 5. Identificar qual especialista foi chamado (via tool calls no histórico ou eventos de handoff)
         var specialistCalls = GetSpecialistToolCalls(frameworkResponse);
         var handoffEvent = ExtractHandoffAgent(frameworkResponse);
-        var calledAgent = handoffEvent ?? specialistCalls.FirstOrDefault();
-        var calledBinding = FindCalledBinding(orchestratorCtx, calledAgent != null ? new[] { calledAgent } : Array.Empty<string>());
+        var calledBinding = FindCalledBinding(orchestratorCtx, specialistCalls);
+        var calledAgent = calledBinding?.Agent.Name ?? handoffEvent ?? specialistCalls.FirstOrDefault();
 
-        IAgent? resolvedAgent = null;
-        if (!string.IsNullOrEmpty(calledAgent))
+        IAgent? resolvedAgent = calledBinding?.Agent;
+        if (resolvedAgent is null && !string.IsNullOrEmpty(calledAgent))
         {
             var sanitizedCalledName = SanitizeAgentName(calledAgent);
             var matchingAgentInfo = activeAgents.FirstOrDefault(a => SanitizeAgentName(a.Name) == sanitizedCalledName);
@@ -144,8 +142,15 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
 
         sw.Stop();
 
+        // Persist the supervisor and each specialist session that actually ran.
+        foreach (var binding in orchestratorCtx.SpecialistBindings.Where(binding =>
+                     specialistCalls.Contains(binding.Tool.Name, StringComparer.OrdinalIgnoreCase)))
+        {
+            await frameworkFactory.PersistSessionAsync(sessionId, binding.FrameworkAgent, binding.Session, ct);
+        }
+
         // 6. Persistir sessão do framework para continuidade via hosting nativo
-        await sessionStore.SaveSessionAsync(orchestrator, sessionId, session, ct);
+        await frameworkFactory.PersistSessionAsync(sessionId, orchestrator, session, ct);
 
         return await PostProcessHostedResponseAsync(
             sessionId,
@@ -157,78 +162,6 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             orchestrator.Id ?? string.Empty,
             sw.Elapsed,
             ct);
-    }
-
-    private static FrameworkAgentResponse ExtractResponseFromWorkflowRun(Run run)
-    {
-        var messages = new List<ChatMessage>();
-        var eventCount = run.OutgoingEvents.Count();
-
-        // Primary: AgentResponseEvent
-        foreach (var ev in run.OutgoingEvents)
-        {
-            if (ev is AgentResponseEvent responseEvent)
-            {
-                messages.AddRange(responseEvent.Response.Messages);
-            }
-            else if (ev is AgentResponseUpdateEvent updateEvent)
-            {
-                messages.AddRange(updateEvent.AsResponse().Messages);
-            }
-            else if (ev is WorkflowOutputEvent outputEvent)
-            {
-                if (outputEvent.Is<ChatMessage>(out var msg))
-                {
-                    messages.Add(msg);
-                }
-                else if (outputEvent.Is<string>(out var text) && !string.IsNullOrWhiteSpace(text))
-                {
-                    messages.Add(new ChatMessage(ChatRole.Assistant, text));
-                }
-            }
-        }
-
-        // Fallback: try to extract text from any object in OutgoingEvents
-        if (messages.Count == 0)
-        {
-            foreach (var ev in run.OutgoingEvents)
-            {
-                var text = ExtractTextFromEventObject(ev);
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    messages.Add(new ChatMessage(ChatRole.Assistant, text));
-                }
-            }
-        }
-
-        return new FrameworkAgentResponse
-        {
-            Messages = messages
-        };
-    }
-
-    private static string ExtractTextFromEventObject(object ev)
-    {
-        var type = ev.GetType();
-        var responseProp = type.GetProperty("Response");
-        if (responseProp != null)
-        {
-            var response = responseProp.GetValue(ev);
-            if (response != null)
-            {
-                var messagesProp = response.GetType().GetProperty("Messages");
-                if (messagesProp?.GetValue(response) is IEnumerable<ChatMessage> msgs)
-                {
-                    return string.Join("\n", msgs
-                        .Where(m => m.Role == ChatRole.Assistant)
-                        .SelectMany(m => m.Contents.OfType<TextContent>())
-                        .Select(t => t.Text));
-                }
-            }
-        }
-
-        var textProp = type.GetProperty("Text");
-        return textProp?.GetValue(ev) as string ?? string.Empty;
     }
 
     private static string? ExtractHandoffAgent(FrameworkAgentResponse response)
@@ -282,12 +215,15 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         TimeSpan latency,
         CancellationToken ct = default)
     {
+        var hasContent = !string.IsNullOrWhiteSpace(content);
+        var errorMessage = hasContent ? null : "O orquestrador não retornou conteúdo textual.";
         var response = new CoreAgentResponse
         {
-            Content = content,
+            Content = hasContent ? content : $"Erro: {errorMessage}",
             AgentName = calledAgentName ?? _orchestratorMetadata.Name,
             AgentTier = calledAgent?.Tier ?? AgentTier.Chief,
-            Success = true,
+            Success = hasContent,
+            ErrorMessage = errorMessage,
             SessionId = sessionId,
             Metadata = new Dictionary<string, object>
             {
@@ -358,13 +294,13 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         var content = string.Join("\n", frameworkResponse.Messages
             .Where(m => m.Role == ChatRole.Assistant)
             .SelectMany(m => m.Contents.OfType<TextContent>())
-            .Select(t => t.Text));
+            .Select(t => t.Text)).Trim();
 
         if (string.IsNullOrWhiteSpace(content))
         {
             content = string.Join("\n", frameworkResponse.Messages
                 .Where(m => m.Role == ChatRole.Assistant)
-                .Select(m => m.Text));
+                .Select(m => m.Text)).Trim();
         }
 
         if (string.IsNullOrWhiteSpace(content) && logger != null)

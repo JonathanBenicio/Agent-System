@@ -80,6 +80,9 @@ public class DependencyInjectionValidationTests
 
             var adminConsole = scope.ServiceProvider.GetService<IAdminConsole>();
             adminConsole.Should().NotBeNull();
+
+            scope.ServiceProvider.GetRequiredService<IPlatformConfigStore>()
+                .Should().BeOfType<AgenticSystem.Infrastructure.Persistence.PostgresPlatformConfigStore>();
         }
     }
 }

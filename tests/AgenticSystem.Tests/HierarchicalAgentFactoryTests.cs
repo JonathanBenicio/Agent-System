@@ -110,4 +110,51 @@ public class HierarchicalAgentFactoryTests
         agent.Should().NotBeNull();
         agent.Name.Should().Be("DotNetExpertAgent");
     }
+
+    [Fact]
+    public async Task ResolveAgentAsync_ScopesSameDynamicAgentNameAndRefreshesByTenant()
+    {
+        var tenantAccessor = new TenantContextAccessor();
+        var tenantASpec = new AgentSpecification
+        {
+            Name = "SharedSpecialist",
+            Description = "Tenant A specialist",
+            Domain = "research",
+            Instructions = "Tenant A instructions"
+        };
+        var tenantBSpec = new AgentSpecification
+        {
+            Name = "SharedSpecialist",
+            Description = "Tenant B specialist",
+            Domain = "research",
+            Instructions = "Tenant B instructions"
+        };
+        _dynamicAgentRepository.GetByNameAsync("SharedSpecialist", Arg.Any<CancellationToken>())
+            .Returns(_ => tenantAccessor.CurrentTenantId == "tenant-a" ? tenantASpec : tenantBSpec);
+        var factory = new HierarchicalAgentFactory(
+            _skillManager,
+            _dynamicAgentRepository,
+            _loggerFactory,
+            _logger,
+            tenantContextAccessor: tenantAccessor);
+
+        IAgent tenantAAgent;
+        using (tenantAccessor.BeginScope(new TenantContext { TenantId = "tenant-a" }))
+            tenantAAgent = await factory.ResolveAgentAsync(new AgentInfo { Name = "SharedSpecialist" });
+
+        IAgent tenantBAgent;
+        using (tenantAccessor.BeginScope(new TenantContext { TenantId = "tenant-b" }))
+            tenantBAgent = await factory.ResolveAgentAsync(new AgentInfo { Name = "SharedSpecialist" });
+
+        tenantAAgent.Should().NotBeSameAs(tenantBAgent);
+        tenantAAgent.Instructions.Should().Be("Tenant A instructions");
+        tenantBAgent.Instructions.Should().Be("Tenant B instructions");
+
+        tenantASpec.Instructions = "Tenant A updated instructions";
+        using (tenantAccessor.BeginScope(new TenantContext { TenantId = "tenant-a" }))
+        {
+            var refreshed = await factory.ResolveAgentAsync(new AgentInfo { Name = "SharedSpecialist" });
+            refreshed.Instructions.Should().Be("Tenant A updated instructions");
+        }
+    }
 }

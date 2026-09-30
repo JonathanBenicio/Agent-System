@@ -316,6 +316,64 @@ public class RoleAssignmentEntity : ITenantEntity
     public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>Tenant-scoped role membership for human and API key principals.</summary>
+public class TenantMembershipEntity : ITenantEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string SubjectId { get; set; } = string.Empty;
+    public string SubjectType { get; set; } = "User";
+    public string Role { get; set; } = "Viewer";
+    public string TenantId { get; set; } = string.Empty;
+    public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+    public string? GrantedBy { get; set; }
+}
+
+/// <summary>Explicit platform-wide administration grant; never backfilled from tenant roles.</summary>
+public class PlatformAdministratorEntity
+{
+    public string UserId { get; set; } = string.Empty;
+    public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+    public string? GrantedBy { get; set; }
+}
+
+/// <summary>Platform-wide provider setting; intentionally has no TenantId.</summary>
+public class PlatformConfigEntity
+{
+    public string Key { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public string? EncryptedValue { get; set; }
+    public bool IsSecret { get; set; }
+    public string ChangedBy { get; set; } = string.Empty;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>Change history for platform configuration; secret values are represented by hashes only.</summary>
+public class PlatformConfigAuditEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Key { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public string ChangedBy { get; set; } = string.Empty;
+    public string? PreviousValueHash { get; set; }
+    public string? NewValueHash { get; set; }
+    public DateTime ChangedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>Temporary, scoped and revocable support access to tenant content.</summary>
+public class TenantSupportGrantEntity : ITenantEntity
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string TenantId { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string Scope { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+    public DateTime GrantedAt { get; set; } = DateTime.UtcNow;
+    public string GrantedBy { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
+    public DateTime? RevokedAt { get; set; }
+    public string? RevokedBy { get; set; }
+}
+
 public class OutboxMessageEntity : ITenantEntity
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -376,6 +434,11 @@ public class WorkflowExecutionEntity : ITenantEntity
     public string TenantId { get; set; } = string.Empty;
     public string WorkflowId { get; set; } = string.Empty;
     public string WorkflowName { get; set; } = string.Empty;
+    public int WorkflowDefinitionVersion { get; set; }
+    public string? WorkflowDefinitionHash { get; set; }
+    public string? WorkflowDefinitionSnapshotJson { get; set; }
+    public string? LeaseOwner { get; set; }
+    public DateTime? LeaseExpiresAt { get; set; }
     public string Status { get; set; } = string.Empty; // Core.Models.WorkflowExecutionStatus
     public string VariablesJson { get; set; } = "{}";
     public string? InitiatedBy { get; set; }
@@ -398,6 +461,7 @@ public class WorkflowStepExecutionEntity : ITenantEntity
     public bool CompensationExecuted { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public DateTime? WaitUntilUtc { get; set; }
 }
 
 public class ModelPerformanceEntity : ITenantEntity

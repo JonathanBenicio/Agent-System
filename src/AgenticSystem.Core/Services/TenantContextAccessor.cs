@@ -6,17 +6,19 @@ namespace AgenticSystem.Core.Services;
 
 public sealed class TenantContextAccessor : ITenantContextAccessor
 {
-    private static readonly AsyncLocal<TenantContext?> CurrentContext = new();
+    private static readonly AsyncLocal<TenantContext?> AmbientContext = new();
+
+    public TenantContext? CurrentContext => AmbientContext.Value;
 
     public string CurrentTenantId => 
-        CurrentContext.Value?.TenantId 
+        AmbientContext.Value?.TenantId
         ?? throw new InvalidOperationException("Strict Multi-Tenancy Violation: No active Tenant Context resolved in the current async flow.");
 
     public IDisposable BeginScope(TenantContext context)
     {
-        var previous = CurrentContext.Value;
-        CurrentContext.Value = context;
-        return new Scope(() => CurrentContext.Value = previous);
+        var previous = AmbientContext.Value;
+        AmbientContext.Value = context;
+        return new Scope(() => AmbientContext.Value = previous);
     }
 
     private sealed class Scope : IDisposable

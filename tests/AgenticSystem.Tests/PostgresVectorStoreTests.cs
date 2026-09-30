@@ -27,9 +27,29 @@ public class PostgresVectorStoreTests
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            // base.OnModelCreating(modelBuilder);
-            // Sqlite does not support Postgres raw SQL used in PostgresVectorStore
+            base.OnModelCreating(modelBuilder);
+            // Empty-room guard is provider independent; other room SQL requires PostgreSQL.
         }
+    }
+
+    [Fact]
+    public async Task SearchWithFiltersAsync_EmptyRoomListReturnsNoDocuments()
+    {
+        using var connection = new SqliteConnection("DataSource=:memory:");
+        await connection.OpenAsync();
+        var tenantAccessor = Substitute.For<ITenantContextAccessor>();
+        tenantAccessor.CurrentTenantId.Returns("test-tenant");
+        var options = new DbContextOptionsBuilder<AgenticDbContext>().UseSqlite(connection).Options;
+        var factory = new FakeDbContextFactory
+        {
+            ContextCreator = () => new TestAgenticDbContext(options, tenantAccessor)
+        };
+        var store = new PostgresVectorStore(factory, NullLogger<PostgresVectorStore>.Instance, embeddingGenerator: null);
+
+        var result = await store.SearchWithFiltersAsync("query", new Dictionary<string, string> { ["room_ids"] = " , " });
+
+        result.Matches.Should().BeEmpty();
+        result.TotalFound.Should().Be(0);
     }
 
     [Fact(Skip = "Raw SQL ANY() array syntax requires actual Postgres instance")]
