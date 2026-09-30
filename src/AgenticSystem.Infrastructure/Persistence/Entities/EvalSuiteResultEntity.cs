@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Infrastructure.Persistence.Entities;
 
 [Table("eval_suite_results")]
-public class EvalSuiteResultEntity
+public class EvalSuiteResultEntity : ITenantEntity
 {
     [Key]
     [MaxLength(64)]
@@ -14,6 +15,9 @@ public class EvalSuiteResultEntity
     [Required]
     [MaxLength(256)]
     public string AgentName { get; set; } = string.Empty;
+
+    [MaxLength(50)]
+    public string TenantId { get; set; } = string.Empty;
 
     [MaxLength(64)]
     public string? AgentVersionId { get; set; }
@@ -52,6 +56,7 @@ public class EvalSuiteResultEntity
         {
             SuiteId = SuiteId,
             AgentName = AgentName,
+            TenantId = TenantId,
             AgentVersionId = AgentVersionId,
             TotalTests = TotalTests,
             Passed = Passed,
@@ -79,6 +84,7 @@ public class EvalSuiteResultEntity
         {
             SuiteId = model.SuiteId,
             AgentName = model.AgentName,
+            TenantId = model.TenantId,
             AgentVersionId = model.AgentVersionId,
             TotalTests = model.TotalTests,
             Passed = model.Passed,

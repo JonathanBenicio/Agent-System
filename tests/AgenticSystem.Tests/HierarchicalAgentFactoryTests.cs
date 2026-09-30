@@ -11,6 +11,7 @@ namespace AgenticSystem.Tests;
 public class HierarchicalAgentFactoryTests
 {
     private readonly ISkillManager _skillManager;
+    private readonly IDynamicAgentRepository _dynamicAgentRepository;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<HierarchicalAgentFactory> _logger;
     private readonly HierarchicalAgentFactory _sut;
@@ -18,10 +19,14 @@ public class HierarchicalAgentFactoryTests
     public HierarchicalAgentFactoryTests()
     {
         _skillManager = Substitute.For<ISkillManager>();
+        _dynamicAgentRepository = Substitute.For<IDynamicAgentRepository>();
         _loggerFactory = Substitute.For<ILoggerFactory>();
         _loggerFactory.CreateLogger(Arg.Any<string>()).Returns(Substitute.For<ILogger>());
         _logger = Substitute.For<ILogger<HierarchicalAgentFactory>>();
-        _sut = new HierarchicalAgentFactory(_skillManager, _loggerFactory, _logger);
+        
+        _dynamicAgentRepository.GetAllAsync().Returns(Task.FromResult((IEnumerable<AgentSpecification>)new List<AgentSpecification>()));
+        
+        _sut = new HierarchicalAgentFactory(_skillManager, _dynamicAgentRepository, _loggerFactory, _logger);
     }
 
     [Fact]

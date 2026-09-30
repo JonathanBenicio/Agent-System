@@ -20,6 +20,7 @@ export function useSkills() {
     }
   }, [])
 
+
   useEffect(() => { refresh() }, [refresh])
 
   const deleteSkill = useCallback(async (id: string) => {
@@ -27,5 +28,23 @@ export function useSkills() {
     setSkills(prev => prev.filter(s => s.id !== id))
   }, [])
 
-  return { skills, loading, error, refresh, deleteSkill }
+  const createSkill = useCallback(async (data: { id: string; name: string; domain: string; type: string; systemPromptFragment: string; fewShotExamples?: string; metadata?: Record<string, string> }) => {
+    const newSkill = await skillApi.create(data)
+    setSkills(prev => [...prev, newSkill])
+    return newSkill
+  }, [])
+
+  const updateSkill = useCallback(async (id: string, data: { name?: string; domain?: string; systemPromptFragment?: string; fewShotExamples?: string; metadata?: Record<string, string> }) => {
+    const updated = await skillApi.update(id, data)
+    setSkills(prev => prev.map(s => s.id === id ? { ...s, ...updated } : s))
+    return updated;
+  }, [])
+
+  const uploadSkill = useCallback(async (file: File) => {
+    const res = await skillApi.upload(file)
+    await refresh()
+    return res
+  }, [refresh])
+
+  return { skills, loading, error, refresh, deleteSkill, createSkill, updateSkill, uploadSkill }
 }

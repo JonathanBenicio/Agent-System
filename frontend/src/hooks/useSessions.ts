@@ -1,26 +1,27 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useCallback } from 'react'
 import { sessionApi } from '@/lib/api'
-import type { SessionListItem, ChatMessageDto } from '@/types/api'
+import { getConnection } from '@/lib/signalr'
+import type { ChatMessageDto } from '@/types/api'
 import type { ChatMessage } from '@/types/chat'
 
-export function useSessions() {
-  const [sessions, setSessions] = useState<SessionListItem[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+export function useSessions(search?: string) {
+  const queryClient = useQueryClient()
 
-  const loadSessions = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const data = await sessionApi.list(50)
-      setSessions(data)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to load sessions'
-      setError(message)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [])
+  const { data: sessions = [], isLoading, error } = useQuery({
+    queryKey: ['sessions', search],
+    queryFn: () => sessionApi.list(50, search),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => sessionApi.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] })
+  })
+
+  const renameMutation = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) => sessionApi.updateTitle(id, title),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['sessions'] })
+  })
 
   const loadSessionMessages = useCallback(async (id: string): Promise<ChatMessage[]> => {
     const messages = await sessionApi.messages(id)
@@ -36,27 +37,32 @@ export function useSessions() {
     }))
   }, [])
 
-  const deleteSession = useCallback(async (id: string) => {
-    await sessionApi.delete(id)
-    setSessions(prev => prev.filter(s => s.id !== id))
-  }, [])
-
-  const renameSession = useCallback(async (id: string, title: string) => {
-    const result = await sessionApi.updateTitle(id, title)
-    setSessions(prev => prev.map(s => s.id === id ? { ...s, title: result.title } : s))
-  }, [])
-
+  // Reactive updates via SignalR
   useEffect(() => {
-    void loadSessions()
-  }, [loadSessions])
+    const conn = getConnection()
+    
+    const handleUpdate = () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
+    }
+
+    conn.on('SessionCreated', handleUpdate)
+    conn.on('SessionDeleted', handleUpdate)
+    conn.on('SessionUpdated', handleUpdate)
+
+    return () => {
+      conn.off('SessionCreated', handleUpdate)
+      conn.off('SessionDeleted', handleUpdate)
+      conn.off('SessionUpdated', handleUpdate)
+    }
+  }, [queryClient])
 
   return {
     sessions,
     isLoading,
-    error,
-    refresh: loadSessions,
+    error: error ? (error as Error).message : null,
+    refresh: () => queryClient.invalidateQueries({ queryKey: ['sessions'] }),
     loadSessionMessages,
-    deleteSession,
-    renameSession,
+    deleteSession: deleteMutation.mutateAsync,
+    renameSession: (id: string, title: string) => renameMutation.mutateAsync({ id, title }),
   }
 }

@@ -151,6 +151,22 @@ public sealed class PineconeVectorStore : IVectorStore
         });
     }
 
+    public async Task DeleteCollectionAsync(string collection)
+    {
+        if (string.IsNullOrWhiteSpace(collection))
+            return;
+
+        var body = new
+        {
+            deleteAll = true,
+            @namespace = collection
+        };
+
+        var response = await _httpClient.PostAsJsonAsync("vectors/delete", body);
+        response.EnsureSuccessStatusCode();
+        _logger.LogInformation("🗑️ Deleted Pinecone namespace/collection: {Namespace}", collection);
+    }
+
     #region Pinecone API DTOs
 
     private sealed class PineconeQueryResponse

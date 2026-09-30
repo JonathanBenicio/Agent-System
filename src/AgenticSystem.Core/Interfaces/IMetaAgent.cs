@@ -15,17 +15,17 @@ public interface IMetaAgent
     /// 3. Execução com tracking
     /// 4. Consolidação na memória
     /// </summary>
-    Task<AgentResponse> ProcessRequestAsync(string input, UserContext context);
+    Task<AgentResponse> ProcessRequestAsync(string input, UserContext context, string? sessionId = null);
 
-    IAsyncEnumerable<AgentStreamEvent> ProcessRequestStreamAsync(string input, UserContext context, CancellationToken ct = default);
+    IAsyncEnumerable<AgentStreamEvent> ProcessRequestStreamAsync(string input, UserContext context, string? sessionId = null, CancellationToken ct = default);
 
     /// <summary>
     /// Processa uma requisição direcionada a um agent específico, 
     /// bypassing a análise de contexto e seleção automática do MetaAgent.
     /// </summary>
-    Task<AgentResponse> ProcessDirectRequestAsync(string input, UserContext context, string targetAgent);
+    Task<AgentResponse> ProcessDirectRequestAsync(string input, UserContext context, string targetAgent, string? sessionId = null);
 
-    IAsyncEnumerable<AgentStreamEvent> ProcessDirectRequestStreamAsync(string input, UserContext context, string targetAgent, CancellationToken ct = default);
+    IAsyncEnumerable<AgentStreamEvent> ProcessDirectRequestStreamAsync(string input, UserContext context, string targetAgent, string? sessionId = null, CancellationToken ct = default);
     
     /// <summary>
     /// Lista todos os agents ativos no sistema

@@ -6,6 +6,7 @@ import type { AgentVersion, AgentInfo } from '@/types/api'
 import { agentApi } from '@/lib/api'
 import { useToast } from '@/components/shared/Toast'
 import { cn } from '@/lib/utils'
+import { getCapabilityDescription } from '@/lib/constants'
 
 interface Props {
   agent: AgentInfo
@@ -25,13 +26,13 @@ function serializeVersionToYaml(ver: AgentVersion): string {
   lines.push(`# Microsoft Agent Framework (MAF) - Agent Specification (v${ver.versionNumber})`)
   lines.push(`name: "${ver.agentName || ''}"`)
   lines.push(`description: "${ver.description || ''}"`)
-  
+
   // O autonomyLevel costuma estar nos parameters, ou mapeado na versão
-  const autonomy = typeof ver.parameters?.autonomyLevel === 'number' 
-    ? ver.parameters.autonomyLevel 
+  const autonomy = typeof ver.parameters?.autonomyLevel === 'number'
+    ? ver.parameters.autonomyLevel
     : 2 // default Supervised
   lines.push(`autonomyLevel: ${autonomy}`)
-  
+
   if (ver.tools && ver.tools.length > 0) {
     lines.push('allowedTools:')
     ver.tools.forEach(tool => {
@@ -67,6 +68,7 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
   // Carrega o histórico de versões quando a aba de histórico é ativada
   useEffect(() => {
     if (activeTab === 'history') {
+
       setLoadingHistory(true)
       agentApi.getHistory(agent.name)
         .then(data => {
@@ -82,17 +84,17 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
           setLoadingHistory(false)
         })
     }
-  }, [activeTab, agent.name])
+  }, [activeTab, agent.name, addToast])
 
   // Algoritmo de diff inline simples e extremamente rápido para visualização estruturada de YAML
   const computeYamlDiff = (oldYaml: string, newYaml: string): DiffLine[] => {
     const oldLines = (oldYaml || '').split('\n')
     const newLines = (newYaml || '').split('\n')
     const diff: DiffLine[] = []
-    
+
     let o = 0
     let n = 0
-    
+
     while (o < oldLines.length || n < newLines.length) {
       if (o < oldLines.length && n < newLines.length) {
         if (oldLines[o] === newLines[n]) {
@@ -120,7 +122,7 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
               break
             }
           }
-          
+
           if (!foundMatch) {
             diff.push({ type: 'removed', text: oldLines[o] })
             diff.push({ type: 'added', text: newLines[n] })
@@ -136,14 +138,14 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
         n++
       }
     }
-    
+
     return diff
   }
 
   // Executar o Rollback de Versão Histórica
   const handleRollback = async (version: AgentVersion) => {
     if (rollingBackId) return
-    
+
     const confirmMsg = `Confirmar Rollback para a Versão v${version.versionNumber}? O agente será restaurado para estas configurações.`
     if (!window.confirm(confirmMsg)) return
 
@@ -151,15 +153,15 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
     try {
       await agentApi.rollback(agent.name, version.id)
       addToast(`Agente restaurado com sucesso para a Versão v${version.versionNumber}`, 'success')
-      
+
       // Fecha modal de diff ativo
       setSelectedDiffVersion(null)
-      
+
       // Recarrega o histórico
       if (onRefresh) {
         onRefresh()
       }
-      
+
       // Força a recarga do histórico de versões fechando e reabrindo a aba
       setActiveTab('details')
       setTimeout(() => setActiveTab('history'), 100)
@@ -178,16 +180,16 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} />
       <div className="relative bg-zinc-950 border border-zinc-850 rounded-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl flex flex-col">
-        
+
         {/* Cabeçalho do Detalhe com Tabs */}
         <div className="sticky top-0 bg-zinc-950 px-6 pt-5 pb-3 border-b border-zinc-900 flex flex-col gap-4 z-10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={cn('flex items-center justify-center w-10 h-10 rounded-xl border', 
+              <div className={cn('flex items-center justify-center w-10 h-10 rounded-xl border',
                 agent.tier === 0 ? 'bg-zinc-900 border-zinc-700 text-zinc-300' :
-                agent.tier === 1 ? 'bg-teal-500/10 border-teal-500/20 text-teal-400' :
-                agent.tier === 2 ? 'bg-sky-500/10 border-sky-500/20 text-sky-400' :
-                'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                  agent.tier === 1 ? 'bg-teal-500/10 border-teal-500/20 text-teal-400' :
+                    agent.tier === 2 ? 'bg-sky-500/10 border-sky-500/20 text-sky-400' :
+                      'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
               )}>
                 <Bot className="w-5 h-5" />
               </div>
@@ -262,11 +264,21 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
               {agent.capabilities && agent.capabilities.length > 0 && (
                 <Section title="Capabilities Autorizadas">
                   <div className="flex flex-wrap gap-1.5">
-                    {agent.capabilities.map(c => (
-                      <span key={c} className="px-2.5 py-1 text-xs bg-zinc-900 border border-zinc-850 rounded-lg text-zinc-300 font-medium">
-                        {c}
-                      </span>
-                    ))}
+                    {agent.capabilities.map(c => {
+                      const description = getCapabilityDescription(c)
+                      return (
+                        <span 
+                          key={c} 
+                          title={description}
+                          className={cn(
+                            "px-2.5 py-1 text-xs bg-zinc-900 border border-zinc-850 rounded-lg text-zinc-300 font-medium cursor-help transition-colors hover:border-zinc-700",
+                            description && "hover:text-teal-300"
+                          )}
+                        >
+                          {c}
+                        </span>
+                      )
+                    })}
                   </div>
                 </Section>
               )}
@@ -305,7 +317,7 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
                ABA HISTÓRICO E VERSIONAMENTO
                ========================================================================= */
             <div className="space-y-6 animate-fadeIn">
-              
+
               {/* Carregamento */}
               {loadingHistory ? (
                 <div className="flex flex-col items-center justify-center py-16 space-y-3">
@@ -318,7 +330,7 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  
+
                   {/* Timeline Vertical */}
                   <div className="relative pl-6 border-l border-zinc-850 space-y-6">
                     {versions.map((ver) => {
@@ -335,12 +347,12 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
 
                       return (
                         <div key={ver.id} className="relative">
-                          
+
                           {/* Indicador na Timeline */}
                           <div className={cn(
                             'absolute -left-[31px] top-1.5 w-4.5 h-4.5 rounded-full border-2 flex items-center justify-center transition-all duration-300',
-                            isCurrent 
-                              ? 'bg-zinc-950 border-emerald-500 shadow-lg shadow-emerald-500/20 scale-110' 
+                            isCurrent
+                              ? 'bg-zinc-950 border-emerald-500 shadow-lg shadow-emerald-500/20 scale-110'
                               : 'bg-zinc-900 border-zinc-800'
                           )}>
                             <div className={cn(
@@ -352,11 +364,11 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
                           {/* Bloco de Informações da Versão */}
                           <div className={cn(
                             'p-4 border rounded-xl transition-all duration-200',
-                            isCurrent 
-                              ? 'bg-emerald-950/10 border-emerald-500/20' 
+                            isCurrent
+                              ? 'bg-emerald-950/10 border-emerald-500/20'
                               : 'bg-zinc-900/30 border-zinc-900/60 hover:bg-zinc-900/50 hover:border-zinc-800'
                           )}>
-                            
+
                             <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
                               <div className="flex items-center gap-2">
                                 <span className={cn(
@@ -432,13 +444,13 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
                                 </div>
                                 <div className="max-h-72 overflow-y-auto p-4 font-mono text-[10px] leading-relaxed select-text space-y-0.5">
                                   {computeYamlDiff(serializeVersionToYaml(ver), serializeVersionToYaml(activeVersion)).map((line, lIdx) => (
-                                    <div 
-                                      key={lIdx} 
+                                    <div
+                                      key={lIdx}
                                       className={cn(
                                         'px-2 py-0.5 rounded font-mono',
                                         line.type === 'removed' ? 'bg-red-950/20 text-red-300 border-l-2 border-red-500/70' :
-                                        line.type === 'added' ? 'bg-emerald-950/20 text-emerald-300 border-l-2 border-emerald-500/70' :
-                                        'text-zinc-500'
+                                          line.type === 'added' ? 'bg-emerald-950/20 text-emerald-300 border-l-2 border-emerald-500/70' :
+                                            'text-zinc-500'
                                       )}
                                     >
                                       <span className="opacity-40 select-none mr-2">

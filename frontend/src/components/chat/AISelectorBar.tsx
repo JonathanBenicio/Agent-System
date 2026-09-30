@@ -1,7 +1,13 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, Cpu, Settings2 } from 'lucide-react'
+import { 
+  Cpu, 
+  Settings2, 
+  Brain,
+  Sliders
+} from 'lucide-react'
 import type { LLMProviderInfo } from '@/types/api'
-import { Badge } from '@/components/shared/Badge'
+import { useChat } from '@/hooks/useChat'
+import { cn } from '@/lib/utils'
 
 interface AISelectorBarProps {
   providers: LLMProviderInfo[]
@@ -9,72 +15,94 @@ interface AISelectorBarProps {
   selectedModel: string
   onProviderChange: (providerName: string) => void
   onModelChange: (modelName: string) => void
+  showConfigSidebar?: boolean
+  onToggleConfig?: () => void
+  showInsights?: boolean
+  onToggleInsights?: () => void
 }
 
 export function AISelectorBar({
   providers,
   selectedProvider,
   selectedModel,
-  onProviderChange,
-  onModelChange,
+  showConfigSidebar = false,
+  onToggleConfig,
+  showInsights = false,
+  onToggleInsights,
 }: AISelectorBarProps) {
+  const { sessionId } = useChat()
+
   const activeProvider = providers.find(provider => provider.name === selectedProvider) ?? providers[0]
-  const models = activeProvider?.models ?? []
 
   return (
-    <div className="border-b border-zinc-800 bg-[radial-gradient(circle_at_top_left,_rgba(34,197,94,0.16),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(59,130,246,0.18),_transparent_28%),#09090b] px-4 py-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-emerald-900/80 bg-emerald-950/70 text-emerald-300">
-            <Cpu className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-sm font-semibold text-zinc-100">IA ativa no chat</h2>
-              {activeProvider ? <Badge variant="teal">{activeProvider.name}</Badge> : null}
-            </div>
-            <p className="mt-0.5 text-xs text-zinc-400">
-              Selecione a IA para esta conversa ou ajuste a configuração completa na área dedicada.
-            </p>
-          </div>
+    <div className="relative border-b border-zinc-800 bg-zinc-950/85 backdrop-blur-md px-4 py-2 select-none flex items-center justify-between h-14">
+      {/* Background Teal Gradient Glow */}
+      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_20%_0%,_rgba(20,184,166,0.06),_transparent_40%),radial-gradient(circle_at_80%_0%,_rgba(16,185,129,0.04),_transparent_35%)]" />
+
+      {/* Left Block: Session and Model Info */}
+      <div className="flex items-center gap-3">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-teal-800 bg-teal-950/40 text-teal-400">
+          <Cpu className="h-4 w-4 animate-pulse" />
         </div>
+        <div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xs font-bold tracking-widest text-zinc-200 uppercase font-mono">IA CORE WORKSPACE</h2>
+            {activeProvider && selectedModel && (
+              <span className="bg-teal-950/60 border border-teal-800/80 px-2 py-0.5 text-[10px] font-bold text-teal-400 tracking-wider font-mono uppercase rounded-lg">
+                {activeProvider.name} : {selectedModel.split('/').pop() || selectedModel}
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] tracking-wide text-zinc-500 font-mono">
+            Sessão ativa: <span className="text-zinc-400 font-semibold">{sessionId ? sessionId.slice(0, 8) : 'Nova Sessão'}</span>
+          </p>
+        </div>
+      </div>
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <label className="flex min-w-[180px] flex-col gap-1">
-            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Provider</span>
-            <select
-              value={selectedProvider}
-              onChange={(event) => onProviderChange(event.target.value)}
-              className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-emerald-500"
-            >
-              {providers.map(provider => (
-                <option key={provider.name} value={provider.name}>{provider.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex min-w-[220px] flex-col gap-1">
-            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-zinc-500">Modelo</span>
-            <select
-              value={selectedModel}
-              onChange={(event) => onModelChange(event.target.value)}
-              className="rounded-xl border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-emerald-500"
-            >
-              {models.map(model => (
-                <option key={model} value={model}>{model}</option>
-              ))}
-            </select>
-          </label>
-
-          <Link
-            to="/ai"
-            className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-emerald-500/60 hover:bg-zinc-800"
+      {/* Right Block: Sidebar Toggle Action Buttons */}
+      <div className="flex items-center gap-2">
+        {/* Toggle Config Sidebar */}
+        {onToggleConfig && (
+          <button
+            onClick={onToggleConfig}
+            title="Configurações de Parâmetros"
+            className={cn(
+              "flex h-9 items-center gap-2 px-3 rounded-xl text-xs font-semibold font-mono border transition-all active:scale-95 duration-150",
+              showConfigSidebar
+                ? "bg-teal-950/60 border-teal-700 text-teal-400 shadow-md shadow-teal-950/30"
+                : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-800 hover:text-zinc-200"
+            )}
           >
-            <Settings2 className="h-4 w-4" />
-            Configurar IA
-            <ChevronRight className="h-4 w-4" />
-          </Link>
-        </div>
+            <Sliders className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Parâmetros</span>
+          </button>
+        )}
+
+        {/* Toggle Session Insights */}
+        {onToggleInsights && sessionId && (
+          <button
+            onClick={onToggleInsights}
+            title="Memória da Sessão (Insights)"
+            className={cn(
+              "flex h-9 items-center gap-2 px-3 rounded-xl text-xs font-semibold font-mono border transition-all active:scale-95 duration-150",
+              showInsights
+                ? "bg-teal-950/60 border-teal-700 text-teal-400 shadow-md shadow-teal-950/30"
+                : "bg-zinc-900/60 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:bg-zinc-800 hover:text-zinc-200"
+            )}
+          >
+            <Brain className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Memória</span>
+          </button>
+        )}
+
+        {/* Global LLM API Keys Configuration Link */}
+        <Link
+          to="/ai"
+          title="Configurações do Servidor LLM"
+          className="inline-flex h-9 w-9 items-center justify-center border border-zinc-800 bg-zinc-900/60 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700 hover:bg-zinc-800 transition rounded-xl"
+        >
+          <Settings2 className="w-4 h-4" />
+        </Link>
       </div>
     </div>
   )

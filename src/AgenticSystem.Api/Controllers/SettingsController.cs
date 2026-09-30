@@ -135,6 +135,7 @@ public class SettingsController : ControllerBase
     }
 
     [HttpPost("reranking/assets")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     public async Task<IActionResult> UploadReRankingAssets(
         [FromForm] IFormFile? modelFile,
         [FromForm] IFormFile? vocabularyFile,

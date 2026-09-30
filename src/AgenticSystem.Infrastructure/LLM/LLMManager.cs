@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Http;
+using Microsoft.EntityFrameworkCore;
 using MChatMessage = Microsoft.Extensions.AI.ChatMessage;
 using Polly;
 
@@ -25,7 +26,7 @@ public class LLMManager : ILLMAdministrationService
         ["OpenAI"] = new(StringComparer.OrdinalIgnoreCase) { "gpt-4o", "gpt-4o-mini" },
         ["Gemini"] = new(StringComparer.OrdinalIgnoreCase) { "gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash-exp" },
         ["Claude"] = new(StringComparer.OrdinalIgnoreCase) { "claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest" },
-        ["Ollama"] = new(StringComparer.OrdinalIgnoreCase) { "llama3", "llama3.1", "mistral", "qwen2.5" },
+        ["Ollama"] = new(StringComparer.OrdinalIgnoreCase) { "llama3", "llama3.1", "llama3.2", "phi3", "mistral", "qwen2.5", "codellama", "nomic-embed-text" },
         ["OpenRouter"] = new(StringComparer.OrdinalIgnoreCase) { "openrouter/auto", "meta-llama/llama-3-8b-instruct", "google/gemini-2.5-flash", "anthropic/claude-3.5-sonnet" }
     };
 
@@ -594,6 +595,25 @@ public class LLMManager : ILLMAdministrationService
                     }
                 }
             }
+            else if (name.Equals("Ollama", StringComparison.OrdinalIgnoreCase))
+            {
+                var baseUrl = _settings.Ollama.BaseUrl;
+                using var response = await httpClient.GetAsync($"{baseUrl.TrimEnd('/')}/api/tags", ct);
+                if (response.IsSuccessStatusCode)
+                {
+                    using var doc = await System.Text.Json.JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                    if (doc.RootElement.TryGetProperty("models", out var modelsProp) && modelsProp.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var item in modelsProp.EnumerateArray())
+                        {
+                            if (item.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == System.Text.Json.JsonValueKind.String)
+                            {
+                                discovered.Add(nameProp.GetString()!);
+                            }
+                        }
+                    }
+                }
+            }
 
             // Fazer o merge com os modelos do catálogo inicial para garantir que não perdemos nenhum fallback importante
             if (ProviderModelCatalog.TryGetValue(name, out var existingCatalog))
@@ -813,16 +833,46 @@ public class LLMManager : ILLMAdministrationService
             provider.DefaultModel)
             ?? provider.DefaultModel;
 
-        var requestApiKey = runtime?.RequestApiKey;
-        var sessionApiKey = FirstNonEmpty(runtime?.SessionApiKey, ReadSessionSetting(session, "llm.session.apiKey"));
-        var tenantApiKey = ReadTenantApiKey(tenant, provider.Name);
-        var configApiKey = _configManager is null
-            ? null
-            : await _configManager.ResolveValueAsync($"{GetProviderConfigPrefix(provider.Name)}.apiKey");
+        string? resolvedApiKey = null;
+        var requestApiKeyId = request.ApiKeyId ?? runtime?.RequestApiKeyId;
 
-        var apiKey = FirstNonEmpty(requestApiKey, sessionApiKey, tenantApiKey, configApiKey);
+        using (var scope = _serviceProvider.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetService<AgenticSystem.Infrastructure.Persistence.AgenticDbContext>();
+            var encryptionService = scope.ServiceProvider.GetService<IConfigEncryptionService>();
 
-        return new ResolvedSelection(provider.Name, model, apiKey);
+            if (dbContext != null && encryptionService != null)
+            {
+                if (!string.IsNullOrWhiteSpace(requestApiKeyId))
+                {
+                    var keyEntity = await dbContext.ProviderApiKeys
+                        .FirstOrDefaultAsync(k => k.ProviderName == provider.Name && k.Id == requestApiKeyId && k.IsEnabled, ct);
+                    if (keyEntity != null)
+                        resolvedApiKey = encryptionService.Decrypt(keyEntity.EncryptedValue);
+                }
+                else
+                {
+                    var defaultKey = await dbContext.ProviderApiKeys
+                        .FirstOrDefaultAsync(k => k.ProviderName == provider.Name && k.IsDefault && k.IsEnabled, ct);
+                    if (defaultKey != null)
+                        resolvedApiKey = encryptionService.Decrypt(defaultKey.EncryptedValue);
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(resolvedApiKey))
+        {
+            var requestApiKey = runtime?.RequestApiKey;
+            var sessionApiKey = FirstNonEmpty(runtime?.SessionApiKey, ReadSessionSetting(session, "llm.session.apiKey"));
+            var tenantApiKey = ReadTenantApiKey(tenant, provider.Name);
+            var configApiKey = _configManager is null
+                ? null
+                : await _configManager.ResolveValueAsync($"{GetProviderConfigPrefix(provider.Name)}.apiKey");
+
+            resolvedApiKey = FirstNonEmpty(requestApiKey, sessionApiKey, tenantApiKey, configApiKey);
+        }
+
+        return new ResolvedSelection(provider.Name, model, resolvedApiKey);
     }
 
     private async Task<IChatClient> ResolveChatClientAsync(string providerName, string model, string? apiKey, CancellationToken ct)
@@ -1041,7 +1091,18 @@ public class LLMManager : ILLMAdministrationService
 
     private async Task<Tenant?> ResolveTenantAsync(string? tenantId, CancellationToken ct)
     {
-        var normalizedTenantId = string.IsNullOrWhiteSpace(tenantId) ? Tenant.DefaultTenantId : tenantId;
+        var normalizedTenantId = tenantId;
+        if (string.IsNullOrWhiteSpace(normalizedTenantId))
+        {
+            var tenantAccessor = (ITenantContextAccessor?)_serviceProvider.GetService(typeof(ITenantContextAccessor));
+            normalizedTenantId = tenantAccessor?.CurrentTenantId;
+        }
+
+        if (string.IsNullOrWhiteSpace(normalizedTenantId))
+        {
+            throw new InvalidOperationException("Zero Trust: Tenant ID must be resolved for LLM selection.");
+        }
+
         return await _tenantStore.GetByIdAsync(normalizedTenantId, ct);
     }
 

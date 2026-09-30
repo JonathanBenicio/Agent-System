@@ -20,7 +20,8 @@ public enum ToolCategory
     Tasks,
     Search,
     Api,
-    Database
+    Database,
+    AI
 }
 
 public record ToolInput

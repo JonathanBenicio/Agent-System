@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Zap, RefreshCw, CheckCircle, XCircle, Clock } from 'lucide-react'
-import { configApi, type HotSwapSubsystem, type HotSwapResult } from '@/lib/api'
+import { configApi } from '@/lib/api'
+import type { HotSwapSubsystem, HotSwapResult } from '@/types/api'
 
 type SubsystemConfig = {
   label: string
@@ -24,9 +25,9 @@ const SUBSYSTEMS: Record<HotSwapSubsystem, SubsystemConfig> = {
     label: 'LLM Provider',
     description: 'Recarrega o provider de linguagem (OpenAI, Ollama, Azure)',
     icon: '🧠',
-    color: 'text-violet-400',
-    bgColor: 'bg-violet-900/20',
-    borderColor: 'border-violet-800/50',
+    color: 'text-sky-400',
+    bgColor: 'bg-sky-900/20',
+    borderColor: 'border-sky-800/50',
   },
   embedding: {
     label: 'Embedding Provider',
@@ -81,7 +82,7 @@ export function HotSwapPanel() {
   const subsystemEntries = Object.entries(SUBSYSTEMS) as [HotSwapSubsystem, SubsystemConfig][]
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" aria-label="Painel de Hot-Swap de Configuração">
       {/* Header */}
       <div className="flex items-center gap-3 pb-3 border-b border-zinc-800">
         <div className="p-2 bg-teal-900/30 rounded-lg">
@@ -104,7 +105,7 @@ export function HotSwapPanel() {
         </p>
       </div>
 
-      {/* Subsystem Cards */}
+      {/* Subsystem Panels */}
       <div className="grid grid-cols-1 gap-3">
         {subsystemEntries.map(([key, cfg]) => {
           const state = states[key] ?? { status: 'idle' }

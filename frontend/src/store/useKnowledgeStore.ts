@@ -9,7 +9,7 @@ interface KnowledgeState {
 export const useKnowledgeStore = create<KnowledgeState>()(
   persist(
     (set) => ({
-      activeWorkspaceId: 'tenant-default',
+      activeWorkspaceId: '',
       setActiveWorkspace: (id) => set({ activeWorkspaceId: id }),
     }),
     {

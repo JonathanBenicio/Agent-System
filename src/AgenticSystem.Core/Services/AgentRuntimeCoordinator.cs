@@ -140,21 +140,29 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
             {
                 var response = await operation(ct);
 
-                await PublishEventAsync(new AgentStreamEvent
-                {
-                    Type = AgentStreamEventType.SessionCompleted,
-                    AgentName = response.AgentName,
-                    Message = response.Content,
-                    IsTerminal = true,
-                    Data = new Dictionary<string, object>
+                    var sessionData = new Dictionary<string, object>
                     {
                         ["success"] = response.Success,
                         ["agentTier"] = response.AgentTier.ToString(),
                         ["actions"] = response.ActionsPerformed,
                         ["tools"] = response.ToolsUsed,
-                        ["confidence"] = response.Confidence?.Value ?? 0d
+                        ["confidence"] = response.Confidence?.Value ?? 0d,
+                        ["memoryInjected"] = context.Preferences.TryGetValue("memory_injected", out var mi) && mi is bool b && b
+                    };
+
+                    if (response.Metadata.TryGetValue("citations", out var citations) && citations is not null)
+                    {
+                        sessionData["citations"] = citations;
                     }
-                }, ct);
+
+                    await PublishEventAsync(new AgentStreamEvent
+                    {
+                        Type = AgentStreamEventType.SessionCompleted,
+                        AgentName = response.AgentName,
+                        Message = response.Content,
+                        IsTerminal = true,
+                        Data = sessionData
+                    }, ct);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -286,17 +294,24 @@ public class AgentRuntimeCoordinator : IAgentRuntimeCoordinator
             await operation();
         }
 
+        var eventData = new Dictionary<string, object>
+        {
+            ["artifactId"] = artifact.Id,
+            ["artifactType"] = artifact.Type.ToString(),
+            ["status"] = artifact.Status
+        };
+
+        foreach (var kvp in artifact.Data)
+        {
+            eventData[kvp.Key] = kvp.Value;
+        }
+
         await PublishEventAsync(new AgentStreamEvent
         {
             Type = AgentStreamEventType.ArtifactRecorded,
             AgentName = artifact.AgentName,
             Message = artifact.Name,
-            Data = new Dictionary<string, object>
-            {
-                ["artifactId"] = artifact.Id,
-                ["artifactType"] = artifact.Type.ToString(),
-                ["status"] = artifact.Status
-            }
+            Data = eventData
         }, ct);
     }
 

@@ -9,6 +9,7 @@ export function QuotaAlertListener() {
     const conn = getGatewayConnection()
     startGatewayConnection().catch(err => console.error('Erro ao iniciar Gateway Hub:', err))
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleQuotaThresholdReached = (payload: any) => {
       // O SignalR pode camelCasear as chaves do dicionário dependendo da configuração
       const providerName = payload.providerName || payload.ProviderName

@@ -12,6 +12,7 @@ public class AgentVersion
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
     public string AgentName { get; init; } = string.Empty;
+    public string TenantId { get; set; } = string.Empty;
     public int VersionNumber { get; init; }
     public string Label { get; init; } = string.Empty; // "v1.0", "v2.3-staging", etc.
     public AgentVersionStatus Status { get; set; } = AgentVersionStatus.Draft;

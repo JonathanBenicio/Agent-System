@@ -110,8 +110,8 @@ public class WebhooksController : ControllerBase
         if (!string.IsNullOrEmpty(webhook.TargetWorkflowId))
         {
             _logger.LogInformation("⚙️ Triggering workflow {WorkflowId} from webhook {Id}", webhook.TargetWorkflowId, id);
-            // In a real scenario, we might want to parse the payload and pass it as variables
-            await _workflowEngine.ResumeAsync(webhook.TargetWorkflowId, variables);
+            var tenantId = webhook.TenantId ?? "default";
+            await _workflowEngine.ResumeAsync(tenantId, webhook.TargetWorkflowId, variables);
         }
 
         // Trigger Agent

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -18,7 +19,9 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddAgenticSystemCore(this IServiceCollection services)
     {
-        services.AddSingleton<IMetaAgent, MetaAgentOrchestrator>();
+        services.AddMemoryCache();
+
+        services.AddScoped<IMetaAgent, MetaAgentOrchestrator>();
         services.AddSingleton<IContextAnalyzer, ContextAnalyzer>();
         services.AddSingleton<IAgentFactory, HierarchicalAgentFactory>();
         services.AddSingleton<IAgentMemoryStore, InMemoryAgentMemoryStore>();
@@ -27,6 +30,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISessionManager, SessionManager>();
         services.AddSingleton<ILLMRuntimeContextAccessor, LLMRuntimeContextAccessor>();
         services.AddSingleton<IAgentRuntimeCoordinator, AgentRuntimeCoordinator>();
+        services.AddSingleton<ISessionLifecycleCoordinator, SessionLifecycleCoordinator>();
+        services.AddSingleton<IChatWorkflowCommandHandler, ChatWorkflowCommandHandler>();
         services.AddSingleton<IFinalResponseApprovalService, FinalResponseApprovalService>();
         services.AddSingleton<IAgentExecutionPreProcessingPipeline, AgentExecutionPreProcessingPipeline>();
         services.AddSingleton<IAgentExecutionPostProcessingPipeline, AgentExecutionPostProcessingPipeline>();
@@ -40,6 +45,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuditLog, InMemoryAuditLog>();
         services.AddSingleton<IPermissionService, InMemoryPermissionService>();
         services.AddSingleton<IPolicyStore, InMemoryPolicyStore>();
+        services.AddSingleton<IAgentConfigurationService, AgentConfigurationService>();
 
         // Triage & FastPath (ML14 Expansion)
         services.AddSingleton<ITriageService, TriageService>();
@@ -60,11 +66,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IAuditLog, InMemoryAuditLog>();
         services.AddSingleton<IToolGateway, ToolGateway>();
 
-        // Multi-Tenant
-        services.AddSingleton<ITenantStore, InMemoryTenantStore>();
-        services.AddSingleton<ITenantResolver, TenantResolver>();
-        services.AddSingleton<ITenantContextAccessor, TenantContextAccessor>();
-        services.AddScoped<TenantContext>();
+        // Multi-Tenant — registered by Infrastructure layer (AddAgenticMultiTenancy)
 
         // Maturity Level Services
         services.AddSingleton<IChunkLifecycleManager, ChunkLifecycleManager>();
@@ -125,6 +127,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IMigrationJobStore, InMemoryMigrationJobStore>();
         services.AddSingleton<IEmbeddingMigrationManager, EmbeddingMigrationManager>();
 
+        services.AddSingleton<IOnnxSessionCache, OnnxSessionCache>();
+        services.AddSingleton<IOnnxInferenceQueue, OnnxInferenceQueue>();
+
         // ONNX Runtime Integration (Task 1.2 & 3.3)
         if (System.IO.File.Exists("fastpath_model.onnx"))
         {
@@ -170,6 +175,7 @@ public static class ServiceCollectionExtensions
         // Agent Evaluation
         services.AddSingleton<IEvalResultStore, InMemoryEvalResultStore>();
         services.AddSingleton<IAgentEvaluationService, AgentEvaluationService>();
+        services.AddSingleton<IGoldenSetRepository, InMemoryGoldenSetRepository>();
 
         // Structured Output Validation
         services.AddSingleton<IStructuredOutputValidator, StructuredOutputValidator>();
@@ -210,11 +216,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDataConnectorManager, DataConnectorManager>();
         services.AddSingleton<ITenantIsolationEnforcer, TenantIsolationService>();
         services.AddSingleton<IAgentMarketplace, InMemoryAgentMarketplace>();
-        services.AddSingleton<IAdminConsole, AdminConsoleService>();
+        services.AddScoped<IAdminConsole, AdminConsoleService>();
         services.AddSingleton<IComplianceService, ComplianceService>();
         services.AddSingleton<IMemoryLifecycleStore, InMemoryMemoryLifecycleStore>();
 
         // Phase 5 — Enterprise Scoping & Sandboxing
+        // Default in-memory quota repository — overridden by TenantQuotaRepository in PostgreSQL mode.
+        services.AddSingleton<ITenantQuotaRepository, InMemoryTenantQuotaRepository>();
         services.AddSingleton<IQuotaEnforcer, QuotaEnforcer>();
         services.AddSingleton<IAgentSandbox, AgentSandbox>();
 
@@ -234,6 +242,13 @@ public static class ServiceCollectionExtensions
         toolManager.RegisterTool(new DateTimeTool());
         toolManager.RegisterTool(new CalculatorTool());
         toolManager.RegisterTool(new FileSearchTool());
+        toolManager.RegisterTool(new DynamicOnnxProcessorTool(
+            serviceProvider,
+            serviceProvider.GetRequiredService<ILogger<DynamicOnnxProcessorTool>>(),
+            serviceProvider.GetRequiredService<IOnnxSessionCache>()));
+        toolManager.RegisterTool(new TenantAnalyticsTool(
+            serviceProvider,
+            serviceProvider.GetRequiredService<ILogger<TenantAnalyticsTool>>()));
 
         // Register built-in skills
         var skillManager = serviceProvider.GetRequiredService<ISkillManager>();

@@ -99,9 +99,10 @@ public class PersistentSmartRouterTests
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
             .UseInMemoryDatabase($"smart-router-tests-{Guid.NewGuid():N}")
             .Options;
-        var factory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
-        factory.CreateDbContextAsync(Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromResult(new AgenticDbContext(options, tenantAccessor)));
+        var factory = new FakeDbContextFactory
+        {
+            ContextCreator = () => new AgenticDbContext(options, tenantAccessor)
+        };
 
         _sut = new PersistentSmartRouter(_innerRouter, factory, logger);
     }

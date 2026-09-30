@@ -12,16 +12,19 @@ public class HierarchicalAgentFactory : IAgentFactory
     private readonly ConcurrentDictionary<string, IAgent> _agentPool = new();
     private readonly ISkillManager _skillManager;
     private readonly IAgentMemoryService? _agentMemoryService;
+    private readonly IDynamicAgentRepository _dynamicAgentRepository;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<HierarchicalAgentFactory> _logger;
 
     public HierarchicalAgentFactory(
         ISkillManager skillManager,
+        IDynamicAgentRepository dynamicAgentRepository,
         ILoggerFactory loggerFactory,
         ILogger<HierarchicalAgentFactory> logger,
         IAgentMemoryService? agentMemoryService = null)
     {
         _skillManager = skillManager;
+        _dynamicAgentRepository = dynamicAgentRepository;
         _agentMemoryService = agentMemoryService;
         _loggerFactory = loggerFactory;
         _logger = logger;
@@ -40,20 +43,35 @@ public class HierarchicalAgentFactory : IAgentFactory
         return ResolveAgentByIdentityAsync(agentInfo.Name, agentInfo.Domain);
     }
 
-    private Task<IAgent> ResolveAgentByIdentityAsync(string? requestedAgentName, string? fallbackDomain)
+    private async Task<IAgent> ResolveAgentByIdentityAsync(string? requestedAgentName, string? fallbackDomain)
     {
         var agentName = ResolveAgentPoolKey(requestedAgentName, fallbackDomain);
 
         if (_agentPool.TryGetValue(agentName, out var existingAgent) && existingAgent.IsActive)
         {
             _logger.LogDebug("♻️ Reusing agent: {Agent}", agentName);
-            return Task.FromResult(existingAgent);
+            return existingAgent;
+        }
+
+        // Tentar carregar do banco se não estiver no pool
+        var dynamicSpec = await _dynamicAgentRepository.GetByNameAsync(agentName);
+        if (dynamicSpec != null)
+        {
+            var dynamicAgent = new CustomAgent(
+                _skillManager,
+                _loggerFactory.CreateLogger<CustomAgent>(),
+                dynamicSpec,
+                _agentMemoryService);
+            
+            _agentPool[agentName] = dynamicAgent;
+            _logger.LogInformation("💾 Loaded dynamic agent from DB: {Agent}", agentName);
+            return dynamicAgent;
         }
 
         var agent = CreateAgentForDomain(agentName);
         _agentPool[agentName] = agent;
         _logger.LogInformation("🆕 Created agent: {Agent} (Tier {Tier})", agent.Name, agent.Tier);
-        return Task.FromResult(agent);
+        return agent;
     }
 
     public async Task<IAgent> CreateCustomAgentAsync(AgentSpecification specification)
@@ -64,9 +82,12 @@ public class HierarchicalAgentFactory : IAgentFactory
             specification,
             _agentMemoryService);
 
+        // Persist to DB
+        await _dynamicAgentRepository.SaveAsync(specification);
+
         _agentPool[specification.Name] = agent;
-        _logger.LogInformation("🔧 Custom agent created: {Agent}", specification.Name);
-        return await Task.FromResult(agent);
+        _logger.LogInformation("🔧 Custom agent created and persisted: {Agent}", specification.Name);
+        return agent;
     }
 
     public AgentTier DetermineTier(ComplexityLevel complexity) => complexity switch
@@ -80,6 +101,8 @@ public class HierarchicalAgentFactory : IAgentFactory
 
     public async Task<IEnumerable<AgentInfo>> GetAgentsByTierAsync(AgentTier tier)
     {
+        await EnsureDynamicAgentsLoadedAsync();
+
         var agents = _agentPool.Values
             .Where(a => a.Tier == tier && a.IsActive)
             .Select(a => new AgentInfo
@@ -95,11 +118,13 @@ public class HierarchicalAgentFactory : IAgentFactory
                 AvailableTools = a.AvailableTools.ToList()
             });
 
-        return await Task.FromResult(agents);
+        return agents;
     }
 
     public async Task<IEnumerable<AgentInfo>> GetAllAgentsAsync()
     {
+        await EnsureDynamicAgentsLoadedAsync();
+
         var agents = _agentPool.Values
             .Where(a => a.IsActive)
             .Select(a => new AgentInfo
@@ -115,19 +140,41 @@ public class HierarchicalAgentFactory : IAgentFactory
                 AvailableTools = a.AvailableTools.ToList()
             });
 
-        return await Task.FromResult(agents);
+        return agents;
     }
 
-    public Task<bool> RemoveAgentAsync(string agentName)
+    private async Task EnsureDynamicAgentsLoadedAsync()
+    {
+        var dynamicSpecs = await _dynamicAgentRepository.GetAllAsync();
+        foreach (var spec in dynamicSpecs)
+        {
+            if (!_agentPool.ContainsKey(spec.Name))
+            {
+                var dynamicAgent = new CustomAgent(
+                    _skillManager,
+                    _loggerFactory.CreateLogger<CustomAgent>(),
+                    spec,
+                    _agentMemoryService);
+                
+                _agentPool[spec.Name] = dynamicAgent;
+                _logger.LogDebug("💾 Pre-loaded dynamic agent from DB: {Agent}", spec.Name);
+            }
+        }
+    }
+
+
+    public async Task<bool> RemoveAgentAsync(string agentName)
     {
         if (string.IsNullOrWhiteSpace(agentName))
-            return Task.FromResult(false);
+            return false;
 
         var removed = _agentPool.TryRemove(agentName, out _);
-        if (removed)
-            _logger.LogInformation("🗑️ Agent removed: {Agent}", agentName);
+        var dbRemoved = await _dynamicAgentRepository.DeactivateAsync(agentName);
 
-        return Task.FromResult(removed);
+        if (removed || dbRemoved)
+            _logger.LogInformation("🗑️ Agent removed/deactivated: {Agent}", agentName);
+
+        return removed || dbRemoved;
     }
 
     private string ResolveAgentPoolKey(string? requestedAgentName, string? fallbackDomain)
@@ -164,6 +211,7 @@ public class HierarchicalAgentFactory : IAgentFactory
             "notification" => "NotificationAgent",
             "api" => "APIAgent",
             "dotnet" or "dotnet-expert" or "dotnet-self-learning-architect" => "DotNetExpertAgent",
+            "workflow" or "automator" => "WorkflowSpecialist",
             _ => "GeneralAgent"
         };
     }
@@ -181,6 +229,7 @@ public class HierarchicalAgentFactory : IAgentFactory
             "NotificationAgent" or "notification" => new NotificationAgent(_skillManager, _loggerFactory.CreateLogger<NotificationAgent>(), _agentMemoryService),
             "APIAgent" or "api" => new APIAgent(_skillManager, _loggerFactory.CreateLogger<APIAgent>(), _agentMemoryService),
             "DotNetExpertAgent" or "dotnet" => new DotNetExpertAgent(_skillManager, _loggerFactory.CreateLogger<DotNetExpertAgent>(), _agentMemoryService),
+            "WorkflowSpecialist" or "workflow" => new WorkflowSpecialist(_skillManager, _loggerFactory.CreateLogger<WorkflowSpecialist>(), _agentMemoryService),
             _ => new GeneralAgent(_skillManager, _loggerFactory.CreateLogger<GeneralAgent>(), _agentMemoryService)
         };
     }

@@ -14,18 +14,6 @@ public class InMemoryTenantStore : ITenantStore
 
     public InMemoryTenantStore()
     {
-        // Seed default tenant para backward compatibility
-        var defaultTenant = new Tenant
-        {
-            Id = Tenant.DefaultTenantId,
-            Name = "Default",
-            Slug = "default",
-            Plan = TenantPlan.Pro,
-            Limits = TenantLimits.ProTier(),
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow
-        };
-        _tenants[defaultTenant.Id] = defaultTenant;
     }
 
     public Task<Tenant?> GetByIdAsync(string tenantId, CancellationToken ct = default)

@@ -770,3 +770,295 @@ public class KnowledgeRoomConfiguration : IEntityTypeConfiguration<KnowledgeRoom
         builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_knowledge_rooms_tenant_id");
     }
 }
+
+public class KnowledgeRoomPermissionConfiguration : IEntityTypeConfiguration<KnowledgeRoomPermissionEntity>
+{
+    public void Configure(EntityTypeBuilder<KnowledgeRoomPermissionEntity> builder)
+    {
+        builder.ToTable("knowledge_room_permissions");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.RoomId).HasColumnName("room_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.UserId).HasColumnName("user_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.Role).HasColumnName("role").HasMaxLength(32).IsRequired();
+        builder.Property(e => e.GrantedAt).HasColumnName("granted_at");
+
+        builder.HasIndex(e => new { e.RoomId, e.UserId }).IsUnique().HasDatabaseName("ix_knowledge_room_permissions_room_user");
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_knowledge_room_permissions_tenant_id");
+    }
+}
+
+public class AgentKnowledgeRoomAssignmentConfiguration : IEntityTypeConfiguration<AgentKnowledgeRoomAssignmentEntity>
+{
+    public void Configure(EntityTypeBuilder<AgentKnowledgeRoomAssignmentEntity> builder)
+    {
+        builder.ToTable("agent_knowledge_room_assignments");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.AgentName).HasColumnName("agent_name").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.RoomId).HasColumnName("room_id").HasMaxLength(64).IsRequired();
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(e => new { e.AgentName, e.RoomId, e.TenantId })
+            .IsUnique()
+            .HasDatabaseName("ux_agent_room_assignment");
+        builder.HasIndex(e => e.AgentName).HasDatabaseName("ix_agent_room_assignments_agent");
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_agent_room_assignments_tenant");
+    }
+}
+
+public class LLMProviderApiKeyConfiguration : IEntityTypeConfiguration<LLMProviderApiKeyEntity>
+{
+    public void Configure(EntityTypeBuilder<LLMProviderApiKeyEntity> builder)
+    {
+        builder.ToTable("llm_provider_api_keys");
+
+        builder.HasKey(k => k.Id);
+        builder.Property(k => k.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(k => k.TenantId).HasColumnName("tenant_id").HasMaxLength(64).IsRequired();
+        builder.Property(k => k.ProviderName).HasColumnName("provider_name").HasMaxLength(64).IsRequired();
+        builder.Property(k => k.Name).HasColumnName("name").HasMaxLength(128).IsRequired();
+        builder.Property(k => k.EncryptedValue).HasColumnName("encrypted_value").IsRequired();
+        builder.Property(k => k.LastFour).HasColumnName("last_four").HasMaxLength(4).IsRequired();
+        builder.Property(k => k.IsEnabled).HasColumnName("is_enabled");
+        builder.Property(k => k.IsDefault).HasColumnName("is_default");
+        builder.Property(k => k.Models).HasColumnName("models").IsRequired();
+        builder.Property(k => k.CreatedAt).HasColumnName("created_at");
+        builder.Property(k => k.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(k => new { k.TenantId, k.ProviderName, k.Name })
+            .IsUnique()
+            .HasDatabaseName("ux_llm_api_keys_tenant_provider_name");
+        builder.HasIndex(k => new { k.TenantId, k.ProviderName })
+            .HasDatabaseName("ix_llm_api_keys_tenant_provider");
+        builder.HasIndex(k => new { k.TenantId, k.ProviderName, k.IsDefault })
+            .HasDatabaseName("ix_llm_api_keys_tenant_provider_default");
+    }
+}
+
+public class SystemStateConfiguration : IEntityTypeConfiguration<SystemStateEntity>
+{
+    public void Configure(EntityTypeBuilder<SystemStateEntity> builder)
+    {
+        builder.ToTable("system_states");
+
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.Id).HasColumnName("id").HasMaxLength(128);
+        builder.Property(s => s.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(s => s.Value).HasColumnName("value").IsRequired();
+        builder.Property(s => s.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(s => s.TenantId).HasDatabaseName("ix_system_states_tenant_id");
+    }
+}
+
+public class CustomOnnxModelConfiguration : IEntityTypeConfiguration<CustomOnnxModelEntity>
+{
+    public void Configure(EntityTypeBuilder<CustomOnnxModelEntity> builder)
+    {
+        builder.ToTable("custom_onnx_models");
+
+        builder.HasKey(m => m.Id);
+        builder.Property(m => m.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(m => m.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(m => m.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(m => m.Description).HasColumnName("description");
+        builder.Property(m => m.ModelFileName).HasColumnName("model_file_name").HasMaxLength(512);
+        builder.Property(m => m.ModelData).HasColumnName("model_data");
+        builder.Property(m => m.InputNodeName).HasColumnName("input_node_name").HasMaxLength(128).IsRequired();
+        builder.Property(m => m.OutputNodeName).HasColumnName("output_node_name").HasMaxLength(128).IsRequired();
+        builder.Property(m => m.InputWidth).HasColumnName("input_width");
+        builder.Property(m => m.InputHeight).HasColumnName("input_height");
+        builder.Property(m => m.Channels).HasColumnName("channels");
+        builder.Property(m => m.ScaleFactor).HasColumnName("scale_factor");
+        builder.Property(m => m.MeanRed).HasColumnName("mean_red");
+        builder.Property(m => m.MeanGreen).HasColumnName("mean_green");
+        builder.Property(m => m.MeanBlue).HasColumnName("mean_blue");
+        builder.Property(m => m.OutputFormat).HasColumnName("output_format").HasMaxLength(32).IsRequired();
+        builder.Property(m => m.PostProcessConfigJson).HasColumnName("post_process_config").HasColumnType("jsonb").IsRequired();
+        builder.Property(m => m.FileSizeBytes).HasColumnName("file_size_bytes");
+        builder.Property(m => m.IsActive).HasColumnName("is_active");
+        builder.Property(m => m.CreatedAt).HasColumnName("created_at");
+        builder.Property(m => m.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(m => new { m.TenantId, m.Name })
+            .IsUnique()
+            .HasDatabaseName("ux_custom_onnx_models_tenant_name");
+        builder.HasIndex(m => m.IsActive).HasDatabaseName("ix_custom_onnx_models_active");
+        builder.HasIndex(m => m.TenantId).HasDatabaseName("ix_custom_onnx_models_tenant_id");
+
+        builder.HasMany(m => m.AssociatedFiles)
+            .WithOne(f => f.Model)
+            .HasForeignKey(f => f.ModelId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class CustomOnnxModelFileConfiguration : IEntityTypeConfiguration<CustomOnnxModelFileEntity>
+{
+    public void Configure(EntityTypeBuilder<CustomOnnxModelFileEntity> builder)
+    {
+        builder.ToTable("custom_onnx_model_files");
+
+        builder.HasKey(f => f.Id);
+        builder.Property(f => f.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(f => f.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(f => f.ModelId).HasColumnName("model_id").HasMaxLength(64).IsRequired();
+        builder.Property(f => f.FileName).HasColumnName("file_name").HasMaxLength(256).IsRequired();
+        builder.Property(f => f.FileData).HasColumnName("file_data").IsRequired();
+        builder.Property(f => f.FileSizeBytes).HasColumnName("file_size_bytes");
+        builder.Property(f => f.CreatedAt).HasColumnName("created_at");
+
+        builder.HasIndex(f => f.ModelId).HasDatabaseName("ix_custom_onnx_model_files_model_id");
+        builder.HasIndex(f => new { f.ModelId, f.FileName }).IsUnique().HasDatabaseName("ux_custom_onnx_model_files_model_name");
+        builder.HasIndex(f => f.TenantId).HasDatabaseName("ix_custom_onnx_model_files_tenant_id");
+    }
+}
+
+public class CustomOnnxInferenceJobConfiguration : IEntityTypeConfiguration<CustomOnnxInferenceJobEntity>
+{
+    public void Configure(EntityTypeBuilder<CustomOnnxInferenceJobEntity> builder)
+    {
+        builder.ToTable("custom_onnx_inference_jobs");
+
+        builder.HasKey(j => j.Id);
+        builder.Property(j => j.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(j => j.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(j => j.ModelId).HasColumnName("model_id").HasMaxLength(64).IsRequired();
+        builder.Property(j => j.Status).HasColumnName("status").HasMaxLength(32).IsRequired();
+        builder.Property(j => j.InputImagePath).HasColumnName("input_image_path").HasMaxLength(512);
+        builder.Property(j => j.OutputImagePath).HasColumnName("output_image_path").HasMaxLength(512);
+        builder.Property(j => j.LatencyMs).HasColumnName("latency_ms");
+        builder.Property(j => j.ErrorMessage).HasColumnName("error_message");
+        builder.Property(j => j.CreatedAt).HasColumnName("created_at");
+        builder.Property(j => j.CompletedAt).HasColumnName("completed_at");
+
+        builder.HasIndex(j => j.TenantId).HasDatabaseName("ix_custom_onnx_inference_jobs_tenant_id");
+        builder.HasIndex(j => j.ModelId).HasDatabaseName("ix_custom_onnx_inference_jobs_model_id");
+        builder.HasIndex(j => j.Status).HasDatabaseName("ix_custom_onnx_inference_jobs_status");
+
+        builder.HasOne(j => j.Model)
+            .WithMany()
+            .HasForeignKey(j => j.ModelId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public class AccessApiKeyConfiguration : IEntityTypeConfiguration<AccessApiKeyEntity>
+{
+    public void Configure(EntityTypeBuilder<AccessApiKeyEntity> builder)
+    {
+        builder.ToTable("access_api_keys");
+
+        builder.HasKey(k => k.Id);
+        builder.Property(k => k.Id).HasColumnName("id");
+        builder.Property(k => k.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(k => k.KeyHash).HasColumnName("key_hash").HasMaxLength(256).IsRequired();
+        builder.Property(k => k.Name).HasColumnName("name").HasMaxLength(256).IsRequired();
+        builder.Property(k => k.Role).HasColumnName("role").HasMaxLength(64).HasDefaultValue("Admin").IsRequired();
+        builder.Property(k => k.IsEnabled).HasColumnName("is_enabled").HasDefaultValue(true);
+        builder.Property(k => k.CreatedAt).HasColumnName("created_at");
+        builder.Property(k => k.LastUsedAt).HasColumnName("last_used_at");
+
+        builder.HasIndex(k => k.KeyHash).IsUnique().HasDatabaseName("ix_access_api_keys_hash");
+        builder.HasIndex(k => k.TenantId).HasDatabaseName("ix_access_api_keys_tenant_id");
+    }
+}
+
+public class DbSkillConfiguration : IEntityTypeConfiguration<DbSkillEntity>
+{
+    public void Configure(EntityTypeBuilder<DbSkillEntity> builder)
+    {
+        builder.ToTable("agent_skills");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Domain).HasColumnName("domain").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Type).HasColumnName("type").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.SystemPromptFragment).HasColumnName("system_prompt_fragment").IsRequired();
+        builder.Property(e => e.FewShotExamples).HasColumnName("few_shot_examples");
+        builder.Property(e => e.IsSystem).HasColumnName("is_system").HasDefaultValue(false);
+        builder.Property(e => e.MetadataJson).HasColumnName("metadata_json");
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_agent_skills_tenant_id");
+    }
+}
+
+public class DynamicAgentConfiguration : IEntityTypeConfiguration<DynamicAgentEntity>
+{
+    public void Configure(EntityTypeBuilder<DynamicAgentEntity> builder)
+    {
+        builder.ToTable("dynamic_agents");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Description).HasColumnName("description").HasMaxLength(500).IsRequired();
+        builder.Property(e => e.Domain).HasColumnName("domain").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Tier).HasColumnName("tier").IsRequired();
+        builder.Property(e => e.Instructions).HasColumnName("instructions").IsRequired();
+        builder.Property(e => e.AutonomyLevel).HasColumnName("autonomy_level").IsRequired();
+        builder.Property(e => e.AllowedToolsJson).HasColumnName("allowed_tools_json");
+        builder.Property(e => e.IsActive).HasColumnName("is_active").HasDefaultValue(true);
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_dynamic_agents_tenant_id");
+    }
+}
+
+public class DbToolConfiguration : IEntityTypeConfiguration<DbToolEntity>
+{
+    public void Configure(EntityTypeBuilder<DbToolEntity> builder)
+    {
+        builder.ToTable("agent_tools");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id");
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(150).IsRequired();
+        builder.Property(e => e.Description).HasColumnName("description").IsRequired();
+        builder.Property(e => e.Category).HasColumnName("category").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.RequiresAuth).HasColumnName("requires_auth").HasDefaultValue(false);
+        builder.Property(e => e.Type).HasColumnName("type").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.MetadataJson).HasColumnName("metadata_json").HasColumnType("jsonb");
+        builder.Property(e => e.Version).HasColumnName("version").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.VariantName).HasColumnName("variant_name").HasMaxLength(50);
+        builder.Property(e => e.RolloutPercentage).HasColumnName("rollout_percentage").HasDefaultValue(100);
+        builder.Property(e => e.IsDefault).HasColumnName("is_default").HasDefaultValue(true);
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_agent_tools_tenant_id");
+    }
+}
+
+public class GoldenSetConfiguration : IEntityTypeConfiguration<GoldenSetEntity>
+{
+    public void Configure(EntityTypeBuilder<GoldenSetEntity> builder)
+    {
+        builder.ToTable("golden_sets");
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).HasColumnName("id").HasMaxLength(50);
+        builder.Property(e => e.TenantId).HasColumnName("tenant_id").HasMaxLength(50).IsRequired();
+        builder.Property(e => e.Name).HasColumnName("name").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.Description).HasColumnName("description").HasMaxLength(500);
+        builder.Property(e => e.AgentName).HasColumnName("agent_name").HasMaxLength(100).IsRequired();
+        builder.Property(e => e.CasesJson).HasColumnName("cases_json").HasColumnType("jsonb").IsRequired();
+        builder.Property(e => e.CreatedAt).HasColumnName("created_at");
+        builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
+
+        builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_golden_sets_tenant_id");
+        builder.HasIndex(e => e.AgentName).HasDatabaseName("ix_golden_sets_agent_name");
+    }
+}

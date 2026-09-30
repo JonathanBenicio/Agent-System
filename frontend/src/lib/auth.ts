@@ -43,7 +43,7 @@ export async function loginWithApiKeyApi(apiKey: string): Promise<boolean> {
     })
 
     if (res.ok) {
-      setApiKey('admin') // Salva apenas o indicador de sessão, não a chave real
+      setApiKey(apiKey)
       return true
     }
     return false
@@ -80,8 +80,7 @@ export function getAuthHeaders(): Record<string, string> {
     return { Authorization: `Bearer ${token}` }
   }
   const apiKey = getApiKey()
-  // Se for uma chave legada (diferente do indicador 'admin'), anexa
-  if (apiKey && apiKey !== 'admin') {
+  if (apiKey) {
     return { 'X-Api-Key': apiKey }
   }
   return {}

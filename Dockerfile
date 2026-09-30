@@ -18,7 +18,13 @@ ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV DOTNET_EnableDiagnostics=0
 
-RUN apt-get update && apt-get install -y wget libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
+# Install Node.js (required for running npx-based MCP servers) and basic utilities
+RUN apt-get update && \
+    apt-get install -y wget libgssapi-krb5-2 curl fontconfig fonts-liberation && \
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    rm -rf /var/lib/apt/lists/* && \
+    fc-cache -f -v
 
 COPY --from=build /app/publish .
 
@@ -28,7 +34,7 @@ COPY fastpath_model.onnx .
 # COPY embeddings_model.onnx . (Descomentar quando o arquivo existir)
 # COPY reranker_model.onnx . (Descomentar quando o arquivo existir)
 
-RUN mkdir -p models/rerank models/embeddings
+RUN mkdir -p models/rerank models/embeddings wwwroot/onnx-models && chown -R app:app /app
 
 USER app
 

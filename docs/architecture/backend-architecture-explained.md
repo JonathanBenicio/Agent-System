@@ -2,7 +2,7 @@
 
 > **Documento canônico de arquitetura de software (SST - Single Source of Truth)**. Este arquivo consolida todas as decisões arquiteturais, topologias, fluxos de execução do backend e frontend, substituindo e unificando o antigo `TECHNICAL_ARCHITECTURE_GUIDE.md`.
 >
-> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.5.0** como runtime nativo consolidado (transição 100% concluída), com suporte a fluxos colaborativos e múltiplos canais de interface.
+> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.9.0** como runtime nativo consolidado (transição 100% concluída), com suporte a fluxos colaborativos e múltiplos canais de interface.
 
 ---
 
@@ -40,7 +40,7 @@
 
 ## 1. Visão Geral da Arquitetura
 
-O AgenticSystem é uma plataforma corporativa multi-agent construída sobre o **.NET 10** e o **Microsoft Agent Framework (MAF) 1.5.0**. O sistema expõe agentes de inteligência artificial especializados por domínio (Personal, Work, Learning, Creative, Finance, Health, etc.) que são coordenados por um orquestrador central usando o padrão **Supervisor-with-Tools**.
+O AgenticSystem é uma plataforma corporativa multi-agent construída sobre o **.NET 10** e o **Microsoft Agent Framework (MAF) 1.9.0**. O sistema expõe agentes de inteligência artificial especializados por domínio (Personal, Work, Learning, Creative, Finance, Health, etc.) que são coordenados por um orquestrador central usando o padrão **Supervisor-with-Tools**.
 
 O LLM do orquestrador decide dinamicamente para qual especialista delegar a tarefa com base no input do usuário, eliminando as antigas regras imperativas de roteamento do fluxo principal. Cada especialista é encapsulado e exposto como uma `AIFunction` do orquestrador por meio do método nativo `.AsAIFunction()`.
 
@@ -115,7 +115,7 @@ Capacidades em fase experimental ou protótipos de pesquisa não devem alterar o
 | **Camada** | **Tecnologia** | **Escopo / Papel** |
 |---|---|---|
 | **Runtime** | .NET 10 | ASP.NET Core Runtime para o Backend |
-| **Framework de Agentes** | Microsoft Agent Framework 1.5.0 | `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Hosting`, `Microsoft.Agents.AI.Workflows` |
+| **Framework de Agentes** | Microsoft Agent Framework 1.9.0 | `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Hosting`, `Microsoft.Agents.AI.Workflows` |
 | **Abstração LLM** | `IChatClient` (M.E.AI) | Abstração comum de chat (Microsoft.Extensions.AI) |
 | **Geração de Embeddings**| `IEmbeddingGenerator<string, Embedding<float>>` | Abstração comum de vetores (Microsoft.Extensions.AI) |
 | **Vector Store** | In-Memory / PostgreSQL (pgvector) | Armazenamento de embeddings semânticos |
@@ -138,7 +138,7 @@ Camada externa que gerencia a entrada de requests, canais de comunicação e inf
 *   **Protocol Hosting**: Mapeamentos HTTP para interoperabilidade via A2A, AG-UI e controllers OpenAI-compatible (`/v1/chat/completions`).
 
 ### 4.2 `AgenticSystem.Core` — Domínio e Regras de Negócio
-Independente de frameworks externos de orquestração. **Não referencia o MAF diretamente**, trabalhando sobre interfaces:
+Contém regras de negócio e contratos usados pela integração. O projeto referencia `Microsoft.Agents.AI` para skills e avaliação; o hosting e a composição do runtime permanecem em Infrastructure:
 *   **Domain Agents**: Agentes base (`BaseAgent`) e as especializações (Work, Personal, Learning, etc.).
 *   **Business Workflows**: `MetaAgentOrchestrator` (fachada central), `SmartRouter` (roteamento semântico), `TriageService` (classificação de urgência e intenção) e `AgentExecutionWorkflow`. Detalhes em [Smart Routing & Triage](smart-routing-triage.md).
 *   **Services**: `ConfidenceScoreCalculator`, `SessionManager`, `SessionConsolidator` (compactação e sumarização de histórico), `DirectAgentRequestExecutor` (fast-path de execução direta), `ScheduledTaskManager` (Scheduler), e `ReflectionEngine`.
@@ -356,6 +356,9 @@ Para maximizar a precisão contextual sem estourar a janela de contexto dos mode
                       Contexto RAG Final
 ```
 
+### 8.3 Filtragem SQL-Nativa por Salas (Knowledge Rooms)
+Para garantir isolamento e performance na recuperação de documentos, a filtragem de documentos baseada em salas de conhecimento (`room_ids`) é feita de forma nativa no banco de dados. O `PostgresVectorStore` executa a busca de vetores (`pgvector`) combinada com uma filtragem SQL direta sobre o campo de metadados em formato JSONB, em vez de realizar uma filtragem in-memory após a recuperação. Isso reduz drasticamente a latência e o consumo de memória sob carga.
+
 ---
 
 ## 9. Middleware Pipeline e Auto-Ajuste (Correction Loop)
@@ -494,7 +497,7 @@ Os agentes no AgenticSystem são categorizados pelo seu ciclo de vida e escopo d
 | Tipo de Agente | Criação / Registro | Ciclo de Vida e Escopo | Exemplo de Uso |
 |---|---|---|---|
 | **Built-in (Nativo)** | Inicializado no startup via `HierarchicalAgentFactory` | Singleton (está ativo durante toda a execução da aplicação) | PersonalAgent, WorkAgent, GeneralAgent |
-| **Custom (Dinâmico)** | Criado por prompt do usuário via `DynamicAgentService` | Scoped ou In-Memory Pool (persiste as configurações em banco relacional) | "Agente de Direito Trabalhista" |
+| **Custom (Dinâmico)** | Persistido via `DynamicAgentEntity` (PostgreSQL) e Lazy-loaded via `HierarchicalAgentFactory` | In-Memory Pool após o carregamento; persistente via banco relacional entre reinícios | "Agente de Direito Trabalhista" |
 | **Framework-hosted** | Registrado via `AddAIAgent()` no arquivo `Program.cs` | Scoped por requisição de chat (gerenciado pelo container de DI) | OrchestratorAgent |
 
 *   **Cleanup de Inativos**: Para evitar vazamentos de memória e sobrecarga do banco de dados, o `AgentCleanupHostedService`  executa rotinas em background limpando agentes customizados e dados temporários inativos há mais de 24 horas.

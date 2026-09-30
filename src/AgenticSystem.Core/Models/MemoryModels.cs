@@ -22,11 +22,11 @@ public class ObsidianNote
 public class EmbeddingDocument
 {
     public string Id { get; set; } = string.Empty;
-    public string TenantId { get; set; } = "default";
+    public string TenantId { get; set; } = string.Empty;
     public string Content { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty; // note, agent, decision, domain
     public string Collection { get; set; } = string.Empty;
-    public float[] Embedding { get; set; } = Array.Empty<float>();
+    public float[]? Embedding { get; set; }
     public Dictionary<string, string> Metadata { get; set; } = new();
     public string? ContextualSummary { get; set; }
     public DateTime IndexedAt { get; set; } = DateTime.UtcNow;

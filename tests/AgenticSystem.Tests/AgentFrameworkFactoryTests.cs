@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.AgentFramework;
@@ -23,21 +25,21 @@ public class AgentFrameworkFactoryTests
     }
 
     [Fact]
-    public void CreateFromAgent_ThrowsOnNull()
+    public async Task CreateFromAgent_ThrowsOnNull()
     {
-        var act = () => _sut.CreateFromAgent(null!);
-        act.Should().Throw<ArgumentNullException>();
+        var act = async () => await _sut.CreateFromAgentAsync(null!);
+        await act.Should().ThrowAsync<ArgumentNullException>();
     }
 
     [Fact]
-    public void CreateFromAgent_ReturnsFrameworkAgent()
+    public async Task CreateFromAgent_ReturnsFrameworkAgent()
     {
         var agent = Substitute.For<IAgent>();
         agent.Name.Returns("test-agent");
         agent.Description.Returns("A test agent");
         agent.Instructions.Returns("You are a test agent.");
 
-        var result = _sut.CreateFromAgent(agent);
+        var result = await _sut.CreateFromAgentAsync(agent);
 
         result.Should().NotBeNull();
         result.Name.Should().Be("test-agent");
@@ -45,14 +47,14 @@ public class AgentFrameworkFactoryTests
     }
 
     [Fact]
-    public void CreateFromSpecification_ThrowsOnNull()
+    public async Task CreateFromSpecification_ThrowsOnNull()
     {
-        var act = () => _sut.CreateFromSpecification(null!);
-        act.Should().Throw<ArgumentNullException>();
+        var act = async () => await _sut.CreateFromSpecificationAsync(null!);
+        await act.Should().ThrowAsync<ArgumentNullException>();
     }
 
     [Fact]
-    public void CreateFromSpecification_ReturnsFrameworkAgent()
+    public async Task CreateFromSpecification_ReturnsFrameworkAgent()
     {
         var spec = new AgentSpecification
         {
@@ -61,7 +63,7 @@ public class AgentFrameworkFactoryTests
             Instructions = "You help with things."
         };
 
-        var result = _sut.CreateFromSpecification(spec);
+        var result = await _sut.CreateFromSpecificationAsync(spec);
 
         result.Should().NotBeNull();
         result.Name.Should().Be("dynamic-agent");

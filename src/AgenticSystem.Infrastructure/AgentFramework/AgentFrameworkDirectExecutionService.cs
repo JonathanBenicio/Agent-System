@@ -15,7 +15,7 @@ namespace AgenticSystem.Infrastructure.AgentFramework;
 public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
 {
     private readonly AgentFrameworkFactory _frameworkFactory;
-    private readonly SimpleSessionStoreAdapter _sessionStore;
+    private readonly Microsoft.Agents.AI.Hosting.AgentSessionStore _sessionStore;
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<AgentFrameworkDirectExecutionService> _logger;
     private readonly IAgentRuntimeCoordinator? _runtimeCoordinator;
@@ -24,7 +24,7 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
 
     public AgentFrameworkDirectExecutionService(
         AgentFrameworkFactory frameworkFactory,
-        SimpleSessionStoreAdapter sessionStore,
+        Microsoft.Agents.AI.Hosting.AgentSessionStore sessionStore,
         ISessionManager sessionManager,
         ILogger<AgentFrameworkDirectExecutionService> logger,
         IServiceProvider serviceProvider,

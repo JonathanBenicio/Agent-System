@@ -42,4 +42,9 @@ public interface IVectorStore
     /// Returns usage statistics for a tenant.
     /// </summary>
     Task<VectorStoreStats> GetStatsAsync(string tenantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Remove todos os documentos de uma coleção específica (limpeza rápida de chat/sessão).
+    /// </summary>
+    Task DeleteCollectionAsync(string collection);
 }

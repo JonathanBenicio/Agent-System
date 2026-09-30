@@ -6,6 +6,7 @@ import { Badge } from '@/components/shared/Badge'
 import { useToast } from '@/components/shared/Toast'
 import { cn } from '@/lib/utils'
 import type { LLMProviderInfo } from '@/types/api'
+import { ProviderApiKeysPanel } from './ProviderApiKeysPanel'
 
 export function ProvidersPage() {
   const {
@@ -29,6 +30,7 @@ export function ProvidersPage() {
   const [defaultSelection, setDefaultSelection] = useState({ providerName: '', model: '' })
 
   useEffect(() => {
+
     setDefaultSelection({ providerName: defaultProvider, model: defaultModel })
   }, [defaultModel, defaultProvider])
 
@@ -269,52 +271,52 @@ export function ProvidersPage() {
                     </button>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {p.currentBalance !== undefined && (
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
-                        <Coins className="w-3.5 h-3.5" />
+                    {p.currentBalance !== undefined && (
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400">
+                          <Coins className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Saldo</p>
+                          <p className="text-sm font-medium text-zinc-200">
+                            ${p.currentBalance.toFixed(4)}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Saldo</p>
-                        <p className="text-sm font-medium text-zinc-200">
-                          ${p.currentBalance.toFixed(4)}
+                    )}
+                    {p.requestsRemaining !== undefined && (
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
+                          <Activity className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Requests</p>
+                          <p className="text-sm font-medium text-zinc-200">
+                            {p.requestsRemaining === -1 ? '∞' : p.requestsRemaining.toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {p.tokensRemaining !== undefined && (
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
+                          <CreditCard className="w-3.5 h-3.5" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Tokens</p>
+                          <p className="text-sm font-medium text-zinc-200">
+                            {p.tokensRemaining === -1 ? '∞' : p.tokensRemaining.toLocaleString()}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {p.lastQuotaUpdate && (
+                      <div className="sm:col-span-3 flex justify-end">
+                        <p className="text-[10px] text-zinc-600">
+                          Sincronizado em: {new Date(p.lastQuotaUpdate).toLocaleString()}
                         </p>
                       </div>
-                    </div>
-                  )}
-                  {p.requestsRemaining !== undefined && (
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-400">
-                        <Activity className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Requests</p>
-                        <p className="text-sm font-medium text-zinc-200">
-                          {p.requestsRemaining === -1 ? '∞' : p.requestsRemaining.toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {p.tokensRemaining !== undefined && (
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-400">
-                        <CreditCard className="w-3.5 h-3.5" />
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold">Tokens</p>
-                        <p className="text-sm font-medium text-zinc-200">
-                          {p.tokensRemaining === -1 ? '∞' : p.tokensRemaining.toLocaleString()}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                  {p.lastQuotaUpdate && (
-                    <div className="sm:col-span-3 flex justify-end">
-                      <p className="text-[10px] text-zinc-600">
-                        Sincronizado em: {new Date(p.lastQuotaUpdate).toLocaleString()}
-                      </p>
-                    </div>
-                  )}
+                    )}
                   </div>
                 </div>
               )}
@@ -405,6 +407,9 @@ export function ProvidersPage() {
                   </div>
                 </div>
               )}
+
+              {/* API Keys Panel */}
+              <ProviderApiKeysPanel providerName={p.name} />
             </div>
           ))}
         </div>

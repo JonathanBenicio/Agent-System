@@ -22,14 +22,16 @@ public sealed class LLMRuntimeContextAccessor : ILLMRuntimeContextAccessor
         return new LLMRuntimeContext
         {
             UserId = userContext.UserId,
-            TenantId = string.IsNullOrWhiteSpace(userContext.TenantId) ? Tenant.DefaultTenantId : userContext.TenantId,
+            TenantId = userContext.TenantId,
             SessionId = sessionId,
             RequestProvider = ReadPreference(userContext.Preferences, "llm.request.provider") ?? ReadPreference(userContext.Preferences, "llm.provider"),
             RequestModel = ReadPreference(userContext.Preferences, "llm.request.model") ?? ReadPreference(userContext.Preferences, "llm.model"),
             RequestApiKey = ReadPreference(userContext.Preferences, "llm.request.apiKey") ?? ReadPreference(userContext.Preferences, "llm.apiKey"),
+            RequestApiKeyId = ReadPreference(userContext.Preferences, "llm.request.apiKeyId"),
             SessionProvider = ReadPreference(userContext.Preferences, "llm.session.provider") ?? ReadPreference(userContext.Preferences, "llm.provider"),
             SessionModel = ReadPreference(userContext.Preferences, "llm.session.model") ?? ReadPreference(userContext.Preferences, "llm.model"),
-            SessionApiKey = ReadPreference(userContext.Preferences, "llm.session.apiKey") ?? ReadPreference(userContext.Preferences, "llm.apiKey")
+            SessionApiKey = ReadPreference(userContext.Preferences, "llm.session.apiKey") ?? ReadPreference(userContext.Preferences, "llm.apiKey"),
+            KnowledgeRoomId = ReadPreference(userContext.Preferences, "rag.knowledgeRoomId")
         };
     }
 

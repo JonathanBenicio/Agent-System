@@ -26,7 +26,7 @@ public class PostgresAuditLog : IAuditLog
             Category = entry.Category.ToString(),
             Action = entry.Action,
             UserId = entry.UserId,
-            TenantId = entry.TenantId,
+            TenantId = entry.TenantId ?? throw new ArgumentException("TenantId cannot be null", nameof(entry)),
             SessionId = entry.SessionId,
             AgentName = entry.AgentName,
             ToolName = entry.ToolName,

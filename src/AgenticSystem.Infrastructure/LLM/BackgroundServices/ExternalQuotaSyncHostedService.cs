@@ -54,6 +54,7 @@ public class ExternalQuotaSyncHostedService : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var syncService = scope.ServiceProvider.GetRequiredService<IExternalQuotaSyncService>();
         var tenantStore = scope.ServiceProvider.GetRequiredService<ITenantStore>();
+        var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
 
         _logger.LogDebug("Starting proactive quota synchronization cycle");
 
@@ -66,6 +67,7 @@ public class ExternalQuotaSyncHostedService : BackgroundService
             var tenants = await tenantStore.GetAllAsync(ct);
             foreach (var tenant in tenants)
             {
+                using var tenantScope = tenantContextAccessor.BeginScope(new Core.Models.TenantContext { TenantId = tenant.Id });
                 await SyncTenantKeysAsync(syncService, tenant, ct);
             }
         }

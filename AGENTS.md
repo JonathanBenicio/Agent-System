@@ -8,7 +8,7 @@
 cp appsettings.example.json appsettings.json  # Configure API keys
 dotnet restore
 dotnet run --project src/AgenticSystem.Api   # https://localhost:5001
-dotnet test                                 # 344 unit tests, 80% coverage required
+dotnet test                                 # 608 unit tests, 80% coverage required
 
 # Build & publish
 dotnet build --configuration Release
@@ -27,7 +27,7 @@ npm run cy:run       # Cypress E2E tests
 
 ### CI Commands
 ```bash
-# Backend CI (uses .NET 8 - note: code targets net10.0)
+# Backend CI (uses .NET 10 - aligned with code targets net10.0)
 dotnet restore
 dotnet build --no-restore --configuration Release
 dotnet test --no-build --configuration Release \
@@ -45,30 +45,45 @@ reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coverage-report
 - **Architecture**: `docs/architecture/backend-architecture-explained.md` (MAF 1.5.0 framework-first)
 - **Product Boundary**: `.github/copilot-instructions.md` (Core vs Lab governance)
 
+### 📜 Governança de Documentação (Regra de Ouro)
+Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem:
+1. **GitHub Issue**: Registro da necessidade. **Obrigatório atualizar a descrição da Issue com links para o ADR, Story e Plan assim que criados.**
+2. **ADR (Architectural Decision Record)**: Definição de padrões em `docs/architecture/adr/`.
+3. **User Story**: Critérios de aceite em `docs/USER-STORIES.md`.
+4. **Implementation Plan**: Roteiro técnico em `docs/plan/`.
+5. **Rastreabilidade**: Commits vinculados à issue (ex: `feat: ... Closes #ID`).
+6. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
+
+Consulte o [Master Roadmap Q2 2026](plan/master-roadmap-2026.md) para prioridades.
+
 ### Package Responsibilities
-- **AgenticSystem.Api**: Web API + SignalR hubs (`/hubs/chat`, `/hubs/gateway`, `/hubs/external-agent`)
-- **AgenticSystem.Core**: Business logic, agents, workflows (MAF native)
-- **AgenticSystem.Infrastructure**: External services (LLM, vector stores, MCP, gateway)
+- **AgenticSystem.Api**: Web API + SignalR hubs (`/hubs/chat`, `/hubs/gateway`, `/hubs/external-agent`, `/hubs/workflow`)
+- **AgenticSystem.Core**: Business logic, agents, workflows, tenant isolation (MAF native)
+- **AgenticSystem.Infrastructure**: External services (LLM, vector stores, MCP, gateway, PostgreSQL persistence)
 - **AgenticSystem.Tests**: Unit tests (xUnit + FluentAssertions + NSubstitute)
 
 ## Runtime Quirks & Constraints
 
-### .NET Version Mismatch
+### .NET Version Alignment
 - **Code targets**: .NET 10.0 (all csproj files)
-- **CI uses**: .NET 8.0 (workflows/ci.yml) - **CI is outdated**
-- **SDK**: Use .NET 10 locally, ignore CI version mismatch
+- **CI uses**: .NET 10.0 (workflows/ci.yml) - **CI is fully aligned**
+- **SDK**: Use .NET 10 locally and in CI
 
 ### Auto-Migrations & Startup
 ```csharp
-// EF Core migrations auto-run on startup (Program.cs:399-415)
+// EF Core migrations auto-run on startup (Program.cs)
 await dbContext.Database.MigrateAsync();
 ```
 - No manual migration execution needed
 - PostgreSQL connection required for production
+- **To generate new migrations in the correct folder, use:**
+  ```bash
+  dotnet ef migrations add <Name> --project src/AgenticSystem.Infrastructure --startup-project src/AgenticSystem.Api --output-dir Persistence/Migrations
+  ```
 
 ### Authentication & Authorization
 - **MultiAuth**: API Key OR JWT via `PolicyScheme`
-- **Tenant Context**: Middleware isolates multi-tenant data
+- **Tenant Context**: `TenantMiddleware` extracts tenant from `X-Tenant-Id` header (priority) or JWT `tenant_id` claim (fallback). Unknown tenants are strictly rejected for all authenticated routes, enforcing strict dynamic database boundary isolation.
 - **Rate Limiting**: Per-tenant sliding window (`/api/chat`: 30 req/min default)
 
 ### Configuration Sections
@@ -78,7 +93,8 @@ await dbContext.Database.MigrateAsync();
     "Ollama": { "Enabled": true, "Priority": 1 },      // Default provider
     "OpenAI": { "Enabled": false, "Priority": 10 },    // Disabled by default
     "Gateway": { "DefaultDailyBudget": 50.00 },
-    "Memory": { "VectorStoreType": "InMemory" }      // Dev fallback
+    "Memory": { "VectorStoreType": "InMemory" },       // Dev fallback
+    "LocalExecution": { "StorageMode": "PostgreSQL" }  // Production
   }
 }
 ```
@@ -86,14 +102,14 @@ await dbContext.Database.MigrateAsync();
 ### Service Dependencies
 - **PostgreSQL**: Required for production (pgvector support)
 - **Ollama**: Optional local LLM (docker-compose.yml includes it)
-- **SignalR**: Real-time chat and gateway monitoring
+- **SignalR**: Real-time chat, gateway monitoring, and workflow progress streaming
 
 ## Testing & Quality
 
 ### Test Commands
 ```bash
 # Backend
-dotnet test                              # Full suite
+dotnet test                              # Full suite (608 tests)
 dotnet test --filter "Name~Tests"       # Specific tests
 
 # Frontend
@@ -137,7 +153,7 @@ npm run lint && npm run build && npm run cy:run
 ### Observability
 - **Logging**: Serilog with structured events
 - **Telemetry**: OpenTelemetry + Application Insights
-- **Real-time**: SignalR hubs for gateway events
+- **Real-time**: SignalR hubs for chat, gateway, and workflow events
 
 ## Deployment & Operations
 
@@ -146,7 +162,7 @@ npm run lint && npm run build && npm run cy:run
 # Build
 docker build -t agentic-system .
 
-# Run with dependencies
+# Run with dependencies (API + PostgreSQL + Ollama)
 docker-compose up -d
 
 # Health checks
@@ -163,3 +179,25 @@ curl http://localhost:8080/health
 - **Secrets**: User secrets in API project (`UserSecretsId`)
 - **Environment**: `ASPNETCORE_ENVIRONMENT` controls behavior
 - **CORS**: Development allows all origins, production requires configured origins
+
+## Implemented Features (Recent)
+
+### RAG Metrics
+- `GET /api/document/stats` — returns total chunks, search count (24h), ONNX runtime status
+
+### Knowledge Rooms
+- Full CRUD via `GET/POST/PUT/DELETE /api/knowledge/rooms`
+- Permission-based access control (`KnowledgeRoomPermissionEntity`)
+- Tenant-isolated with `X-Tenant-Id` header
+
+### Workflow Builder
+- Definition CRUD via `GET/POST/DELETE /api/workflow/definitions`
+- Execution lifecycle via `POST /api/workflow/executions/start/{id}`, `GET /api/workflow/executions/{id}`, `POST /api/workflow/executions/{id}/cancel`
+- SignalR real-time progress streaming via `/hubs/workflow`
+- Step types: Action, Decision, Wait, Approval, Parallel, Subworkflow
+- Event broadcasting: `IWorkflowEventBroadcaster` → `SignalRWorkflowEventBroadcaster`
+
+### Tenant Isolation
+- `X-Tenant-Id` header takes precedence over JWT `tenant_id` claim
+- Unknown tenants accepted (dev/test fallback)
+- Global EF Core query filters apply `TenantId` to all `ITenantEntity` types

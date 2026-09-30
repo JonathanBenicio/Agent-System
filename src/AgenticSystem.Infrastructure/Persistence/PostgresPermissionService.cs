@@ -43,7 +43,7 @@ public class PostgresPermissionService : IPermissionService
                 Id = Guid.NewGuid().ToString("N"),
                 UserId = userId,
                 RoleId = role,
-                TenantId = tenantId,
+                TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId)),
                 GrantedAt = DateTime.UtcNow
             });
             await dbContext.SaveChangesAsync(ct);

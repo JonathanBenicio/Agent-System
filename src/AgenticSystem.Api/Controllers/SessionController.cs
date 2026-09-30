@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Api.Hubs;
 using System.Security.Claims;
 
 namespace AgenticSystem.Api.Controllers;
@@ -12,21 +14,25 @@ namespace AgenticSystem.Api.Controllers;
 public class SessionController : ControllerBase
 {
     private readonly ISessionStore _sessionStore;
+    private readonly IHubContext<ChatHub> _hubContext;
     private readonly ILogger<SessionController> _logger;
+    private readonly IVectorStore _vectorStore;
 
-    public SessionController(ISessionStore sessionStore, ILogger<SessionController> logger)
+    public SessionController(ISessionStore sessionStore, IHubContext<ChatHub> hubContext, ILogger<SessionController> logger, IVectorStore vectorStore)
     {
         _sessionStore = sessionStore;
+        _hubContext = hubContext;
         _logger = logger;
+        _vectorStore = vectorStore;
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetSessions([FromQuery] int limit = 50, CancellationToken ct = default)
+    public async Task<IActionResult> GetSessions([FromQuery] int limit = 50, [FromQuery] string? search = null, CancellationToken ct = default)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
 
-        var sessions = await _sessionStore.GetByUserAsync(userId, limit, ct);
+        var sessions = await _sessionStore.GetByUserAsync(userId, limit, search, ct);
 
         var items = sessions
             .OrderByDescending(s => s.EndedAt ?? s.StartedAt)
@@ -75,6 +81,17 @@ public class SessionController : ControllerBase
         await _sessionStore.DeleteAsync(id, ct);
         _logger.LogInformation("Session {SessionId} deleted by user {UserId}", id, userId);
 
+        try
+        {
+            await _vectorStore.DeleteCollectionAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to purge session documents from vector store for session {SessionId}", id);
+        }
+
+        await _hubContext.Clients.User(userId).SendAsync("SessionDeleted", id, ct);
+
         return NoContent();
     }
 
@@ -95,6 +112,8 @@ public class SessionController : ControllerBase
         await _sessionStore.SaveAsync(session, ct);
 
         _logger.LogInformation("Session {SessionId} title updated by user {UserId}", id, userId);
+
+        await _hubContext.Clients.User(userId).SendAsync("SessionUpdated", id, request.Title.Trim(), ct);
 
         return Ok(new { id = session.Id, title = request.Title.Trim() });
     }
