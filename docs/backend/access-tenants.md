@@ -13,7 +13,7 @@ Este documento descreve os contratos da branch `fix/backend-core-tenancy`. O est
 | Papel de plataforma | `platform_administrators` | Registro explícito e separado; Admin/Owner do tenant nunca são promovidos automaticamente. |
 | Sala | `knowledge_room_permissions` | ACL por usuário é obrigatória para ler uma sala, inclusive quando há suporte temporário. |
 
-O runtime não atribui o tenant `default` quando falta contexto. Rotas autenticadas que usam dados de tenant exigem um tenant existente; persistência vetorial e arquivos temporários de modelos também recusam dados sem `TenantId`. Quotas de providers globais pertencem ao escopo explícito `platform`.
+O runtime não atribui o tenant `default` quando falta contexto. Rotas autenticadas que usam dados de tenant exigem um tenant existente; persistência vetorial e arquivos temporários de modelos também recusam dados sem `TenantId`. Quotas de providers globais pertencem ao escopo explícito `platform`. Em banco vazio, o bootstrap não cria tenant nem API key sem `AgenticSystem:AdminApiKey`; com a chave configurada, cria o tenant `admin`, persiste somente o hash e cria a membership correspondente. O bootstrap não semeia agentes ou workflows de produto.
 
 A migration `AddTenantMembershipAndSupportAccess` copia vínculos de `role_assignments` e API keys existentes, mantendo tenant e papel. Ela não preenche `platform_administrators`. Novas atribuições de papel sincronizam a tabela legada e membership.
 
