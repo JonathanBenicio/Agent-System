@@ -8,9 +8,9 @@ Copy-Item src/AgenticSystem.Api/appsettings.example.json src/AgenticSystem.Api/a
 dotnet restore
 dotnet run --project src/AgenticSystem.Api --urls http://localhost:5001
 ```
-Configurar somente credenciais locais apropriadas; não commitar secrets nem sobrescrever appsettings existente. URL é controlada pelo host, não há garantia de HTTPS/porta pelo comando sem --urls. JWT secret e Encryption:Key obrigatórios fora de Development; CORS AllowedOrigins obrigatório em produção. API key precisa estar habilitada no banco; bootstrap legacy AdminApiKey só cria chave quando banco inicial está vazio.
+Configurar somente credenciais locais apropriadas; não commitar secrets nem sobrescrever appsettings existente. URL é controlada pelo host, não há garantia de HTTPS/porta pelo comando sem --urls. JWT secret e Encryption:Key obrigatórios fora de Development; CORS AllowedOrigins obrigatório em produção. API key precisa estar habilitada no banco. Em banco sem tenants, `AgenticSystem:AdminApiKey` é obrigatória para o bootstrap inicial; configure `AgenticSystem__AdminApiKey` no ambiente. Sem ela, o startup lança `MissingTenantBootstrapConfigurationException` e encerra a inicialização. Com tenants já provisionados, essa chave não é exigida pelo bootstrap.
 
-StorageMode PostgreSQL e VectorStoreType PostgreSQL selecionam persistência; InMemory é diagnóstico/desenvolvimento, não prova de durabilidade. Startup tenta migrações e bootstrap, mas catch loga falha e continua. /health é liveness; confirmar migrations e acesso a tabelas separadamente.
+StorageMode PostgreSQL e VectorStoreType PostgreSQL selecionam persistência; InMemory é diagnóstico/desenvolvimento, não prova de durabilidade. Startup executa migrações e bootstrap. A falta de `AdminApiKey` quando o banco ainda não tem tenants é fatal; outras falhas de migração/bootstrap continuam sendo registradas e podem não interromper a inicialização. `/health` é liveness; confirmar migrations e acesso a tabelas separadamente.
 
 ## Providers LLM e Gateway
 

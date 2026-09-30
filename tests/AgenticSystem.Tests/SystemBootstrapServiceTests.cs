@@ -16,19 +16,51 @@ namespace AgenticSystem.Tests;
 public sealed class SystemBootstrapServiceTests
 {
     [Fact]
-    public async Task BootstrapAsync_WithoutConfiguredKey_LeavesDatabaseUnprovisioned()
+    public async Task BootstrapAsync_WithoutConfiguredKey_ThrowsAndLeavesDatabaseUnprovisioned()
     {
         await using var context = CreateContext(out var tenantScope);
         using (tenantScope)
         {
             var sut = CreateService(context);
 
-            await sut.BootstrapAsync();
+            Func<Task> act = () => sut.BootstrapAsync();
+
+            await act.Should()
+                .ThrowAsync<MissingTenantBootstrapConfigurationException>()
+                .WithMessage("*AgenticSystem:AdminApiKey*");
 
             (await context.Tenants.IgnoreQueryFilters().CountAsync()).Should().Be(0);
             (await context.AccessApiKeys.IgnoreQueryFilters().CountAsync()).Should().Be(0);
             (await context.DynamicAgents.IgnoreQueryFilters().CountAsync()).Should().Be(0);
             (await context.WorkflowDefinitions.IgnoreQueryFilters().CountAsync()).Should().Be(0);
+        }
+    }
+
+    [Fact]
+    public async Task BootstrapAsync_WhenTenantAlreadyExists_DoesNotRequireBootstrapKey()
+    {
+        await using var context = CreateContext(out var tenantScope);
+        using (tenantScope)
+        {
+            context.Tenants.Add(new Tenant
+            {
+                Id = "existing-tenant",
+                Name = "Existing Tenant",
+                Slug = "existing-tenant",
+                Plan = TenantPlan.Free,
+                Limits = TenantLimits.FreeTier(),
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+            await context.SaveChangesAsync();
+
+            var sut = CreateService(context);
+
+            await sut.BootstrapAsync();
+
+            (await context.Tenants.IgnoreQueryFilters().CountAsync()).Should().Be(1);
+            (await context.AccessApiKeys.IgnoreQueryFilters().CountAsync()).Should().Be(0);
         }
     }
 

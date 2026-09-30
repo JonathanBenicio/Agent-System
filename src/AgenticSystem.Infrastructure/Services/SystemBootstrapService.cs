@@ -38,7 +38,7 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
 
             if (!tenantExists && string.IsNullOrWhiteSpace(adminApiKey))
             {
-                _logger.LogInformation("No tenant was provisioned because AgenticSystem:AdminApiKey is not configured.");
+                throw new MissingTenantBootstrapConfigurationException();
             }
             else if (!tenantExists)
             {
@@ -124,5 +124,13 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
             _logger.LogError(ex, "Unexpected error during system bootstrap.");
             throw;
         }
+    }
+}
+
+public sealed class MissingTenantBootstrapConfigurationException : InvalidOperationException
+{
+    public MissingTenantBootstrapConfigurationException()
+        : base("Cannot bootstrap an empty database without AgenticSystem:AdminApiKey. Configure the environment variable AgenticSystem__AdminApiKey.")
+    {
     }
 }
