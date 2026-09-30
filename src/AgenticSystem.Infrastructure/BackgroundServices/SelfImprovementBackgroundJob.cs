@@ -74,19 +74,32 @@ public class SelfImprovementBackgroundJob : BackgroundService
             var tenantStore = scope.ServiceProvider.GetService<ITenantStore>();
             var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
 
-            var tenants = new List<string> { "admin" };
-            if (tenantStore != null)
+            if (tenantStore is null)
             {
-                try
-                {
-                    var allTenants = await tenantStore.GetAllAsync(ct);
-                    if (allTenants != null && allTenants.Count > 0)
-                        tenants = allTenants.Select(t => t.Id).ToList();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to load tenants for self-improvement, falling back to admin");
-                }
+                _logger.LogWarning("Tenant store is unavailable; skipping self-improvement cycle.");
+                return;
+            }
+
+            IReadOnlyList<Tenant> allTenants;
+            try
+            {
+                allTenants = await tenantStore.GetAllAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load tenants; skipping self-improvement cycle.");
+                return;
+            }
+
+            var tenants = allTenants
+                .Select(tenant => tenant.Id)
+                .Where(tenantId => !string.IsNullOrWhiteSpace(tenantId))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (tenants.Count == 0)
+            {
+                _logger.LogInformation("No tenants are provisioned; skipping self-improvement cycle.");
+                return;
             }
 
             foreach (var tenantId in tenants)
