@@ -53,7 +53,16 @@ public sealed class ProviderBackedChatClient : IChatClient
         }
 
         var assistant = new MChatMessage(ChatRole.Assistant, response.Content);
-        return new ChatResponse(assistant);
+        return new ChatResponse(assistant)
+        {
+            ModelId = response.Model,
+            Usage = new UsageDetails
+            {
+                InputTokenCount = response.Usage.PromptTokens > 0 ? response.Usage.PromptTokens : null,
+                OutputTokenCount = response.Usage.CompletionTokens > 0 ? response.Usage.CompletionTokens : null,
+                TotalTokenCount = response.Usage.TotalTokens
+            }
+        };
     }
 
     public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(
@@ -67,7 +76,15 @@ public sealed class ProviderBackedChatClient : IChatClient
         if (string.IsNullOrEmpty(text))
             yield break;
 
-        yield return new ChatResponseUpdate(ChatRole.Assistant, text);
+        var update = new ChatResponseUpdate(ChatRole.Assistant, text)
+        {
+            ModelId = response.ModelId
+        };
+        if (response.Usage is not null)
+        {
+            update.Contents.Add(new UsageContent(response.Usage));
+        }
+        yield return update;
     }
 
     public object? GetService(Type serviceType, object? serviceKey = null)

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Exceptions;
 using AgenticSystem.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
@@ -47,6 +48,7 @@ public class OpenAIChatCompletionController : ControllerBase
     [ProducesResponseType(typeof(ChatCompletionResponse), 200)]
     [ProducesResponseType(typeof(ChatCompletionError), 401)]
     [ProducesResponseType(typeof(ChatCompletionError), 400)]
+    [ProducesResponseType(typeof(ChatCompletionError), 429)]
     [ProducesResponseType(typeof(ChatCompletionError), 500)]
     public async Task<IActionResult> CreateChatCompletion(
         [FromBody] ChatCompletionRequest request,
@@ -131,6 +133,19 @@ public class OpenAIChatCompletionController : ControllerBase
         {
             throw; // Let ASP.NET handle cancellation
         }
+        catch (Exception ex) when (QuotaExceededException.Find(ex) is not null)
+        {
+            var quotaError = QuotaExceededException.Find(ex)!;
+            return StatusCode(StatusCodes.Status429TooManyRequests, new ChatCompletionError
+            {
+                Error = new ChatCompletionErrorDetail
+                {
+                    Message = quotaError.Message,
+                    Type = "rate_limit_error",
+                    Code = "quota_exceeded"
+                }
+            });
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "OpenAI-compatible endpoint: orchestrator execution failed");
@@ -140,6 +155,19 @@ public class OpenAIChatCompletionController : ControllerBase
                 {
                     Message = "Internal server error during agent execution.",
                     Type = "server_error"
+                }
+            });
+        }
+
+        if (!agentResponse.Success && agentResponse.ErrorMessage?.StartsWith("Quota Exceeded:", StringComparison.Ordinal) == true)
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests, new ChatCompletionError
+            {
+                Error = new ChatCompletionErrorDetail
+                {
+                    Message = agentResponse.ErrorMessage,
+                    Type = "rate_limit_error",
+                    Code = "quota_exceeded"
                 }
             });
         }

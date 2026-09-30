@@ -45,6 +45,7 @@ public class TenantLimits
     public int MaxConcurrentSessions { get; set; }
     public int MaxAgents { get; set; }
     public int MaxDocumentsMb { get; set; }
+    public int MaxDocuments { get; set; } = 10_000;
 
     public static TenantLimits FreeTier() => new()
     {
@@ -53,7 +54,8 @@ public class TenantLimits
         MaxDailyCostUsd = 1.00m,
         MaxConcurrentSessions = 3,
         MaxAgents = 5,
-        MaxDocumentsMb = 100
+        MaxDocumentsMb = 100,
+        MaxDocuments = 10_000
     };
 
     public static TenantLimits ProTier() => new()
@@ -63,7 +65,8 @@ public class TenantLimits
         MaxDailyCostUsd = 25.00m,
         MaxConcurrentSessions = 20,
         MaxAgents = 50,
-        MaxDocumentsMb = 5_000
+        MaxDocumentsMb = 5_000,
+        MaxDocuments = 100_000
     };
 
     public static TenantLimits EnterpriseTier() => new()
@@ -73,6 +76,7 @@ public class TenantLimits
         MaxDailyCostUsd = 500.00m,
         MaxConcurrentSessions = 100,
         MaxAgents = 500,
-        MaxDocumentsMb = 50_000
+        MaxDocumentsMb = 50_000,
+        MaxDocuments = 1_000_000
     };
 }

@@ -2,6 +2,7 @@
 
 > Backend: [contratos, acesso, recursos e validação](docs/backend/README.md). Processo: [templates](templates/README.md).
 > Revisão do PR: [correções e evidências](docs/backend/validation/2026-09-28-review-fixes.md).
+> Correção ativa dos bugs #111–#117: [ADR-035](docs/architecture/adr/035-backend-core-isolation-and-reliability.md) · [plano/status](docs/plan/backend-core-remediation.md) · [evidências](docs/backend/validation/backend-core-remediation.md).
 
 > .NET 10 + Microsoft Agent Framework + Microsoft.Extensions.AI — orquestração framework-first hospedada, memória Obsidian + PostgreSQL/pgvector e superfícies A2A, AG-UI e OpenAI-compatible. Plugins MCP cliente disponíveis; servidor HTTP /mcp não mapeado na baseline.
 
@@ -40,6 +41,9 @@ Capacidades experimentais (como protocolos extras, plugins MCP, workflows colabo
 - módulo separado
 - rollout opcional
 - fallback explícito para o comportamento atual
+
+Self-improvement (#16) permanece na trilha Lab: a flag `AgenticSystem:SelfImprovement:Enabled` fica desligada por padrão; quando habilitada em laboratório, mudanças de prompt viram propostas e exigem aprovação de Owner/Admin, com versão, auditoria e rollback. O contrato está em [API do backend](docs/backend/api-core.md).
+O executor Hyperlight CodeAct é uma capacidade Lab: a flag global começa desligada, e o tool só aparece com `AgenticSystem:Hyperlight:Enabled=true` no ambiente `Lab`.
 
 ### Critérios de incubação e descarte
 
@@ -108,7 +112,7 @@ graph TD
 | Camada | Tecnologias |
 |--------|-------------|
 | **Core** | .NET 10, ASP.NET Core 10, SignalR 10, Microsoft.Extensions.AI |
-| **Agent Runtime** | Microsoft Agent Framework 1.4 + hosting/workflows |
+| **Agent Runtime** | Microsoft Agent Framework 1.22.0 + hosted agents/workflows; A2A/AG-UI hosting remains preview |
 | **LLM** | OpenAI, Google Gemini, Anthropic Claude, Ollama, IChatClient contextual |
 | **Embeddings** | OpenAI (text-embedding-3-small), Google (text-embedding-004), Ollama (nomic-embed-text), ML.NET+ONNX |
 | **Memory** | Obsidian vault (human-readable), PostgreSQL + pgvector (semantic search) |

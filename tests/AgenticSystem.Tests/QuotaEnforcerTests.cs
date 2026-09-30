@@ -13,6 +13,7 @@ public class QuotaEnforcerTests
     private readonly IMemoryCache _cache;
     private readonly ITenantQuotaRepository _repository;
     private readonly ILogger<QuotaEnforcer> _logger;
+    private readonly IEventBus _eventBus;
     private readonly QuotaEnforcer _sut;
 
     public QuotaEnforcerTests()
@@ -20,7 +21,8 @@ public class QuotaEnforcerTests
         _cache = new MemoryCache(new MemoryCacheOptions());
         _repository = Substitute.For<ITenantQuotaRepository>();
         _logger = Substitute.For<ILogger<QuotaEnforcer>>();
-        _sut = new QuotaEnforcer(_cache, _repository, _logger);
+        _eventBus = Substitute.For<IEventBus>();
+        _sut = new QuotaEnforcer(_cache, _repository, _logger, eventBus: _eventBus);
     }
 
     [Fact]
@@ -156,5 +158,18 @@ public class QuotaEnforcerTests
 
         // Assert
         result.Allowed.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RecordUsageAsync_PublishesOnlyTenantScopedCostSummary()
+    {
+        await _sut.RecordUsageAsync("tenant-42", tokensUsed: 27, costUsd: 0.004);
+
+        await _eventBus.Received(1).PublishAsync(
+            Arg.Is<SystemBusEvent>(busEvent =>
+                busEvent.EventType == "FinOps.TurnCostUpdated" &&
+                busEvent.TenantId == "tenant-42" &&
+                busEvent.Payload.ContainsKey("TurnCostSummary")),
+            Arg.Any<CancellationToken>());
     }
 }

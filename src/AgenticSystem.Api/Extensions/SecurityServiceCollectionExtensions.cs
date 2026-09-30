@@ -11,6 +11,8 @@ public static class SecurityServiceCollectionExtensions
 {
     public static IServiceCollection AddApiSecurity(this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
+        var supabaseAuthenticationConfigured = !string.IsNullOrWhiteSpace(configuration["Supabase:JwtSecret"]);
+
         services.AddAuthentication(options =>
         {
             options.DefaultScheme = "MultiAuth";
@@ -62,13 +64,17 @@ public static class SecurityServiceCollectionExtensions
                             {
                                 return JwtTenantAuthenticationHandler.SchemeName;
                             }
+
+                            return supabaseAuthenticationConfigured
+                                ? "Supabase"
+                                : JwtTenantAuthenticationHandler.SchemeName;
                         }
                     }
                     catch
                     {
-                        // Fallback to Supabase if parsing fails
+                        // Opaque bearer API keys are handled by the ApiKey scheme below.
                     }
-                    return "Supabase";
+                    return ApiKeyAuthenticationHandler.SchemeName;
                 }
                 return ApiKeyAuthenticationHandler.SchemeName;
             };

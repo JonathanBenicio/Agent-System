@@ -27,6 +27,10 @@ builder.Host.UseDefaultServiceProvider((context, options) =>
 
 builder.Services.AddAgenticSystemCore();
 builder.Services.AddAgenticSystemInfrastructure(builder.Configuration);
+builder.Services.AddHttpContextAccessor();
+// AG-UI hosting resolves this provider while MapAGUIServer builds routes from the root provider.
+// The implementation is safe as a singleton because it reads request/tenant data from ambient accessors.
+builder.Services.AddSingleton<Microsoft.Agents.AI.Hosting.AgentIsolationKeyProvider, AgenticSystem.Api.Auth.TenantSessionIsolationKeyProvider>();
 
 // Register SignalR-based session event publisher for real-time UI sync
 builder.Services.AddSingleton<AgenticSystem.Core.Interfaces.IEventPublisher, AgenticSystem.Api.SignalR.SignalRSessionEventPublisher>();
@@ -67,7 +71,7 @@ if (a2aEnabled || agUiEnabled)
 
     if (agUiEnabled)
     {
-        builder.Services.AddAGUI();
+        builder.Services.AddAGUIServer();
     }
 }
 
@@ -83,6 +87,7 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
 
+builder.Services.AddScoped<AgenticSystem.Api.SignalR.TenantHubFilter>();
 builder.Services.AddSignalR(options =>
 {
     options.AddFilter<AgenticSystem.Api.SignalR.TenantHubFilter>();
@@ -138,6 +143,27 @@ builder.AddEnterpriseObservability("AgenticSystem.Api");
 // ============================================================================
 
 var app = builder.Build();
+
+// This service exists only in the isolated validation host so that the
+// GatewayHub tenant-broadcast path can be exercised over a real SignalR socket.
+if (app.Environment.IsEnvironment("Validation"))
+{
+    var tenantContextAccessor = app.Services.GetRequiredService<AgenticSystem.Core.Interfaces.ITenantContextAccessor>();
+    using (tenantContextAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext
+    {
+        TenantId = "system-validation-gateway",
+        TenantName = "Validation Gateway Fixture"
+    }))
+    {
+        app.Services.GetRequiredService<AgenticSystem.Core.Interfaces.IServiceGateway>()
+            .RegisterService(new AgenticSystem.Core.Models.ServiceRegistration
+            {
+                Name = "validation-gateway-fixture",
+                Category = "validation",
+                DailyBudget = 1m
+            });
+    }
+}
 
 // Auto-migrate database on startup
 using (var scope = app.Services.CreateScope())
@@ -229,7 +255,7 @@ if (a2aEnabled)
 }
 if (agUiEnabled)
 {
-    app.MapAGUI("AgenticSystem", "/agui")
+    app.MapAGUIServer("AgenticSystem", "/agui")
         .RequireAuthorization()
         .RequireRateLimiting(RateLimitingServiceCollectionExtensions.ProtocolPolicyName);
 }
@@ -247,13 +273,13 @@ await eventBus.SubscribeAsync("FinOps.TurnCostUpdated", "GatewayHubPublisher", a
 {
     if (busEvent.Payload.TryGetValue("TurnCostSummary", out var summaryObj))
     {
-        await gatewayHub.Clients.All.SendAsync("TurnCostSummaryUpdated", summaryObj);
+        await gatewayHub.Clients.Group($"tenant:{busEvent.TenantId}:gateway").SendAsync("TurnCostSummaryUpdated", summaryObj);
     }
 });
 
 await eventBus.SubscribeAsync("FinOps.QuotaThresholdReached", "GatewayHubPublisher", async busEvent =>
 {
-    await gatewayHub.Clients.All.SendAsync("QuotaThresholdReached", busEvent.Payload);
+    await gatewayHub.Clients.Group($"tenant:{busEvent.TenantId}:gateway").SendAsync("QuotaThresholdReached", busEvent.Payload);
 });
 
 Log.Information("Agentic System starting up...");

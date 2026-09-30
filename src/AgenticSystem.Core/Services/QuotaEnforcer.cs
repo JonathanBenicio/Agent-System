@@ -8,18 +8,15 @@ namespace AgenticSystem.Core.Services;
 
 /// <summary>
 /// Production implementation of <see cref="IQuotaEnforcer"/> that combines:
-/// <list type="bullet">
-///   <item>An <see cref="IMemoryCache"/> with a 60-second TTL for hot-path reads (rate-limit checks),</item>
-///   <item>An <see cref="ITenantQuotaRepository"/> for durable writes and daily-reset persistence.</item>
-/// </list>
-/// This dual-layer design avoids hitting the database on every token-counted LLM call while
-/// ensuring quotas survive application restarts and work correctly across multiple replicas.
+/// Daily usage and configuration are always read from the durable repository so stale replica
+/// snapshots cannot authorize usage beyond the persisted quota.
 /// </summary>
 public class QuotaEnforcer : IQuotaEnforcer
 {
-    private readonly IMemoryCache _cache;
     private readonly ITenantQuotaRepository _repository;
     private readonly ILogger<QuotaEnforcer> _logger;
+    private readonly ITenantContextAccessor? _tenantContextAccessor;
+    private readonly IEventBus? _eventBus;
 
     /// <summary>
     /// In-memory per-minute sliding window counters. These are intentionally NOT persisted
@@ -28,20 +25,18 @@ public class QuotaEnforcer : IQuotaEnforcer
     /// </summary>
     private readonly ConcurrentDictionary<string, (int Count, DateTime WindowStart)> _minuteCounters = new();
 
-    private static readonly MemoryCacheEntryOptions CacheOptions = new()
-    {
-        AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(60),
-        Priority = CacheItemPriority.High,
-    };
-
     public QuotaEnforcer(
         IMemoryCache cache,
         ITenantQuotaRepository repository,
-        ILogger<QuotaEnforcer> logger)
+        ILogger<QuotaEnforcer> logger,
+        ITenantContextAccessor? tenantContextAccessor = null,
+        IEventBus? eventBus = null)
     {
-        _cache = cache;
+        ArgumentNullException.ThrowIfNull(cache);
         _repository = repository;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
+        _eventBus = eventBus;
     }
 
     /// <inheritdoc/>
@@ -52,11 +47,16 @@ public class QuotaEnforcer : IQuotaEnforcer
         CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(ownerId))
-            return new QuotaCheckResult { Allowed = true };
+            return new QuotaCheckResult
+            {
+                Allowed = false,
+                DenialReason = "A tenant identity is required to enforce usage limits.",
+                RecommendedAction = QuotaAlertAction.Block
+            };
 
         // 1. Per-minute rate-limit check (in-memory, no DB trip needed)
         var minuteWindow = GetOrResetMinuteWindow(ownerId);
-        var snapshot = await GetSnapshotAsync(ownerId, ct);
+        var snapshot = ApplyTenantPlanCeiling(ownerId, await GetSnapshotAsync(ownerId, ct));
 
         if (minuteWindow.Count >= snapshot.RequestsPerMinute)
         {
@@ -117,8 +117,34 @@ public class QuotaEnforcer : IQuotaEnforcer
         // Persist to database — this is the source of truth for daily totals.
         await _repository.IncrementUsageAsync(ownerId, tokensUsed, costUsd, ct);
 
+        if (_eventBus is not null)
+        {
+            try
+            {
+                await _eventBus.PublishAsync(new SystemBusEvent
+                {
+                    EventType = "FinOps.TurnCostUpdated",
+                    Source = nameof(QuotaEnforcer),
+                    TenantId = ownerId,
+                    Payload = new Dictionary<string, object>
+                    {
+                        ["TurnCostSummary"] = new
+                        {
+                            tenantId = ownerId,
+                            tokens = tokensUsed,
+                            costUsd,
+                            recordedAt = DateTime.UtcNow
+                        }
+                    }
+                }, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to publish tenant cost summary for {TenantId}", ownerId);
+            }
+        }
+
         // Invalidate cache so the next check reflects real DB values immediately.
-        _cache.Remove(CacheKey(ownerId));
 
         _logger.LogDebug("Recorded usage for {OwnerId}: {Tokens} tokens, ${Cost:F4}", ownerId, tokensUsed, costUsd);
     }
@@ -147,7 +173,6 @@ public class QuotaEnforcer : IQuotaEnforcer
     public async Task SetQuotaConfigAsync(QuotaConfig config, CancellationToken ct = default)
     {
         await _repository.UpsertConfigAsync(config.OwnerId, config, ct);
-        _cache.Remove(CacheKey(config.OwnerId));
     }
 
     /// <inheritdoc/>
@@ -169,13 +194,7 @@ public class QuotaEnforcer : IQuotaEnforcer
 
     private async Task<TenantQuotaSnapshot> GetSnapshotAsync(string ownerId, CancellationToken ct)
     {
-        return await _cache.GetOrCreateAsync(
-            CacheKey(ownerId),
-            async entry =>
-            {
-                entry.SetOptions(CacheOptions);
-                return await _repository.GetOrCreateAsync(ownerId, ct);
-            }) ?? await _repository.GetOrCreateAsync(ownerId, ct);
+        return await _repository.GetOrCreateAsync(ownerId, ct);
     }
 
     private (int Count, DateTime WindowStart) GetOrResetMinuteWindow(string ownerId)
@@ -200,7 +219,36 @@ public class QuotaEnforcer : IQuotaEnforcer
                 : (existing.Count + 1, existing.WindowStart));
     }
 
-    private static string CacheKey(string ownerId) => $"quota:{ownerId}";
+    private TenantQuotaSnapshot ApplyTenantPlanCeiling(string tenantId, TenantQuotaSnapshot snapshot)
+    {
+        var tenant = _tenantContextAccessor?.CurrentContext;
+        if (tenant is null || !string.Equals(tenant.TenantId, tenantId, StringComparison.Ordinal))
+            return snapshot;
+
+        var ceiling = tenant.Plan switch
+        {
+            TenantPlan.Pro => TenantLimits.ProTier(),
+            TenantPlan.Enterprise => TenantLimits.EnterpriseTier(),
+            _ => TenantLimits.FreeTier()
+        };
+        var configured = tenant.Limits;
+        var requestsPerMinute = Restrict(snapshot.RequestsPerMinute, Math.Min(ceiling.MaxRequestsPerMinute, PositiveOr(configured.MaxRequestsPerMinute, ceiling.MaxRequestsPerMinute)));
+        var tokensPerDay = Restrict(snapshot.MaxTokensPerDay, Math.Min(ceiling.MaxTokensPerDay, PositiveOr(configured.MaxTokensPerDay, ceiling.MaxTokensPerDay)));
+        var budgetPerDay = Restrict(snapshot.MaxDailyBudgetUsd, Math.Min((double)ceiling.MaxDailyCostUsd, PositiveOr((double)configured.MaxDailyCostUsd, (double)ceiling.MaxDailyCostUsd)));
+
+        return snapshot with
+        {
+            RequestsPerMinute = requestsPerMinute,
+            MaxTokensPerDay = tokensPerDay,
+            MaxDailyBudgetUsd = budgetPerDay
+        };
+    }
+
+    private static int PositiveOr(int value, int fallback) => value > 0 ? value : fallback;
+    private static double PositiveOr(double value, double fallback) => value > 0 ? value : fallback;
+    private static int Restrict(int configured, int ceiling) => configured > 0 ? Math.Min(configured, ceiling) : ceiling;
+    private static long Restrict(long configured, int ceiling) => configured > 0 ? Math.Min(configured, ceiling) : ceiling;
+    private static double Restrict(double configured, double ceiling) => configured > 0 ? Math.Min(configured, ceiling) : ceiling;
 
     private static double CalculatePercent(double current, double max) =>
         max <= 0 ? 0 : Math.Min(100, current / max * 100);

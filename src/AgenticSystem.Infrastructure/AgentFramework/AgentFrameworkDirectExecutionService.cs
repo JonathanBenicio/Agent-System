@@ -1,10 +1,17 @@
+#pragma warning disable MAAI001 // Required experimental MAF session-store integration; reviewed under issue #120.
+
 using System.Text;
+using AgenticSystem.Core.Skills;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using FrameworkAgent = Microsoft.Agents.AI.AIAgent;
 using FrameworkAgentResponse = Microsoft.Agents.AI.AgentResponse;
+using FrameworkSessionStore = Microsoft.Agents.AI.AgentSessionStore;
+using FrameworkSessionStoreKey = Microsoft.Agents.AI.AgentSessionStoreKey;
 
 namespace AgenticSystem.Infrastructure.AgentFramework;
 
@@ -15,7 +22,7 @@ namespace AgenticSystem.Infrastructure.AgentFramework;
 public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
 {
     private readonly AgentFrameworkFactory _frameworkFactory;
-    private readonly Microsoft.Agents.AI.Hosting.AgentSessionStore _sessionStore;
+    private readonly FrameworkSessionStore _sessionStore;
     private readonly ISessionManager _sessionManager;
     private readonly ILogger<AgentFrameworkDirectExecutionService> _logger;
     private readonly IAgentRuntimeCoordinator? _runtimeCoordinator;
@@ -24,7 +31,7 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
 
     public AgentFrameworkDirectExecutionService(
         AgentFrameworkFactory frameworkFactory,
-        Microsoft.Agents.AI.Hosting.AgentSessionStore sessionStore,
+        FrameworkSessionStore sessionStore,
         ISessionManager sessionManager,
         ILogger<AgentFrameworkDirectExecutionService> logger,
         IServiceProvider serviceProvider,
@@ -50,6 +57,8 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
         ArgumentNullException.ThrowIfNull(agent);
         ArgumentException.ThrowIfNullOrWhiteSpace(sessionId);
         ArgumentNullException.ThrowIfNull(context);
+        ArgumentException.ThrowIfNullOrWhiteSpace(context.TenantId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(context.UserId);
 
         agent.UpdateLastUsed();
 
@@ -57,8 +66,20 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
 
         try
         {
-            frameworkAgent = await _frameworkFactory.CreateFromAgentAsync(agent, ct);
-            var session = await _sessionStore.GetSessionAsync(frameworkAgent, sessionId, ct);
+            var workflow = context.WorkflowOptions;
+            Exception? workflowToolFailure = null;
+            var allowedTools = workflow?.AllowedTools is { } restricted
+                ? agent.AvailableTools.Intersect(restricted, StringComparer.OrdinalIgnoreCase).ToArray()
+                : agent.AvailableTools.ToArray();
+            var workflowTools = workflow is null ? null : CreateWorkflowTools(context, allowedTools,
+                error => Interlocked.CompareExchange(ref workflowToolFailure, error, null));
+            frameworkAgent = workflow is null
+                ? await _frameworkFactory.CreateFromAgentAsync(agent, ct)
+                : await _frameworkFactory.CreateFromAgentAsync(agent, workflowTools, workflow.Model, ct, allowedTools);
+            var sessionKey = new FrameworkSessionStoreKey(sessionId).WithPartition(
+                "isolation",
+                $"{context.TenantId}:{context.UserId}");
+            var session = await _sessionStore.GetOrCreateSessionAsync(frameworkAgent, sessionKey, ct);
 
             string content = string.Empty;
             FrameworkAgentResponse? frameworkResponse = null;
@@ -118,7 +139,27 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
                 
                 for (int attempt = 1; attempt <= maxRetries; attempt++)
                 {
-                    frameworkResponse = await frameworkAgent.RunAsync(currentInput, session, options: runOptions, cancellationToken: ct);
+                    if (workflow?.ImagePath is { } imagePath)
+                    {
+                        var verifiedPath = VerifyTenantImagePath(imagePath, context.TenantId);
+                        var imageBytes = await File.ReadAllBytesAsync(verifiedPath, ct);
+                        if (imageBytes.Length > 10 * 1024 * 1024)
+                            throw new InvalidOperationException("Workflow image exceeds 10 MiB.");
+                        var mediaType = Path.GetExtension(verifiedPath).ToLowerInvariant() switch
+                        {
+                            ".jpg" or ".jpeg" => "image/jpeg",
+                            ".png" => "image/png",
+                            ".webp" => "image/webp",
+                            _ => throw new InvalidOperationException("Unsupported workflow image type.")
+                        };
+                        var message = new ChatMessage(ChatRole.User, currentInput);
+                        message.Contents.Add(new DataContent(imageBytes, mediaType));
+                        frameworkResponse = await frameworkAgent.RunAsync([message], session, options: runOptions, cancellationToken: ct);
+                    }
+                    else
+                    {
+                        frameworkResponse = await frameworkAgent.RunAsync(currentInput, session, options: runOptions, cancellationToken: ct);
+                    }
 
                     content = string.Join("\n", frameworkResponse.Messages
                         .Where(m => m.Role == ChatRole.Assistant)
@@ -155,6 +196,9 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
                 }
             }
 
+            if (workflowToolFailure is not null)
+                throw new InvalidOperationException("A workflow tool failed or was denied.", workflowToolFailure);
+
             var result = new AgentResponse
             {
                 Content = content ?? string.Empty,
@@ -170,7 +214,7 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
             };
 
             await SyncResponseAsync(sessionId, input, agent.Name, result);
-            await _sessionStore.SaveSessionAsync(frameworkAgent, sessionId, session, ct);
+            await _sessionStore.SaveSessionAsync(frameworkAgent, sessionKey, session, ct);
 
             return result;
         }
@@ -222,5 +266,66 @@ public class AgentFrameworkDirectExecutionService : IDirectAgentExecutionService
         };
 
         await _sessionManager.AddEventAsync(sessionId, agentEvent);
+    }
+
+    private IReadOnlyList<AITool> CreateWorkflowTools(
+        UserContext context, IReadOnlyCollection<string> allowedTools, Action<Exception> recordFailure)
+    {
+        if (!allowedTools.Contains("CleanImageAsync", StringComparer.OrdinalIgnoreCase)
+            && !allowedTools.Contains("RenderBannerAsync", StringComparer.OrdinalIgnoreCase))
+            return [];
+
+        var skills = _serviceProvider.GetRequiredService<BannerProductionSkills>();
+        var permissions = _serviceProvider.GetRequiredService<IPermissionService>();
+
+        async Task AuthorizeAsync(string name, CancellationToken ct)
+        {
+            if (!await permissions.HasPermissionAsync(context.UserId, $"tools/{name}", Permission.Execute, ct))
+                throw new UnauthorizedAccessException($"Workflow initiator cannot execute '{name}'.");
+        }
+
+        var result = new List<AITool>();
+        if (allowedTools.Contains("CleanImageAsync", StringComparer.OrdinalIgnoreCase))
+            result.Add(AIFunctionFactory.Create(
+                async (string path, string items) =>
+                {
+                    try
+                    {
+                        await AuthorizeAsync("CleanImageAsync", CancellationToken.None);
+                        var output = await skills.CleanImageAsync(VerifyTenantImagePath(path, context.TenantId), items);
+                        return VerifyTenantImagePath(output, context.TenantId);
+                    }
+                    catch (Exception ex) { recordFailure(ex); throw; }
+                },
+                "CleanImageAsync", "Remove fios, postes e lixo de uma imagem do tenant"));
+        if (allowedTools.Contains("RenderBannerAsync", StringComparer.OrdinalIgnoreCase))
+            result.Add(AIFunctionFactory.Create(
+                async (string path, decimal price, int beds, string location, string phone) =>
+                {
+                    try
+                    {
+                        await AuthorizeAsync("RenderBannerAsync", CancellationToken.None);
+                        var output = await skills.RenderBannerAsync(
+                            VerifyTenantImagePath(path, context.TenantId), price, beds, location, phone);
+                        return VerifyTenantImagePath(output, context.TenantId);
+                    }
+                    catch (Exception ex) { recordFailure(ex); throw; }
+                },
+                "RenderBannerAsync", "Renderiza o banner final sobre uma imagem do tenant"));
+        return result;
+    }
+
+    private string VerifyTenantImagePath(string imagePath, string tenantId)
+    {
+        if (string.IsNullOrWhiteSpace(tenantId) || Path.GetFileName(tenantId) != tenantId)
+            throw new InvalidOperationException("Invalid tenant for workflow image access.");
+        var host = _serviceProvider.GetRequiredService<IHostEnvironment>();
+        var tenantDirectory = Path.GetFullPath(Path.Combine(host.ContentRootPath, "wwwroot", "uploads", tenantId));
+        var path = Path.GetFullPath(imagePath);
+        if (!path.StartsWith(tenantDirectory + Path.DirectorySeparatorChar,
+                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)
+            || !File.Exists(path))
+            throw new UnauthorizedAccessException("Workflow image must exist under the active tenant uploads directory.");
+        return path;
     }
 }

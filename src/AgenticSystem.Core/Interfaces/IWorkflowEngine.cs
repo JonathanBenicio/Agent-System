@@ -27,6 +27,24 @@ public interface IWorkflowEngine
         Dictionary<string, object>? additionalInput = null,
         CancellationToken ct = default);
 
+    /// <summary>Processes one execution whose database lease has already been claimed.</summary>
+    Task ProcessClaimedExecutionAsync(WorkflowExecutionClaim claim, CancellationToken ct = default);
+
+    /// <summary>Approves the pending human-approval step and resumes the workflow.</summary>
+    Task<WorkflowExecution> ApproveAsync(
+        string tenantId,
+        string executionId,
+        string approvedBy,
+        CancellationToken ct = default);
+
+    /// <summary>Rejects the pending human-approval step and terminates the workflow.</summary>
+    Task<WorkflowExecution> RejectAsync(
+        string tenantId,
+        string executionId,
+        string rejectedBy,
+        string? reason = null,
+        CancellationToken ct = default);
+
     /// <summary>
     /// Cancels a running workflow. Triggers compensation for completed steps if configured.
     /// </summary>

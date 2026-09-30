@@ -23,10 +23,10 @@ public class PostgresPermissionService : IPermissionService
     public async Task<IReadOnlyList<RoleAssignment>> GetRolesAsync(string userId, CancellationToken ct = default)
     {
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(ct);
-        return await dbContext.RoleAssignments
+        return await dbContext.TenantMemberships
             .AsNoTracking()
-            .Where(r => r.UserId == userId)
-            .Select(r => new RoleAssignment { UserId = r.UserId, RoleName = r.RoleId, TenantId = r.TenantId, AssignedAt = r.GrantedAt })
+            .Where(r => r.SubjectId == userId)
+            .Select(r => new RoleAssignment { UserId = r.SubjectId, RoleName = r.Role, TenantId = r.TenantId, AssignedAt = r.GrantedAt })
             .ToListAsync(ct);
     }
 
@@ -46,8 +46,23 @@ public class PostgresPermissionService : IPermissionService
                 TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId)),
                 GrantedAt = DateTime.UtcNow
             });
-            await dbContext.SaveChangesAsync(ct);
         }
+
+        var membership = await dbContext.TenantMemberships.FirstOrDefaultAsync(
+            item => item.SubjectId == userId && item.SubjectType == "User" && item.Role == role && item.TenantId == tenantId, ct);
+        if (membership is null)
+        {
+            dbContext.TenantMemberships.Add(new TenantMembershipEntity
+            {
+                SubjectId = userId,
+                SubjectType = "User",
+                Role = role,
+                TenantId = tenantId ?? throw new ArgumentNullException(nameof(tenantId)),
+                GrantedAt = DateTime.UtcNow
+            });
+        }
+        if (dbContext.ChangeTracker.HasChanges())
+            await dbContext.SaveChangesAsync(ct);
     }
 
     public async Task RevokeRoleAsync(string userId, string role, string? tenantId = null, CancellationToken ct = default)
@@ -59,17 +74,25 @@ public class PostgresPermissionService : IPermissionService
         if (existing is not null)
         {
             dbContext.RoleAssignments.Remove(existing);
-            await dbContext.SaveChangesAsync(ct);
         }
+
+        var membership = await dbContext.TenantMemberships.FirstOrDefaultAsync(
+            item => item.SubjectId == userId && item.SubjectType == "User" && item.Role == role && item.TenantId == tenantId, ct);
+        if (membership is not null)
+        {
+            dbContext.TenantMemberships.Remove(membership);
+        }
+        if (dbContext.ChangeTracker.HasChanges())
+            await dbContext.SaveChangesAsync(ct);
     }
 
     public async Task<Permission> GetEffectivePermissionsAsync(string userId, string resource, CancellationToken ct = default)
     {
         await using var dbContext = await _dbContextFactory.CreateDbContextAsync(ct);
-        var roleNames = await dbContext.RoleAssignments
+        var roleNames = await dbContext.TenantMemberships
             .AsNoTracking()
-            .Where(r => r.UserId == userId)
-            .Select(r => r.RoleId)
+            .Where(r => r.SubjectId == userId)
+            .Select(r => r.Role)
             .ToListAsync(ct);
 
         Permission effective = Permission.None;

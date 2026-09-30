@@ -1,5 +1,63 @@
 # User Stories — Agentic System
 
+## BACK-FIX-111–117 — Núcleo seguro e operacional
+Como usuário de um tenant, quero executar conversas e consumir recursos autorizados sem acesso cruzado ou falhas de persistência, para operar o núcleo com isolamento e contabilização confiáveis.
+
+Issues: [#111](https://github.com/JonathanBenicio/Agent-System/issues/111)–[#117](https://github.com/JonathanBenicio/Agent-System/issues/117) • [ADR-035](architecture/adr/035-backend-core-isolation-and-reliability.md) • [Plano](plan/backend-core-remediation.md) • [Validação](backend/validation/backend-core-remediation.md). Status: cenários funcionais validados; release ainda depende do gate de cobertura e dos limites descritos no relatório.
+
+- BACK-FIX-111: chave Viewer conserva Viewer e não muda tenant sem vínculo/concessão; Admin legado permanece scoped.
+- BACK-FIX-112: header/query/claim seguem a mesma política; tenants desconhecidos/inativos são negados; eventos dos cinco hubs permanecem no tenant autorizado; Gateway global exige Platform Admin.
+- BACK-FIX-113: RAG vazio nega, SQL funciona no PostgreSQL real e sala permitida é encontrada mesmo com mais de 55 candidatos proibidos.
+- BACK-FIX-114: chat REST/SSE/SignalR gera conteúdo/sessionId, retoma somente para o dono e persiste após restart com isolamento MAF configurado.
+- BACK-FIX-115: incrementos confirmados não se perdem sob concorrência; consumo real de tokens/custo é persistido e volta a ser bloqueado após restart; janela RPM é local ao processo.
+- BACK-FIX-116: dois tenants têm defaults completos e isolados após restart; seeding concorrente/idempotente conserva IDs e customizações antigas.
+- BACK-FIX-117: memberships por tenant aplicam papéis independentes; Platform Admin não tem conteúdo implícito; suporte expira/revoga com auditoria; gateway global exige Platform Admin; planos limitam quotas e recursos, ACL de sala sempre obrigatória.
+
+Evidência unitária não substitui integração; critérios falhos/não executados permanecem abertos.
+
+## BACK-MAF-120 — MAF atualizado e providers integrados ao Gateway
+
+Como mantenedor do backend multi-tenant, quero atualizar o Microsoft Agent Framework com compatibilidade comprovada e encaminhar providers ativos pelo Gateway, para que o runtime de produção tenha execução e telemetria reais sob os controles existentes.
+
+Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [Plano](plan/maf-122-protocols-gateway.md).
+Status: implementação MAF/Gateway validada; suíte 755 aprovados, 1 skip vetorial, 0 falhas; build limpo. PostgreSQL validou store global/NOTIFY, dois LLMManagers/Gateways com inferência Ollama, sessão MAF reaberta após reinício real da API e Wait recuperado após encerramento forçado. Banner gerou arquivo com client determinístico e skills reais; inferência vision/editor ainda não foi executada. Handler externo precisa deduplicar após crash. A2A/AG-UI preview está separado em #121. [Evidência](backend/validation/maf-122-workflow-runtime-2026-09-29.md).
+
+- Dada sessão pertencente a usuário/tenant, quando criada, serializada, retomada ou restaurada após restart, então seu owner, tenant, ID e estado MAF permanecem iguais; identidade de outro tenant recebe negação sem dados.
+- Dado provider de infraestrutura habilitado na configuração do host, quando a aplicação inicia e chama o modelo, então ele aparece no Gateway e chamadas completas/streaming atualizam status/circuito/limite; provider desabilitado não é registrado.
+- Dada API key BYOK pertencente a um tenant, quando esse tenant escolhe o provider, então sua rota e quota por tenant permanecem isoladas, sem compartilhar circuit/rate state global via Gateway.
+- Dado Platform Admin que atualiza provider global, quando dois tenants usam o runtime após restart ou em nós diferentes, então ambos veem os mesmos limites/modelos/chave global cifrada; mudança fica auditada pelo ator e a API retorna apenas presença da credencial.
+- Dado tenant com configuração BYOK existente, quando a configuração global é alterada, então o valor legado continua tenant-scoped e não é promovido nem sobrescrito; a chamada usa credencial do tenant antes da global.
+- Dado falha/cancelamento durante stream, quando ocorre, então recursos são liberados, falha é contabilizada e fallback só é usado antes de conteúdo ter sido entregue; quotas persistidas por tenant continuam aplicadas.
+- Dada mudança de pacote/API MAF ou migration explícita do store global, quando build/testes/EF são executados, então incompatibilidade é corrigida sem migrar dados tenant para globais, ou fica registrada como bloqueio verificável.
+- Dado workflow dinâmico compilado por tenant/request no modo PostgreSQL, quando iniciado, então existe um worker compatível e todas as instâncias conhecem a mesma versão da definição; caso contrário, o backend não deve retornar uma execução pendente como se a tivesse enfileirado com sucesso.
+
+## BACK-ORCH-122 — Orquestrar agentes dinamicos pelo supervisor MAF
+
+Como usuário da plataforma de agentes personalizáveis, quero que o orquestrador identifique e delegue a solicitação aos especialistas ativos configurados para meu tenant, para receber resposta consolidada sem perder o estado das sessões.
+
+Issue: [#122](https://github.com/JonathanBenicio/Agent-System/issues/122) · [ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md) · [Plano separado](plan/dynamic-orchestrator-implementation.md). Dependência: API de sessões MAF 1.22 em [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
+Status: implementação funcional do supervisor concluída; regressões cobrem multi-tool, binding, identidade, catálogo, persistência seletiva de sessões e cache tenant-scoped. Sessão MAF do supervisor reaberta após reinício real da API; especialistas só foram reabertos com novos adapters/contextos. Suíte: 755 aprovados/1 skip.
+
+- Dada lista de specialists com bindings válidos, quando o modo “Intelligent Router” recebe input, então `ChatClientAgent` do MAF pode invocar um ou mais `AIFunction`s correspondentes e consolidar resposta útil.
+- Dado agente ativo cuja tool/binding falhou ou agente inativo, quando o prompt supervisor é construído, então ele não é apresentado como candidato delegável.
+- Dada alteração de descrição/domínio/tier/tools no catálogo, quando o próximo request constrói supervisor, então a instrução/cache reflete a nova configuração sem restart.
+- Dada execução com delegação, quando termina, então a sessão MAF do supervisor e de cada specialist invocado é persistida com partição tenant+usuário e retomável após restart.
+- Dada chamada direta por `targetAgent`, quando executada, então continua bypassando o orquestrador; respostas SignalR/REST continuam informando `agentName` real e `sessionId`.
+- Dada execução sem especialista aplicável, quando o supervisor não delega, então a resposta direta continua válida; quota, erro e cancelamento não produzem sucesso vazio.
+
+## BACK-PROTO-121 — Validar A2A e AG-UI sob hosting preview
+
+Como integrador de protocolos, quero validar A2A e AG-UI de ponta a ponta depois da atualização do core MAF, para saber se autenticação, tenant, sessão e streaming funcionam antes de tratar esses endpoints preview como suportados.
+
+Issue: [#121](https://github.com/JonathanBenicio/Agent-System/issues/121) · [ADR-037](architecture/adr/037-a2a-agui-preview-validation.md) · [Plano](plan/a2a-agui-preview-validation.md). Dependência: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
+Status: planejada; prioridade secundária, não bloqueia MAF core/Gateway.
+
+- Dado hosting preview compatível com o core atualizado, quando a flag habilita A2A/AG-UI, então endpoint e contrato básico iniciam no host de validação.
+- Dada identidade sem auth, tenant desconhecido/inativo ou sem membership, quando invoca qualquer protocolo, então a chamada é negada sem emitir conteúdo.
+- Dada sessão em tenant A, quando identidade de tenant B tenta criar/retomar ou subscrever stream, então recebe negação sem conteúdo de A.
+- Dada execução válida em cada protocolo, quando resposta ou stream ocorre e é cancelado, então formato esperado chega ao solicitante e recursos são encerrados.
+- Dada evidência com modelo local, fixture, skip ou indisponibilidade externa, quando registrada, então cada categoria fica distinguida e nenhuma é descrita como validação mais ampla.
+
 ## BACK-DOC-001 — Contratos claros e validação do núcleo
 
 Como mantenedor, quero contratos rastreáveis de endpoints, acesso e recursos, para distinguir funcionalidades comprovadas de lacunas.
@@ -2413,23 +2471,28 @@ O backend oferece CRUD e execução de Golden Sets via REST. Esses endpoints nã
 
 ---
 
-### Épico 13: Resilient Workflows & Durable Orchestration (Issue #108)
+### Épico 13: Resilient Workflows & Durable Orchestration
 
-#### US-52 — Migração para DurableTask Multi-Tenant no PostgreSQL
+#### US-52 — Execução recuperável de workflows dinâmicos multi-tenant
 
-**Como** arquiteto ou desenvolvedor do sistema,  
-**quero** que a plataforma execute as orquestrações e persista as sessões dos agentes utilizando a infraestrutura nativa do `Microsoft.Agents.AI.DurableTask`,  
-**para que** workflows de longa duração de múltiplos agentes sobrevivam a reinicializações com checkpoints robustos no PostgreSQL e isolamento estrito de Multi-Tenancy.
+**Rastreabilidade:** [Issue original #108 (fechada)](https://github.com/JonathanBenicio/Agent-System/issues/108) · reavaliação do backend em [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [plano](plan/maf-122-protocols-gateway.md).
+
+**Como** usuário de uma plataforma de agentes personalizáveis,<br>
+**quero** executar definições de workflow do meu tenant, acompanhar o mesmo ID até o resultado e retomar execuções após falha do worker,<br>
+**para que** automações dinâmicas preservem estado, autorização e efeitos rastreáveis sem depender de um grafo global estático.
 
 | Item | Detalhe |
 |------|---------|
-| Componentes | `SimpleSessionStoreAdapter` (Substituição) · `DurableWorkflowCompiler` (Novo) |
-| API / Serviços | `IWorkflowCompiler` · `AgentSessionStore` · `DurableTask` Services |
-| Status | ⏳ Planejado (ADR-030, Issue #108) |
+| Runtime | `IWorkflowEngine`/`IWorkflowStore` como orquestrador da aplicação; MAF 1.22 como runtime de agentes e ferramentas |
+| Persistência | PostgreSQL com versão/hash imutável da definição, execução, etapas, aprovação/espera e lease de worker |
+| Status | Engine dinâmico canônico implementado: ID/status, snapshot/hash, approval/reject, Agent, Wait persistido, retries, RBAC de tool e lease/recovery. Wait concluiu após encerramento forçado antes do prazo. Banner compartilha start/status com o store e gerou arquivo final com client determinístico/skills reais; modelos vision/editor não foram exercitados. Handler externo precisa deduplicar a chave. Suíte 755 aprovados/1 skip. |
 
-**Critérios de Aceite:**
-- [ ] A sessão de orquestração do MAF deve ser delegada ao `Microsoft.Agents.AI.DurableTask` configurado com banco de dados PostgreSQL como engine de persistência.
-- [ ] O particionamento Multi-Tenant deve ser garantido prefixando o identificador do tenant em cada instância durável: `InstanceId = $"{TenantId}:{SessionId}"`.
-- [ ] As tabelas internas da engine do DurableTask PostgreSQL devem ser criadas na inicialização da aplicação usando scripts internos do provedor, sem poluir o histórico de migrations do EF Core.
-- [ ] O compilador de workflows orientados a grafos deve mapear de forma transparente os nós declarativos do banco para Atividades (Activities) assíncronas do DurableTask.
-- [ ] Garantir 100% de sucesso na suíte de testes de integração, cobrindo criação, serialização e recuperação de workflows duráveis simulados.
+O Issue #108 exigia especificamente `Microsoft.Agents.AI.DurableTask`. Essa escolha foi substituída na análise atual: a extensão agenda por nome com registry criado no startup, enquanto as definições do produto são tenant/request-specific e a API atual consulta `IWorkflowStore`. O valor de produto continua; o mecanismo não é requisito.
+
+**Critérios de aceite:**
+- [x] O start cria um execution ID persistido e o mesmo ID serve à consulta/cancelamento/eventos; PostgreSQL validou leitura negada por outro tenant.
+- [x] Cada execução fixa versão/hash e snapshot imutável; editar a definição viva não altera a retomada.
+- [x] Claims concorrentes, fencing e recovery após lease expirado foram testados no PostgreSQL; Wait persiste prazo e retoma após recriar engine/store. Restart abrupto de API no meio de efeito externo continua follow-up.
+- [x] Etapas Agent/Action executam; Action exige `Permission.Execute`, Approval restringe papéis, Wait retoma no prazo e Subworkflow falha explicitamente quando não suportado.
+- [x] `MaxRetries` é aplicado e a tool recebe chave idempotente estável por execução/etapa; handler externo precisa deduplicar. Semântica at-least-once, sem exactly-once.
+- [x] Testes PostgreSQL no Compose isolado cobrem claims concorrentes, lease expirado, Wait após reinício real, start/status de Banner, aprovação, isolamento e fencing. Efeito externo interrompido e imagem final de Banner seguem abertos.

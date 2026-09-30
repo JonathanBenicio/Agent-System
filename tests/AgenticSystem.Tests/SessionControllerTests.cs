@@ -19,8 +19,10 @@ public class SessionControllerTests
     private readonly IHubContext<ChatHub> _hubContext;
     private readonly ILogger<SessionController> _logger;
     private readonly IVectorStore _vectorStore;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
     private readonly SessionController _sut;
     private const string UserId = "user-123";
+    private const string TenantId = "tenant-123";
 
     public SessionControllerTests()
     {
@@ -28,7 +30,9 @@ public class SessionControllerTests
         _hubContext = Substitute.For<IHubContext<ChatHub>>();
         _logger = Substitute.For<ILogger<SessionController>>();
         _vectorStore = Substitute.For<IVectorStore>();
-        _sut = new SessionController(_sessionStore, _hubContext, _logger, _vectorStore);
+        _tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
+        _tenantContextAccessor.CurrentTenantId.Returns(TenantId);
+        _sut = new SessionController(_sessionStore, _hubContext, _logger, _vectorStore, _tenantContextAccessor);
 
         var user = new ClaimsPrincipal(new ClaimsIdentity(new[]
         {
@@ -47,10 +51,10 @@ public class SessionControllerTests
         // Arrange
         var sessions = new List<SessionData>
         {
-            new() { Id = "session-001", UserId = UserId, StartedAt = DateTime.UtcNow.AddMinutes(-10) },
-            new() { Id = "session-002", UserId = UserId, StartedAt = DateTime.UtcNow.AddMinutes(-5) }
+            new() { Id = "session-001", UserId = UserId, TenantId = TenantId, StartedAt = DateTime.UtcNow.AddMinutes(-10) },
+            new() { Id = "session-002", UserId = UserId, TenantId = TenantId, StartedAt = DateTime.UtcNow.AddMinutes(-5) }
         };
-        _sessionStore.GetByUserAsync(UserId, Arg.Any<int>()).Returns(sessions);
+        _sessionStore.GetByTenantAsync(TenantId, UserId, Arg.Any<int>()).Returns(sessions);
 
         // Act
         var result = await _sut.GetSessions();
@@ -65,7 +69,7 @@ public class SessionControllerTests
     public async Task GetSession_WhenFoundAndAuthorized_ReturnsOk()
     {
         // Arrange
-        var session = new SessionData { Id = "session-001", UserId = UserId };
+        var session = new SessionData { Id = "session-001", UserId = UserId, TenantId = TenantId };
         _sessionStore.GetAsync("session-001").Returns(session);
 
         // Act
@@ -92,7 +96,7 @@ public class SessionControllerTests
     public async Task GetSession_WhenOwnedByOtherUser_ReturnsNotFound()
     {
         // Arrange
-        var session = new SessionData { Id = "session-001", UserId = "other-user" };
+        var session = new SessionData { Id = "session-001", UserId = "other-user", TenantId = TenantId };
         _sessionStore.GetAsync("session-001").Returns(session);
 
         // Act
@@ -103,10 +107,20 @@ public class SessionControllerTests
     }
 
     [Fact]
+    public async Task GetSession_WhenSameUserButDifferentTenant_ReturnsNotFound()
+    {
+        _sessionStore.GetAsync("session-001").Returns(new SessionData { Id = "session-001", UserId = UserId, TenantId = "other-tenant" });
+
+        var result = await _sut.GetSession("session-001");
+
+        result.Should().BeOfType<NotFoundObjectResult>();
+    }
+
+    [Fact]
     public async Task DeleteSession_ReturnsNoContent()
     {
         // Arrange
-        var session = new SessionData { Id = "session-001", UserId = UserId };
+        var session = new SessionData { Id = "session-001", UserId = UserId, TenantId = TenantId };
         _sessionStore.GetAsync("session-001").Returns(session);
 
         // Act
@@ -121,7 +135,7 @@ public class SessionControllerTests
     public async Task UpdateTitle_UpdatesRuntimeSettings()
     {
         // Arrange
-        var session = new SessionData { Id = "session-001", UserId = UserId };
+        var session = new SessionData { Id = "session-001", UserId = UserId, TenantId = TenantId };
         _sessionStore.GetAsync("session-001").Returns(session);
         var request = new UpdateSessionTitleRequest("New Title");
 

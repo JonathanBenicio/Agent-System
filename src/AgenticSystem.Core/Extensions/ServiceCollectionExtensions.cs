@@ -120,6 +120,7 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<IConfigReloadNotifier, ConfigReloadNotifier>();
         services.AddSingleton<IConfigManager, ConfigManager>();
+        services.AddSingleton<IPlatformConfigStore, InMemoryPlatformConfigStore>();
         services.AddHostedService<SecretRotationBackgroundService>();
 
         // ML23 — Embedding Migration (Re-indexação)
@@ -209,6 +210,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ICitationEngine, DefaultCitationEngine>();
         services.AddSingleton<IExplainabilityService, DefaultExplainabilityService>();
         services.AddSingleton<IAgentSimulationEngine, AgentSimulationService>();
+        services.AddSingleton<ISelfImprovementProposalStore, InMemorySelfImprovementProposalStore>();
         services.AddSingleton<ISelfImprovementEngine, SelfImprovementService>();
 
         // Phase 4 — Platform & Data Connectors

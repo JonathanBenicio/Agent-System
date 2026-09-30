@@ -16,6 +16,7 @@ public class TenantMiddlewareTests
     private readonly ITenantStore _store;
     private readonly ITenantResolver _resolver;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly IPermissionService _permissionService;
     private readonly ILogger<TenantMiddleware> _logger;
 
     public TenantMiddlewareTests()
@@ -23,6 +24,7 @@ public class TenantMiddlewareTests
         _store = Substitute.For<ITenantStore>();
         _resolver = new TenantResolver(_store, Substitute.For<ILogger<TenantResolver>>());
         _tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
+        _permissionService = Substitute.For<IPermissionService>();
         _tenantContextAccessor.BeginScope(Arg.Any<TenantContext>()).Returns(Substitute.For<IDisposable>());
         _logger = Substitute.For<ILogger<TenantMiddleware>>();
     }
@@ -76,11 +78,14 @@ public class TenantMiddlewareTests
         // Set claim
         var identity = new ClaimsIdentity(new[]
         {
-            new Claim(TenantMiddleware.TenantIdClaimType, "jwt-tenant")
+            new Claim(TenantMiddleware.TenantIdClaimType, "jwt-tenant"),
+            new Claim(ClaimTypes.NameIdentifier, "user-1")
         }, "TestAuth");
         httpContext.User = new ClaimsPrincipal(identity);
+        _permissionService.GetRolesAsync("user-1", Arg.Any<CancellationToken>()).Returns(
+            [new RoleAssignment { UserId = "user-1", RoleName = "Viewer", TenantId = "jwt-tenant" }]);
 
-        await middleware.InvokeAsync(httpContext, _resolver, _tenantContextAccessor);
+        await middleware.InvokeAsync(httpContext, _resolver, _tenantContextAccessor, _permissionService);
 
         _tenantContextAccessor.Received(1).BeginScope(Arg.Is<TenantContext>(tc =>
             tc.TenantId == "jwt-tenant" &&
@@ -89,7 +94,7 @@ public class TenantMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_HeaderTakesPrecedence_OverClaim_WhenUserIsAdmin()
+    public async Task InvokeAsync_HeaderMismatch_IsDenied_EvenWhenUserIsAdmin()
     {
         var claimTenant = new Tenant
         {
@@ -125,11 +130,10 @@ public class TenantMiddlewareTests
         httpContext.User = new ClaimsPrincipal(identity);
         httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = "header-tenant";
 
-        await middleware.InvokeAsync(httpContext, _resolver, _tenantContextAccessor);
+        await middleware.InvokeAsync(httpContext, _resolver, _tenantContextAccessor, _permissionService);
 
-        // Header takes precedence over claim
-        _tenantContextAccessor.Received(1).BeginScope(Arg.Is<TenantContext>(tc =>
-            tc.TenantId == "header-tenant"));
+        httpContext.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        _tenantContextAccessor.DidNotReceive().BeginScope(Arg.Any<TenantContext>());
     }
 
     [Fact]
@@ -147,7 +151,7 @@ public class TenantMiddlewareTests
         httpContext.User = new ClaimsPrincipal(identity);
         httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = "tenant-b";
 
-        await middleware.InvokeAsync(httpContext, _resolver, _tenantContextAccessor);
+        await middleware.InvokeAsync(httpContext, _resolver, _tenantContextAccessor, _permissionService);
 
         // Should return 403 Forbidden
         httpContext.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
@@ -169,19 +173,19 @@ public class TenantMiddlewareTests
     }
 
     [Fact]
-    public async Task InvokeAsync_UnknownTenant_FallbackForNonAuthorizedRoutes()
+    public async Task InvokeAsync_UnknownTenant_IsRejectedOnPublicRoutesToo()
     {
         _store.GetByIdAsync("unknown-tenant", Arg.Any<CancellationToken>()).Returns((Tenant?)null);
 
         var middleware = CreateMiddleware();
         var httpContext = new DefaultHttpContext();
+        httpContext.Response.Body = new MemoryStream();
         httpContext.Request.Headers[TenantMiddleware.TenantIdHeaderName] = "unknown-tenant";
 
         await middleware.InvokeAsync(httpContext, _resolver, _tenantContextAccessor);
 
-        // Non-authorized route: fallback creates context with provided tenantId
-        _tenantContextAccessor.Received(1).BeginScope(Arg.Is<TenantContext>(tc =>
-            tc.TenantId == "unknown-tenant"));
+        httpContext.Response.StatusCode.Should().Be(StatusCodes.Status403Forbidden);
+        _tenantContextAccessor.DidNotReceive().BeginScope(Arg.Any<TenantContext>());
     }
 
     [Fact]

@@ -33,6 +33,9 @@ public class QdrantVectorStore : IVectorStore
 
     public async Task UpsertAsync(EmbeddingDocument document)
     {
+        if (string.IsNullOrWhiteSpace(document.TenantId))
+            throw new ArgumentException("A tenant ID is required to store an embedding document.", nameof(document));
+
         var collectionName = document.Collection ?? "default";
         
         // Em uma implementação real, verificaríamos se a coleção existe e a criaríamos se necessário.
@@ -51,7 +54,7 @@ public class QdrantVectorStore : IVectorStore
                         content = document.Content,
                         type = document.Type,
                         metadata = System.Text.Json.JsonSerializer.Serialize(document.Metadata),
-                        tenantId = "default" // TODO: Add TenantId to EmbeddingDocument in Core
+                        tenantId = document.TenantId
                     }
                 }
             }

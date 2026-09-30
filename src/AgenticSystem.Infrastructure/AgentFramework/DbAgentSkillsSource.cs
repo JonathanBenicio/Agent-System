@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.Persistence.Entities;
@@ -35,19 +38,14 @@ public class DbAgentSkillsSource
     /// </summary>
     public async Task<IEnumerable<ISkill>> LoadSkillsAsync(CancellationToken ct = default)
     {
-        try
-        {
-            await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
             
             // 1. Consulta todas as habilidades cadastradas no banco de dados para o Tenant atual.
             // Os filtros globais de ITenantEntity segregarão os registros dinamicamente.
             var entities = await db.AgentSkills.AsNoTracking().ToListAsync(ct);
 
             // 2. Se a lista de skills do Tenant estiver vazia, dispara a rotina automática de Auto-Seeding
-            if (entities.Count == 0)
-            {
-                entities = await SeedDefaultSkillsAsync(db, ct);
-            }
+            entities = await SeedDefaultSkillsAsync(db, entities, ct);
 
             return entities.Select(e => new DbBasedSkill(
                 e.Id,
@@ -61,26 +59,24 @@ public class DbAgentSkillsSource
                     ? new Dictionary<string, string>() 
                     : JsonSerializer.Deserialize<Dictionary<string, string>>(e.MetadataJson) ?? new()
             ));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to load database agent skills. Falling back to empty list.");
-            return Enumerable.Empty<ISkill>();
-        }
     }
 
     /// <summary>
     /// Provisiona automaticamente o catálogo de skills nativas do sistema para o Tenant atual no banco operacional.
     /// </summary>
-    private async Task<List<DbSkillEntity>> SeedDefaultSkillsAsync(AgenticDbContext db, CancellationToken ct)
+    private async Task<List<DbSkillEntity>> SeedDefaultSkillsAsync(AgenticDbContext db, List<DbSkillEntity> existing, CancellationToken ct)
     {
+        if (string.IsNullOrWhiteSpace(db.CurrentTenantId))
+            throw new InvalidOperationException("Cannot seed default skills without an active tenant.");
+
         _logger.LogWarning("📚 Tenant '{TenantId}' sem catálogo de habilidades. Semeando skills padrões no banco...", db.CurrentTenantId);
+        var tenantSuffix = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(db.CurrentTenantId)))[..16].ToLowerInvariant();
 
         var defaultSkills = new List<DbSkillEntity>
         {
             new()
             {
-                Id = "coding-assistant",
+                Id = $"coding-assistant-{tenantSuffix}",
                 TenantId = db.CurrentTenantId,
                 Name = "Coding Assistant",
                 Domain = "work",
@@ -92,7 +88,7 @@ public class DbAgentSkillsSource
             },
             new()
             {
-                Id = "productivity",
+                Id = $"productivity-{tenantSuffix}",
                 TenantId = db.CurrentTenantId,
                 Name = "Productivity & Planning",
                 Domain = "personal",
@@ -103,7 +99,7 @@ public class DbAgentSkillsSource
             },
             new()
             {
-                Id = "creative-writing",
+                Id = $"creative-writing-{tenantSuffix}",
                 TenantId = db.CurrentTenantId,
                 Name = "Creative Writing Specialist",
                 Domain = "general",
@@ -114,7 +110,7 @@ public class DbAgentSkillsSource
             },
             new()
             {
-                Id = "data-analysis",
+                Id = $"data-analysis-{tenantSuffix}",
                 TenantId = db.CurrentTenantId,
                 Name = "Data Analysis Helper",
                 Domain = "work",
@@ -125,17 +121,23 @@ public class DbAgentSkillsSource
             }
         };
 
+        var knownIds = existing.Select(skill => skill.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var knownNames = existing.Where(skill => skill.IsSystem).Select(skill => skill.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = defaultSkills.Where(skill => !knownIds.Contains(skill.Id) && !knownNames.Contains(skill.Name)).ToList();
+        if (missing.Count == 0)
+            return existing;
+
         try
         {
-            db.AgentSkills.AddRange(defaultSkills);
+            db.AgentSkills.AddRange(missing);
             await db.SaveChangesAsync(ct);
-            _logger.LogInformation("📚 Auto-Seeding de skills padrão concluído com sucesso para o Tenant '{TenantId}' (4 skills provisionadas).", db.CurrentTenantId);
-            return defaultSkills;
+            _logger.LogInformation("📚 Auto-Seeding de skills padrão concluído para o Tenant '{TenantId}' ({Count} skills provisionadas).", db.CurrentTenantId, missing.Count);
+            return existing.Concat(missing).ToList();
         }
-        catch (DbUpdateException ex)
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
-            // Tratamento de concorrência se outra instância já inseriu simultaneamente
-            _logger.LogWarning(ex, "Concorrência detectada: Outra instância já semeou as skills padrão para o Tenant '{TenantId}'.", db.CurrentTenantId);
+            _logger.LogDebug(ex, "Concurrent default skill seeding detected for tenant {TenantId}; reloading after unique-key conflict.", db.CurrentTenantId);
+            db.ChangeTracker.Clear();
             return await db.AgentSkills.AsNoTracking().ToListAsync(ct);
         }
     }

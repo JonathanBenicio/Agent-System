@@ -12,6 +12,7 @@ namespace AgenticSystem.Infrastructure.LLM.Services;
 /// </summary>
 public class ExternalQuotaSyncService : IExternalQuotaSyncService
 {
+    private const string PlatformTenantId = "platform";
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly IEventBus _eventBus;
@@ -42,9 +43,10 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
         long remainingTokens, 
         DateTime? resetAt)
     {
+        tenantId ??= PlatformTenantId;
         try 
         {
-            using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId ?? "system-background" });
+            using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId });
             using var context = await _dbContextFactory.CreateDbContextAsync();
             var entity = await context.ExternalProviderQuotas
                 .FirstOrDefaultAsync(q => q.ProviderName == providerName && q.TenantId == tenantId && q.ApiKeyId == apiKeyId);
@@ -55,7 +57,7 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
                 {
                     Id = Guid.NewGuid().ToString(),
                     ProviderName = providerName,
-                    TenantId = tenantId ?? "default",
+                    TenantId = tenantId,
                     ApiKeyId = apiKeyId
                 };
                 context.ExternalProviderQuotas.Add(entity);
@@ -81,6 +83,7 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
 
     public async Task SyncBillingAsync(string providerName, string? tenantId, string apiKeyId, string apiKey)
     {
+        tenantId ??= PlatformTenantId;
         _logger.LogInformation("Proactive billing sync triggered for {Provider} (Key: {ApiKeyId})", providerName, apiKeyId);
         
         try
@@ -107,6 +110,7 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
 
     private async Task SyncOpenRouterBillingAsync(string? tenantId, string apiKeyId, string apiKey)
     {
+        tenantId ??= PlatformTenantId;
         var client = _httpClientFactory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
         
@@ -124,14 +128,14 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
             if (data.TryGetProperty("limit", out var limitProp) && limitProp.ValueKind != System.Text.Json.JsonValueKind.Null) 
                 limit = limitProp.GetDouble();
 
-            using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId ?? "system-background" });
+            using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId });
             using var context = await _dbContextFactory.CreateDbContextAsync();
             var entity = await context.ExternalProviderQuotas
                 .FirstOrDefaultAsync(q => q.ProviderName == "OpenRouter" && q.TenantId == tenantId && q.ApiKeyId == apiKeyId);
 
             if (entity == null)
             {
-                entity = new ExternalProviderQuotaEntity { Id = Guid.NewGuid().ToString(), ProviderName = "OpenRouter", TenantId = tenantId ?? "default", ApiKeyId = apiKeyId };
+                entity = new ExternalProviderQuotaEntity { Id = Guid.NewGuid().ToString(), ProviderName = "OpenRouter", TenantId = tenantId, ApiKeyId = apiKeyId };
                 context.ExternalProviderQuotas.Add(entity);
             }
 
@@ -147,10 +151,11 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
 
     private async Task SyncOpenAIBillingAsync(string? tenantId, string apiKeyId, string apiKey)
     {
+        tenantId ??= PlatformTenantId;
         // OpenAI doesn't have a simple public balance API for standard keys.
         // We'll sync usage for today as a proxy or use dashboard internal API if we want to risk it.
         // For now, let's just update the LastSyncAt to show we checked.
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId ?? "system-background" });
+        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId });
         using var context = await _dbContextFactory.CreateDbContextAsync();
         var entity = await context.ExternalProviderQuotas
             .FirstOrDefaultAsync(q => q.ProviderName == "OpenAI" && q.TenantId == tenantId && q.ApiKeyId == apiKeyId);
@@ -164,7 +169,8 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
 
     private async Task SyncGenericProviderBillingAsync(string providerName, string? tenantId, string apiKeyId, string apiKey)
     {
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId ?? "system-background" });
+        tenantId ??= PlatformTenantId;
+        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId });
         // For now, just update the timestamp to show the key is still valid/monitored
         using var context = await _dbContextFactory.CreateDbContextAsync();
         var entity = await context.ExternalProviderQuotas
@@ -176,7 +182,7 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
             { 
                 Id = Guid.NewGuid().ToString(), 
                 ProviderName = providerName, 
-                TenantId = tenantId ?? "default", 
+                TenantId = tenantId,
                 ApiKeyId = apiKeyId,
                 RemainingRequests = 1000, // Default initial values
                 RemainingTokens = 1000000
@@ -190,7 +196,8 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
 
     public async Task<ExternalProviderQuota?> GetQuotaAsync(string providerName, string? tenantId, string apiKeyId)
     {
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId ?? "system-background" });
+        tenantId ??= PlatformTenantId;
+        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId });
         using var context = await _dbContextFactory.CreateDbContextAsync();
         var entity = await context.ExternalProviderQuotas
             .FirstOrDefaultAsync(q => q.ProviderName == providerName && q.TenantId == tenantId && q.ApiKeyId == apiKeyId);
@@ -210,7 +217,8 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
 
     public async Task<bool> IsProviderAvailableAsync(string providerName, string? tenantId = null)
     {
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId ?? "system-background" });
+        tenantId ??= PlatformTenantId;
+        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId });
         using var context = await _dbContextFactory.CreateDbContextAsync();
         
         // Find all keys for this provider and tenant
@@ -226,7 +234,8 @@ public class ExternalQuotaSyncService : IExternalQuotaSyncService
 
     public async Task<IReadOnlyList<ExternalProviderQuota>> GetAllQuotasAsync(string? tenantId = null)
     {
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId ?? "system-background" });
+        tenantId ??= PlatformTenantId;
+        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = tenantId });
         using var context = await _dbContextFactory.CreateDbContextAsync();
         var entities = await context.ExternalProviderQuotas
             .Where(q => q.TenantId == tenantId)

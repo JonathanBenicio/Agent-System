@@ -13,22 +13,28 @@ namespace AgenticSystem.Api.Hubs;
 public class WorkflowHub : Hub
 {
     private readonly ILogger<WorkflowHub> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public WorkflowHub(ILogger<WorkflowHub> logger)
+    public WorkflowHub(ILogger<WorkflowHub> logger, ITenantContextAccessor tenantContextAccessor)
     {
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     public async Task SubscribeToWorkflow(string executionId)
     {
-        await Groups.AddToGroupAsync(Context.ConnectionId, $"workflow:{executionId}");
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
+        if (string.IsNullOrWhiteSpace(tenantId)) throw new HubException("Tenant identity is required.");
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}:workflow:{executionId}");
         _logger.LogDebug("Client {ConnectionId} subscribed to workflow {ExecutionId}",
             Context.ConnectionId, executionId);
     }
 
     public async Task UnsubscribeFromWorkflow(string executionId)
     {
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"workflow:{executionId}");
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
+        if (!string.IsNullOrWhiteSpace(tenantId))
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"tenant:{tenantId}:workflow:{executionId}");
     }
 
     public override async Task OnConnectedAsync()
@@ -59,7 +65,7 @@ public class SignalRWorkflowEventBroadcaster : IWorkflowEventBroadcaster
     {
         try
         {
-            await _hubContext.Clients.Group($"workflow:{execution.Id}").SendAsync("ExecutionStarted", new
+            await _hubContext.Clients.Group(WorkflowGroup(execution.TenantId, execution.Id)).SendAsync("ExecutionStarted", new
             {
                 execution.Id,
                 execution.WorkflowId,
@@ -74,11 +80,11 @@ public class SignalRWorkflowEventBroadcaster : IWorkflowEventBroadcaster
         }
     }
 
-    public async Task BroadcastStepStarted(string executionId, WorkflowStepExecution step)
+    public async Task BroadcastStepStarted(string tenantId, string executionId, WorkflowStepExecution step)
     {
         try
         {
-            await _hubContext.Clients.Group($"workflow:{executionId}").SendAsync("StepStarted", new
+            await _hubContext.Clients.Group(WorkflowGroup(tenantId, executionId)).SendAsync("StepStarted", new
             {
                 executionId,
                 step.StepId,
@@ -93,11 +99,32 @@ public class SignalRWorkflowEventBroadcaster : IWorkflowEventBroadcaster
         }
     }
 
-    public async Task BroadcastStepCompleted(string executionId, WorkflowStepExecution step)
+    public async Task BroadcastApprovalRequested(WorkflowExecution execution, WorkflowStepExecution step)
     {
         try
         {
-            await _hubContext.Clients.Group($"workflow:{executionId}").SendAsync("StepCompleted", new
+            await _hubContext.Clients.Group(WorkflowGroup(execution.TenantId, execution.Id)).SendAsync("ApprovalRequested", new
+            {
+                executionId = execution.Id,
+                workflowId = execution.WorkflowId,
+                executionStatus = execution.Status,
+                step.StepId,
+                step.StepName,
+                stepStatus = step.Status,
+                step.StartedAt
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to broadcast ApprovalRequested for {ExecutionId}/{StepId}", execution.Id, step.StepId);
+        }
+    }
+
+    public async Task BroadcastStepCompleted(string tenantId, string executionId, WorkflowStepExecution step)
+    {
+        try
+        {
+            await _hubContext.Clients.Group(WorkflowGroup(tenantId, executionId)).SendAsync("StepCompleted", new
             {
                 executionId,
                 step.StepId,
@@ -113,11 +140,11 @@ public class SignalRWorkflowEventBroadcaster : IWorkflowEventBroadcaster
         }
     }
 
-    public async Task BroadcastStepFailed(string executionId, WorkflowStepExecution step)
+    public async Task BroadcastStepFailed(string tenantId, string executionId, WorkflowStepExecution step)
     {
         try
         {
-            await _hubContext.Clients.Group($"workflow:{executionId}").SendAsync("StepFailed", new
+            await _hubContext.Clients.Group(WorkflowGroup(tenantId, executionId)).SendAsync("StepFailed", new
             {
                 executionId,
                 step.StepId,
@@ -137,7 +164,7 @@ public class SignalRWorkflowEventBroadcaster : IWorkflowEventBroadcaster
     {
         try
         {
-            await _hubContext.Clients.Group($"workflow:{execution.Id}").SendAsync("ExecutionCompleted", new
+            await _hubContext.Clients.Group(WorkflowGroup(execution.TenantId, execution.Id)).SendAsync("ExecutionCompleted", new
             {
                 execution.Id,
                 execution.WorkflowId,
@@ -157,7 +184,7 @@ public class SignalRWorkflowEventBroadcaster : IWorkflowEventBroadcaster
     {
         try
         {
-            await _hubContext.Clients.Group($"workflow:{execution.Id}").SendAsync("ExecutionFailed", new
+            await _hubContext.Clients.Group(WorkflowGroup(execution.TenantId, execution.Id)).SendAsync("ExecutionFailed", new
             {
                 execution.Id,
                 execution.WorkflowId,
@@ -177,7 +204,7 @@ public class SignalRWorkflowEventBroadcaster : IWorkflowEventBroadcaster
     {
         try
         {
-            await _hubContext.Clients.Group($"workflow:{execution.Id}").SendAsync("ExecutionCancelled", new
+            await _hubContext.Clients.Group(WorkflowGroup(execution.TenantId, execution.Id)).SendAsync("ExecutionCancelled", new
             {
                 execution.Id,
                 execution.WorkflowId,
@@ -192,4 +219,6 @@ public class SignalRWorkflowEventBroadcaster : IWorkflowEventBroadcaster
             _logger.LogWarning(ex, "Failed to broadcast ExecutionCancelled for {ExecutionId}", execution.Id);
         }
     }
+
+    private static string WorkflowGroup(string tenantId, string executionId) => $"tenant:{tenantId}:workflow:{executionId}";
 }
