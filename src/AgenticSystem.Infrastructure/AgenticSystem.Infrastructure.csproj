@@ -26,6 +26,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Agents.AI" Version="1.22.0" />
     <PackageReference Include="Microsoft.Agents.AI.Abstractions" Version="1.22.0" />
+    <PackageReference Include="Microsoft.Agents.AI.Hyperlight" Version="1.21.0-preview.260911.1" />
     <PackageReference Include="Microsoft.Agents.AI.DurableTask" Version="1.16.0-preview.260922.1" />
     <PackageReference Include="Microsoft.Agents.AI.Hosting" Version="1.22.0-preview.260918.1" />
     <PackageReference Include="Microsoft.Agents.AI.Workflows" Version="1.22.0" />
