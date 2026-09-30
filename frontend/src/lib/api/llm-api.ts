@@ -11,6 +11,16 @@ import type {
 } from '@/types/api'
 
 export const llmApi = {
+  chatConfiguration: () => get<{
+    defaultProvider: string
+    defaultModel: string
+    providers: { name: string; defaultModel: string; models: string[] }[]
+    preferredProvider?: string
+    preferredModel?: string
+    canManageTenant: boolean
+  }>('/api/chat/configuration'),
+  saveChatSelection: (provider: string, model: string) =>
+    put<{ provider: string; model: string }>('/api/chat/configuration', { provider, model }),
   configuration: () => get<LLMConfigurationInfo>('/api/admin/llm/configuration'),
   providers: () => get<LLMProviderInfo[]>('/api/admin/llm/providers'),
   provider: (name: string) => get<LLMProviderInfo>(`/api/admin/llm/providers/${encodeURIComponent(name)}`),

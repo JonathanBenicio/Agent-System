@@ -9,7 +9,5 @@ public interface ILLMProviderApiKeyService
     Task<LLMProviderApiKey> UpdateKeyAsync(string providerName, string id, UpdateApiKeyRequest request, CancellationToken ct = default);
     Task DeleteKeyAsync(string providerName, string id, CancellationToken ct = default);
     Task SetDefaultKeyAsync(string providerName, string id, CancellationToken ct = default);
-    Task<bool> TestKeyAsync(string providerName, string id, CancellationToken ct = default);
     Task<string> GetDecryptedKeyAsync(string providerName, string id, CancellationToken ct = default);
-    Task<IReadOnlyList<string>> DiscoverModelsForKeyAsync(string providerName, string id, CancellationToken ct = default);
 }

@@ -40,7 +40,8 @@ public static class ChatRequestPreferencesBuilder
         {
             foreach (var kv in request.Context)
             {
-                preferences[kv.Key] = kv.Value;
+                if (string.Equals(kv.Key, "rag.knowledgeRoomId", StringComparison.OrdinalIgnoreCase))
+                    preferences[kv.Key] = kv.Value;
             }
         }
 
@@ -61,8 +62,6 @@ public static class ChatRequestPreferencesBuilder
         if (!string.IsNullOrWhiteSpace(request.ApiKey))
         {
             preferences["llm.request.apiKey"] = request.ApiKey;
-            preferences["llm.session.apiKey"] = request.ApiKey;
-            preferences["llm.apiKey"] = request.ApiKey;
         }
 
         return preferences;

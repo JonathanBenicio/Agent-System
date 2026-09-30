@@ -16,6 +16,7 @@
 - [Orquestrador supervisor dinâmico: ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md), [story BACK-ORCH-122](USER-STORIES.md#back-orch-122--orquestrar-agentes-dinamicos-pelo-supervisor-maf) e [plano separado](plan/dynamic-orchestrator-implementation.md)
 - [Issue #16 — auto-melhoria exige aprovação humana e permanece na trilha Lab](backend/api-core.md)
 - [Issue #106 — política FIDES e redaction por tenant](backend/access-tenants.md)
+- [Chat, sessões e configurações usadas: ADR-039](architecture/adr/039-chat-session-user-tenant-settings.md), [story BACK-CHAT-123](USER-STORIES.md#back-chat-123--chat-sessoes-e-configuracoes-efetivamente-usadas), [plano](plan/chat-session-user-settings.md) e [contratos/endpoints](backend/chat-sessions-settings.md)
 
 Índice de navegação da documentação do projeto, organizado por papel documental.
 

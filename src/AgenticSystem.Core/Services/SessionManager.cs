@@ -34,11 +34,12 @@ public class SessionManager : ISessionManager
             if (existingSession is not null)
             {
                 var userTenantId = userContext.TenantId;
-                if (existingSession.UserId == userContext.UserId && existingSession.TenantId == userTenantId)
-                {
-                    _logger.LogInformation("📂 Reusing existing session: {SessionId}", sessionId);
-                    return sessionId;
-                }
+                if (existingSession.UserId != userContext.UserId || existingSession.TenantId != userTenantId)
+                    throw new UnauthorizedAccessException("Session belongs to another user or tenant.");
+                if (existingSession.EndedAt is not null)
+                    throw new InvalidOperationException("Ended sessions cannot be resumed.");
+                _logger.LogInformation("📂 Reusing existing session: {SessionId}", sessionId);
+                return sessionId;
             }
         }
 
@@ -164,7 +165,6 @@ public class SessionManager : ISessionManager
 
         CopyPreference(userContext.Preferences, settings, "llm.session.provider");
         CopyPreference(userContext.Preferences, settings, "llm.session.model");
-        CopyPreference(userContext.Preferences, settings, "llm.session.apiKey");
 
         if (!settings.ContainsKey("llm.session.provider"))
             CopyPreference(userContext.Preferences, settings, "llm.provider", "llm.session.provider");
@@ -172,8 +172,6 @@ public class SessionManager : ISessionManager
         if (!settings.ContainsKey("llm.session.model"))
             CopyPreference(userContext.Preferences, settings, "llm.model", "llm.session.model");
 
-        if (!settings.ContainsKey("llm.session.apiKey"))
-            CopyPreference(userContext.Preferences, settings, "llm.apiKey", "llm.session.apiKey");
 
         return settings;
     }

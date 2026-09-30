@@ -1111,6 +1111,7 @@ public class DbSkillConfiguration : IEntityTypeConfiguration<DbSkillEntity>
         builder.Property(e => e.SystemPromptFragment).HasColumnName("system_prompt_fragment").IsRequired();
         builder.Property(e => e.FewShotExamples).HasColumnName("few_shot_examples");
         builder.Property(e => e.IsSystem).HasColumnName("is_system").HasDefaultValue(false);
+        builder.Property(e => e.IsEnabled).HasColumnName("is_enabled").HasDefaultValue(true);
         builder.Property(e => e.MetadataJson).HasColumnName("metadata_json");
         builder.Property(e => e.CreatedAt).HasColumnName("created_at");
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");

@@ -119,6 +119,7 @@ public static class ServiceCollectionExtensions
             return new AesConfigEncryptionService(encryptionKey);
         });
         services.AddSingleton<IConfigReloadNotifier, ConfigReloadNotifier>();
+        services.AddSingleton<IChatSettingsStore, InMemoryChatSettingsStore>();
         services.AddSingleton<IConfigManager, ConfigManager>();
         services.AddSingleton<IPlatformConfigStore, InMemoryPlatformConfigStore>();
         services.AddHostedService<SecretRotationBackgroundService>();

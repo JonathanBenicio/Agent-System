@@ -18,7 +18,8 @@ export function useChatState() {
   const [messagesMap, setMessagesMap] = useState<Record<string, ChatMessage[]>>({ general: [] })
   const [activeChannel, setActiveChannel] = useState<string>('general')
   const [isProcessing, setIsProcessing] = useState(false)
-  const [sessionId, setSessionId] = useState<string>(() => generateId())
+  const [sessionId, setSessionId] = useState<string>('')
+  const [sessionEnded, setSessionEnded] = useState(false)
   const [activeSessionSummary, setActiveSessionSummary] = useState<SessionSummaryDto | undefined>()
   const [activeSessionInsights, setActiveSessionInsights] = useState<SessionInsightsDto | undefined>()
   
@@ -42,8 +43,8 @@ export function useChatState() {
   const loadHistory = useCallback(async (id: string) => {
     setIsProcessing(true)
     try {
-      const msgs = await sessionApi.messages(id)
-      const mapped: ChatMessage[] = msgs.map((m: ChatMessageDto) => ({
+      const detail = await sessionApi.get(id)
+      const mapped: ChatMessage[] = detail.messages.map((m: ChatMessageDto) => ({
         id: m.id,
         role: m.role as ChatMessage['role'],
         content: m.content,
@@ -53,11 +54,12 @@ export function useChatState() {
         tools: m.tools,
         timestamp: m.timestamp,
         isHistory: true,
-        memoryInjected: (m as any).memoryInjected,
-        citations: (m as any).citations,
+        memoryInjected: m.memoryInjected,
       }))
       setMessages(mapped)
       setSessionId(id)
+      setSessionEnded(Boolean(detail.endedAt))
+      return detail
     } catch (err) {
       console.error('Failed to load session history:', err)
       toast.error('Erro ao carregar histórico da sessão')
@@ -83,7 +85,8 @@ export function useChatState() {
 
   const clearMessages = useCallback(async () => {
     setMessagesMap(prev => ({ ...prev, [activeChannel]: [] }))
-    setSessionId(generateId())
+    setSessionId('')
+    setSessionEnded(false)
     setActiveSessionSummary(undefined)
     setActiveSessionInsights(undefined)
   }, [activeChannel])
@@ -98,6 +101,8 @@ export function useChatState() {
     setIsProcessing,
     sessionId,
     setSessionId,
+    sessionEnded,
+    setSessionEnded,
     activeSessionSummary,
     setActiveSessionSummary,
     activeSessionInsights,

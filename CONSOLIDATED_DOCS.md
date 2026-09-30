@@ -1,6 +1,7 @@
 # CONSOLIDATED_DOCS.md
 
 > Contratos operacionais atuais: [hub do backend](docs/backend/README.md). Evidências: [validação](docs/backend/validation/2026-09-28.md).
+> Meta de chat, sessões e configurações efetivamente usadas: [Issue #123](https://github.com/JonathanBenicio/Agent-System/issues/123), [ADR-039](docs/architecture/adr/039-chat-session-user-tenant-settings.md), [story](docs/USER-STORIES.md#back-chat-123--chat-sessoes-e-configuracoes-efetivamente-usadas) e [plano](docs/plan/chat-session-user-settings.md).
 > Correções da revisão: [PR #118](docs/backend/validation/2026-09-28-review-fixes.md).
 > Correção de backend #111–#117: [ADR-035](docs/architecture/adr/035-backend-core-isolation-and-reliability.md), [plano/status](docs/plan/backend-core-remediation.md) e [evidências atuais](docs/backend/validation/backend-core-remediation.md).
 > Issue #120 — MAF 1.22 e Gateway: [ADR-036](docs/architecture/adr/036-maf-122-protocols-and-gateway.md), [story](docs/USER-STORIES.md#back-maf-120--maf-atualizado-e-providers-integrados-ao-gateway), [análise de compatibilidade](docs/plan/maf-122-compatibility-review.md) e [plano](docs/plan/maf-122-protocols-gateway.md).
