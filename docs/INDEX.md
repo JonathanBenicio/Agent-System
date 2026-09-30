@@ -1,5 +1,7 @@
 # Documentação — AgenticSystem
 
+- [Especificações das 46 issues abertas (snapshot 2026-09-29)](plan/open-issues-specification-audit-2026-09-29.md)
+
 ## Backend: contratos e evidências
 
 - [Hub](backend/README.md)
@@ -17,6 +19,7 @@
 - [Issue #16 — auto-melhoria exige aprovação humana e permanece na trilha Lab](backend/api-core.md)
 - [Issue #106 — política FIDES e redaction por tenant](backend/access-tenants.md)
 - [Chat, sessões e configurações usadas: ADR-039](architecture/adr/039-chat-session-user-tenant-settings.md), [story BACK-CHAT-123](USER-STORIES.md#back-chat-123--chat-sessoes-e-configuracoes-efetivamente-usadas), [plano](plan/chat-session-user-settings.md) e [contratos/endpoints](backend/chat-sessions-settings.md)
+- [Decisão de aprovação humana para auto-melhoria: ADR-040](architecture/adr/040-self-improvement-human-approval.md) · Issue #16 / ML39 · [especificações das issues abertas](plan/open-issues-specification-audit-2026-09-29.md)
 
 Índice de navegação da documentação do projeto, organizado por papel documental.
 

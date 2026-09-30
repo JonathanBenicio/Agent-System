@@ -1,5 +1,7 @@
 # Plano de Migração Completa — MAF 1.6.2 (Revisado)
 
+> **Decisões vigentes (2026-09-29):** #104 valida sintaxe PowerFx apenas; não há avaliação em runtime até novo caso aprovado. #105 integrará o pacote Hyperlight Preview atrás de flag global desligada por padrão, habilitável somente em Lab após testes de segurança; o executor atual continua simulado. #106 usará padrões FIDES built-in revisados, política/toggles por tenant e detectores obrigatórios que Owner/Admin não pode desligar. DurableTask não será scheduler de grafos dinâmicos; ver [especificações das issues](open-issues-specification-audit-2026-09-29.md), [ADR-006](../architecture/adr/006-manutencao-custom-session-e-sandbox.md) e [ADR-040](../architecture/adr/040-self-improvement-human-approval.md).
+
 > **Status:** Planejamento  
 > **Data:** 25 de Maio de 2026  
 > **Princípio Arquitetural:** Tudo é criado dinamicamente pelo chat e persistido no PostgreSQL. Nada deve depender de arquivos em disco ou configuração estática em C#.
@@ -88,66 +90,38 @@ dotnet ef migrations add AddDynamicAgentsTable --project src/AgenticSystem.Infra
 
 ---
 
-### Gap 2: Sessões Duráveis (`DurableTask`) — FUTURO
+### Gap 2: DurableTask para workflows dinâmicos — decisão registrada
 
-> [!IMPORTANT]
-> O pacote `Microsoft.Agents.AI.DurableTask` **não está instalado**. A persistência de sessão continua sendo customizada via `SimpleSessionStoreAdapter` → PostgreSQL.
-
-#### Decisão Necessária do Usuário:
-O `SimpleSessionStoreAdapter` atual funciona bem para o caso de uso do projeto? Ou precisa de resiliência nativa (retry automático, checkpointing de workflows longos, Human-in-the-Loop durável)?
-
-- **Se o atual é suficiente**: Manter `SimpleSessionStoreAdapter` como está. Documentar como decisão arquitetural.
-- **Se precisa de DurableTask**: Adicionar o pacote, criar as tabelas de orquestração no PostgreSQL, e migrar os workflows de `InProcessExecution` para execução durável com `InstanceId = "{TenantId}:{SessionId}"`.
+Em 2026-09-29 ficou decidido não usar DurableTask como scheduler de grafos arbitrários por tenant. O engine `IWorkflowEngine`/`IWorkflowStore` da aplicação agenda essas definições versionadas; MAF executa agentes. Sessões MAF permanecem no store PostgreSQL do produto. DurableTask pode ser reconsiderado somente com suporte comprovado a registry dinâmico, isolamento, recuperação e versão de workflow. Ver ADR-036/038 e issues #120/#122.
 
 ---
 
-### Gap 3: PowerFx Real (Motor de Expressões)
+### Gap 3: PowerFx — validar sintaxe, sem execução em runtime
 
-> [!WARNING]
-> O `AgentYamlValidator` valida expressões PowerFx apenas com checagem de parênteses. O motor real (`RecalcEngine`) não está instalado.
-
-#### [MODIFY] `src/AgenticSystem.Infrastructure/AgenticSystem.Infrastructure.csproj`
-- Adicionar `Microsoft.PowerFx.Core` e `Microsoft.PowerFx.Interpreter`.
-
-#### [MODIFY] `src/AgenticSystem.Infrastructure/AgentFramework/AgentYamlValidator.cs`
-- Substituir a validação de parênteses pela compilação real via `RecalcEngine` com:
-  - Funções permitidas: `If`, `And`, `Or`, `Sum`, `Abs`, `Concat`, `Len`, `Upper`, `Lower`.
-  - Timeout de 50ms via `CancellationToken`.
-  - Contexto higienizado com `TenantContextRecord`.
+Decisão de produto: manter `RecalcEngine.Check` no `AgentYamlValidator` para rejeitar fórmulas inválidas. Não executar expressões PowerFx em runtime até que um caso de uso seja aprovado por nova issue. A lista de funções e o contexto seguro do plano histórico não habilitam avaliação.
 
 ---
 
-### Gap 4: Hyperlight WASM Real (Sandbox de Código)
+### Gap 4: Hyperlight WASM — Preview sob flag global
 
-#### Situação Atual:
-O `HyperlightSandboxedExecutor` é um **stub** que simula execução. Não há isolamento real.
-
-#### Decisão Necessária:
-- O SDK `Hyperlight` da Microsoft está disponível como pacote NuGet público? Se sim, substituir a simulação pela execução real em micro-VM/WASM.
-- Se não está disponível publicamente, documentar como "Lab Feature" e manter a simulação com warning nos logs.
+Decisão de produto: integrar `Microsoft.Agents.AI.Hyperlight` Preview atrás de flag global desligada por padrão, habilitável somente em Lab e após testes de segurança. O executor atual continua simulado; flag desligada ou pacote ausente deve retornar capacidade indisponível, sem output hardcoded que pareça execução. Filesystem e rede ficam negados por padrão. Threat model, timeout, memória, cancelamento, isolamento e compatibilidade devem passar antes de habilitar. Ver ADR-006 e issue #105.
 
 ---
 
-### Gap 5: FIDES Middleware (Segurança de Dados Sensíveis)
+### Gap 5: FIDES — regras built-in, políticas tenant e OCR
 
-#### Situação: Não implementado.
-
-#### [NEW] `src/AgenticSystem.Infrastructure/Security/FidesDataProtectionMiddleware.cs`
-- Middleware no pipeline do `AIAgentBuilder` que intercepta mensagens antes de enviar ao LLM.
-- Escaneia e mascara dados sensíveis (CPF, cartão de crédito, tokens) usando regex patterns configuráveis por Tenant no banco.
-- Registrar via `builder.Use(inner => new FidesDataProtectionMiddleware(inner, ...))`.
+Decisão de produto: detectores built-in revisados, toggles de política por tenant gerenciados por Owner/Admin; todos ativos por padrão e detectores obrigatórios de credenciais não podem ser desligados. Não aceitar regex arbitrária de tenant. Incluir scan/OCR de imagens e anexos antes do provider. Se detectar conteúdo sensível que não possa ser redigido com confiança, bloquear a chamada e pedir mídia redigida. Falha/timeout do detector obrigatório falha fechada; não registrar o dado original. Formatos suportados e implementação técnica serão definidos no plano da issue #106.
 
 ---
-
-## Priorização Recomendada
+## Priorização histórica — decisões vigentes em 2026-09-29
 
 | Prioridade | Gap | Justificativa |
 |:---:|:---|:---|
 | **P0** | Gap 1 — Persistir agentes dinâmicos no banco | Contradiz o princípio central do projeto. Dados somem no restart. |
-| **P1** | Gap 3 — PowerFx real | Validação de YAML é superficial. Risco de expressões inválidas em produção. |
-| **P2** | Gap 5 — FIDES | Segurança de dados do Tenant. Compliance. |
-| **P3** | Gap 2 — DurableTask | Depende de necessidade real de resiliência. Pode esperar. |
-| **P4** | Gap 4 — Hyperlight real | Depende de disponibilidade do SDK. Lab feature. |
+| **P1** | Gap 3 — PowerFx runtime | Adiado por decisão: sintaxe somente até caso de uso aprovado. |
+| **P2** | Gap 5 — FIDES + OCR | Política decidida; implementação de toggles/OCR e segurança fail-closed pendentes. |
+| **P3** | Gap 2 — DurableTask | Não usar como scheduler de grafos dinâmicos por tenant; decisão documentada em ADR-036/038. |
+| **P4** | Gap 4 — Hyperlight Preview | Integrar somente atrás de flag global off por padrão, em Lab, após testes de segurança. |
 
 ---
 
@@ -156,7 +130,7 @@ O `HyperlightSandboxedExecutor` é um **stub** que simula execução. Não há i
 Após execução:
 1. Atualizar [backend-architecture-explained.md](../architecture/backend-architecture-explained.md) — Seções 4, 12, 13.
 2. Atualizar [maf-migration-roadmap.md](maf-migration-roadmap.md) — Marcar fases concluídas.
-3. Criar ADR para decisão sobre DurableTask (manter vs migrar).
+3. DurableTask dinâmico: decisão registrada em ADR-036/038; não migrar até existir requisito e compatibilidade comprovados.
 
 ## Verification Plan
 
