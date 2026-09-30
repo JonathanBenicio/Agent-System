@@ -16,17 +16,31 @@ WORKDIR /app
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
+ENV AgenticSystem__Fides__TessDataPath=/usr/share/tesseract-ocr/5/tessdata
 ENV DOTNET_EnableDiagnostics=0
 
 # Install Node.js (required for running npx-based MCP servers) and basic utilities
 RUN apt-get update && \
-    apt-get install -y wget libgssapi-krb5-2 curl fontconfig fonts-liberation && \
+    apt-get install -y wget libgssapi-krb5-2 curl fontconfig fonts-liberation \
+      tesseract-ocr tesseract-ocr-eng tesseract-ocr-por && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
     rm -rf /var/lib/apt/lists/* && \
     fc-cache -f -v
 
 COPY --from=build /app/publish .
+
+# TesseractOCR's .NET wrapper resolves these Linux native libraries by its ABI names.
+RUN set -eux; \
+    case "$(dpkg --print-architecture)" in \
+      amd64) libdir=x86_64-linux-gnu ;; \
+      arm64) libdir=aarch64-linux-gnu ;; \
+      *) echo "Unsupported Tesseract native architecture"; exit 1 ;; \
+    esac; \
+    mkdir -p /app/x64; \
+    ln -sf "/usr/lib/${libdir}/libdl.so.2" /usr/lib/libdl.so; \
+    ln -sf "/usr/lib/${libdir}/liblept.so.5" /app/x64/libleptonica-1.85.0.dll.so; \
+    ln -sf "/usr/lib/${libdir}/libtesseract.so.5" /app/x64/libtesseract55.dll.so
 
 # Copiar modelos ML/ONNX para o runtime
 COPY fastpath_model.zip .

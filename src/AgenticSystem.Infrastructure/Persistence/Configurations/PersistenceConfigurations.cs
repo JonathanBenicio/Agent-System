@@ -970,6 +970,19 @@ public class PlatformConfigAuditConfiguration : IEntityTypeConfiguration<Platfor
     }
 }
 
+public class FidesTenantPolicyConfiguration : IEntityTypeConfiguration<FidesTenantPolicyEntity>
+{
+    public void Configure(EntityTypeBuilder<FidesTenantPolicyEntity> builder)
+    {
+        builder.ToTable("fides_tenant_policies");
+        builder.HasKey(policy => policy.TenantId);
+        builder.Property(policy => policy.TenantId).HasMaxLength(100).IsRequired();
+        builder.Property(policy => policy.EnabledDetectorsJson).HasColumnType("jsonb").IsRequired();
+        builder.Property(policy => policy.UpdatedBy).HasMaxLength(200);
+        builder.HasIndex(policy => policy.UpdatedAt);
+    }
+}
+
 public class CustomOnnxModelConfiguration : IEntityTypeConfiguration<CustomOnnxModelEntity>
 {
     public void Configure(EntityTypeBuilder<CustomOnnxModelEntity> builder)

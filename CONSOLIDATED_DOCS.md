@@ -8,6 +8,7 @@
 > Issue #105 — Hyperlight CodeAct preview, flag global desligada por padrão e ativação somente em Lab: contrato em [operations](docs/backend/operations.md).
 > BACK-ORCH-122 — supervisor dinâmico implementado: [issue #122](https://github.com/JonathanBenicio/Agent-System/issues/122), [ADR-038](docs/architecture/adr/038-dynamic-supervisor-orchestrator.md), [story](docs/USER-STORIES.md#back-orch-122--orquestrar-agentes-dinamicos-pelo-supervisor-maf), [plano](docs/plan/dynamic-orchestrator-implementation.md) e [evidência de runtime](docs/backend/validation/maf-122-workflow-runtime-2026-09-29.md). Sessão MAF reaberta após reinício real da API; recuperação de Wait demonstrada. Banner gerou arquivo final com client MAF determinístico e skills reais; inferência vision/editor segue sem teste.
 > Issue #16 — auto-melhoria com flag Lab desligada por padrão, aprovação Owner/Admin, versionamento, auditoria e rollback: contrato em [API do backend](docs/backend/api-core.md).
+> Issue #106 — FIDES usa detectores built-in e toggles por tenant; OCR Tesseract local redige imagens e rasteriza PDFs, com falha fechada para conteúdo incerto. Contrato em [acesso/tenants](docs/backend/access-tenants.md).
 
 Este arquivo foi substituído por um índice de navegação. Consulte a documentação canônica diretamente:
 

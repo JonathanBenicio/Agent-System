@@ -41,8 +41,12 @@ public static class AgentBuilderMiddlewareExtensions
     public static AIAgentBuilder UseFidesDataProtection(
         this AIAgentBuilder builder,
         ITenantContextAccessor tenantContext,
-        ILogger logger)
+        IFidesTenantPolicyStore policyStore,
+        IFidesMediaScanner mediaScanner,
+        Microsoft.Extensions.Options.IOptions<AgenticSystem.Infrastructure.Configuration.FidesSecuritySettings> settings,
+        ILogger<AgenticSystem.Infrastructure.Security.FidesDataProtectionMiddleware> logger)
     {
-        return builder.Use(inner => new AgenticSystem.Infrastructure.Security.FidesDataProtectionMiddleware(inner, tenantContext, logger));
+        return builder.Use(inner => new AgenticSystem.Infrastructure.Security.FidesDataProtectionMiddleware(
+            inner, tenantContext, policyStore, mediaScanner, settings, logger));
     }
 }

@@ -74,6 +74,9 @@ public static class ServiceCollectionExtensions
         services.Configure<SemanticCacheOptions>(configuration.GetSection("AgenticSystem:SemanticCache"));
         services.Configure<SelfImprovementSettings>(configuration.GetSection("AgenticSystem:SelfImprovement"));
         services.Configure<HyperlightExecutionSettings>(configuration.GetSection("AgenticSystem:Hyperlight"));
+        services.Configure<FidesSecuritySettings>(configuration.GetSection("AgenticSystem:Fides"));
+        services.AddSingleton<IFidesTenantPolicyStore, InMemoryFidesTenantPolicyStore>();
+        services.AddSingleton<IFidesMediaScanner, Security.TesseractFidesMediaScanner>();
 
         return services;
     }
@@ -496,6 +499,7 @@ public static class ServiceCollectionExtensions
         ReplaceSingleton<IAgentVersionStore, PostgresAgentVersionStore>(services);
         ReplaceSingleton<IPromptTemplateStore, PostgresPromptTemplateStore>(services);
         ReplaceSingleton<ISelfImprovementProposalStore, PostgresSelfImprovementProposalStore>(services);
+        ReplaceSingleton<IFidesTenantPolicyStore, PostgresFidesTenantPolicyStore>(services);
         ReplaceSingleton<IEvalResultStore, PostgresEvalResultStore>(services);
         return services;
     }

@@ -187,6 +187,11 @@ using (var scope = app.Services.CreateScope())
                 Serilog.Log.Information("Auto-bootstrap finalizado.");
             }
         }
+        catch (AgenticSystem.Infrastructure.Services.MissingTenantBootstrapConfigurationException ex)
+        {
+            Serilog.Log.Fatal(ex, "Startup aborted because the initial tenant bootstrap configuration is missing.");
+            throw;
+        }
         catch (Exception ex)
         {
             Serilog.Log.Error(ex, "Erro fatal ao aplicar migrações ou auto-bootstrap no startup.");

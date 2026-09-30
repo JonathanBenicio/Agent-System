@@ -143,7 +143,12 @@ public class OrchestratorHostBuilder
         if (_tenantContextAccessor is not null)
         {
             var fidesLogger = _loggerFactory.CreateLogger<AgenticSystem.Infrastructure.Security.FidesDataProtectionMiddleware>();
-            builder = builder.UseFidesDataProtection(_tenantContextAccessor, fidesLogger);
+            builder = builder.UseFidesDataProtection(
+                _tenantContextAccessor,
+                _serviceProvider.GetRequiredService<IFidesTenantPolicyStore>(),
+                _serviceProvider.GetRequiredService<IFidesMediaScanner>(),
+                _serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<AgenticSystem.Infrastructure.Configuration.FidesSecuritySettings>>(),
+                fidesLogger);
         }
 
         // Adicionar logging e telemetry nativo

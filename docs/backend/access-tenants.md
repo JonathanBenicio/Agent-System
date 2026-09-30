@@ -13,11 +13,24 @@ Este documento descreve os contratos da branch `fix/backend-core-tenancy`. O est
 | Papel de plataforma | `platform_administrators` | Registro explícito e separado; Admin/Owner do tenant nunca são promovidos automaticamente. |
 | Sala | `knowledge_room_permissions` | ACL por usuário é obrigatória para ler uma sala, inclusive quando há suporte temporário. |
 
-O runtime não atribui o tenant `default` quando falta contexto. Rotas autenticadas que usam dados de tenant exigem um tenant existente; persistência vetorial e arquivos temporários de modelos também recusam dados sem `TenantId`. Quotas de providers globais pertencem ao escopo explícito `platform`.
+O runtime não atribui o tenant `default` quando falta contexto. Rotas autenticadas que usam dados de tenant exigem um tenant existente; persistência vetorial e arquivos temporários de modelos também recusam dados sem `TenantId`. Quotas de providers globais pertencem ao escopo explícito `platform`. Em banco vazio, a inicialização falha com exceção se `AgenticSystem:AdminApiKey` estiver ausente; configure `AgenticSystem__AdminApiKey` no ambiente. Com a chave configurada, o bootstrap cria o tenant `admin`, persiste somente o hash e cria a membership correspondente. Se já houver tenants, o bootstrap ignora essa chave. O bootstrap não semeia agentes ou workflows de produto.
 
 A migration `AddTenantMembershipAndSupportAccess` copia vínculos de `role_assignments` e API keys existentes, mantendo tenant e papel. Ela não preenche `platform_administrators`. Novas atribuições de papel sincronizam a tabela legada e membership.
 
 API keys aceitam `Owner`, `Admin`, `Operator`, `Viewer`, `Member` e `ServiceAccount`; `Member` efetivamente recebe leitura. `Owner` e `Admin` são papéis do tenant, nunca equivalem ao administrador da plataforma.
+
+## Política FIDES por tenant
+
+`GET /api/security/fides/policy` lê os toggles do tenant autenticado; `PUT` altera apenas detectores built-in conhecidos e exige `Owner` ou `Admin`. Sem uma política persistida, todos os detectores ficam ativos. `CredentialToken` é obrigatório e não pode ser desligado. Cada alteração incrementa a versão da política e gera auditoria.
+
+| Método/rota | Entrada/resultado | Regra |
+|---|---|---|
+| GET /api/security/fides/policy | `{ tenantId, enabledDetectors, version, updatedBy, updatedAt }` | Somente Owner/Admin; ausência de registro retorna todos os detectores ligados. |
+| PUT /api/security/fides/policy | `{ "enabledDetectors": { "Email": false } }` | Somente Owner/Admin; rejeita nomes desconhecidos e tentativa de desligar `CredentialToken`; grava versão e auditoria. |
+
+O middleware inspeciona texto de usuário/sistema antes do provider e nunca registra o conteúdo original. Imagens e páginas PDF usam Tesseract OCR local; regiões detectadas são cobertas por redaction opaca. PDFs são rasterizados em um novo PDF para remover camadas de texto ocultas e metadados do original. Configure `AgenticSystem:Fides:TessDataPath` para a pasta com os modelos `eng` e `por` (`eng+por` é o padrão). Política ausente mantém todos os detectores ativos.
+
+Falha de leitura da política, timeout/erro do detector, modelo OCR indisponível, baixa confiança, anexo não suportado ou região sem coordenadas conclusivas bloqueia a chamada antes do provider e pede uma cópia redigida. Limites de entrada: 10 MB, até 8 páginas PDF; timeout padrão 10 s. A configuração atual usa TesseractOCR 5.5.2 e PDFtoImage 5.4.0.
 
 ## Administração da plataforma
 

@@ -8,9 +8,9 @@ Copy-Item src/AgenticSystem.Api/appsettings.example.json src/AgenticSystem.Api/a
 dotnet restore
 dotnet run --project src/AgenticSystem.Api --urls http://localhost:5001
 ```
-Configurar somente credenciais locais apropriadas; não commitar secrets nem sobrescrever appsettings existente. URL é controlada pelo host, não há garantia de HTTPS/porta pelo comando sem --urls. JWT secret e Encryption:Key obrigatórios fora de Development; CORS AllowedOrigins obrigatório em produção. API key precisa estar habilitada no banco; bootstrap legacy AdminApiKey só cria chave quando banco inicial está vazio.
+Configurar somente credenciais locais apropriadas; não commitar secrets nem sobrescrever appsettings existente. URL é controlada pelo host, não há garantia de HTTPS/porta pelo comando sem --urls. JWT secret e Encryption:Key obrigatórios fora de Development; CORS AllowedOrigins obrigatório em produção. API key precisa estar habilitada no banco. Em banco sem tenants, `AgenticSystem:AdminApiKey` é obrigatória para o bootstrap inicial; configure `AgenticSystem__AdminApiKey` no ambiente. Sem ela, o startup lança `MissingTenantBootstrapConfigurationException` e encerra a inicialização. Com tenants já provisionados, essa chave não é exigida pelo bootstrap.
 
-StorageMode PostgreSQL e VectorStoreType PostgreSQL selecionam persistência; InMemory é diagnóstico/desenvolvimento, não prova de durabilidade. Startup tenta migrações e bootstrap, mas catch loga falha e continua. /health é liveness; confirmar migrations e acesso a tabelas separadamente.
+StorageMode PostgreSQL e VectorStoreType PostgreSQL selecionam persistência; InMemory é diagnóstico/desenvolvimento, não prova de durabilidade. Startup executa migrações e bootstrap. A falta de `AdminApiKey` quando o banco ainda não tem tenants é fatal; outras falhas de migração/bootstrap continuam sendo registradas e podem não interromper a inicialização. `/health` é liveness; confirmar migrations e acesso a tabelas separadamente.
 
 ## Providers LLM e Gateway
 
@@ -19,6 +19,10 @@ StorageMode PostgreSQL e VectorStoreType PostgreSQL selecionam persistência; In
 ## Hyperlight CodeAct (Lab)
 
 Hyperlight usa o pacote preview `Microsoft.Agents.AI.Hyperlight` e permanece desligado por padrão. O tool só é registrado quando `AgenticSystem:Hyperlight:Enabled=true` e `ASPNETCORE_ENVIRONMENT=Lab`. A integração atual executa JavaScript; Python/C# não são anunciados como suportados. Não configura montagens de filesystem nem allowlist de rede. Com a flag desligada ou fora de Lab, o tool não é registrado; falhas reais da sandbox retornam erro, sem saída simulada.
+
+## FIDES e varredura de mídia
+
+FIDES processa mídia localmente com TesseractOCR 5.5.2 e PDFtoImage 5.4.0. A imagem final é enviada apenas depois da redaction; PDFs são reconstituídos como páginas rasterizadas para retirar o texto oculto original. O container instala os modelos `eng` e `por`; fora do container, configure `AgenticSystem:Fides:TessDataPath`. Sem os modelos, com confiança baixa ou ao exceder os limites, a requisição é bloqueada.
 
 ## Compose existente
 API 8080, PostgreSQL host 5433, Ollama 11434. Compose ativa alguns providers externos e pede GPU NVIDIA; revisar ambiente antes de usar. Para diagnóstico deste plano, usar [compose isolado](../../tests/backend-validation/compose.yml), sem providers externos, sem GPU obrigatória.
