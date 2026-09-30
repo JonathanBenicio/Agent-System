@@ -264,7 +264,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GatewayController.cs",
       "line": 108,
-      "sha256": "9454a88f27958de43b74f9d92401c0a20b865659fbc026ecfbd59f2af3ba6878"
+      "sha256": "26f685606ae42adf39d654736e0fd49132e0e9ac97b02a1d83f65db3e6ed8f62"
     },
     {
       "method": "GET",
@@ -276,7 +276,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GatewayController.cs",
       "line": 56,
-      "sha256": "9454a88f27958de43b74f9d92401c0a20b865659fbc026ecfbd59f2af3ba6878"
+      "sha256": "26f685606ae42adf39d654736e0fd49132e0e9ac97b02a1d83f65db3e6ed8f62"
     },
     {
       "method": "GET",
@@ -288,7 +288,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GatewayController.cs",
       "line": 119,
-      "sha256": "9454a88f27958de43b74f9d92401c0a20b865659fbc026ecfbd59f2af3ba6878"
+      "sha256": "26f685606ae42adf39d654736e0fd49132e0e9ac97b02a1d83f65db3e6ed8f62"
     },
     {
       "method": "GET",
@@ -300,7 +300,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GatewayController.cs",
       "line": 67,
-      "sha256": "9454a88f27958de43b74f9d92401c0a20b865659fbc026ecfbd59f2af3ba6878"
+      "sha256": "26f685606ae42adf39d654736e0fd49132e0e9ac97b02a1d83f65db3e6ed8f62"
     },
     {
       "method": "GET",
@@ -312,7 +312,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GatewayController.cs",
       "line": 78,
-      "sha256": "9454a88f27958de43b74f9d92401c0a20b865659fbc026ecfbd59f2af3ba6878"
+      "sha256": "26f685606ae42adf39d654736e0fd49132e0e9ac97b02a1d83f65db3e6ed8f62"
     },
     {
       "method": "POST",
@@ -324,7 +324,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GatewayController.cs",
       "line": 151,
-      "sha256": "9454a88f27958de43b74f9d92401c0a20b865659fbc026ecfbd59f2af3ba6878"
+      "sha256": "26f685606ae42adf39d654736e0fd49132e0e9ac97b02a1d83f65db3e6ed8f62"
     },
     {
       "method": "POST",
@@ -336,7 +336,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GatewayController.cs",
       "line": 130,
-      "sha256": "9454a88f27958de43b74f9d92401c0a20b865659fbc026ecfbd59f2af3ba6878"
+      "sha256": "26f685606ae42adf39d654736e0fd49132e0e9ac97b02a1d83f65db3e6ed8f62"
     },
     {
       "method": "GET",
@@ -348,7 +348,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GatewayController.cs",
       "line": 97,
-      "sha256": "9454a88f27958de43b74f9d92401c0a20b865659fbc026ecfbd59f2af3ba6878"
+      "sha256": "26f685606ae42adf39d654736e0fd49132e0e9ac97b02a1d83f65db3e6ed8f62"
     },
     {
       "method": "GET",
@@ -360,7 +360,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/LLMController.cs",
       "line": 38,
-      "sha256": "8e742e9a985df6d7815c67b3373822eb1709266cde0ecd4955cf598b3f03c737"
+      "sha256": "30261f5794f633d531eaa1eee184767b026c1ea2a145c8ccc29f4775f83e0566"
     },
     {
       "method": "PUT",
@@ -372,7 +372,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/LLMController.cs",
       "line": 105,
-      "sha256": "8e742e9a985df6d7815c67b3373822eb1709266cde0ecd4955cf598b3f03c737"
+      "sha256": "30261f5794f633d531eaa1eee184767b026c1ea2a145c8ccc29f4775f83e0566"
     },
     {
       "method": "GET",
@@ -384,7 +384,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/LLMController.cs",
       "line": 45,
-      "sha256": "8e742e9a985df6d7815c67b3373822eb1709266cde0ecd4955cf598b3f03c737"
+      "sha256": "30261f5794f633d531eaa1eee184767b026c1ea2a145c8ccc29f4775f83e0566"
     },
     {
       "method": "GET",
@@ -396,7 +396,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/LLMController.cs",
       "line": 52,
-      "sha256": "8e742e9a985df6d7815c67b3373822eb1709266cde0ecd4955cf598b3f03c737"
+      "sha256": "30261f5794f633d531eaa1eee184767b026c1ea2a145c8ccc29f4775f83e0566"
     },
     {
       "method": "PUT",
@@ -408,7 +408,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/LLMController.cs",
       "line": 122,
-      "sha256": "8e742e9a985df6d7815c67b3373822eb1709266cde0ecd4955cf598b3f03c737"
+      "sha256": "30261f5794f633d531eaa1eee184767b026c1ea2a145c8ccc29f4775f83e0566"
     },
     {
       "method": "POST",
@@ -420,7 +420,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/LLMController.cs",
       "line": 88,
-      "sha256": "8e742e9a985df6d7815c67b3373822eb1709266cde0ecd4955cf598b3f03c737"
+      "sha256": "30261f5794f633d531eaa1eee184767b026c1ea2a145c8ccc29f4775f83e0566"
     },
     {
       "method": "POST",
@@ -432,7 +432,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/LLMController.cs",
       "line": 81,
-      "sha256": "8e742e9a985df6d7815c67b3373822eb1709266cde0ecd4955cf598b3f03c737"
+      "sha256": "30261f5794f633d531eaa1eee184767b026c1ea2a145c8ccc29f4775f83e0566"
     },
     {
       "method": "GET",
@@ -528,7 +528,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/LLMController.cs",
       "line": 69,
-      "sha256": "8e742e9a985df6d7815c67b3373822eb1709266cde0ecd4955cf598b3f03c737"
+      "sha256": "30261f5794f633d531eaa1eee184767b026c1ea2a145c8ccc29f4775f83e0566"
     },
     {
       "method": "GET",
@@ -540,7 +540,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/LLMController.cs",
       "line": 62,
-      "sha256": "8e742e9a985df6d7815c67b3373822eb1709266cde0ecd4955cf598b3f03c737"
+      "sha256": "30261f5794f633d531eaa1eee184767b026c1ea2a145c8ccc29f4775f83e0566"
     },
     {
       "method": "POST",
@@ -552,7 +552,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/LLMController.cs",
       "line": 137,
-      "sha256": "8e742e9a985df6d7815c67b3373822eb1709266cde0ecd4955cf598b3f03c737"
+      "sha256": "30261f5794f633d531eaa1eee184767b026c1ea2a145c8ccc29f4775f83e0566"
     },
     {
       "method": "GET",
@@ -1056,7 +1056,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/AgentManagementController.cs",
       "line": 32,
-      "sha256": "859ccf5f0a224dad425391e9f6b96de1e58a6a2fe29e4e29854a718d639a888c"
+      "sha256": "c60b08dec1912d2a540a11c19f3ba45fbb012c0790ffbba26ace720f79704e15"
     },
     {
       "method": "POST",
@@ -1068,7 +1068,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/AgentManagementController.cs",
       "line": 46,
-      "sha256": "859ccf5f0a224dad425391e9f6b96de1e58a6a2fe29e4e29854a718d639a888c"
+      "sha256": "c60b08dec1912d2a540a11c19f3ba45fbb012c0790ffbba26ace720f79704e15"
     },
     {
       "method": "DELETE",
@@ -1080,7 +1080,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/AgentManagementController.cs",
       "line": 106,
-      "sha256": "859ccf5f0a224dad425391e9f6b96de1e58a6a2fe29e4e29854a718d639a888c"
+      "sha256": "c60b08dec1912d2a540a11c19f3ba45fbb012c0790ffbba26ace720f79704e15"
     },
     {
       "method": "GET",
@@ -1092,7 +1092,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/AgentManagementController.cs",
       "line": 70,
-      "sha256": "859ccf5f0a224dad425391e9f6b96de1e58a6a2fe29e4e29854a718d639a888c"
+      "sha256": "c60b08dec1912d2a540a11c19f3ba45fbb012c0790ffbba26ace720f79704e15"
     },
     {
       "method": "PUT",
@@ -1104,7 +1104,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/AgentManagementController.cs",
       "line": 81,
-      "sha256": "859ccf5f0a224dad425391e9f6b96de1e58a6a2fe29e4e29854a718d639a888c"
+      "sha256": "c60b08dec1912d2a540a11c19f3ba45fbb012c0790ffbba26ace720f79704e15"
     },
     {
       "method": "GET",
@@ -1176,7 +1176,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/AgentManagementController.cs",
       "line": 63,
-      "sha256": "859ccf5f0a224dad425391e9f6b96de1e58a6a2fe29e4e29854a718d639a888c"
+      "sha256": "c60b08dec1912d2a540a11c19f3ba45fbb012c0790ffbba26ace720f79704e15"
     },
     {
       "method": "POST",
@@ -1200,7 +1200,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/AgentManagementController.cs",
       "line": 39,
-      "sha256": "859ccf5f0a224dad425391e9f6b96de1e58a6a2fe29e4e29854a718d639a888c"
+      "sha256": "c60b08dec1912d2a540a11c19f3ba45fbb012c0790ffbba26ace720f79704e15"
     },
     {
       "method": "POST",
@@ -1272,7 +1272,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/AgentManagementController.cs",
       "line": 116,
-      "sha256": "859ccf5f0a224dad425391e9f6b96de1e58a6a2fe29e4e29854a718d639a888c"
+      "sha256": "c60b08dec1912d2a540a11c19f3ba45fbb012c0790ffbba26ace720f79704e15"
     },
     {
       "method": "GET",
@@ -1500,7 +1500,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/AuthController.cs",
       "line": 47,
-      "sha256": "f3b07115d5a7190964be4a423ea3ff958724349a481369e2170c5e05ba982ba5"
+      "sha256": "ebeb8c691eb9047f2811bbe6ed48a81df525a2ac907b581f0b26f7d35face05b"
     },
     {
       "method": "POST",
@@ -1512,7 +1512,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/AuthController.cs",
       "line": 227,
-      "sha256": "f3b07115d5a7190964be4a423ea3ff958724349a481369e2170c5e05ba982ba5"
+      "sha256": "ebeb8c691eb9047f2811bbe6ed48a81df525a2ac907b581f0b26f7d35face05b"
     },
     {
       "method": "POST",
@@ -1524,7 +1524,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/ChatController.cs",
       "line": 36,
-      "sha256": "cfd9d3df1b162bbb8101bcf8ed298f6eb01a9b413b6a53f60dccd43e22fb6fdf"
+      "sha256": "2a27ccd3ab6c895db5a263228b7d78bc84c86f580df2e418ce2ae26a39b38316"
     },
     {
       "method": "POST",
@@ -1536,7 +1536,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/ChatController.cs",
       "line": 69,
-      "sha256": "cfd9d3df1b162bbb8101bcf8ed298f6eb01a9b413b6a53f60dccd43e22fb6fdf"
+      "sha256": "2a27ccd3ab6c895db5a263228b7d78bc84c86f580df2e418ce2ae26a39b38316"
     },
     {
       "method": "POST",
@@ -1548,7 +1548,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/DocumentController.cs",
       "line": 75,
-      "sha256": "74fcc91687032f93ee3a26771d1719fcb180f123b1d9a4f0480e489ca5efcb40"
+      "sha256": "18f40221f04d60585a267b3375d1683a796266e24dbd22a02654a2b16935a9b9"
     },
     {
       "method": "POST",
@@ -1560,7 +1560,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/DocumentController.cs",
       "line": 167,
-      "sha256": "74fcc91687032f93ee3a26771d1719fcb180f123b1d9a4f0480e489ca5efcb40"
+      "sha256": "18f40221f04d60585a267b3375d1683a796266e24dbd22a02654a2b16935a9b9"
     },
     {
       "method": "GET",
@@ -1572,7 +1572,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/DocumentController.cs",
       "line": 44,
-      "sha256": "74fcc91687032f93ee3a26771d1719fcb180f123b1d9a4f0480e489ca5efcb40"
+      "sha256": "18f40221f04d60585a267b3375d1683a796266e24dbd22a02654a2b16935a9b9"
     },
     {
       "method": "GET",
@@ -1584,7 +1584,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 49,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "POST",
@@ -1596,7 +1596,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 79,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "DELETE",
@@ -1608,7 +1608,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 192,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "GET",
@@ -1620,7 +1620,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 66,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "PUT",
@@ -1632,7 +1632,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 136,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "POST",
@@ -1644,7 +1644,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 208,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "GET",
@@ -1656,7 +1656,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 340,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "GET",
@@ -1668,7 +1668,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 49,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "POST",
@@ -1680,7 +1680,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 79,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "DELETE",
@@ -1692,7 +1692,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 192,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "GET",
@@ -1704,7 +1704,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 66,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "PUT",
@@ -1716,7 +1716,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 136,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "POST",
@@ -1728,7 +1728,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 208,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "GET",
@@ -1740,7 +1740,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 340,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "GET",
@@ -1752,7 +1752,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 49,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "POST",
@@ -1764,7 +1764,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 79,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "DELETE",
@@ -1776,7 +1776,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 192,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "GET",
@@ -1788,7 +1788,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 66,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "PUT",
@@ -1800,7 +1800,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 136,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "POST",
@@ -1812,7 +1812,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 208,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "GET",
@@ -1824,7 +1824,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/GoldenSetController.cs",
       "line": 340,
-      "sha256": "c1244f631be23b9b04baf8bb9d93df8762742dc9e849a83f35a66d6b8ae3de19"
+      "sha256": "4bf891f04dc5b83e590626e8db0c4a43093e1625d1ceba8721031e3be54fdb9a"
     },
     {
       "method": "GET",
@@ -2088,7 +2088,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
       "line": 27,
-      "sha256": "f965d156cc3f502ed0d8edaa266da247756c5a97d8c8122b5409d193d8dd81a4"
+      "sha256": "a9ae87dfddc089538131a67532b28474b93a94f6b809d443de41ffabb1f490b7"
     },
     {
       "method": "GET",
@@ -2100,7 +2100,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
       "line": 59,
-      "sha256": "f965d156cc3f502ed0d8edaa266da247756c5a97d8c8122b5409d193d8dd81a4"
+      "sha256": "a9ae87dfddc089538131a67532b28474b93a94f6b809d443de41ffabb1f490b7"
     },
     {
       "method": "DELETE",
@@ -2112,7 +2112,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
       "line": 168,
-      "sha256": "f965d156cc3f502ed0d8edaa266da247756c5a97d8c8122b5409d193d8dd81a4"
+      "sha256": "a9ae87dfddc089538131a67532b28474b93a94f6b809d443de41ffabb1f490b7"
     },
     {
       "method": "PUT",
@@ -2124,7 +2124,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
       "line": 75,
-      "sha256": "f965d156cc3f502ed0d8edaa266da247756c5a97d8c8122b5409d193d8dd81a4"
+      "sha256": "a9ae87dfddc089538131a67532b28474b93a94f6b809d443de41ffabb1f490b7"
     },
     {
       "method": "PUT",
@@ -2136,7 +2136,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
       "line": 36,
-      "sha256": "f965d156cc3f502ed0d8edaa266da247756c5a97d8c8122b5409d193d8dd81a4"
+      "sha256": "a9ae87dfddc089538131a67532b28474b93a94f6b809d443de41ffabb1f490b7"
     },
     {
       "method": "GET",
@@ -2148,7 +2148,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
       "line": 204,
-      "sha256": "f965d156cc3f502ed0d8edaa266da247756c5a97d8c8122b5409d193d8dd81a4"
+      "sha256": "a9ae87dfddc089538131a67532b28474b93a94f6b809d443de41ffabb1f490b7"
     },
     {
       "method": "POST",
@@ -2160,7 +2160,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
       "line": 220,
-      "sha256": "f965d156cc3f502ed0d8edaa266da247756c5a97d8c8122b5409d193d8dd81a4"
+      "sha256": "a9ae87dfddc089538131a67532b28474b93a94f6b809d443de41ffabb1f490b7"
     },
     {
       "method": "DELETE",
@@ -2172,7 +2172,31 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/PlatformAdminController.cs",
       "line": 289,
-      "sha256": "f965d156cc3f502ed0d8edaa266da247756c5a97d8c8122b5409d193d8dd81a4"
+      "sha256": "a9ae87dfddc089538131a67532b28474b93a94f6b809d443de41ffabb1f490b7"
+    },
+    {
+      "method": "GET",
+      "path": "/api/security/fides/policy",
+      "action": "Get",
+      "parameters": "CancellationToken ct",
+      "authorization": "Authorize (roles/policy: see source)",
+      "condition": "see runtime configuration in source",
+      "openApiHidden": false,
+      "source": "src/AgenticSystem.Api/Controllers/FidesPolicyController.cs",
+      "line": 28,
+      "sha256": "3fe120b78ebc58c10c5c0673afb3d20db616ba6cc82f88d93ede482be235d169"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/security/fides/policy",
+      "action": "Update",
+      "parameters": "[FromBody] UpdateFidesPolicyRequest request, CancellationToken ct",
+      "authorization": "Authorize (roles/policy: see source)",
+      "condition": "see runtime configuration in source",
+      "openApiHidden": false,
+      "source": "src/AgenticSystem.Api/Controllers/FidesPolicyController.cs",
+      "line": 37,
+      "sha256": "3fe120b78ebc58c10c5c0673afb3d20db616ba6cc82f88d93ede482be235d169"
     },
     {
       "method": "GET",
@@ -2184,7 +2208,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/SessionController.cs",
       "line": 32,
-      "sha256": "60582869fe48846546996a91f5b3215e955dc5057e6c0329d9c88fac617ab4b4"
+      "sha256": "4c9b5348455d9b99a0e170c8353d0fb033b6ff1532b42e3734da9adfbf1b4af9"
     },
     {
       "method": "DELETE",
@@ -2196,7 +2220,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/SessionController.cs",
       "line": 74,
-      "sha256": "60582869fe48846546996a91f5b3215e955dc5057e6c0329d9c88fac617ab4b4"
+      "sha256": "4c9b5348455d9b99a0e170c8353d0fb033b6ff1532b42e3734da9adfbf1b4af9"
     },
     {
       "method": "GET",
@@ -2208,7 +2232,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/SessionController.cs",
       "line": 48,
-      "sha256": "60582869fe48846546996a91f5b3215e955dc5057e6c0329d9c88fac617ab4b4"
+      "sha256": "4c9b5348455d9b99a0e170c8353d0fb033b6ff1532b42e3734da9adfbf1b4af9"
     },
     {
       "method": "GET",
@@ -2220,7 +2244,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/SessionController.cs",
       "line": 61,
-      "sha256": "60582869fe48846546996a91f5b3215e955dc5057e6c0329d9c88fac617ab4b4"
+      "sha256": "4c9b5348455d9b99a0e170c8353d0fb033b6ff1532b42e3734da9adfbf1b4af9"
     },
     {
       "method": "PUT",
@@ -2232,7 +2256,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/SessionController.cs",
       "line": 101,
-      "sha256": "60582869fe48846546996a91f5b3215e955dc5057e6c0329d9c88fac617ab4b4"
+      "sha256": "4c9b5348455d9b99a0e170c8353d0fb033b6ff1532b42e3734da9adfbf1b4af9"
     },
     {
       "method": "GET",
@@ -2400,7 +2424,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/WorkflowController.cs",
       "line": 31,
-      "sha256": "37e3efcd7242e46f4414706b2e7df84aabb83b4b9a0a100464956b1a18c2f43a"
+      "sha256": "6e6e9b87a391f32d31c552e82eb545e315c147b894a9e772f01279bcda45a0a2"
     },
     {
       "method": "POST",
@@ -2412,7 +2436,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/WorkflowController.cs",
       "line": 48,
-      "sha256": "37e3efcd7242e46f4414706b2e7df84aabb83b4b9a0a100464956b1a18c2f43a"
+      "sha256": "6e6e9b87a391f32d31c552e82eb545e315c147b894a9e772f01279bcda45a0a2"
     },
     {
       "method": "DELETE",
@@ -2424,7 +2448,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/WorkflowController.cs",
       "line": 56,
-      "sha256": "37e3efcd7242e46f4414706b2e7df84aabb83b4b9a0a100464956b1a18c2f43a"
+      "sha256": "6e6e9b87a391f32d31c552e82eb545e315c147b894a9e772f01279bcda45a0a2"
     },
     {
       "method": "GET",
@@ -2436,7 +2460,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/WorkflowController.cs",
       "line": 39,
-      "sha256": "37e3efcd7242e46f4414706b2e7df84aabb83b4b9a0a100464956b1a18c2f43a"
+      "sha256": "6e6e9b87a391f32d31c552e82eb545e315c147b894a9e772f01279bcda45a0a2"
     },
     {
       "method": "GET",
@@ -2448,7 +2472,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/WorkflowController.cs",
       "line": 105,
-      "sha256": "37e3efcd7242e46f4414706b2e7df84aabb83b4b9a0a100464956b1a18c2f43a"
+      "sha256": "6e6e9b87a391f32d31c552e82eb545e315c147b894a9e772f01279bcda45a0a2"
     },
     {
       "method": "GET",
@@ -2460,7 +2484,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/WorkflowController.cs",
       "line": 96,
-      "sha256": "37e3efcd7242e46f4414706b2e7df84aabb83b4b9a0a100464956b1a18c2f43a"
+      "sha256": "6e6e9b87a391f32d31c552e82eb545e315c147b894a9e772f01279bcda45a0a2"
     },
     {
       "method": "POST",
@@ -2472,7 +2496,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/WorkflowController.cs",
       "line": 129,
-      "sha256": "37e3efcd7242e46f4414706b2e7df84aabb83b4b9a0a100464956b1a18c2f43a"
+      "sha256": "6e6e9b87a391f32d31c552e82eb545e315c147b894a9e772f01279bcda45a0a2"
     },
     {
       "method": "POST",
@@ -2484,7 +2508,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/WorkflowController.cs",
       "line": 113,
-      "sha256": "37e3efcd7242e46f4414706b2e7df84aabb83b4b9a0a100464956b1a18c2f43a"
+      "sha256": "6e6e9b87a391f32d31c552e82eb545e315c147b894a9e772f01279bcda45a0a2"
     },
     {
       "method": "POST",
@@ -2495,8 +2519,8 @@
       "condition": "see runtime configuration in source",
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/WorkflowController.cs",
-      "line": 152,
-      "sha256": "37e3efcd7242e46f4414706b2e7df84aabb83b4b9a0a100464956b1a18c2f43a"
+      "line": 153,
+      "sha256": "6e6e9b87a391f32d31c552e82eb545e315c147b894a9e772f01279bcda45a0a2"
     },
     {
       "method": "POST",
@@ -2508,7 +2532,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/WorkflowController.cs",
       "line": 66,
-      "sha256": "37e3efcd7242e46f4414706b2e7df84aabb83b4b9a0a100464956b1a18c2f43a"
+      "sha256": "6e6e9b87a391f32d31c552e82eb545e315c147b894a9e772f01279bcda45a0a2"
     },
     {
       "method": "POST",
@@ -2520,7 +2544,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/OpenAI/OpenAIChatCompletionController.cs",
       "line": 46,
-      "sha256": "0c012762d8f49ec05103466f5c523c751c674b20ed9915abf71e29f9aa7aac64"
+      "sha256": "cfe93e3cd59d4c80aeeade864350bcf2815f466f7956bf4e550fe6e3c6f5e3e5"
     },
     {
       "method": "GET",
@@ -2532,7 +2556,7 @@
       "openApiHidden": false,
       "source": "src/AgenticSystem.Api/Controllers/OpenAI/OpenAIChatCompletionController.cs",
       "line": 217,
-      "sha256": "0c012762d8f49ec05103466f5c523c751c674b20ed9915abf71e29f9aa7aac64"
+      "sha256": "cfe93e3cd59d4c80aeeade864350bcf2815f466f7956bf4e550fe6e3c6f5e3e5"
     }
   ]
 }

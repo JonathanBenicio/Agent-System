@@ -16,6 +16,8 @@ StorageMode PostgreSQL e VectorStoreType PostgreSQL selecionam persistência; In
 
 `/api/admin/llm` é restrito a Platform Admin. Modelos, habilitação, prioridade, default e chaves globais ficam em `platform_configs`; segredos são cifrados, e `platform_config_audits` registra ator e hashes sem gravar segredo. Configure `AgenticSystem:Encryption:Key` fora de Development antes de habilitar armazenamento persistido. BYOK continua em credenciais/configuração tenant-scoped e mantém quota por tenant; esses valores não são promovidos ao store global. Chamadas com chave global passam pelo Gateway; chamadas BYOK preservam o isolamento do tenant.
 
+FIDES processa mídia localmente com TesseractOCR 5.5.2 e PDFtoImage 5.4.0. A imagem final é enviada apenas depois da redaction; PDFs são reconstituídos como páginas rasterizadas para retirar o texto oculto original. O container instala os modelos `eng` e `por`; fora do container, configure `AgenticSystem:Fides:TessDataPath`. Sem os modelos, com confiança baixa ou ao exceder os limites, a requisição é bloqueada.
+
 ## Compose existente
 API 8080, PostgreSQL host 5433, Ollama 11434. Compose ativa alguns providers externos e pede GPU NVIDIA; revisar ambiente antes de usar. Para diagnóstico deste plano, usar [compose isolado](../../tests/backend-validation/compose.yml), sem providers externos, sem GPU obrigatória.
 

@@ -2,7 +2,7 @@
 
 Gerado com `node scripts/backend-contract-inventory.mjs`. Cada rota aponta para sua assinatura atual; parâmetros C# não substituem schema/obrigatoriedade de binding. Autorizações adicionais e flags exigem leitura da fonte. Endpoints fora do núcleo ainda não possuem prova integrada.
 
-211 combinações método/rota, incluindo aliases. Consulte [contratos do núcleo](api-core.md) e [hubs/protocolos](transports.md).
+213 combinações método/rota, incluindo aliases. Consulte [contratos do núcleo](api-core.md) e [hubs/protocolos](transports.md).
 
 | Método | Rota | Ação/entrada C# | Autorização declarada | Fonte |
 |---|---|---|---|---|
@@ -187,6 +187,8 @@ Gerado com `node scripts/backend-contract-inventory.mjs`. Cada rota aponta para 
 | GET | /api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants | ListSupportGrants(string tenantId, string roomId, CancellationToken ct) | Authorize (roles/policy: see source) | [PlatformAdminController.cs:204](../../src/AgenticSystem.Api/Controllers/PlatformAdminController.cs) |
 | POST | /api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants | CreateSupportGrant(string tenantId, string roomId, [FromBody] CreateSupportGrantRequest request, CancellationToken ct) | Authorize (roles/policy: see source) | [PlatformAdminController.cs:220](../../src/AgenticSystem.Api/Controllers/PlatformAdminController.cs) |
 | DELETE | /api/platform/tenants/{tenantId}/rooms/{roomId}/support-grants/{grantId} | RevokeSupportGrant(string tenantId, string roomId, string grantId, CancellationToken ct) | Authorize (roles/policy: see source) | [PlatformAdminController.cs:289](../../src/AgenticSystem.Api/Controllers/PlatformAdminController.cs) |
+| GET | /api/security/fides/policy | Get(CancellationToken ct) | Authorize (roles/policy: see source) | [FidesPolicyController.cs:28](../../src/AgenticSystem.Api/Controllers/FidesPolicyController.cs) |
+| PUT | /api/security/fides/policy | Update([FromBody] UpdateFidesPolicyRequest request, CancellationToken ct) | Authorize (roles/policy: see source) | [FidesPolicyController.cs:37](../../src/AgenticSystem.Api/Controllers/FidesPolicyController.cs) |
 | GET | /api/session | GetSessions([FromQuery] int limit = 50, [FromQuery] string? search = null, CancellationToken ct = default) | Authorize (roles/policy: see source) | [SessionController.cs:32](../../src/AgenticSystem.Api/Controllers/SessionController.cs) |
 | DELETE | /api/session/{id} | DeleteSession(string id, CancellationToken ct = default) | Authorize (roles/policy: see source) | [SessionController.cs:74](../../src/AgenticSystem.Api/Controllers/SessionController.cs) |
 | GET | /api/session/{id} | GetSession(string id, CancellationToken ct = default) | Authorize (roles/policy: see source) | [SessionController.cs:48](../../src/AgenticSystem.Api/Controllers/SessionController.cs) |
@@ -213,7 +215,7 @@ Gerado com `node scripts/backend-contract-inventory.mjs`. Cada rota aponta para 
 | GET | /api/workflow/executions/{id} | GetExecution(string id, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:96](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
 | POST | /api/workflow/executions/{id}/approve | ApproveExecution(string id, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:129](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
 | POST | /api/workflow/executions/{id}/cancel | CancelExecution(string id, [FromQuery] string? reason, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:113](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
-| POST | /api/workflow/executions/{id}/reject | RejectExecution(string id, [FromQuery] string? reason, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:152](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
+| POST | /api/workflow/executions/{id}/reject | RejectExecution(string id, [FromQuery] string? reason, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:153](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
 | POST | /api/workflow/executions/start/{definitionId} | StartWorkflow(string definitionId, [FromBody] Dictionary<string, object>? variables, CancellationToken ct = default) | Authorize (roles/policy: see source) | [WorkflowController.cs:66](../../src/AgenticSystem.Api/Controllers/WorkflowController.cs) |
 | POST | /v1/chat/completions | CreateChatCompletion([FromBody] ChatCompletionRequest request, CancellationToken ct) | no Authorize attribute; inspect action | [OpenAIChatCompletionController.cs:46](../../src/AgenticSystem.Api/Controllers/OpenAI/OpenAIChatCompletionController.cs) |
 | GET | /v1/models | ListModels() | no Authorize attribute; inspect action | [OpenAIChatCompletionController.cs:217](../../src/AgenticSystem.Api/Controllers/OpenAI/OpenAIChatCompletionController.cs) |

@@ -72,6 +72,9 @@ public static class ServiceCollectionExtensions
         services.Configure<DynamicSkillsOptions>(configuration.GetSection("AgenticSystem:Skills"));
         services.Configure<SemanticCacheOptions>(configuration.GetSection("AgenticSystem:SemanticCache"));
         services.Configure<SelfImprovementSettings>(configuration.GetSection("AgenticSystem:SelfImprovement"));
+        services.Configure<FidesSecuritySettings>(configuration.GetSection("AgenticSystem:Fides"));
+        services.AddSingleton<IFidesTenantPolicyStore, InMemoryFidesTenantPolicyStore>();
+        services.AddSingleton<IFidesMediaScanner, Security.TesseractFidesMediaScanner>();
 
         return services;
     }
@@ -492,6 +495,7 @@ public static class ServiceCollectionExtensions
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<IAgentVersionStore, PostgresAgentVersionStore>(services);
         ReplaceSingleton<IPromptTemplateStore, PostgresPromptTemplateStore>(services);
+        ReplaceSingleton<IFidesTenantPolicyStore, PostgresFidesTenantPolicyStore>(services);
         ReplaceSingleton<IEvalResultStore, PostgresEvalResultStore>(services);
         return services;
     }
