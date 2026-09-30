@@ -19,6 +19,19 @@ A migration `AddTenantMembershipAndSupportAccess` copia vínculos de `role_assig
 
 API keys aceitam `Owner`, `Admin`, `Operator`, `Viewer`, `Member` e `ServiceAccount`; `Member` efetivamente recebe leitura. `Owner` e `Admin` são papéis do tenant, nunca equivalem ao administrador da plataforma.
 
+## Política FIDES por tenant
+
+`GET /api/security/fides/policy` lê os toggles do tenant autenticado; `PUT` altera apenas detectores built-in conhecidos e exige `Owner` ou `Admin`. Sem uma política persistida, todos os detectores ficam ativos. `CredentialToken` é obrigatório e não pode ser desligado. Cada alteração incrementa a versão da política e gera auditoria.
+
+| Método/rota | Entrada/resultado | Regra |
+|---|---|---|
+| GET /api/security/fides/policy | `{ tenantId, enabledDetectors, version, updatedBy, updatedAt }` | Somente Owner/Admin; ausência de registro retorna todos os detectores ligados. |
+| PUT /api/security/fides/policy | `{ "enabledDetectors": { "Email": false } }` | Somente Owner/Admin; rejeita nomes desconhecidos e tentativa de desligar `CredentialToken`; grava versão e auditoria. |
+
+O middleware inspeciona texto de usuário/sistema antes do provider e nunca registra o conteúdo original. Imagens e páginas PDF usam Tesseract OCR local; regiões detectadas são cobertas por redaction opaca. PDFs são rasterizados em um novo PDF para remover camadas de texto ocultas e metadados do original. Configure `AgenticSystem:Fides:TessDataPath` para a pasta com os modelos `eng` e `por` (`eng+por` é o padrão). Política ausente mantém todos os detectores ativos.
+
+Falha de leitura da política, timeout/erro do detector, modelo OCR indisponível, baixa confiança, anexo não suportado ou região sem coordenadas conclusivas bloqueia a chamada antes do provider e pede uma cópia redigida. Limites de entrada: 10 MB, até 8 páginas PDF; timeout padrão 10 s. A configuração atual usa TesseractOCR 5.5.2 e PDFtoImage 5.4.0.
+
 ## Administração da plataforma
 
 As rotas abaixo exigem autenticação e um registro explícito do `sub`/`NameIdentifier` em `platform_administrators`. A middleware dispensa seleção/membership de tenant apenas em `/api/platform/*`; o handler JWT ainda exige uma claim `tenant_id`, que não é usada para escolher o tenant nessa área.

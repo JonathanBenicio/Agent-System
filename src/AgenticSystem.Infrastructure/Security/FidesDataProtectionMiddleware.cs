@@ -1,39 +1,41 @@
+﻿using System.Text;
+using AgenticSystem.Core.Interfaces;
 using System.Text.RegularExpressions;
+using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.Configuration;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using AgenticSystem.Core.Interfaces;
+using Microsoft.Extensions.Options;
 using FrameworkAgentResponse = Microsoft.Agents.AI.AgentResponse;
 
 namespace AgenticSystem.Infrastructure.Security;
 
-/// <summary>
-/// Middleware do Agent Framework que executa o FIDES (proteção de dados sensíveis).
-/// Intercepta RunCoreAsync para mascarar dados sensíveis antes de enviá-los ao LLM.
-/// Registrado no pipeline via .UseFidesDataProtection() extension method.
-/// </summary>
-public class FidesDataProtectionMiddleware : DelegatingAIAgent
+public sealed class FidesDataProtectionMiddleware : DelegatingAIAgent
 {
-    private readonly ITenantContextAccessor _tenantContext;
-    private readonly ILogger _logger;
+    private const string BlockedMessage = "Mensagem bloqueada pelo FIDES: não foi possível verificar ou redigir com segurança todos os dados sensíveis. Envie uma versão textual ou uma cópia da mídia já redigida.";
 
-    // Regras padrão de mascaramento
-    private static readonly List<(string Name, Regex Pattern, string Mask)> DefaultRules = new()
-    {
-        ("CPF", new Regex(@"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b", RegexOptions.Compiled), "[CPF MASCARADO]"),
-        ("CreditCard", new Regex(@"\b(?:\d{4}[ -]?){3}\d{4}\b", RegexOptions.Compiled), "[CARTÃO MASCARADO]"),
-        ("Email", new Regex(@"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", RegexOptions.Compiled | RegexOptions.IgnoreCase), "[EMAIL MASCARADO]"),
-        ("Token", new Regex(@"\b(?:sk-[a-zA-Z0-9]{32,}|eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+)\b", RegexOptions.Compiled), "[TOKEN MASCARADO]")
-    };
+    private readonly ITenantContextAccessor _tenantContext;
+    private readonly IFidesTenantPolicyStore _policyStore;
+    private readonly IFidesMediaScanner _mediaScanner;
+    private readonly ILogger<FidesDataProtectionMiddleware> _logger;
+    private readonly TimeSpan _mediaScanTimeout;
 
     public FidesDataProtectionMiddleware(
         AIAgent innerAgent,
         ITenantContextAccessor tenantContext,
-        ILogger logger)
+        IFidesTenantPolicyStore policyStore,
+        IFidesMediaScanner mediaScanner,
+        IOptions<FidesSecuritySettings> settings,
+        ILogger<FidesDataProtectionMiddleware> logger)
         : base(innerAgent)
     {
         _tenantContext = tenantContext ?? throw new ArgumentNullException(nameof(tenantContext));
+        _policyStore = policyStore ?? throw new ArgumentNullException(nameof(policyStore));
+        _mediaScanner = mediaScanner ?? throw new ArgumentNullException(nameof(mediaScanner));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _mediaScanTimeout = TimeSpan.FromSeconds(Math.Clamp(settings.Value.MediaScanTimeoutSeconds, 1, 60));
     }
 
     protected override async Task<FrameworkAgentResponse> RunCoreAsync(
@@ -42,69 +44,187 @@ public class FidesDataProtectionMiddleware : DelegatingAIAgent
         AgentRunOptions? options,
         CancellationToken cancellationToken)
     {
-        // Mascara as mensagens antes de processar
-        var maskedMessages = MaskMessages(messages.ToList());
+        string tenantId;
+        FidesTenantPolicy policy;
+        try
+        {
+            tenantId = _tenantContext.CurrentTenantId;
+            policy = await _policyStore.GetAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            _logger.LogError("FIDES policy could not be loaded; blocking the provider call.");
+            return BlockedResponse();
+        }
 
-        // Delegate to inner agent
-        return await base.RunCoreAsync(maskedMessages, session, options, cancellationToken);
+        var transformed = await ProtectMessagesAsync(messages, policy, tenantId, cancellationToken);
+        if (transformed.Blocked)
+            return BlockedResponse();
+
+        if (transformed.DetectedCategories.Count > 0)
+        {
+            _logger.LogInformation(
+                "FIDES redacted categories {Categories} for tenant {TenantId}.",
+                string.Join(",", transformed.DetectedCategories),
+                tenantId);
+        }
+
+        return await base.RunCoreAsync(transformed.Messages, session, options, cancellationToken);
     }
 
-    private IEnumerable<ChatMessage> MaskMessages(IList<ChatMessage> originalMessages)
+    private async Task<ProtectedMessagesResult> ProtectMessagesAsync(
+        IEnumerable<ChatMessage> messages,
+        FidesTenantPolicy policy,
+        string tenantId,
+        CancellationToken ct)
     {
-        var maskedMessages = new List<ChatMessage>(originalMessages.Count);
-        bool anyMasked = false;
+        var protectedMessages = new List<ChatMessage>();
+        var detectedCategories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var msg in originalMessages)
+        foreach (var message in messages)
         {
-            if (msg.Role != ChatRole.User && msg.Role != ChatRole.System)
+            if (message.Role != ChatRole.User && message.Role != ChatRole.System)
             {
-                maskedMessages.Add(msg);
+                protectedMessages.Add(message);
                 continue;
             }
 
-            var maskedMsg = new ChatMessage(msg.Role, string.Empty);
-            foreach (var content in msg.Contents)
+            var protectedMessage = new ChatMessage(message.Role, string.Empty);
+            foreach (var content in message.Contents)
             {
                 if (content is TextContent textContent)
                 {
-                    var maskedText = ApplyFidesMasks(textContent.Text, out bool hasMasked);
-                    if (hasMasked)
+                    try
                     {
-                        anyMasked = true;
+                        protectedMessage.Contents.Add(new TextContent(
+                            ApplyBuiltInMasks(textContent.Text, policy, detectedCategories)));
                     }
-                    maskedMsg.Contents.Add(new TextContent(maskedText));
+                    catch (RegexMatchTimeoutException)
+                    {
+                        _logger.LogError("FIDES detector exceeded its timeout for tenant {TenantId}; blocking the provider call.", tenantId);
+                        return ProtectedMessagesResult.BlockedResult;
+                    }
+                }
+                else if (content is DataContent dataContent)
+                {
+                    var replacement = await ProtectDataContentAsync(dataContent, policy, detectedCategories, tenantId, ct);
+                    if (replacement is null)
+                        return ProtectedMessagesResult.BlockedResult;
+                    protectedMessage.Contents.Add(replacement);
                 }
                 else
                 {
-                    maskedMsg.Contents.Add(content);
+                    // URI and other non-text payloads cannot be inspected without safe local bytes.
+                    _logger.LogWarning("FIDES received uninspectable content for tenant {TenantId}; blocking the provider call.", tenantId);
+                    return ProtectedMessagesResult.BlockedResult;
                 }
             }
-            maskedMessages.Add(maskedMsg);
+
+            protectedMessages.Add(protectedMessage);
         }
 
-        if (anyMasked)
-        {
-            _logger.LogInformation("🛡️ FIDES: Dados sensíveis interceptados e mascarados para o Tenant {TenantId}", _tenantContext.CurrentTenantId);
-        }
-
-        return maskedMessages;
+        return new ProtectedMessagesResult(protectedMessages, detectedCategories, false);
     }
 
-    private string ApplyFidesMasks(string input, out bool anyMasked)
+    private async Task<AIContent?> ProtectDataContentAsync(
+        DataContent dataContent,
+        FidesTenantPolicy policy,
+        HashSet<string> detectedCategories,
+        string tenantId,
+        CancellationToken ct)
     {
-        anyMasked = false;
+        var mediaType = dataContent.MediaType ?? string.Empty;
+        if (mediaType.StartsWith("text/", StringComparison.OrdinalIgnoreCase) ||
+            mediaType.Equals("application/json", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                var text = Encoding.UTF8.GetString(dataContent.Data.Span);
+                return new DataContent(
+                    Encoding.UTF8.GetBytes(ApplyBuiltInMasks(text, policy, detectedCategories)),
+                    mediaType);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                _logger.LogError("FIDES text detector exceeded its timeout for tenant {TenantId}; blocking the provider call.", tenantId);
+                return null;
+            }
+        }
+
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(_mediaScanTimeout);
+        FidesMediaScanResult scan;
+        try
+        {
+            scan = await _mediaScanner
+                .ScanAndRedactAsync(dataContent.Data, mediaType, policy, timeout.Token)
+                .WaitAsync(_mediaScanTimeout, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            _logger.LogError("FIDES media scan failed for tenant {TenantId}; blocking the provider call.", tenantId);
+            return null;
+        }
+
+        foreach (var category in scan.DetectedCategories)
+            detectedCategories.Add(category);
+
+        return scan.Status switch
+        {
+            FidesMediaScanStatus.NoSensitiveContent
+                when scan.SanitizedContent is { Length: > 0 } && !string.IsNullOrWhiteSpace(scan.SanitizedMediaType)
+                => new DataContent(scan.SanitizedContent, scan.SanitizedMediaType),
+            FidesMediaScanStatus.NoSensitiveContent => dataContent,
+            FidesMediaScanStatus.SensitiveContentRedacted
+                when scan.RedactedContent is { Length: > 0 } && !string.IsNullOrWhiteSpace(scan.RedactedMediaType)
+                => new DataContent(scan.RedactedContent, scan.RedactedMediaType),
+            _ => BlockMedia(tenantId)
+        };
+    }
+
+    private string ApplyBuiltInMasks(
+        string input,
+        FidesTenantPolicy policy,
+        HashSet<string> detectedCategories)
+    {
         if (string.IsNullOrWhiteSpace(input))
             return input;
 
         var result = input;
-        foreach (var rule in DefaultRules)
+        foreach (var detector in FidesBuiltInRules.All)
         {
-            if (rule.Pattern.IsMatch(result))
-            {
-                anyMasked = true;
-                result = rule.Pattern.Replace(result, rule.Mask);
-            }
+            if (!FidesBuiltInRules.IsEnabled(detector.Name, policy) || !detector.Pattern.IsMatch(result))
+                continue;
+
+            detectedCategories.Add(detector.Name);
+            result = detector.Pattern.Replace(result, detector.Mask);
         }
+
         return result;
+    }
+
+    private AIContent? BlockMedia(string tenantId)
+    {
+        _logger.LogWarning("FIDES could not confidently redact sensitive media for tenant {TenantId}; blocking the provider call.", tenantId);
+        return null;
+    }
+
+    private static FrameworkAgentResponse BlockedResponse() =>
+        new(new ChatMessage(ChatRole.Assistant, BlockedMessage));
+
+    private sealed record ProtectedMessagesResult(
+        IEnumerable<ChatMessage> Messages,
+        IReadOnlyCollection<string> DetectedCategories,
+        bool Blocked)
+    {
+        public static ProtectedMessagesResult BlockedResult { get; } = new([], [], true);
     }
 }
