@@ -1,0 +1,37 @@
+{
+  "scope": "Historical execution only; new runs need their own manifest/report and reviewed environment metadata.",
+  "baseline": "f8de7a6e3aa9d671a67ae60f2f52e0c1f80b3eae",
+  "date": "2026-09-28",
+  "environment": {
+    "dotnet": "10.0.201",
+    "node": "24.12.0",
+    "postgres": "16.15",
+    "pgvector": "0.8.6",
+    "ollama": "0.34.4",
+    "generationModel": "qwen2.5:0.5b",
+    "embeddingModel": "nomic-embed-text",
+    "embeddingDimensions": 768,
+    "apiEnvironment": "Validation",
+    "ports": [
+      5188,
+      55432,
+      11435
+    ],
+    "realServices": true,
+    "mockLlm": false
+  },
+  "artifactHashes": {
+    "core-results.json": "c57f05e0f6cb3dacdf8f3b5acc30acc5e5fc1431a8cee031716bd096f1520462",
+    "store-results.json": "6217f0c3a774430f4ccd47c053e20543bc4fd334a936832d194f9331422577e1",
+    "session-before-restart.json": "6ee7b12d987e7b20f161828f9ebab4dfc93f5fc31fb256e6426b7533faeb244f",
+    "session-after-restart.json": "38a221fe1ad8fe2e2f59c53499d463432789ec58d1f0c99e3b4857850b31411a",
+    "openapi-contracts.json": "271317ea58e4fd6265c9a96c1086c78462a6b5c3630f2ae8057006143b0efda3",
+    "openapi-release.json": "86d405e29d2a96329aa3f05d023c80ee7286658d542849328c4ea0475c415d51",
+    "baseline.trx": "2ed5627c772ad243fce2d004a2c5820e1c31a5914300a7f0627191fc10b9278f"
+  },
+  "coverage": {
+    "path": "coverage/ed824876-629a-4436-9979-49e744b46730/coverage.cobertura.xml",
+    "sha256": "1d01b2983140922042940db3805eee720d3cf29aa9f30c010c9c39dcfa4a0d6c"
+  },
+  "sourceInventorySha256": "9ce311686e40390fab98cd805d7f66f3ef8c6ecbeebacddcc44a17797c9f9a6d"
+}

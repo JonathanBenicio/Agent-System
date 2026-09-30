@@ -1,0 +1,328 @@
+{
+  "baseline": "f8de7a6e3aa9d671a67ae60f2f52e0c1f80b3eae",
+  "date": "2026-09-28",
+  "environment": {
+    "dotnet": "10.0.201",
+    "node": "24.12.0",
+    "postgres": "16.15",
+    "pgvector": "0.8.6",
+    "ollama": "0.34.4",
+    "generationModel": "qwen2.5:0.5b",
+    "embeddingModel": "nomic-embed-text",
+    "embeddingDimensions": 768,
+    "apiEnvironment": "Validation",
+    "ports": [
+      5188,
+      55432,
+      11435
+    ],
+    "realServices": true,
+    "mockLlm": false
+  },
+  "unitTests": {
+    "passed": 687,
+    "skipped": 1,
+    "failed": 0,
+    "total": 688,
+    "executed": 687,
+    "otherOutcomes": 0
+  },
+  "coverage": {
+    "linePercent": 22.39,
+    "branchPercent": 25.82,
+    "linesCovered": 12545,
+    "linesValid": 56029,
+    "minimum": 80,
+    "passed": false,
+    "sha256": "1d01b2983140922042940db3805eee720d3cf29aa9f30c010c9c39dcfa4a0d6c"
+  },
+  "inventory": {
+    "source": 201,
+    "releaseOpenApi": 196,
+    "unmatched": 0
+  },
+  "artifactHashes": {
+    "core-results.json": "c57f05e0f6cb3dacdf8f3b5acc30acc5e5fc1431a8cee031716bd096f1520462",
+    "store-results.json": "6217f0c3a774430f4ccd47c053e20543bc4fd334a936832d194f9331422577e1",
+    "session-before-restart.json": "6ee7b12d987e7b20f161828f9ebab4dfc93f5fc31fb256e6426b7533faeb244f",
+    "session-after-restart.json": "38a221fe1ad8fe2e2f59c53499d463432789ec58d1f0c99e3b4857850b31411a",
+    "openapi-contracts.json": "271317ea58e4fd6265c9a96c1086c78462a6b5c3630f2ae8057006143b0efda3",
+    "openapi-release.json": "86d405e29d2a96329aa3f05d023c80ee7286658d542849328c4ea0475c415d51",
+    "baseline.trx": "2ed5627c772ad243fce2d004a2c5820e1c31a5914300a7f0627191fc10b9278f"
+  },
+  "summary": {
+    "passed": 24,
+    "failed": 9,
+    "not_executed": 2
+  },
+  "records": [
+    {
+      "id": "ENV-01",
+      "criterion": "API liveness and migrated real PostgreSQL",
+      "result": "passed",
+      "detail": "migrations=6; PostgreSQL=16.15 (Debian 16.15-1.pgdg12+2); vector=0.8.6",
+      "durationMs": 1101,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "AUTH-01",
+      "criterion": "invalid key denied for known tenant",
+      "result": "passed",
+      "detail": "401",
+      "durationMs": 52,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "AUTH-02",
+      "criterion": "JWT tenant fallback accepted",
+      "result": "passed",
+      "detail": "200 array",
+      "durationMs": 150,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "AUTH-03",
+      "criterion": "non-admin header override denied",
+      "result": "passed",
+      "detail": "403",
+      "durationMs": 5,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "AUTH-04",
+      "criterion": "unknown tenant JWT denied",
+      "result": "passed",
+      "detail": "403",
+      "durationMs": 9,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "AUTH-05",
+      "criterion": "Viewer API key cannot override tenant",
+      "result": "failed",
+      "detail": "Viewer key accepted cross-tenant header: status=200",
+      "durationMs": 41,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "ROOM-01",
+      "criterion": "create private room and creator access",
+      "result": "passed",
+      "detail": "201; creator owns room",
+      "durationMs": 200,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "ROOM-02",
+      "criterion": "same tenant without ACL denied",
+      "result": "passed",
+      "detail": "404",
+      "durationMs": 40,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "ROOM-03",
+      "criterion": "other tenant denied",
+      "result": "passed",
+      "detail": "404",
+      "durationMs": 9,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "ROOM-04",
+      "criterion": "Reader grant/read then edit denied",
+      "result": "passed",
+      "detail": "grant 200/read 200/edit 403",
+      "durationMs": 110,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "ROOM-05",
+      "criterion": "revocation blocks subsequent read",
+      "result": "passed",
+      "detail": "204 then 404",
+      "durationMs": 44,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "LLM-01",
+      "criterion": "real local Ollama generation",
+      "result": "passed",
+      "detail": "model=qwen2.5:0.5b; outputTokens=10",
+      "durationMs": 2940,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "RAG-01",
+      "criterion": "real embedding generation",
+      "result": "passed",
+      "detail": "dimensions=768",
+      "durationMs": 811,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "RAG-02",
+      "criterion": "upload and tenant stats isolation",
+      "result": "passed",
+      "detail": "ingest 200; A chunks=2; B chunks=0",
+      "durationMs": 3641,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "CHAT-01",
+      "criterion": "synchronous chat succeeds and creates session",
+      "result": "failed",
+      "detail": "status=200; success=false; session=false; error=Erro interno ao processar a requisição.",
+      "durationMs": 32870,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "SESSION-01",
+      "criterion": "session persisted and other user/tenant denied",
+      "result": "not_executed",
+      "detail": "dependency CHAT-01",
+      "durationMs": 1,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "CHAT-02",
+      "criterion": "other user cannot resume session",
+      "result": "not_executed",
+      "detail": "dependency CHAT-01",
+      "durationMs": 0,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "SSE-01",
+      "criterion": "SSE terminates successfully with structured events",
+      "result": "failed",
+      "detail": "terminal sessioncompleted missing or error present; types=0,23,22",
+      "durationMs": 4824,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "HUB-01",
+      "criterion": "valid SignalR gateway invocation",
+      "result": "passed",
+      "detail": "handshake/invocation completed",
+      "durationMs": 97,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "HUB-02",
+      "criterion": "query tenant override rejected",
+      "result": "failed",
+      "detail": "cross-tenant query accepted and method completed",
+      "durationMs": 12,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "HUB-03",
+      "criterion": "unknown query tenant rejected",
+      "result": "failed",
+      "detail": "unknown query tenant accepted and method completed",
+      "durationMs": 10,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "HUB-04",
+      "criterion": "SignalR chat returns terminal success",
+      "result": "failed",
+      "detail": "no successful ReceiveMessage; events=Connected,ProcessingStarted,SessionCreated,StreamEvent,StreamEvent,SessionEnded,StreamEvent,ReceiveMessage,SessionEnded",
+      "durationMs": 4845,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "RATE-01",
+      "criterion": "HTTP rate limit and tenant partition",
+      "result": "passed",
+      "detail": "429 observed; other tenant 400 validation",
+      "durationMs": 116,
+      "artifact": "core-results.json"
+    },
+    {
+      "id": "STORE-01",
+      "criterion": "real pgvector semantic query excludes another tenant",
+      "result": "passed",
+      "detail": "matches=2; foreign tenant excluded; embeddings real",
+      "artifact": "store-results.json"
+    },
+    {
+      "id": "STORE-02",
+      "criterion": "SQL room prefilter returns only allowed room",
+      "result": "failed",
+      "detail": "PostgresException: 42703: column \"metadata_json\" does not exist\r\n\r\nPOSITION: 39",
+      "artifact": "store-results.json"
+    },
+    {
+      "id": "STORE-03",
+      "criterion": "empty allowed-room list fails closed",
+      "result": "failed",
+      "detail": "InvalidOperationException: empty room_ids returned matches=2",
+      "artifact": "store-results.json"
+    },
+    {
+      "id": "QUOTA-01",
+      "criterion": "daily counters survive new repository/context",
+      "result": "passed",
+      "detail": "tokens=10 requests=1 from new repository",
+      "artifact": "store-results.json"
+    },
+    {
+      "id": "QUOTA-02",
+      "criterion": "eight concurrent increments either accounted or explicit failures",
+      "result": "failed",
+      "detail": "InvalidOperationException: failures=2 tokens=16 requests=7",
+      "artifact": "store-results.json"
+    },
+    {
+      "id": "QUOTA-03",
+      "criterion": "persisted token threshold blocks request",
+      "result": "passed",
+      "detail": "denied after persisted token threshold",
+      "artifact": "store-results.json"
+    },
+    {
+      "id": "QUOTA-04",
+      "criterion": "daily reset persists zero counters",
+      "result": "passed",
+      "detail": "persisted counters=0 and current UTC reset date",
+      "artifact": "store-results.json"
+    },
+    {
+      "id": "SESSION-READ-before-restart",
+      "criterion": "persisted session is visible only to its owner and tenant",
+      "result": "passed",
+      "detail": "owner=200 other-user=404 other-tenant=404",
+      "artifact": "session-before-restart.json"
+    },
+    {
+      "id": "SESSION-TITLE",
+      "criterion": "title change is persisted and foreign owner denied",
+      "result": "passed",
+      "detail": "title=200 foreign=404",
+      "artifact": "session-before-restart.json"
+    },
+    {
+      "id": "SESSION-MESSAGES-before-restart",
+      "criterion": "message endpoint enforces ownership",
+      "result": "passed",
+      "detail": "owner messages=200 other-user=404",
+      "artifact": "session-before-restart.json"
+    },
+    {
+      "id": "SESSION-READ-after-restart",
+      "criterion": "persisted session is visible only to its owner and tenant",
+      "result": "passed",
+      "detail": "owner=200 other-user=404 other-tenant=404; title survived restart",
+      "artifact": "session-after-restart.json"
+    },
+    {
+      "id": "SESSION-MESSAGES-after-restart",
+      "criterion": "message endpoint enforces ownership",
+      "result": "passed",
+      "detail": "owner messages=200 other-user=404",
+      "artifact": "session-after-restart.json"
+    }
+  ]
+}

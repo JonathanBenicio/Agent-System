@@ -2,7 +2,7 @@
 
 > **Status documental:** Em Execução
 > **Escopo:** Saneamento documental em USER-STORIES.md e implementação completa de ponta a ponta da US-41 (associação de agentes a salas de conhecimento)
-> **Fonte de verdade operacional:** [ADR-019](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/architecture/adr/019-agent-room-association.md)
+> **Fonte de verdade operacional:** [ADR-019](../architecture/adr/019-agent-room-association.md)
 > **Gerado em:** 2026-05-21
 > **Projeto:** AgenticSystem
 
@@ -33,7 +33,7 @@ Documentamos abaixo decisões de design e de comportamento que influenciarão di
 ## Objetivo
 
 O objetivo desta iniciativa é duplo:
-1. **Saneamento Documental Extensivo:** Sincronizar o [USER-STORIES.md](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/USER-STORIES.md) com a realidade do repositório, marcando como `✅ Implementado` as capacidades prontas (Reranker local ONNX, Canvas de Workflows, Webhooks, Alertas de Consumo e Dynamic ONNX Engine) e resolvendo a duplicidade entre `ML35` e `ML40`.
+1. **Saneamento Documental Extensivo:** Sincronizar o [USER-STORIES.md](../USER-STORIES.md) com a realidade do repositório, marcando como `✅ Implementado` as capacidades prontas (Reranker local ONNX, Canvas de Workflows, Webhooks, Alertas de Consumo e Dynamic ONNX Engine) e resolvendo a duplicidade entre `ML35` e `ML40`.
 2. **Implementar a US-41 (Associação de Agente a Knowledge Rooms):** Concluir a integração pendente para permitir restringir o escopo semântico dos agentes em salas de conhecimento por meio de uma interface robusta.
 
 ## Princípios de Implantação
@@ -47,7 +47,7 @@ O objetivo desta iniciativa é duplo:
 
 | Ordem | Frente/Fase | Motivo do sequenciamento |
 |---|---|---|
-| 1 | Saneamento Documental | Ajustar a base de verdade do projeto ([USER-STORIES.md](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/docs/USER-STORIES.md)) removendo redundâncias e atualizando status corretos. |
+| 1 | Saneamento Documental | Ajustar a base de verdade do projeto ([USER-STORIES.md](../USER-STORIES.md)) removendo redundâncias e atualizando status corretos. |
 | 2 | Backend: APIs de Associação | Expor endpoints de GET e PUT para gerenciar a associação no `AgentController.cs` injetando `IAgentKnowledgeRoomStore`. |
 | 3 | Frontend: Integração do Multiselect | Atualizar o `AgentFormModal.tsx` para listar as salas disponíveis dinamicamente, permitindo a seleção múltipla e persistência no submit do formulário. |
 | 4 | Verificação e Validação | Validar testes de build, executar testes unitários do backend e fazer auditorias de lint/UX. |

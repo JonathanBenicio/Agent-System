@@ -1,5 +1,7 @@
 # ADR 033: Migração do Microsoft Agent Framework para 1.9.0 e Saneamento de DI
 
+> Revisão operacional 2026-09-28: MAF 1.9.0 está nos csproj da baseline. Implementação e validação integrada são estados separados; ver [relatório](../../backend/validation/2026-09-28.md).
+
 **Status:** Proposto
 **Data:** 04 de Junho de 2026
 **Autor(es):** Antigravity AI & Jonathan Benicio

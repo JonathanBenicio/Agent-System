@@ -2,7 +2,7 @@
 
 > **Status documental:** Concluído
 > **Escopo:** Resolver 4 problemas críticos de Dependency Injection no núcleo do Microsoft Agent Framework e migrar os pacotes `Microsoft.Agents.*` de 1.6.2 para 1.9.0.
-> **Fonte de verdade operacional:** [Backend Architecture Audit](backend-architecture-audit.md) · [ADR-033](../architecture/adr/033-maf-190-upgrade.md)
+> **Fonte de verdade operacional:** [Backend Architecture Audit](backend-architecture-audit.md) · [ADR-033](../architecture/adr/033-maf-190-upgrade-di-cleanup.md)
 > **Gerado em:** 04 de Junho de 2026
 > **Projeto:** AgenticSystem
 

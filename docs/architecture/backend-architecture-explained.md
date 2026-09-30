@@ -1,8 +1,10 @@
 # Backend & Frontend AgenticSystem — Arquitetura de Referência Consolidada
 
+> Contratos atuais e diferenças verificadas na baseline f8de7a6: [hub](../backend/README.md), [acesso](../backend/access-tenants.md), [recursos](../backend/resources-rules.md) e [validação](../backend/validation/2026-09-28.md). Diagramas de intenção não equivalem a prova integrada.
+
 > **Documento canônico de arquitetura de software (SST - Single Source of Truth)**. Este arquivo consolida todas as decisões arquiteturais, topologias, fluxos de execução do backend e frontend, substituindo e unificando o antigo `TECHNICAL_ARCHITECTURE_GUIDE.md`.
 >
-> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.9.0** como runtime nativo consolidado (transição 100% concluída), com suporte a fluxos colaborativos e múltiplos canais de interface.
+> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.9.0** como runtime do fluxo principal (isso não comprova estabilidade integrada), com suporte a fluxos colaborativos e múltiplos canais de interface.
 
 ---
 
@@ -133,7 +135,7 @@ Capacidades em fase experimental ou protótipos de pesquisa não devem alterar o
 ### 4.1 `AgenticSystem.Api` — Apresentação
 Camada externa que gerencia a entrada de requests, canais de comunicação e infraestrutura HTTP/WebSocket:
 *   **Controllers**: REST endpoints para CRUD de agentes, controle de sessões, upload de documentos e gateway administrativo.
-*   **Hubs SignalR**: `ChatHub` (streaming de tokens, eventos de execução) e `GatewayHub` (status de microsserviços em tempo real).
+*   **Hubs SignalR**: `ChatHub`, `GatewayHub`, `ExternalAgentHub`, `WorkflowHub` e `OnnxHub`; ver contratos no hub operacional.
 *   **Middlewares**: `TenantMiddleware` (resolução dinâmica de tenant por JWT ou Header) e `ApiKeyAuthHandler`.
 *   **Protocol Hosting**: Mapeamentos HTTP para interoperabilidade via A2A, AG-UI e controllers OpenAI-compatible (`/v1/chat/completions`).
 
@@ -172,7 +174,7 @@ builder.Services.AddKeyedSingleton<AIAgent>("AgenticSystem", (sp, key) =>
 ```
 
 > **Nota de Infraestrutura**: Containers Linux que utilizam clientes Npgsql requerem a biblioteca `libgssapi-krb5-2` instalada no `Dockerfile` para evitar erros de biblioteca compartilhada em tempo de execução.
-> **Nota de Compatibilidade**: O MCP server via `ModelContextProtocol.AspNetCore` está comentado no `Program.cs` (`app.MapMcp("/mcp").RequireAuthorization()`) aguardando alinhamento de versões com `Microsoft.Extensions.AI` 10.6.0.
+> **MCP**: /mcp não está mapeado em Program.cs na baseline. Plugins MCP cliente são um recurso diferente; ver transportes no hub operacional.
 
 ### 5.2 Registro no Program.cs
 
@@ -241,6 +243,8 @@ Para garantir governança, custos previsíveis e flexibilidade de provedores, o 
 
 O AgenticSystem utiliza o padrão **Supervisor-with-Tools**. O Orquestrador Central é um `ChatClientAgent` do MAF enriquecido com instruções que descrevem as competências de cada especialista registrado.
 
+Na baseline f8de7a6, esses bindings coexistem com o fluxo principal de handoff: FrameworkOrchestratorService.ExecuteAsync monta BuildHandoffWorkflowAsync e executa InProcessExecution.RunAsync. O diagrama abaixo descreve bindings de ferramentas; não representa sozinho o fluxo completo. A validação identificou falha de SessionIsolationKeyProvider antes do handoff ([relatório](../backend/validation/2026-09-28.md)).
+
 ```
                   ┌───────────────────────────────┐
                   │      Orquestrador Central     │
@@ -288,7 +292,7 @@ Frontend (React) ──[SendMessage]──> ChatHub
   │       ├─ 2. Injeta RAGContextProvider (MAF MessageAIContextProvider)
   │       ├─ 3. Carrega histórico de chat via ISessionStore (SimpleSessionStoreAdapter)
   │       │
-  │       ├─ 4. Executa OrchestratorAgent.RunAsync(input, session)
+  │       ├─ 4. Executa FrameworkOrchestratorService.ExecuteAsync → handoff workflow
   │       │      ├─ RAGContextProvider executa busca semântica em lote
   │       │      ├─ LLM avalia e invoca os Specialists agentes via tool calling
   │       │      └─ Middleware local: UseReflection() & UseQualityGates()
@@ -513,8 +517,8 @@ O AgenticSystem foi desenhado para ser multi-inquilino (multi-tenant) desde as c
                                 │
                                 ▼
                        [ TenantMiddleware ]
-                                ├─ Resolve JWT claim: "tenantId"
-                                └─ Fallback: Header "X-Tenant-Id"
+                                ├─ Resolve Header: "X-Tenant-Id"
+                                └─ Fallback: JWT "tenant_id" / app_metadata.tenant_id
                                 │
                                 ▼
                    Registra scoped TenantContext
@@ -582,7 +586,7 @@ Para conexões com APIs externas (OpenAI, Anthropic, Claude, Jina, etc.), o sist
 
 ## 17. SignalR — Comunicação Real-Time
 
-O backend expõe dois Hubs SignalR para garantir dinamismo e monitoramento em tempo real de longo prazo.
+O backend expõe cinco hubs SignalR; veja [contratos e limites de isolamento](../backend/transports.md).
 
 ### 17.1 ChatHub (`/hubs/chat`)
 Gerencia o canal principal de interações do chat.
@@ -595,8 +599,8 @@ Gerencia o canal principal de interações do chat.
 | Evento | Payload | Descrição |
 |---|---|---|
 | `ProcessingStarted` | `{ DateTime timestamp }` | Indica ao frontend para ligar o spinner de "IA pensando" |
-| `AgentSelected` | `{ string name, string tier }` | Informa qual agente foi escolhido pelo supervisor |
-| `StreamEvent` | `{ string token }` | Envia tokens de texto parciais em streaming |
+| StreamEvent com Type AgentSelected | AgentStreamEvent | Seleção do agente dentro do fluxo tipado |
+| `StreamEvent` | `AgentStreamEvent` completo | Eventos tipados de execução, incluindo tokens |
 | `ReceiveMessage` | `{ string content, string agentName, string sessionId, bool success }` | Envia a mensagem consolidada final e fecha o ciclo de resposta |
 | `ReceiveError` | `{ string error }` | Notifica o frontend sobre falhas de execução |
 

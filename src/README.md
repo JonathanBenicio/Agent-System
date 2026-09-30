@@ -113,7 +113,7 @@ Abaixo está o detalhamento técnico de como o framework é configurado, como os
 
 O `OrchestratorHostBuilder` é o componente nativo responsável por centralizar a montagem do agente orquestrador principal e configurar dinamicamente suas capacidades. Alinhado ao padrão `AddAIAgent` do MAF, ele encapsula a composição declarativa do agente de chat (`ChatClientAgent`), ferramentas de sistema, injeção de contexto e middlewares de governança.
 
-A inicialização e o encadeamento de middlewares declarativos (como RAG e Security Gates) no MAF estão implementados no método `CreateHostedOrchestratorAgent` do arquivo [OrchestratorHostBuilder.cs](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorHostBuilder.cs).
+A inicialização e o encadeamento de middlewares declarativos (como RAG e Security Gates) no MAF estão implementados no método `CreateHostedOrchestratorAgent` do arquivo [OrchestratorHostBuilder.cs](AgenticSystem.Infrastructure/AgentFramework/OrchestratorHostBuilder.cs).
 
 ---
 
@@ -124,7 +124,7 @@ Através do método `BuildHandoffWorkflowAsync`, é montado um grafo de workflow
 - O **Orquestrador** pode delegar a execução de uma tarefa a qualquer um dos **Agentes Especialistas** ativos (e vice-versa).
 - Os **Agentes Especialistas** têm autonomia para transferir o controle entre si ou devolver o controle de volta ao Orquestrador quando terminarem.
 
-A lógica de montagem e enlace dos agentes especialistas em uma topologia mesh está descrita e implementada no método `BuildHandoffWorkflowAsync` do arquivo [OrchestratorHostBuilder.cs](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AgentFramework/OrchestratorHostBuilder.cs).
+A lógica de montagem e enlace dos agentes especialistas em uma topologia mesh está descrita e implementada no método `BuildHandoffWorkflowAsync` do arquivo [OrchestratorHostBuilder.cs](AgenticSystem.Infrastructure/AgentFramework/OrchestratorHostBuilder.cs).
 
 ---
 
@@ -170,7 +170,7 @@ sequenceDiagram
 1.  **Carregamento de Estado**: O `AgentSessionStore` recupera a sessão do framework vinculada ao `SessionId` (podendo persistir em memória ou no banco PostgreSQL com pgvector).
 2.  **Pré-Processamento**: Executa o pipeline de sanitização (`IAgentExecutionPreProcessingPipeline`) para formatar mensagens e corrigir distorções estruturais no input.
 3.  **Execução do Workflow**: Invoca a execução assíncrona do grafo de malha construído usando `InProcessExecution.RunAsync(...)` para rodar o Handoff em processo:
-    Esta etapa invoca a orquestração nativa em processo mapeada no método `ExecuteAsync` de [FrameworkOrchestratorService.cs](file:///c:/Users/Jonathan/Documents/Developer/GitHub/Agent-System/src/AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs).
+    Esta etapa invoca a orquestração nativa em processo mapeada no método `ExecuteAsync` de [FrameworkOrchestratorService.cs](AgenticSystem.Infrastructure/AgentFramework/FrameworkOrchestratorService.cs).
 4.  **Extração do Resultado**: O resultado final e as mensagens acumuladas no fluxo são decodificados a partir dos eventos expostos pela execução (como `AgentResponseEvent`, `AgentResponseUpdateEvent` e `WorkflowOutputEvent`).
 5.  **Detecção de Handoff / Especialistas**: O serviço analisa os logs de execução para descobrir se houve delegação de contexto identificando assinaturas de chamadas especiais como `handoff_to_[agent]` ou *Tool Calls* específicas do especialista.
 6.  **Persistência e Pós-Processamento**: O estado do agente é atualizado no `AgentSessionStore` e a resposta passa pelo pipeline de pós-processamento, que dispara a telemetria, atualiza o balanço de custos e salva os novos metadados da sessão.
