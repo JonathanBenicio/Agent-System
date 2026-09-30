@@ -82,7 +82,7 @@ public class PostgresSkillManager : ISkillManager
                 entity = new DbSkillEntity
                 {
                     Id = skill.Id,
-                    TenantId = db.CurrentTenantId ?? "default",
+                    TenantId = db.CurrentTenantId,
                     Name = skill.Name,
                     Domain = skill.Domain,
                     Type = skill.Type.ToString(),

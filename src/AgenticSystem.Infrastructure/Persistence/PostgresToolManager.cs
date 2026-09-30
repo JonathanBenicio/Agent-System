@@ -189,7 +189,7 @@ public class PostgresToolManager : IToolManager
                 entity = new DbToolEntity
                 {
                     Id = tool.Id,
-                    TenantId = db.CurrentTenantId ?? "default",
+                    TenantId = db.CurrentTenantId,
                     Name = tool.Name,
                     Description = tool.Description,
                     Category = tool.Category.ToString(),

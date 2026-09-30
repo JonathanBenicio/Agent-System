@@ -6,7 +6,7 @@ namespace AgenticSystem.Api.Middleware;
 
 /// <summary>
 /// Middleware que extrai o tenantId do request (JWT claim ou header) e popula o TenantContext scoped.
-/// Se nenhum tenant é encontrado, usa o tenant "default" para backward compatibility.
+/// Requests that access tenant data must identify an existing tenant explicitly.
 /// </summary>
 public class TenantMiddleware
 {

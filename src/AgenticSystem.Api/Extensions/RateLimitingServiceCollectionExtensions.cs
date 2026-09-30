@@ -71,15 +71,20 @@ public static class RateLimitingServiceCollectionExtensions
             // Policy for chat endpoints — per-tenant sliding window
             options.AddPolicy(TenantChatPolicyName, httpContext =>
             {
-                var tenantId = httpContext.User.FindFirst("tenant_id")?.Value
-                    ?? httpContext.Request.Headers["X-Tenant-Id"].FirstOrDefault()
-                    ?? "default";
+                var tenantId = httpContext.Items.TryGetValue("tenant-context", out var tenantContextValue)
+                    && tenantContextValue is AgenticSystem.Core.Models.TenantContext tenantContext
+                    ? tenantContext.TenantId
+                    : httpContext.User.FindFirst("tenant_id")?.Value
+                        ?? httpContext.Request.Headers["X-Tenant-Id"].FirstOrDefault();
+                var partitionKey = string.IsNullOrWhiteSpace(tenantId)
+                    ? BuildProtocolPartitionKey(httpContext)
+                    : $"tenant:{tenantId}";
                 var permitLimit = httpContext.Items.TryGetValue(TenantRateLimitItemKey, out var limitValue) && limitValue is int resolvedLimit
                     ? resolvedLimit
                     : 30;
 
                 return RateLimitPartition.GetSlidingWindowLimiter(
-                    $"chat:tenant:{tenantId}",
+                    $"chat:{partitionKey}",
                     _ => new SlidingWindowRateLimiterOptions
                     {
                         PermitLimit = permitLimit,
