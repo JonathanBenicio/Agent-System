@@ -60,9 +60,8 @@ public class SystemState
 
 public class SelfImprovementSettings
 {
-    public bool Enabled { get; set; } = true;
+    public bool Enabled { get; set; }
     public int RunIntervalHours { get; set; } = 24;
-    public double AutoApplyThreshold { get; set; } = 0.8;
 }
 
 public class RiskFactor
@@ -123,6 +122,7 @@ public class SimulatedAction
 public class SelfImprovementRecord
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
+    public string TenantId { get; set; } = string.Empty;
     public string AgentName { get; init; } = string.Empty;
     public ImprovementType Type { get; init; }
     public string OriginalBehavior { get; init; } = string.Empty;
@@ -130,11 +130,16 @@ public class SelfImprovementRecord
     public string Trigger { get; init; } = string.Empty; // What caused the improvement
     public double ConfidenceGain { get; init; }
     public double ConfidenceLevel { get; set; } // 0.0 to 1.0
-    public bool IsAutoApplied { get; set; }
     public DateTime LearnedAt { get; init; } = DateTime.UtcNow;
     public bool Applied { get; set; }
     public string Status { get; set; } = "Proposed";
     public string? Rationale { get; set; }
+    public string? CreatedBy { get; set; }
+    public string? ReviewedBy { get; set; }
+    public DateTime? ReviewedAt { get; set; }
+    public string? PreviousInstructions { get; set; }
+    public int? AppliedPromptVersion { get; set; }
+    public string? AppliedAgentVersionId { get; set; }
     public Dictionary<string, string> ProposedChanges { get; init; } = new();
 }
 

@@ -47,6 +47,7 @@ public class AgenticDbContext : DbContext
     public DbSet<OutboxMessageEntity> OutboxMessages => Set<OutboxMessageEntity>();
     public DbSet<AgentPolicyEntity> AgentPolicies => Set<AgentPolicyEntity>();
     public DbSet<AgentVersionEntity> AgentVersions => Set<AgentVersionEntity>();
+    public DbSet<SelfImprovementProposalEntity> SelfImprovementProposals => Set<SelfImprovementProposalEntity>();
     public DbSet<PromptTemplateEntity> PromptTemplates => Set<PromptTemplateEntity>();
     public DbSet<EvalSuiteResultEntity> EvalSuiteResults => Set<EvalSuiteResultEntity>();
     public DbSet<KnowledgeGraphNodeEntity> KnowledgeGraphNodes => Set<KnowledgeGraphNodeEntity>();

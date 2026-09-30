@@ -1,127 +1,322 @@
-using AgenticSystem.Core.Interfaces;
+﻿using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace AgenticSystem.Core.Services;
 
-public class SelfImprovementService : ISelfImprovementEngine
+public sealed class SelfImprovementService : ISelfImprovementEngine
 {
     private readonly IOperationalStore _operationalStore;
-    private readonly IAgentVersioningService _versioningService;
-    private readonly ILogger<SelfImprovementService> _logger;
+    private readonly ISelfImprovementProposalStore _proposalStore;
+    private readonly IAgentFactory _agentFactory;
+    private readonly IAgentVersionStore _agentVersionStore;
+    private readonly IPromptManager _promptManager;
+    private readonly IAuditLog _auditLog;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
     private readonly SelfImprovementSettings _settings;
     private const string CursorKey = "SelfImprovement_LastReflectionId";
 
     public SelfImprovementService(
         IOperationalStore operationalStore,
-        IAgentVersioningService versioningService,
-        IOptions<SelfImprovementSettings> options,
-        ILogger<SelfImprovementService> logger)
+        ISelfImprovementProposalStore proposalStore,
+        IAgentFactory agentFactory,
+        IAgentVersionStore agentVersionStore,
+        IPromptManager promptManager,
+        IAuditLog auditLog,
+        ITenantContextAccessor tenantContextAccessor,
+        IOptions<SelfImprovementSettings> options)
     {
         _operationalStore = operationalStore;
-        _versioningService = versioningService;
+        _proposalStore = proposalStore;
+        _agentFactory = agentFactory;
+        _agentVersionStore = agentVersionStore;
+        _promptManager = promptManager;
+        _auditLog = auditLog;
+        _tenantContextAccessor = tenantContextAccessor;
         _settings = options.Value;
-        _logger = logger;
     }
 
     public async Task ProcessBatchImprovementsAsync(CancellationToken ct = default)
     {
-        _logger.LogInformation("⏳ Starting daily batch self-improvement cycle...");
-
-        // 1. Get cursor
-        var cursorState = await _operationalStore.GetSystemStateAsync(CursorKey, ct);
-        var lastId = cursorState?.Value;
-
-        // 2. Fetch new reflections
-        var newReflections = await _operationalStore.GetReflectionsSinceAsync(lastId, 500, ct);
-        
-        if (!newReflections.Any())
-        {
-            _logger.LogInformation("✅ No new reflections to process.");
+        if (!_settings.Enabled)
             return;
-        }
 
-        // 3. Group by agent
+        var cursorState = await _operationalStore.GetSystemStateAsync(CursorKey, ct);
+        var newReflections = await _operationalStore.GetReflectionsSinceAsync(cursorState?.Value, 500, ct);
         var agentsToProcess = newReflections
-            .Where(r => r.Severity == ReflectionSeverity.Critical)
-            .GroupBy(r => r.AgentName)
+            .Where(reflection => reflection.Severity == ReflectionSeverity.Critical)
+            .GroupBy(reflection => reflection.AgentName)
             .ToList();
 
-        _logger.LogInformation("🔍 Found critical reflections for {Count} agents.", agentsToProcess.Count);
-
         foreach (var group in agentsToProcess)
+            await AnalyzeAndImproveAsync(group.Key, ct);
+
+        if (newReflections.Count > 0)
         {
-            var agentName = group.Key;
-            var record = await AnalyzeAndImproveAsync(agentName, ct);
-
-            if (record.Status == "Proposed")
+            await _operationalStore.SaveSystemStateAsync(new SystemState
             {
-                // Auto-apply logic
-                if (record.ConfidenceLevel >= _settings.AutoApplyThreshold)
-                {
-                    _logger.LogInformation("🤖 Confidence {Level:P0} meets threshold ({Threshold:P0}). Auto-applying for {AgentName}.", 
-                        record.ConfidenceLevel, _settings.AutoApplyThreshold, agentName);
-                    record.IsAutoApplied = true;
-                    await ApplyImprovementAsync(record.Id, ct);
-                    record.Status = "Applied";
-                }
-            }
+                Id = CursorKey,
+                Value = newReflections[^1].Id
+            }, ct);
         }
-
-        // 4. Update cursor
-        var latestReflectionId = newReflections.Last().Id;
-        await _operationalStore.SaveSystemStateAsync(new SystemState 
-        { 
-            Id = CursorKey, 
-            Value = latestReflectionId 
-        }, ct);
-
-        _logger.LogInformation("🏁 Batch cycle completed. Cursor updated to: {Id}", latestReflectionId);
     }
 
     public async Task<SelfImprovementRecord> AnalyzeAndImproveAsync(string agentName, CancellationToken ct = default)
     {
-        _logger.LogInformation("🔄 Analyzing performance for agent: {AgentName}", agentName);
+        if (!_settings.Enabled)
+            return new SelfImprovementRecord { AgentName = agentName, Status = "Disabled" };
 
-        // Fetch recent learnings (limit for analysis)
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
         var reflections = await _operationalStore.GetRecentLearningsAsync(50, ct);
-        var agentReflections = reflections.Where(r => r.AgentName == agentName).ToList();
-        
-        var criticalReflections = agentReflections.Where(r => r.Severity == ReflectionSeverity.Critical).ToList();
-        
+        var criticalReflections = reflections
+            .Where(reflection => reflection.AgentName == agentName && reflection.Severity == ReflectionSeverity.Critical)
+            .ToList();
+        var currentInstructions = await _promptManager.ResolvePromptAsync(agentName, ct: ct);
         var record = new SelfImprovementRecord
         {
+            TenantId = tenantId,
             AgentName = agentName,
             Type = ImprovementType.PromptRefinement,
-            Rationale = $"Analyzing {criticalReflections.Count} critical reflections."
+            Rationale = $"Analyzing {criticalReflections.Count} critical reflections.",
+            CreatedBy = "SelfImprovementEngine",
+            PreviousInstructions = currentInstructions
         };
 
-        if (criticalReflections.Any())
-        {
-            // Simple heuristic for confidence: based on volume of critical lessons
-            // More lessons for the same agent = more confidence that a fix is needed.
-            record.ConfidenceLevel = Math.Min(0.5 + (criticalReflections.Count * 0.1), 0.95);
-            
-            record.ProposedChanges["instructions_update"] = "Refine constraints based on lessons: " + 
-                string.Join("; ", criticalReflections.SelectMany(r => r.LessonsLearned).Distinct().Take(5));
-                
-            record.Status = "Proposed";
-        }
-        else
+        if (criticalReflections.Count == 0)
         {
             record.Status = "NoImprovementNeeded";
             record.ConfidenceLevel = 1.0;
             record.Rationale = "Current performance is stable.";
+            return record;
         }
+
+        record.ConfidenceLevel = Math.Min(0.5 + criticalReflections.Count * 0.1, 0.95);
+        var lessons = string.Join("; ", criticalReflections
+            .SelectMany(reflection => reflection.LessonsLearned)
+            .Distinct(StringComparer.Ordinal)
+            .Take(5));
+        record.ProposedChanges["instructions"] = string.IsNullOrWhiteSpace(currentInstructions)
+            ? $"Apply these reviewed lessons to your behavior: {lessons}"
+            : $"{currentInstructions.TrimEnd()}\n\n## Proposed improvement (requires tenant approval)\nApply these reviewed lessons to your behavior: {lessons}";
+        record.Status = "Proposed";
+
+        await _proposalStore.SaveAsync(record, ct);
+        await _auditLog.RecordAsync(new AuditEntry
+        {
+            Category = AuditCategory.ConfigChange,
+            Action = "SelfImprovement.Proposed",
+            TenantId = tenantId,
+            AgentName = agentName,
+            Description = "Self-improvement proposal created for human review.",
+            Metadata = new Dictionary<string, object>
+            {
+                ["proposalId"] = record.Id,
+                ["confidenceLevel"] = record.ConfidenceLevel
+            }
+        }, ct);
 
         return record;
     }
 
-    public async Task<bool> ApplyImprovementAsync(string improvementId, CancellationToken ct = default)
+    public Task<IReadOnlyList<SelfImprovementRecord>> GetProposalsAsync(CancellationToken ct = default) =>
+        _proposalStore.GetAllAsync(ct);
+
+    public async Task<bool> ApproveProposalAsync(string improvementId, string approvedBy, CancellationToken ct = default)
     {
-        _logger.LogInformation("🚀 Applying self-improvement: {Id}", improvementId);
-        // Em uma implementação real, chamaria _versioningService.CreateNewSnapshotAsync(...)
-        return await Task.FromResult(true);
+        if (!_settings.Enabled)
+            return false;
+
+        var proposal = await GetProposedRecordAsync(improvementId, ct);
+        if (proposal is null || !proposal.ProposedChanges.TryGetValue("instructions", out var newInstructions))
+            return false;
+
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
+        var agent = await GetAgentInfoAsync(proposal.AgentName);
+        if (agent is null)
+            return false;
+
+        await _agentFactory.CreateCustomAgentAsync(ToSpecification(agent, newInstructions));
+        var versions = await _promptManager.GetTemplatesAsync(proposal.AgentName, ct);
+        var nextVersion = versions.Count == 0 ? 1 : versions.Max(template => template.Version) + 1;
+        await _promptManager.SaveTemplateAsync(new PromptTemplate
+        {
+            Name = "Approved self-improvement",
+            AgentName = proposal.AgentName,
+            TenantId = tenantId,
+            TemplateBody = newInstructions,
+            Version = nextVersion,
+            Description = $"Approved proposal {proposal.Id}",
+            CreatedBy = approvedBy
+        }, ct);
+        var agentVersion = await SaveActiveAgentVersionAsync(
+            agent,
+            newInstructions,
+            proposal.AgentName,
+            $"Approved self-improvement proposal {proposal.Id}",
+            proposal.Rationale ?? string.Empty,
+            approvedBy,
+            ct);
+
+        proposal.Status = "Applied";
+        proposal.ReviewedBy = approvedBy;
+        proposal.ReviewedAt = DateTime.UtcNow;
+        proposal.AppliedPromptVersion = nextVersion;
+        proposal.AppliedAgentVersionId = agentVersion.Id;
+        await _proposalStore.UpdateAsync(proposal, ct);
+        await RecordReviewAsync(proposal, "SelfImprovement.Approved", approvedBy, ct);
+        return true;
     }
+
+    public async Task<bool> RejectProposalAsync(string improvementId, string rejectedBy, CancellationToken ct = default)
+    {
+        if (!_settings.Enabled)
+            return false;
+
+        var proposal = await GetProposedRecordAsync(improvementId, ct);
+        if (proposal is null)
+            return false;
+
+        proposal.Status = "Rejected";
+        proposal.ReviewedBy = rejectedBy;
+        proposal.ReviewedAt = DateTime.UtcNow;
+        await _proposalStore.UpdateAsync(proposal, ct);
+        await RecordReviewAsync(proposal, "SelfImprovement.Rejected", rejectedBy, ct);
+        return true;
+    }
+
+    public async Task<bool> RollbackProposalAsync(string improvementId, string rolledBackBy, CancellationToken ct = default)
+    {
+        if (!_settings.Enabled)
+            return false;
+
+        var proposal = await _proposalStore.GetAsync(improvementId, ct);
+        if (proposal is null || proposal.Status != "Applied" || proposal.PreviousInstructions is null)
+            return false;
+
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
+        var agent = await GetAgentInfoAsync(proposal.AgentName);
+        if (agent is null)
+            return false;
+
+        await _agentFactory.CreateCustomAgentAsync(ToSpecification(agent, proposal.PreviousInstructions));
+        var versions = await _promptManager.GetTemplatesAsync(proposal.AgentName, ct);
+        var nextVersion = versions.Count == 0 ? 1 : versions.Max(template => template.Version) + 1;
+        await _promptManager.SaveTemplateAsync(new PromptTemplate
+        {
+            Name = "Self-improvement rollback",
+            AgentName = proposal.AgentName,
+            TenantId = tenantId,
+            TemplateBody = proposal.PreviousInstructions,
+            Version = nextVersion,
+            Description = $"Rollback of proposal {proposal.Id}",
+            CreatedBy = rolledBackBy
+        }, ct);
+        var agentVersion = await SaveActiveAgentVersionAsync(
+            agent,
+            proposal.PreviousInstructions,
+            proposal.AgentName,
+            $"Rollback of self-improvement proposal {proposal.Id}",
+            "Restored instructions from before the approved proposal.",
+            rolledBackBy,
+            ct);
+
+        proposal.Status = "RolledBack";
+        proposal.ReviewedBy = rolledBackBy;
+        proposal.ReviewedAt = DateTime.UtcNow;
+        proposal.AppliedPromptVersion = nextVersion;
+        proposal.AppliedAgentVersionId = agentVersion.Id;
+        await _proposalStore.UpdateAsync(proposal, ct);
+        await RecordReviewAsync(proposal, "SelfImprovement.RolledBack", rolledBackBy, ct);
+        return true;
+    }
+
+    private async Task<SelfImprovementRecord?> GetProposedRecordAsync(string proposalId, CancellationToken ct)
+    {
+        var proposal = await _proposalStore.GetAsync(proposalId, ct);
+        return proposal?.Status == "Proposed" ? proposal : null;
+    }
+
+    private async Task<AgentInfo?> GetAgentInfoAsync(string agentName)
+    {
+        var agents = await _agentFactory.GetAllAgentsAsync();
+        return agents.FirstOrDefault(agent => agent.Name.Equals(agentName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static AgentSpecification ToSpecification(AgentInfo agent, string instructions) => new()
+    {
+        Name = agent.Name,
+        Description = agent.Description,
+        Tier = agent.Tier,
+        Domain = agent.Domain,
+        AllowedTools = agent.AvailableTools.ToList(),
+        AutonomyLevel = agent.AutonomyLevel,
+        Instructions = instructions
+    };
+
+    private async Task<AgentVersion> SaveActiveAgentVersionAsync(
+        AgentInfo agent,
+        string instructions,
+        string agentName,
+        string description,
+        string changeLog,
+        string createdBy,
+        CancellationToken ct)
+    {
+        var activeVersion = await _agentVersionStore.GetActiveAsync(agentName, AgentVersionEnvironment.Production, ct);
+        if (activeVersion is not null)
+        {
+            activeVersion.Status = AgentVersionStatus.Deprecated;
+            await _agentVersionStore.SaveAsync(activeVersion, ct);
+        }
+
+        var nextVersion = await _agentVersionStore.GetNextVersionNumberAsync(agentName, ct);
+        var version = new AgentVersion
+        {
+            AgentName = agentName,
+            TenantId = _tenantContextAccessor.CurrentTenantId,
+            VersionNumber = nextVersion,
+            Label = $"v{nextVersion}.0",
+            Status = AgentVersionStatus.Active,
+            Environment = AgentVersionEnvironment.Production,
+            SystemPrompt = instructions,
+            Tools = agent.AvailableTools,
+            Description = description,
+            ChangeLog = changeLog,
+            CreatedBy = createdBy,
+            ParentVersionId = activeVersion?.Id
+        };
+        await _agentVersionStore.SaveAsync(version, ct);
+        await _auditLog.RecordAsync(new AuditEntry
+        {
+            Category = AuditCategory.ConfigChange,
+            Action = "AgentVersion.Created",
+            UserId = createdBy,
+            TenantId = version.TenantId,
+            AgentName = agentName,
+            Description = description,
+            Metadata = new Dictionary<string, object>
+            {
+                ["versionId"] = version.Id,
+                ["versionNumber"] = version.VersionNumber,
+                ["parentVersionId"] = version.ParentVersionId ?? string.Empty
+            }
+        }, ct);
+        return version;
+    }
+
+    private Task RecordReviewAsync(SelfImprovementRecord proposal, string action, string userId, CancellationToken ct) =>
+        _auditLog.RecordAsync(new AuditEntry
+        {
+            Category = AuditCategory.ApprovalDecision,
+            Action = action,
+            UserId = userId,
+            TenantId = proposal.TenantId,
+            AgentName = proposal.AgentName,
+            Description = $"Self-improvement proposal {proposal.Id} {proposal.Status.ToLowerInvariant()}.",
+            Metadata = new Dictionary<string, object>
+            {
+                ["proposalId"] = proposal.Id,
+                ["promptVersion"] = proposal.AppliedPromptVersion ?? 0
+            }
+        }, ct);
 }
