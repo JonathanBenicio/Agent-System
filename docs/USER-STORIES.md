@@ -545,10 +545,10 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 - [x] `TenantContext` propagado por middleware a todo pipeline
 - [x] Store in-memory (default) com interface para persistência
 - [x] Sessões, preferências e agents isolados por tenant
-- [x] Request sem tenant → default tenant ou rejeição (configurável)
+- [x] Rotas autenticadas que acessam dados de tenant sem tenant explícito são rejeitadas; rotas públicas/isentas seguem sua política documentada
 - [x] `JwtTenantAuthenticationHandler : AuthenticationHandler<JwtTenantAuthenticationOptions>` — autenticação JWT com extração automática de tenant
 - [x] `TenantMiddleware` — intercepta toda request, resolve tenant e popula `TenantContext`
-- [x] `TenantResolver : ITenantResolver` — lógica de resolução: JWT claim → header → default
+- [x] `TenantResolver : ITenantResolver` — resolve tenant explícito; runtime não usa `default` como fallback
 - [x] `Tenant` persistido via EF Core com `TenantConfiguration : IEntityTypeConfiguration<Tenant>`
 - [x] `TenantLimits` — rate limiting e quotas por tenant (requests, tokens, storage)
 
@@ -565,14 +565,14 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 | Serviços | `SystemBootstrapService` · `ApiKeyAuthenticationHandler` · `TenantMiddleware` |
 | Responsabilidade | Auto-bootstrap de tenant/chaves no startup, validação de chaves hashed SHA-256 e remoção de referências hardcoded a "default" |
 | Testes | Unitários (xUnit) e Integração/E2E |
-| Status | ⏳ Proposto |
+| Status | ✅ Implementado na pilha de integração para develop; PR #127 mergeado na branch-base intermediária |
 
 **Critérios de Aceite:**
-- [ ] O banco de dados reflete o tenant `admin` e `access_api_keys` populados automaticamente no primeiro boot se a tabela estiver vazia.
-- [ ] Chaves de API são armazenadas exclusivamente como hash SHA-256 de via única, protegendo as chaves contra vazamento físico de banco.
-- [ ] Requisições com chaves válidas (enviadas por cookie ou header) são resolvidas para o `tenant_id` correto associado no banco.
-- [ ] Requisições autenticadas sem um `tenant_id` final explícito são rejeitadas pelo `TenantMiddleware` com HTTP 403 Forbidden.
-- [ ] Nenhuma constante estática ou string `"default"` permanece como fallback implícito no Core ou Api do sistema.
+- [x] Banco vazio com `AgenticSystem:AdminApiKey` explícita cria o tenant `admin`, hash da chave e membership; tenant já provisionado não recebe outra chave.
+- [x] Banco vazio sem a configuração lança `MissingTenantBootstrapConfigurationException` e aborta o startup com orientação para `AgenticSystem__AdminApiKey`.
+- [x] Chaves persistidas são localizadas pelo hash e resolvidas ao tenant e papel de membership associados.
+- [x] Requisições protegidas sem tenant explícito ou com tenant desconhecido/inativo são rejeitadas; rotas públicas seguem as exceções documentadas.
+- [x] Bootstrap não semeia agentes de produto nem cria Platform Admin; fallbacks de tenant são removidos do runtime coberto pela implementação.
 
 ---
 
@@ -676,8 +676,8 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 | Status | ✅ Implementado |
 
 **Critérios de Aceite:**
-- [x] ApiKey handler valida contra `AgenticSystem:AdminApiKey` com comparação timing-safe
-- [x] ApiKey gera claims: Name=admin, Role=Admin, tenant_id=default
+- [x] API key é validada pelo hash persistido em `access_api_keys` e pela membership; `AgenticSystem:AdminApiKey` é apenas o segredo explícito do bootstrap inicial
+- [x] API key usa tenant e papel armazenados no banco/membership; o bootstrap configurado associa a chave ao tenant `admin`, sem claim/fallback `default`
 - [x] JWT handler valida signing key, issuer, audience e lifetime
 - [x] JWT exige claim `tenant_id` — rejeita token sem ele
 - [x] PolicyScheme `MultiAuth` roteia automaticamente pelo header presente
@@ -696,7 +696,7 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 | Middleware | `TenantMiddleware` |
 | Diretório | `Api/Middleware/` |
 | DI | `TenantContext` (scoped) · `ITenantResolver` · `ITenantStore` |
-| Resolução | 1º JWT claim `tenant_id` → 2º header `X-Tenant-Id` → fallback "default" |
+| Resolução | `X-Tenant-Id` ou claim JWT `tenant_id` explícitos, com validação de correspondência e existência; sem fallback `default` em rotas protegidas |
 | Contexto | `TenantContext.TenantId`, `.TenantName`, `.Plan`, `.Limits`, `.IsAuthenticated` |
 | Status | ✅ Implementado |
 

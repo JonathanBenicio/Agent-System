@@ -37,6 +37,13 @@ const getBorderClass = (status?: number) => {
   return 'border-zinc-800'; // Default
 };
 
+const getOnnxModelId = (input: unknown): string => {
+  if (!input || typeof input !== 'object' || !('parameters' in input)) return '';
+  const parameters = input.parameters;
+  if (!parameters || typeof parameters !== 'object' || !('modelId' in parameters)) return '';
+  return typeof parameters.modelId === 'string' ? parameters.modelId : '';
+};
+
 // Simple Custom Node Components
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AgentNode = ({ data }: any) => (
@@ -471,7 +478,7 @@ export function WorkflowBuilderPage() {
                       
                       {node.data.toolName === 'onnx_processor' && (
                         <OnnxModelSelector 
-                          value={((node.data.input as any)?.parameters?.modelId as string) || ''}
+                          value={getOnnxModelId(node.data.input)}
                           onChange={(modelId) => {
                             setNodes(nodes.map(n => n.id === node.id ? {
                               ...n,

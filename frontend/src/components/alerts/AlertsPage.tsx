@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { alertsApi } from '@/lib/api'
 import type { SystemAlert } from '@/types/api'
 import { PageLoading, PageError } from '@/components/shared/Loading'
@@ -6,31 +6,18 @@ import { AlertTriangle, Check, Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<SystemAlert[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchAlerts = async () => {
-    try {
-      setLoading(true)
-      const data = await alertsApi.getAlerts()
-      setAlerts(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar alertas')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-
-    fetchAlerts()
-  }, [])
+  const queryClient = useQueryClient()
+  const queryKey = ['alerts']
+  const query = useQuery({ queryKey, queryFn: () => alertsApi.getAlerts() })
+  const alerts = query.data ?? []
+  const loading = query.isLoading
+  const error = query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null
+  const fetchAlerts = () => query.refetch()
 
   const handleMarkAsRead = async (id: string) => {
     try {
       await alertsApi.markAsRead(id)
-      setAlerts(prev => prev.map(a => a.id === id ? { ...a, isRead: true } : a))
+      queryClient.setQueryData<SystemAlert[]>(queryKey, prev => (prev ?? []).map(alert => alert.id === id ? { ...alert, isRead: true } : alert))
     } catch (err) {
       console.error('Erro ao marcar como lido:', err)
     }

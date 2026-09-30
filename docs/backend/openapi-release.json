@@ -891,6 +891,110 @@
         }
       }
     },
+    "/api/agent/improvements": {
+      "get": {
+        "tags": [
+          "AgentSelfImprovement"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SelfImprovementRecord"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SelfImprovementRecord"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SelfImprovementRecord"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/agent/improvements/{proposalId}/approve": {
+      "post": {
+        "tags": [
+          "AgentSelfImprovement"
+        ],
+        "parameters": [
+          {
+            "name": "proposalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/agent/improvements/{proposalId}/reject": {
+      "post": {
+        "tags": [
+          "AgentSelfImprovement"
+        ],
+        "parameters": [
+          {
+            "name": "proposalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/agent/improvements/{proposalId}/rollback": {
+      "post": {
+        "tags": [
+          "AgentSelfImprovement"
+        ],
+        "parameters": [
+          {
+            "name": "proposalId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
     "/api/agent/skills/all": {
       "get": {
         "tags": [
@@ -1004,6 +1108,47 @@
             "application/*+json": {
               "schema": {
                 "$ref": "#/components/schemas/CreateSkillRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/agent/skills/{id}/enabled": {
+      "put": {
+        "tags": [
+          "AgentSkills"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSkillEnabledRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSkillEnabledRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetSkillEnabledRequest"
               }
             }
           }
@@ -1350,6 +1495,47 @@
             "application/*+json": {
               "schema": {
                 "$ref": "#/components/schemas/ChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/chat/configuration": {
+      "get": {
+        "tags": [
+          "ChatSettings"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "ChatSettings"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChatSettingsRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChatSettingsRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChatSettingsRequest"
               }
             }
           }
@@ -1950,6 +2136,81 @@
         "responses": {
           "200": {
             "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/security/fides/policy": {
+      "get": {
+        "tags": [
+          "FidesPolicy"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/FidesTenantPolicy"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FidesTenantPolicy"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FidesTenantPolicy"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "FidesPolicy"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFidesPolicyRequest"
+              }
+            },
+            "text/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFidesPolicyRequest"
+              }
+            },
+            "application/*+json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateFidesPolicyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/FidesTenantPolicy"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FidesTenantPolicy"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FidesTenantPolicy"
+                }
+              }
+            }
           }
         }
       }
@@ -5185,6 +5446,16 @@
       }
     },
     "/api/Session": {
+      "post": {
+        "tags": [
+          "Session"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      },
       "get": {
         "tags": [
           "Session"
@@ -5202,6 +5473,28 @@
           {
             "name": "search",
             "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/Session/{id}/end": {
+      "post": {
+        "tags": [
+          "Session"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -5963,6 +6256,57 @@
           }
         }
       }
+    },
+    "/api/workflow/executions/{id}/approve": {
+      "post": {
+        "tags": [
+          "Workflow"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/workflow/executions/{id}/reject": {
+      "post": {
+        "tags": [
+          "Workflow"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6575,6 +6919,35 @@
         ],
         "type": "string"
       },
+      "FidesTenantPolicy": {
+        "type": "object",
+        "properties": {
+          "tenantId": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabledDetectors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "nullable": true
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "updatedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
       "GatewaySettings": {
         "type": "object",
         "properties": {
@@ -6631,6 +7004,18 @@
           }
         },
         "additionalProperties": false
+      },
+      "ImprovementType": {
+        "enum": [
+          "promptRefinement",
+          "promptOptimization",
+          "toolUsagePattern",
+          "responseFormat",
+          "errorRecovery",
+          "domainKnowledge",
+          "userPreference"
+        ],
+        "type": "string"
       },
       "InboundWebhookEntity": {
         "type": "object",
@@ -7076,6 +7461,104 @@
         },
         "additionalProperties": false
       },
+      "SelfImprovementRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true
+          },
+          "tenantId": {
+            "type": "string",
+            "nullable": true
+          },
+          "agentName": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "$ref": "#/components/schemas/ImprovementType"
+          },
+          "originalBehavior": {
+            "type": "string",
+            "nullable": true
+          },
+          "improvedBehavior": {
+            "type": "string",
+            "nullable": true
+          },
+          "trigger": {
+            "type": "string",
+            "nullable": true
+          },
+          "confidenceGain": {
+            "type": "number",
+            "format": "double"
+          },
+          "confidenceLevel": {
+            "type": "number",
+            "format": "double"
+          },
+          "learnedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "applied": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "nullable": true
+          },
+          "rationale": {
+            "type": "string",
+            "nullable": true
+          },
+          "createdBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewedBy": {
+            "type": "string",
+            "nullable": true
+          },
+          "reviewedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "previousInstructions": {
+            "type": "string",
+            "nullable": true
+          },
+          "appliedPromptVersion": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "appliedAgentVersionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "proposedChanges": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "SetSkillEnabledRequest": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
       "StartMigrationRequest": {
         "type": "object",
         "properties": {
@@ -7165,6 +7648,10 @@
             "nullable": true
           },
           "userId": {
+            "type": "string",
+            "nullable": true
+          },
+          "idempotencyKey": {
             "type": "string",
             "nullable": true
           }
@@ -7362,6 +7849,20 @@
         },
         "additionalProperties": false
       },
+      "UpdateChatSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "nullable": true
+          },
+          "model": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
       "UpdateDefaultLlmSelectionRequest": {
         "type": "object",
         "properties": {
@@ -7371,6 +7872,19 @@
           },
           "model": {
             "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateFidesPolicyRequest": {
+        "type": "object",
+        "properties": {
+          "enabledDetectors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "boolean"
+            },
             "nullable": true
           }
         },
@@ -7960,6 +8474,9 @@
       "name": "AgentRuntime"
     },
     {
+      "name": "AgentSelfImprovement"
+    },
+    {
       "name": "AgentSkills"
     },
     {
@@ -7975,6 +8492,9 @@
       "name": "Chat"
     },
     {
+      "name": "ChatSettings"
+    },
+    {
       "name": "Config"
     },
     {
@@ -7982,6 +8502,9 @@
     },
     {
       "name": "EmbeddingMigration"
+    },
+    {
+      "name": "FidesPolicy"
     },
     {
       "name": "Gateway"

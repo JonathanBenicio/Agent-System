@@ -18,6 +18,9 @@ export function SettingsPage() {
   const [vocabularyFile, setVocabularyFile] = useState<File | null>(null)
   const [packageFile, setPackageFile] = useState<File | null>(null)
   const [uploadInputKey, setUploadInputKey] = useState(0)
+  const gw = gwForm ?? settings?.gateway ?? null
+  const mem = memForm ?? settings?.memory ?? null
+  const rerank = rerankForm ?? settings?.reranking ?? null
 
   // --- React 19 Actions ---
   const [gwActionState, gwAction, gwPending] = useActionState(async () => {
@@ -85,12 +88,8 @@ export function SettingsPage() {
   if (loading) return <PageLoading />
   if (error || !settings) return <PageError message={error ?? 'Sem dados'} onRetry={refresh} />
 
-  const gw = gwForm ?? settings.gateway
-  const mem = memForm ?? settings.memory
-  const rerank = rerankForm ?? settings.reranking
-
   const updateRerank = <K extends keyof RerankingSettings>(key: K, value: RerankingSettings[K]) => {
-    setRerankForm({ ...rerank, [key]: value })
+    setRerankForm({ ...(rerank ?? settings.reranking), [key]: value })
   }
 
   const tabs: { id: Tab; label: string }[] = [

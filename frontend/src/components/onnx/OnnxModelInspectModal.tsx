@@ -9,10 +9,11 @@ interface Props {
 
 export function OnnxModelInspectModal({ modelId, onClose }: Props) {
   const inspectMutation = useInspectOnnxModel()
+  const inspectModel = inspectMutation.mutate
 
   useEffect(() => {
-    inspectMutation.mutate(modelId)
-  }, [modelId])
+    inspectModel(modelId)
+  }, [modelId, inspectModel])
 
   const copyToClipboard = () => {
     if (inspectMutation.data) {

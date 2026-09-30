@@ -11,18 +11,25 @@ interface Props {
 
 export function PluginDetailModal({ plugin: initialPlugin, onClose }: Props) {
   const [plugin, setPlugin] = useState<PluginSummary>(initialPlugin)
-  const [loading, setLoading] = useState(true)
+  const [loadedPluginId, setLoadedPluginId] = useState<string | null>(null)
+  const loading = loadedPluginId !== initialPlugin.id
   const [resources, setResources] = useState<string[]>([])
 
   useEffect(() => {
-    setLoading(true)
+    let active = true
     Promise.all([
       pluginApi.get(initialPlugin.id),
       pluginApi.resources(initialPlugin.id).catch(() => [] as string[])
     ]).then(([details, res]) => {
+      if (!active) return
       setPlugin(details)
       setResources(res)
-    }).finally(() => setLoading(false))
+    }).catch(error => {
+      console.error('Erro ao carregar detalhes do plugin:', error)
+    }).finally(() => {
+      if (active) setLoadedPluginId(initialPlugin.id)
+    })
+    return () => { active = false }
   }, [initialPlugin.id])
 
   return (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Play,
   CheckCircle2,
@@ -12,7 +12,6 @@ import {
   TerminalSquare
 } from 'lucide-react';
 import { useWorkflows, useWorkflowExecution } from '@/hooks/useWorkflows';
-import type { WorkflowExecution } from '@/types/api';
 
 interface ExecutionHistoryPanelProps {
   workflowId: string | null;
@@ -30,32 +29,19 @@ export function ExecutionHistoryPanel({
   onSelectExecution
 }: ExecutionHistoryPanelProps) {
   const { listExecutions } = useWorkflows();
-  const [executions, setExecutions] = useState<WorkflowExecution[]>([]);
-  const [loading, setLoading] = useState(false);
+  const executionsQuery = useQuery({
+    queryKey: ['workflow-execution-history', workflowId],
+    queryFn: async () => {
+      if (!workflowId) return []
+      const data = await listExecutions()
+      return data.filter(execution => execution.workflowId === workflowId)
+    },
+    enabled: isOpen && !!workflowId && !selectedExecutionId,
+  })
+  const executions = executionsQuery.data ?? []
+  const loading = executionsQuery.isLoading
 
   const { data: executionDetails, isLoading: loadingDetails } = useWorkflowExecution(selectedExecutionId);
-
-  const loadExecutions = async () => {
-    if (!workflowId) return;
-    setLoading(true);
-    try {
-      const data = await listExecutions();
-      const filtered = data.filter(e => e.workflowId === workflowId);
-      setExecutions(filtered);
-    } catch (error) {
-      console.error("Failed to load executions", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (isOpen && workflowId && !selectedExecutionId) {
-
-      loadExecutions();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, workflowId, selectedExecutionId]);
 
   if (!isOpen) return null;
 
@@ -149,7 +135,7 @@ export function ExecutionHistoryPanel({
             </h3>
             <div className="flex items-center gap-2">
               <button
-                onClick={loadExecutions}
+                onClick={() => void executionsQuery.refetch()}
                 className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-100"
                 title="Refresh"
               >

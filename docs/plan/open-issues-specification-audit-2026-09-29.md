@@ -25,22 +25,22 @@ Issues antigas que parecem concluídas, duplicadas ou substituídas **continuam 
 | Issue | Decisão do usuário | Limite da decisão / implementação |
 |---|---|---|
 | #104 PowerFx | Validar sintaxe apenas; não executar fórmulas até surgir um caso de uso aprovado. | Manter `RecalcEngine.Check`; remover linguagem que prometa avaliação de regras no runtime. |
-| #105 Hyperlight | Integrar o pacote .NET preview atrás de flag global, desligada por padrão e habilitável somente em laboratório; segurança deve ser testada. | Não declarar sandbox estável; implementação atual segue simulada até integração verificada. Sem filesystem/rede por padrão é requisito proposto. |
-| #106 FIDES | Usar regras built-in revisadas, com política/toggles por tenant; tudo ativo por padrão; detectores obrigatórios de credenciais não podem ser desligados; incluir OCR de imagens/anexos. | Owner/Admin gerencia; mídia não redigível/falha de detector bloqueia a chamada e solicita versão redigida. Sem regex de tenant. |
+| #105 Hyperlight | Integrar o pacote .NET preview atrás de flag global, desligada por padrão e habilitável somente em laboratório; segurança deve ser testada. | Decisão implementada na pilha de integração: JavaScript real via CodeAct, flag desligada por padrão e registro somente no ambiente `Lab`. Preview continua sujeito à validação de segurança/plataforma antes de promoção. |
+| #106 FIDES | Usar regras built-in revisadas, com política/toggles por tenant; tudo ativo por padrão; detectores obrigatórios de credenciais não podem ser desligados; incluir OCR de imagens/anexos. | Implementado na pilha: toggles/persistência tenant-scoped, detectores built-in e OCR Tesseract local; mídia incerta, timeout ou detector obrigatório indisponível bloqueia o provider. Sem regex de tenant. |
 | #16 Auto-melhoria | Gerar proposta e exigir aprovação humana antes de aplicar; auto-aplicação por confidence threshold fica rejeitada. | Owner/Admin do tenant aprova; aprovação gera auditoria/versionamento/rollback. |
-| #97 Tenant default | Remover fallbacks no runtime; tenant deve ser explícito; `default` fica restrito a fixture/migração. | Fallbacks encontrados na ficha #97 continuam gap de implementação. |
-| #99 Bootstrap | Bootstrap só com chave explicitamente configurada; não semear agentes Banner de produto; sem chave, não criar tenant. | A API inicia sem tenant e exige provisionamento explícito antes de uso; bootstrap não cria Platform Admin. |
+| #97 Tenant default | Remover fallbacks no runtime; tenant deve ser explícito; `default` fica restrito a fixture/migração. | Remoção dos fallbacks aprovados está incluída na branch core da pilha; verificar busca final de código e testes antes de promover a `develop`. |
+| #99 Bootstrap | Bootstrap só com chave explicitamente configurada; não semear agentes Banner de produto; sem chave, não criar tenant. | Decisão refinada depois do snapshot: banco vazio sem `AdminApiKey` lança `MissingTenantBootstrapConfigurationException` e aborta startup; com chave cria tenant `admin`; banco provisionado não precisa da chave. Sem seeds Banner ou Platform Admin. |
 | #121 A2A/AG-UI | Manter E2E de protocolos preview despriorizado e separado. | Não declarar validado nem estável enquanto os hosts permanecerem preview/desligados. |
 | #109 Roadmap 10/10 | Manter como visão; só executar itens decompostos em issues priorizadas. | A visão não autoriza implementação em lote nem usa nota subjetiva como aceite. |
 
-As decisões estão documentadas; mudança de código, flags, APIs ou políticas ainda exige etapa de implementação e validação própria.
+As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo continua histórico; o estado atualizado da pilha está em “Integração para develop — 2026-09-30”.
 
 ## Resumo do estado atual
 
 | Classe | Issues | Tratamento desta especificação |
 |---|---|---|
 | Trabalho recente com pacote canônico | #110–#123 | Reutilizar ADRs/stories/planos; explicitar evidência pendente e relação entre PRs/issues. |
-| Segurança/tenancy ainda em PR draft | #111–#117 | O PR #119 permanece draft; não fechar issues até revisão e gates descritos no relatório. |
+| Segurança/tenancy | #111–#117 | Código e evidências estão na branch de integração; PR #119 continua aberto/draft e não será fechado automaticamente. A2A/AG-UI seguem como follow-up de preview no contrato #117. |
 | Pedido obsoleto ou provável duplicata | #12–#16, #34, #45, #60, #62–#66, #74–#80, #90, #92–#93, #96–#99, #104–#106 | Corrigir baseline, mapear código atual e indicar `concluída`, `parcial`, `duplicada`, `substituída` ou `sem decisão`; recomendar destino sem fechar. |
 | Roadmap sem critérios por entrega | #83–#88 | No snapshot #88 e #83–#87 estão abertas. O roadmap não altera o gate de cobertura e deve separar comportamento de cobertura. |
 | Visão estratégica sem execução delimitada | #109 | Converter a visão extensa em backlog priorizado com objetivos observáveis, dependências e propostas claramente distintas de decisão aceita. |
@@ -225,27 +225,31 @@ As decisões estão documentadas; mudança de código, flags, APIs ou políticas
 
 **Classificação:** descrição atual está objetivamente desatualizada; `FidesDataProtectionMiddleware` existe e é registrado no pipeline.
 
-**Estado de código observado:** regras são regex estáticas para CPF formatado, cartão, e-mail e alguns formatos de token; entram mensagens User/System; o accessor do tenant é usado no log. Isso não comprova regras configuráveis por tenant, classificação completa, auditoria segura, cobertura de formatos ou política para imagens/anexos.
+**Estado no snapshot 2026-09-29:** regras eram regex estáticas para CPF formatado, cartão, e-mail e alguns formatos de token; isso não comprovava política tenant-scoped nem tratamento de mídia. A seção histórica descreve a baseline da auditoria, não o código integrado agora.
 
-**Decisão do usuário:** catálogo built-in revisado, sem regex fornecida pelo tenant; política/toggles por tenant; todos os detectores ativos por padrão; detectores obrigatórios de credenciais não podem ser desligados. Owner/Admin gerencia toggles. Incluir OCR/scan de imagens e anexos; mídia que não possa ser redigida com confiança bloqueia a chamada e pede uma versão redigida; falha/timeout de detector obrigatório também falha fechado e não envia dado original. **Detalhes ainda técnicos:** formatos suportados, engine OCR, localização e métrica de confiança; política/toggles/OCR não estão implementados.
+**Decisão do usuário:** catálogo built-in revisado, sem regex fornecida pelo tenant; política/toggles por tenant; todos os detectores ativos por padrão; detectores obrigatórios de credenciais não podem ser desligados. Owner/Admin gerencia toggles. Incluir OCR/scan de imagens e anexos; mídia que não possa ser redigida com confiança bloqueia a chamada e pede uma versão redigida; falha/timeout de detector obrigatório também falha fechado e não envia dado original.
 
 **Especificação aprovada:** texto e OCR de imagens/anexos são inspecionados antes do provider; saída OCR sensível é redigida; se não houver redação com confiança ou detector obrigatório falhar/timeout, negar despacho e solicitar mídia redigida; toggles são tenant-scoped e auditados; todos os padrões built-in iniciam ativos; detectores obrigatórios não podem ser desligados; tenant A não lê política de B; logs não contêm originais; testes sintéticos cobrem positivos/falsos positivos/erro.
 
-**Fontes:** ADR-005 e ADR-027 hoje contêm afirmações que excedem a implementação; [plano histórico](maf-complete-migration-plan.md) também diz que não existe. Atualizar os três estados para uma única descrição vigente antes de tratar a issue como concluída.
+**Implementação na pilha:** política persistida/versionada por tenant; regras built-in ativas por padrão, `CredentialToken` obrigatório, OCR local Tesseract para imagens/PDF e bloqueio fail-closed em baixa confiança, timeout, mídia não suportada ou dados ausentes. Testes focados incluem isolamento e redaction de PNG/PDF; build Release e integração PostgreSQL/Docker foram registrados no PR #130. Ainda exige revisão da evidência e avaliação do risco operacional do OCR antes de promoção/fechamento.
+
+**Fontes:** ADR-005/027 e o plano MAF são históricos; contrato atual em [acesso/tenants](../backend/access-tenants.md), [operação](../backend/operations.md) e testes do PR #130.
 
 ## issue-105
 
 **Hyperlight / sandbox real**
 
-**Classificação:** implementação atual é simulada; o executor produz saída fixa e métricas fixas, apesar da descrição/log sugerir execução WASM real. A afirmação antiga do ADR-006 de que nenhum pacote .NET público existe ficou desatualizada.
+**Estado no snapshot 2026-09-29:** implementação ainda era simulada; esta descrição não representa a branch integrada depois do PR #129. A afirmação antiga do ADR-006 de que nenhum pacote .NET público existe ficou desatualizada.
 
 **Resultado seguro esperado:** nenhuma ferramenta ou UI deve representar esta simulação como isolamento real; o caminho simulado precisa estar marcado como Lab e não pode processar código confiável/segredos como se fosse sandbox. Pesquisa de disponibilidade do runtime oficial deve ser datada e usar fonte primária; disponibilidade de package não prova compatibilidade com .NET/Windows/Linux nem manutenção.
 
-**Decisão do usuário:** integrar o pacote .NET preview atrás de flag global, desligada por padrão e habilitável apenas em laboratório, com testes de segurança. Até isso ocorrer, nenhuma chamada pode ser apresentada como execução real. O mock/simulação não deve retornar sucesso/output fixo quando a flag estiver desligada; deve retornar feature desabilitada ou indisponível.
+**Decisão do usuário:** integrar o pacote .NET preview atrás de flag global, desligada por padrão e habilitável apenas em laboratório, com testes de segurança. Nenhuma chamada pode ser apresentada como execução real quando a integração não está habilitada; sem flag/Lab deve retornar indisponível.
 
 **Aceite para futuro runtime real:** threat model; idiomas/ABI suportados; limites de CPU/memória/tempo, filesystem/rede/syscalls, cancelamento e teardown; escaping de stdout/stderr; isolamento entre tenants; versão pinada; prova negativa de acesso ao host; fallback fechado se runtime ausente. O pacote oficial `Microsoft.Agents.AI.Hyperlight` foi publicado em versões preview; a versão NuGet consultada em 2026-09-29 é `1.21.0-preview.260911.1`, com dependência de `Microsoft.Agents.AI.Abstractions >=1.21.0`, `Microsoft.Extensions.AI.Abstractions >=10.10.0` e `Hyperlight.HyperlightSandbox.Api >=0.6.0`; o SDK sandbox tem versão `0.7.0`. Ambos permanecem preview e sua compatibilidade com MAF 1.22/runtime/plataformas deste produto ainda não foi testada. Fontes primárias: [pacote do Agent Framework](https://www.nuget.org/packages/Microsoft.Agents.AI.Hyperlight/) · [README .NET oficial](https://github.com/microsoft/agent-framework/blob/main/dotnet/src/Microsoft.Agents.AI.Hyperlight/README.md) · [API do sandbox](https://www.nuget.org/packages/Hyperlight.HyperlightSandbox.Api/).
 
-**Fontes:** `HyperlightSandboxedExecutor.cs`, ADR-006, ADR-027 e plano MAF histórico. A integração preview é decisão tomada, mas permanece não implementada/não validada; critérios de segurança e ativação devem passar no teste antes de habilitar em laboratório.
+**Implementação na pilha:** `HyperlightExecuteCodeTool` usa o CodeAct oficial para JavaScript; flag global off por padrão e registro só em `Lab`; chamadas fora dessas condições falham como indisponíveis, e erros da sandbox não são simulados. Oito testes focados e build Release passaram no PR #129. Continua preview; os testes não equivalem a auditoria independente do sandbox nem validam execução em todos os sistemas operacionais.
+
+**Fontes:** [contrato de operação](../backend/operations.md), código `HyperlightSandboxedExecutor.cs`, ADR-006/027 (históricos), PR #129 e fontes oficiais listadas nele.
 
 ## issue-104
 
@@ -265,11 +269,11 @@ As decisões estão documentadas; mudança de código, flags, APIs ou políticas
 
 **Classificação:** classe/serviço existe; o issue descreve criação automática do primeiro tenant e credencial inicial.
 
-**Decisão do usuário:** bootstrap só é executado com segredo explicitamente configurado; não semear `VisionAnalyst`/`EditorChefe` nem outros agentes de produto; sem `AdminApiKey`, nenhum tenant é criado e a API inicia sem tenant. O operador deve provisionar explicitamente antes de uso. Bootstrap de tenant nunca cria Platform Admin.
+**Decisão do usuário:** bootstrap só é executado com segredo explicitamente configurado; não semear `VisionAnalyst`/`EditorChefe` nem outros agentes de produto; sem `AdminApiKey`, nenhum tenant é criado. Refinamento posterior: em banco vazio sem a chave, o bootstrap lança exceção e a API não inicia; isso evita um modo de operação sem tenant que não tinha caminho de provisionamento. Com chave, cria `admin` e sua membership. Bootstrap nunca cria Platform Admin.
 
-**Aceite revisado:** banco vazio + chave configurada provisiona uma vez; banco existente não reemite key; ausência de chave deixa banco sem tenant/credencial e a API sobe em modo sem tenant; startup concorrente é idempotente; não há segredo em log; membership Admin do tenant não é Platform Admin.
+**Aceite revisado:** banco vazio + chave configurada provisiona `admin` uma vez; banco existente não reemite key e não exige a chave de bootstrap; ausência de chave em banco vazio lança `MissingTenantBootstrapConfigurationException`, com mensagem que orienta configurar `AgenticSystem__AdminApiKey`; startup concorrente é idempotente; não há segredo em log; membership Admin do tenant não é Platform Admin.
 
-**Fonte:** `SystemBootstrapService`, ADR-026, story de auth em `USER-STORIES.md`. A issue propõe SHA-256 e `AdminApiKey` estática; atualizar segurança contra baixa entropia/legacy antes de tratar como prescrição vigente. O serviço também semeia `VisionAnalyst` e `EditorChefe` com instruções específicas de banner/imóveis no tenant `admin`; especificar se isso é demo/lab ou comportamento de produto, e manter seeds de produto fora do bootstrap genérico.
+**Implementação na pilha:** `SystemBootstrapService` aplica a regra acima; stores de produto não são semeados. Três testes focados cobrem banco vazio sem chave, configuração explícita e banco já provisionado. O build Release passou no follow-up da #99. A integração com `develop` ainda requer passar pela validação desta branch.
 
 ## issue-98
 
@@ -287,7 +291,7 @@ As decisões estão documentadas; mudança de código, flags, APIs ou políticas
 
 **Classificação:** especificação histórica de “expurgo total”; `default` pode continuar em fixture/config legado, mas não deve ser confundido com fallback de autorização.
 
-**Decisão do usuário:** remover todos os fallbacks de tenant no runtime; tenant deve ser explícito; `default` pode ficar somente em migrações/fixtures. A varredura atual ainda encontra `TenantId ?? "default"` em `DynamicOnnxProcessorTool`, `WebhooksController`, `ExternalQuotaSyncService`, `PostgresToolManager` e `PostgresSkillManager`; cada ocorrência precisa migrar para contexto explícito ou falhar fechado antes de a issue poder ser concluída.
+**Decisão do usuário:** remover todos os fallbacks de tenant no runtime; tenant deve ser explícito; `default` pode ficar somente em migrações/fixtures. O PR #126 removeu os fallbacks de quotas, ferramentas/skills, arquivos ONNX, retomada de workflow por webhook e partição de rate-limit; Qdrant passa a exigir TenantId explícito. Na árvore integrada, buscas pelos padrões de fallback aprovados não encontraram fallback nos projetos API/Core/Infrastructure fora de migrations; a suíte consolidada ainda deve confirmar o comportamento.
 
 **Fonte:** ADR-026, middleware/DBContext atual e testes. A frase “nenhuma ocorrência da palavra default” é critério excessivo e não mede isolamento; substituir por buscas comportamentais e referências de runtime.
 
@@ -535,6 +539,8 @@ As decisões estão documentadas; mudança de código, flags, APIs ou políticas
 
 **Decisão do usuário:** auto-melhoria gera uma proposta e exige aprovação humana; o confidence threshold nunca aprova/aplica sozinho. Aprovador: Owner/Admin do tenant. Ver [ADR-040](../architecture/adr/040-self-improvement-human-approval.md). **Spec restante:** quota proativa precisa de forecast/alerta e de métricas verificáveis; batch deve persistir proposta, versão, avaliação, aprovação, rejeição e rollback; `DotNetExpertAgent` já existe, mas a inclusão futura como domínio de triagem precisa de acceptance próprio.
 
+**Implementação na pilha:** propostas tenant-scoped persistidas; flag Lab off por padrão; aprovação/rejeição por Owner/Admin, versionamento de prompt/agente, auditoria e rollback. Dois testes focados e build Release foram registrados no PR #128. A issue #16 é mais ampla que auto-melhoria; as partes FinOps/batch/expert agent continuam precisando de requisitos próprios.
+
 **Fonte:** ML39 em `USER-STORIES.md`; `docs/backend/resources-rules.md`; issue #16. Dividir em stories/novas issues se todos permanecerem escopo.
 
 ## issue-14
@@ -567,10 +573,43 @@ As decisões estão documentadas; mudança de código, flags, APIs ou políticas
 
 **Fonte:** `docs/USER-STORIES.md`, status de #13/#14/#15/#16 na API e documento de roadmap. #15 precisa ser verificada individualmente; manter a referência ou encerramento correto.
 
-## Notas de fechamento
+## Notas do snapshot de 2026-09-29
 
-- Issues em PR draft #118, #119 e #124 permanecem abertas até revisão/merge e gates; issues com acceptance cumprida recebem recomendação, não fechamento automático.
+- No snapshot original, PRs #118, #119 e #124 estavam draft. Esse estado é histórico; a pilha atual foi reorganizada abaixo.
 - Requisitos que contradizem código são marcados como drift, não copiados como alvo novo sem confirmação.
 - Propostas de arquitetura sem evidência permanecem `proposta` e precisam de decisão antes de virar implementação.
-- Decisões de produto tomadas em 2026-09-29: PowerFx sintaxe-only; Hyperlight Preview sob flag global off/Lab; FIDES built-in/toggles tenant + OCR e fail-closed; auto-melhoria com aprovação Owner/Admin; bootstrap só com key explícita sem seeds de produto; tenant runtime sem fallback; #109 permanece visão de roadmap.
-- A implementação dessas decisões permanece aberta em #97, #99, #105, #106 e #16. OCR engine/formats/confidence, testes de Hyperlight, persistência/UI de approval e remoção dos fallbacks são trabalho técnico; não foram declarados implementados.
+- Decisões de produto tomadas em 2026-09-29 e refinadas depois: PowerFx sintaxe-only; Hyperlight Preview sob flag global off/Lab; FIDES built-in/toggles tenant + OCR e fail-closed; auto-melhoria com aprovação Owner/Admin; bootstrap só com chave explícita, fail-fast sem chave e sem seeds de produto; tenant runtime sem fallback; #109 permanece visão de roadmap.
+- Estado da pilha em 2026-09-30: implementações de #97, #99, #105, #106 e escopo de auto-melhoria de #16 estão incluídas nos PRs #126–#130, mesclados em branches intermediárias e reunidos na branch de integração para `develop`. Issues continuam abertas para revisão; inclusão no PR integrado não é fechamento nem prova de merge em `develop`.
+
+## Integração para develop — 2026-09-30
+
+A branch `integration/develop-pr-stack-2026-09-30` parte de `develop` e reúne a base do PR #73, PRs #118/#119, mudanças #126–#130, PRs #124/#125 e as decisões atuais. O PR #31 não foi incluído: sua issue #30 está fechada e a limpeza documental é independente, parcialmente sobreposta e contém remoções amplas fora desta entrega. `docs/backend-contracts-validation` também não foi mesclada separadamente porque seu tree é idêntico ao head documental incluído em #118.
+
+O PR de integração será aberto como draft enquanto as validações PostgreSQL/Ollama/OCR e o Cypress integrado permanecerem pendentes. Os relatórios dos PRs empilhados são evidência das respectivas branches/ambientes e não substituem a validação da árvore consolidada.
+
+### Estado das decisões implementadas nesta árvore
+
+| Issue | Implementação incluída | Verificação desta consolidação |
+|---|---|---|
+| #97 | Remoção dos fallbacks de tenant no runtime; Qdrant exige TenantId explícito | Busca estática pelos padrões aprovados sem fallback em API/Core/Infrastructure, exceto migrations; suíte completa pendente |
+| #99 | Bootstrap cria `admin` só com segredo; banco vazio sem `AdminApiKey` aborta startup; sem seeds Banner | Testes focados 3/3 e build Release no PR #127; repetir na árvore consolidada |
+| #16 | Propostas persistidas por tenant; aprovação Owner/Admin, versionamento, auditoria e rollback | Testes focados 2/2 e build Release no PR #128; repetir na árvore consolidada |
+| #105 | Hyperlight CodeAct para JavaScript, flag off e registro somente em Lab | Testes focados 8/8 e build Release no PR #129; preview não equivale a auditoria independente de segurança |
+| #106 | Toggles FIDES tenant-scoped, regras built-in, OCR local de imagem/PDF e fail-closed | Testes focados, PostgreSQL Compose e Docker registrados no PR #130; repetir teste/build consolidados |
+
+As issues permanecem abertas para revisão. O PR #31 (issue #30 fechada) não foi incluído: a limpeza documental é independente, parcialmente sobreposta e contém remoções amplas fora desta entrega. `docs/backend-contracts-validation` também não foi mesclada separadamente porque seu tree é idêntico ao head documental incluído em #118.
+
+### Validação da árvore integrada
+
+| Verificação | Resultado | Limite |
+|---|---|---|
+| Build Release da solução .NET | Passou, 0 avisos/erros | Executado na árvore integrada |
+| Suíte .NET, paralelismo xUnit desativado | 771 aprovados, 16 ignorados, 0 falhas | Os ignorados incluem testes PostgreSQL/Ollama e OCR; sem Compose não há prova integrada nova |
+| Build frontend | Passou | `npm run build` no WSL com Node 22 Linux |
+| ESLint global | Passou | `npm run lint` no WSL; regra mantida e os carregamentos iniciais migrados para TanStack Query |
+| Cypress #123 | Não repetido na integração | PR #124 registrou 1 spec aprovada; API/DB local não estavam disponíveis nesta sessão WSL |
+| Endpoint inventory/OpenAPI | 222 actions de controllers; 217 operações MVC visíveis; 0 faltantes/extra | Gerados do mesmo tree `81820bb` |
+| Links de documentação | 161 arquivos, 832 links, 0 quebrados | Verificador do repositório |
+| `git diff --check` | Passou | Mudanças locais da branch de integração |
+
+Docker Desktop está parado e o serviço `com.docker.service` não pôde ser iniciado neste ambiente; o listener `localhost:5432` existente foi deixado intocado. Portanto não alegar que a validação PostgreSQL/Ollama/OCR passou nesta árvore.

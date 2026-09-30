@@ -1,6 +1,6 @@
 # Schemas dos contratos MVC
 
-Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produção. Obrigatoriedade/binding reflete o OpenAPI; validações de negócio no controller/store podem ser mais restritas. Consultar [núcleo](api-core.md), [inventário](endpoint-inventory.md) e fontes. Swagger declara segurança global ApiKey, mas o runtime aceita também JWT e há actions com auth própria: usar [guia de acesso](access-tenants.md), não inferir política só do spec. Este schema não abrange hubs ou protocolos de bibliotecas.
+Gerado do [OpenAPI Release](openapi-release.json) pelas registrations MVC/Swagger da API nesta branch de integração. Obrigatoriedade/binding reflete o OpenAPI; validações de negócio no controller/store podem ser mais restritas. Consulte [núcleo](api-core.md), [inventário](endpoint-inventory.md) e fontes. Swagger declara segurança global ApiKey, mas o runtime aceita também JWT e há actions com auth própria: use [guia de acesso](access-tenants.md), sem inferir política só pelo spec. Este schema não abrange hubs ou protocolos de bibliotecas.
 
 ### AgentSpecification
 
@@ -24,7 +24,6 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 
-
 ### ApprovalDecisionRequest
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
@@ -32,11 +31,16 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | decidedBy | string | não |
 | comment | string | não |
 
+### AssignTenantMembershipRequest
+
+| Campo | Tipo/schema | Obrigatório no OpenAPI |
+|---|---|---|
+| role | string | não |
+
 ### AutonomyLevel
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
-
 
 ### BrainstormRequest
 
@@ -132,12 +136,10 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 
-
 ### ConfigCategory
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
-
 
 ### ConfigEntryRequest
 
@@ -179,6 +181,14 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | fewShotExamples | string | não |
 | metadata | object | não |
 
+### CreateSupportGrantRequest
+
+| Campo | Tipo/schema | Obrigatório no OpenAPI |
+|---|---|---|
+| userId | string | não |
+| reason | string | não |
+| expiresAt | string | não |
+
 ### CreateTaskRequest
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
@@ -205,7 +215,6 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 
-
 ### DiscoverModelsRequest
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
@@ -231,6 +240,15 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 
+### FidesTenantPolicy
+
+| Campo | Tipo/schema | Obrigatório no OpenAPI |
+|---|---|---|
+| tenantId | string | não |
+| enabledDetectors | object | não |
+| version | integer | não |
+| updatedBy | string | não |
+| updatedAt | string | não |
 
 ### GatewaySettings
 
@@ -255,6 +273,11 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 | subsystem | string | não |
+
+### ImprovementType
+
+| Campo | Tipo/schema | Obrigatório no OpenAPI |
+|---|---|---|
 
 ### InboundWebhookEntity
 
@@ -296,7 +319,6 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 
-
 ### LoginRequest
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
@@ -324,7 +346,6 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
-
 
 ### MemorySettings
 
@@ -406,7 +427,6 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 
-
 ### ScheduledTasksHealthReport
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
@@ -419,6 +439,37 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | enabledRules | integer | não |
 | channels | array of ChannelInfo | não |
 | overallHealthy | boolean | não |
+
+### SelfImprovementRecord
+
+| Campo | Tipo/schema | Obrigatório no OpenAPI |
+|---|---|---|
+| id | string | não |
+| tenantId | string | não |
+| agentName | string | não |
+| type | ImprovementType | não |
+| originalBehavior | string | não |
+| improvedBehavior | string | não |
+| trigger | string | não |
+| confidenceGain | number | não |
+| confidenceLevel | number | não |
+| learnedAt | string | não |
+| applied | boolean | não |
+| status | string | não |
+| rationale | string | não |
+| createdBy | string | não |
+| reviewedBy | string | não |
+| reviewedAt | string | não |
+| previousInstructions | string | não |
+| appliedPromptVersion | integer | não |
+| appliedAgentVersionId | string | não |
+| proposedChanges | object | não |
+
+### SetSkillEnabledRequest
+
+| Campo | Tipo/schema | Obrigatório no OpenAPI |
+|---|---|---|
+| enabled | boolean | não |
 
 ### StartMigrationRequest
 
@@ -457,6 +508,7 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | action | string | não |
 | parameters | object | não |
 | userId | string | não |
+| idempotencyKey | string | não |
 
 ### TriggerAction
 
@@ -518,7 +570,6 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 
-
 ### UpdateApiKeyRequest
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
@@ -529,12 +580,25 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | isDefault | boolean | não |
 | models | array of string | não |
 
+### UpdateChatSettingsRequest
+
+| Campo | Tipo/schema | Obrigatório no OpenAPI |
+|---|---|---|
+| provider | string | não |
+| model | string | não |
+
 ### UpdateDefaultLlmSelectionRequest
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 | providerName | string | não |
 | model | string | não |
+
+### UpdateFidesPolicyRequest
+
+| Campo | Tipo/schema | Obrigatório no OpenAPI |
+|---|---|---|
+| enabledDetectors | object | não |
 
 ### UpdateGoldenSetDto
 
@@ -627,6 +691,12 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | fewShotExamples | string | não |
 | metadata | object | não |
 
+### UpdateTenantPlanRequest
+
+| Campo | Tipo/schema | Obrigatório no OpenAPI |
+|---|---|---|
+| plan | string | não |
+
 ### VoiceRequest
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
@@ -672,12 +742,10 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 
-
 ### WorkflowExecutionStatus
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
-
 
 ### WorkflowStep
 
@@ -706,12 +774,10 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations de produç
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
 
-
 ### WorkflowTriggerType
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
 |---|---|---|
-
 
 ### YamlRequest
 

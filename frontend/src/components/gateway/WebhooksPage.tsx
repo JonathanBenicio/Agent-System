@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Cable,
   Plus,
@@ -16,35 +17,31 @@ import { Badge } from '@/components/shared/Badge';
 import { useToast } from '@/components/shared/Toast';
 
 import { webhookApi } from '@/lib/api'
-import type { InboundWebhook } from '@/types/api'
 
 export function WebhooksPage() {
-  const [webhooks, setWebhooks] = useState<InboundWebhook[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { addToast } = useToast();
+  const queryClient = useQueryClient()
+  const queryKey = ['webhooks']
+  const query = useQuery({
+    queryKey,
+    queryFn: async () => {
+      try {
+        return await webhookApi.list()
+      } catch (error) {
+        addToast('Erro ao carregar webhooks', 'error')
+        throw error
+      }
+    },
+  })
+  const webhooks = query.data ?? []
+  const loading = query.isLoading
   const [showForm, setShowForm] = useState(false);
   const [newName, setNewName] = useState('');
   const [targetWorkflowId, setTargetWorkflowId] = useState('');
   const [targetAgentName, setTargetAgentName] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const { addToast } = useToast();
 
-  const fetchWebhooks = async () => {
-    setLoading(true);
-    try {
-      const data = await webhookApi.list();
-      setWebhooks(data);
-    } catch {
-      addToast('Erro ao carregar webhooks', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-
-    fetchWebhooks();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const fetchWebhooks = () => query.refetch()
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +56,7 @@ export function WebhooksPage() {
       setTargetWorkflowId('');
       setTargetAgentName('');
       setShowForm(false);
-      fetchWebhooks();
+      await queryClient.invalidateQueries({ queryKey });
     } catch {
       addToast('Erro ao criar webhook', 'error');
     }
@@ -70,7 +67,7 @@ export function WebhooksPage() {
     try {
       await webhookApi.delete(id);
       addToast('Webhook removido', 'success');
-      fetchWebhooks();
+      await queryClient.invalidateQueries({ queryKey });
     } catch {
       addToast('Erro ao remover webhook', 'error');
     }

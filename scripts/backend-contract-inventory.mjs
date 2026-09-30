@@ -1,9 +1,11 @@
 import { readFileSync, readdirSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 
 // Source inventory supplements OpenAPI: conditional protocols and hubs are separate.
 const root = resolve(import.meta.dirname, '..');
+const baseline = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 function files(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap(e => e.isDirectory()
     ? files(resolve(dir, e.name)) : e.name.endsWith('.cs') ? [resolve(dir, e.name)] : []);
@@ -38,7 +40,7 @@ routes.sort((a, b) => a.path.localeCompare(b.path) || a.method.localeCompare(b.m
 const duplicates = routes.filter((r, i) => routes.findIndex(x => x.method === r.method && x.path === r.path) !== i);
 if (duplicates.length) throw new Error('Duplicate route: ' + JSON.stringify(duplicates));
 const out = resolve(root, 'docs/backend'); mkdirSync(out, { recursive: true });
-writeFileSync(resolve(out, 'endpoint-inventory.json'), JSON.stringify({ baseline: 'f8de7a6e3aa9d671a67ae60f2f52e0c1f80b3eae', scope: 'Controller attributes; runtime OpenAPI and Program mappings must be checked separately', routes }, null, 2) + '\n');
+writeFileSync(resolve(out, 'endpoint-inventory.json'), JSON.stringify({ baseline, scope: 'Controller attributes; runtime OpenAPI and Program mappings must be checked separately', routes }, null, 2) + '\n');
 const escape = s => s.replaceAll('|', '\\|').replaceAll('`', "'");
 writeFileSync(resolve(out, 'endpoint-inventory.md'), '# Inventário de endpoints HTTP\n\nGerado com `node scripts/backend-contract-inventory.mjs`. Cada rota aponta para sua assinatura atual; parâmetros C# não substituem schema/obrigatoriedade de binding. Autorizações adicionais e flags exigem leitura da fonte. Endpoints fora do núcleo ainda não possuem prova integrada.\n\n' + routes.length + ' combinações método/rota, incluindo aliases. Consulte [contratos do núcleo](api-core.md) e [hubs/protocolos](transports.md).\n\n| Método | Rota | Ação/entrada C# | Autorização declarada | Fonte |\n|---|---|---|---|---|\n' + routes.map(r => `| ${r.method} | ${r.path} | ${escape(r.action + '(' + r.parameters + ')')} | ${r.authorization} | [${r.source.split('/').at(-1)}:${r.line}](../../${r.source}) |`).join('\n') + '\n');
 console.log(JSON.stringify({ routes: routes.length, duplicateRoutes: duplicates.length }));

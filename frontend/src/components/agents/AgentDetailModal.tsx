@@ -61,29 +61,31 @@ export function AgentDetailModal({ agent, onClose, onRefresh }: Props) {
 
   // --- Estado do Histórico de Versões ---
   const [versions, setVersions] = useState<AgentVersion[]>([])
-  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [loadedHistoryAgent, setLoadedHistoryAgent] = useState<string | null>(null)
+  const loadingHistory = activeTab === 'history' && loadedHistoryAgent !== agent.name
   const [selectedDiffVersion, setSelectedDiffVersion] = useState<AgentVersion | null>(null)
   const [rollingBackId, setRollingBackId] = useState<string | null>(null)
 
   // Carrega o histórico de versões quando a aba de histórico é ativada
   useEffect(() => {
-    if (activeTab === 'history') {
+    if (activeTab !== 'history') return
 
-      setLoadingHistory(true)
-      agentApi.getHistory(agent.name)
-        .then(data => {
-          // Ordena decrescente pelo número da versão para que as mais novas apareçam no topo
-          const sorted = [...data].sort((a, b) => b.versionNumber - a.versionNumber)
-          setVersions(sorted)
-        })
-        .catch(err => {
-          console.error('Erro ao carregar histórico:', err)
-          addToast('Erro ao carregar histórico de versões', 'error')
-        })
-        .finally(() => {
-          setLoadingHistory(false)
-        })
-    }
+    let active = true
+    agentApi.getHistory(agent.name)
+      .then(data => {
+        if (!active) return
+        const sorted = [...data].sort((a, b) => b.versionNumber - a.versionNumber)
+        setVersions(sorted)
+        setLoadedHistoryAgent(agent.name)
+      })
+      .catch(err => {
+        if (!active) return
+        console.error('Erro ao carregar histórico:', err)
+        addToast('Erro ao carregar histórico de versões', 'error')
+        setLoadedHistoryAgent(agent.name)
+      })
+
+    return () => { active = false }
   }, [activeTab, agent.name, addToast])
 
   // Algoritmo de diff inline simples e extremamente rápido para visualização estruturada de YAML

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { X } from 'lucide-react'
 import type { LoadPluginRequest } from '@/types/api'
 
@@ -16,20 +16,9 @@ export function PluginLoadModal({ initialValues, onLoad, onClose }: Props) {
     transportType: 'stdio',
   })
   const [argsInput, setArgsInput] = useState(initialValues?.arguments?.join('\n') || '')
-  const [envInput, setEnvInput] = useState('')
-  const [headersInput, setHeadersInput] = useState('')
+  const [envInput, setEnvInput] = useState(() => Object.entries(initialValues?.environmentVariables ?? {}).map(([k, v]) => `${k}=${v}`).join('\n'))
+  const [headersInput, setHeadersInput] = useState(() => Object.entries(initialValues?.headers ?? {}).map(([k, v]) => `${k}=${v}`).join('\n'))
   const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (initialValues) {
-      if (initialValues.environmentVariables) {
-        setEnvInput(Object.entries(initialValues.environmentVariables).map(([k, v]) => `${k}=${v}`).join('\n'))
-      }
-      if (initialValues.headers) {
-        setHeadersInput(Object.entries(initialValues.headers).map(([k, v]) => `${k}=${v}`).join('\n'))
-      }
-    }
-  }, [initialValues])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
