@@ -2,7 +2,7 @@
 
 Status: desenho aprovado; implementação pendente de definição de merge gate.
 Issue: #97 · ADR: [ADR-026](../architecture/adr/026-auto-bootstrap-remove-default-tenant.md) · Story: ML19.1 em [USER-STORIES.md](../USER-STORIES.md).
-Baseline: PR #132, head `aebd59c`, base `develop`.
+Baseline: PR #132, branch `integration/develop-pr-stack-2026-09-30` contra `develop`; inspeção dos fluxos atualizada em 2026-10-01.
 
 ## Objetivo
 
