@@ -15,7 +15,7 @@ This file tracks all major tracks for the project. Planos canônicos ficam em do
 | BACK-MAF-133 | Provider global em Gateway/produção e reload multi-host; planejado para pós-merge | [#133](https://github.com/JonathanBenicio/Agent-System/issues/133), [story](../docs/USER-STORIES.md#back-maf-133--provider-global-na-composicao-gateway-de-producao), [plano](../docs/plan/maf-gateway-production-validation.md) |
 | BACK-ORCH-134 | Sessões/fingerprint do supervisor após restart; planejado para pós-merge | [#134](https://github.com/JonathanBenicio/Agent-System/issues/134), [story](../docs/USER-STORIES.md#back-orch-134--retomar-supervisor-e-especialistas-apos-restart), [plano](../docs/plan/dynamic-supervisor-session-recovery.md) |
 | FINOPS-135 | Forecast de quota LLM tenant-scoped planejado, sem substituir enforcement rígido | [#135](https://github.com/JonathanBenicio/Agent-System/issues/135), [ML40](../docs/USER-STORIES.md#ml40--forecast-proativo-de-quotas-llm), [plano](../docs/plan/proactive-llm-quota-forecast.md) |
-| TENANT-SCOPE-097 | Desenho de system scope tipado aprovado; implementação pendente e gate de #132 por decidir | [#97](https://github.com/JonathanBenicio/Agent-System/issues/97), [ADR-026](../docs/architecture/adr/026-auto-bootstrap-remove-default-tenant.md), [plano](../docs/plan/tenant-system-scope-remediation.md) |
+| TENANT-SCOPE-097 | Implementação e validação concluídas na branch do PR #132; issue aguarda merge | [#97](https://github.com/JonathanBenicio/Agent-System/issues/97), [ADR-026](../docs/architecture/adr/026-auto-bootstrap-remove-default-tenant.md), [plano](../docs/plan/tenant-system-scope-remediation.md) |
 
 ## Roadmap histórico Q2 2026 (status histórico, sem nova prova integrada)
 

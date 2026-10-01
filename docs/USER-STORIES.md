@@ -567,15 +567,19 @@ Este aceite também cobre a referência de #16 ao especialista `DotNetExpertAgen
 | Serviços | `SystemBootstrapService` · `ApiKeyAuthenticationHandler` · `TenantMiddleware` |
 | Responsabilidade | Auto-bootstrap de tenant/chaves no startup, validação de chaves hashed SHA-256 e remoção de referências hardcoded a "default" |
 | Testes | Unitários (xUnit) e Integração/E2E |
-| Status | ⚠ Parcial na pilha de integração; bootstrap/default estão implementados, mas a separação tipada de system scope ainda está pendente |
+| Status | Implementado e validado na branch integrada do PR #132; a issue aguarda merge para `develop` |
 
 **Critérios de Aceite:**
 - [x] Banco vazio com `AgenticSystem:AdminApiKey` explícita cria o tenant `admin`, hash da chave e membership; tenant já provisionado não recebe outra chave.
-- [x] Banco vazio sem a configuração lança `MissingTenantBootstrapConfigurationException` e aborta o startup com orientação para `AgenticSystem__AdminApiKey`.
+- [x] Banco vazio sem a configuração inicia sem tenant ou credencial; operações tenant-owned ficam bloqueadas até provisionamento explícito.
 - [x] Chaves persistidas são localizadas pelo hash e resolvidas ao tenant e papel de membership associados.
 - [x] Requisições protegidas sem tenant explícito ou com tenant desconhecido/inativo são rejeitadas; rotas públicas seguem as exceções documentadas.
 - [x] Bootstrap não semeia agentes de produto nem cria Platform Admin; fallback `default` foi removido do runtime coberto pela implementação.
-- [ ] Operações globais/background usam contexto de sistema tipado, não `TenantId=platform`/`system-background`; esses valores não são aceitos por header/claim e nenhum registro tenant-owned é gravado sob eles.
+- [x] `default`, `platform`, `system-background` e `system-devui` não são resolvidos nem aceitos como tenant por header, claim ou store.
+- [x] Operações globais/background usam contexto de sistema tipado; nenhum registro tenant-owned é gravado sob identificador sintético.
+- [x] Quotas/catálogos/outbox/alertas de plataforma ficam em stores globais; dados BYOK/alerts/outbox tenant-owned são lidos e gravados sob o tenant corrente.
+- [x] Jobs multi-tenant enumeram tenants provisionados e processam dados tenant-owned sob o contexto real de cada tenant.
+- [x] A migration move catálogos, quotas e eventos antigos `platform`/`system-background` para stores globais e preserva eventos associados a um tenant real.
 
 ---
 

@@ -1,5 +1,7 @@
 # Contratos HTTP do núcleo
-Fonte atual: controladores, DTOs e stores no follow-up de isolamento em `fix/backend-core-tenancy` (`151e6d4`). [Inventário completo](endpoint-inventory.md). Exemplos ilustram schema; evidências de execução estão em [validação da correção](validation/backend-core-remediation.md), e o diagnóstico de baseline permanece em [2026-09-28](validation/2026-09-28.md).
+Fonte atual: controladores, DTOs e stores na branch integrada para `develop`, com escopos tenant e plataforma separados. [Inventário completo](endpoint-inventory.md). Exemplos ilustram schema; evidências de execução estão em [validação da correção](validation/backend-core-remediation.md), e o diagnóstico de baseline permanece em [2026-09-28](validation/2026-09-28.md).
+
+Alertas de quota seguem o tenant autenticado em `GET /api/v1/alerts` e `POST /api/v1/alerts/{id}/read`; o filtro de tenant limita listagem e atualização de leitura. Alertas de chaves globais de plataforma são acessíveis somente por Platform Admin em `GET /api/platform/alerts` e `POST /api/platform/alerts/{id}/read`.
 
 ## Convenções
 Base URL configurada pelo host; exemplos usam http://localhost:5188. JSON dos controllers usa camelCase, enums camelCase e omite nulos. Não há envelope único: arrays, objetos, ProblemDetails, texto e respostas vazias coexistem. Exceções não tratadas retornam 500 com error/correlationId e X-Correlation-Id. 429 retorna error e Retry-After. Não assumir correlationId em todos os erros de validação.

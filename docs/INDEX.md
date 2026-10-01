@@ -12,12 +12,13 @@
 - [Correções e validação da revisão do PR #118](backend/validation/2026-09-28-review-fixes.md)
 - [ADR-034](architecture/adr/034-backend-contracts-and-access-target.md), [plano](plan/backend-documentation-validation.md), [templates](../templates/README.md)
 - [Correção dos bugs #111–#117: ADR-035](architecture/adr/035-backend-core-isolation-and-reliability.md), [plano](plan/backend-core-remediation.md) e [relatório/evidências](backend/validation/backend-core-remediation.md)
+- [Tenant scopes #97: ADR-026](architecture/adr/026-auto-bootstrap-remove-default-tenant.md), [plano](plan/tenant-system-scope-remediation.md) e [validação PostgreSQL](backend/validation/tenant-system-scope-2026-10-01.md)
 - [MAF 1.22 e Gateway: ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md), [story BACK-MAF-120](USER-STORIES.md#back-maf-120--maf-atualizado-e-providers-integrados-ao-gateway), [análise de compatibilidade](plan/maf-122-compatibility-review.md), [plano](plan/maf-122-protocols-gateway.md) e [evidência de runtime](backend/validation/maf-122-workflow-runtime-2026-09-29.md)
 - [A2A/AG-UI preview: ADR-037](architecture/adr/037-a2a-agui-preview-validation.md), [story BACK-PROTO-121](USER-STORIES.md#back-proto-121--validar-a2a-e-ag-ui-sob-hosting-preview) e [plano](plan/a2a-agui-preview-validation.md)
 - [Issue #105 — Hyperlight CodeAct em Lab, desligado por padrão](backend/operations.md)
 - [Orquestrador supervisor dinâmico: ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md), [story BACK-ORCH-122](USER-STORIES.md#back-orch-122--orquestrar-agentes-dinamicos-pelo-supervisor-maf) e [plano separado](plan/dynamic-orchestrator-implementation.md)
 - Follow-ups pós-PR #132: [Gateway de produção #133](plan/maf-gateway-production-validation.md), [retomada do supervisor #134](plan/dynamic-supervisor-session-recovery.md) e [forecast de quotas #135 / ML40](plan/proactive-llm-quota-forecast.md)
-- [Escopo de sistema sem tenant sintético (#97)](plan/tenant-system-scope-remediation.md) — decisão aprovada; implementação e gate de merge ainda pendentes
+- [Escopo de sistema sem tenant sintético (#97)](plan/tenant-system-scope-remediation.md) — implementação validada nesta branch; issue aguarda revisão/merge de #132
 - Stories dos follow-ups: [BACK-MAF-133](USER-STORIES.md#back-maf-133--provider-global-na-composicao-gateway-de-producao), [BACK-ORCH-134](USER-STORIES.md#back-orch-134--retomar-supervisor-e-especialistas-apos-restart) e [ML40](USER-STORIES.md#ml40--forecast-proativo-de-quotas-llm)
 - [Issue #16 — auto-melhoria exige aprovação humana e permanece na trilha Lab](backend/api-core.md)
 - [Issue #106 — política FIDES e redaction por tenant](backend/access-tenants.md)

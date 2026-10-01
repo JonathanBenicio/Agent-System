@@ -93,7 +93,7 @@ await dbContext.Database.MigrateAsync();
 
 ### Authentication & Authorization
 - **MultiAuth**: API Key OR JWT via `PolicyScheme`
-- **Tenant Context**: `TenantMiddleware` extracts tenant from `X-Tenant-Id` header (priority) or JWT `tenant_id` claim (fallback). Controller routes with AuthorizeAttribute reject unknown tenants; Admin override and hub fallback require validation (docs/backend/access-tenants.md).
+- **Tenant Context**: `TenantMiddleware` extracts tenant from `X-Tenant-Id` header (priority) or JWT `tenant_id` claim (fallback). `default`, `platform`, `system-background`, and `system-devui` are reserved and cannot be resolved or accepted as runtime tenants. System/background operations use typed `SystemOperationContext`; tenant-owned data requires a real tenant context (docs/backend/access-tenants.md).
 - **Rate Limiting**: Per-tenant sliding window (`/api/chat`: 30 req/min default)
 
 ### Configuration Sections

@@ -50,3 +50,9 @@ Data: 2026-09-29 · Issue: [#120](https://github.com/JonathanBenicio/Agent-Syste
 - Testes focados de sessão, execução direta e colaboração/workflow e Gateway/registry: resultados atualizados estão no plano principal; suíte completa deve ser repetida depois das mudanças de orquestrador.
 - DI do `IWorkflowClient` pela extensão MAF e workflow durable real em PostgreSQL: pendentes.
 - A2A/AG-UI E2E: fora do caminho crítico e separada em #121; esta análise não certifica protocolo.
+
+## Release .NET 1.23.0 publicada em 2026-10-01 — avaliação para depois de #132
+
+A release contém mudanças relevantes para o catálogo/orquestrador dinâmico e aprovações: suporte a mudanças de tools entre runs, binding de respostas de approval e allow-list de chaves de configuração, todas com mudanças de compatibilidade; ver [release oficial dotnet-1.23.0](https://github.com/microsoft/agent-framework/releases/tag/dotnet-1.23.0). O núcleo `Microsoft.Agents.AI` 1.23.0 já foi publicado como estável, mas `Microsoft.Agents.AI.Hosting` e os hosts A2A/AG-UI continuam em versões `1.23.0-preview`; ver [NuGet do core 1.23.0](https://www.nuget.org/packages/Microsoft.Agents.AI/1.23.0), [Hosting 1.23 preview](https://www.nuget.org/packages/Microsoft.Agents.AI.Hosting/1.23.0-preview.260928.1) e [AG-UI 1.23 preview](https://www.nuget.org/packages/Microsoft.Agents.AI.Hosting.AGUI.AspNetCore/1.23.0-preview.260928.1).
+
+**Recomendação:** manter o baseline 1.22 nesta consolidação de tenancy para preservar a validação desta árvore. Planejar o upgrade 1.23 como alteração separada após #132, validando configuração allow-listed, tools do supervisor que mudam entre sessões e fluxos de approval/workflow. A release 1.23 não remove o estado preview de Hosting A2A/AG-UI; o aceite E2E continua em #121.

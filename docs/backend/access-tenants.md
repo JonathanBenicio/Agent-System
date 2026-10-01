@@ -13,7 +13,9 @@ Este documento descreve os contratos da branch `fix/backend-core-tenancy`. O est
 | Papel de plataforma | `platform_administrators` | Registro explícito e separado; Admin/Owner do tenant nunca são promovidos automaticamente. |
 | Sala | `knowledge_room_permissions` | ACL por usuário é obrigatória para ler uma sala, inclusive quando há suporte temporário. |
 
-O runtime não atribui o tenant `default` quando falta contexto. Rotas autenticadas que usam dados de tenant exigem um tenant existente; persistência vetorial e arquivos temporários de modelos também recusam dados sem `TenantId`. Quotas de providers globais pertencem ao escopo explícito `platform`. Em banco vazio, a inicialização falha com exceção se `AgenticSystem:AdminApiKey` estiver ausente; configure `AgenticSystem__AdminApiKey` no ambiente. Com a chave configurada, o bootstrap cria o tenant `admin`, persiste somente o hash e cria a membership correspondente. Se já houver tenants, o bootstrap ignora essa chave. O bootstrap não semeia agentes ou workflows de produto.
+O runtime não atribui o tenant `default` quando falta contexto, e esse ID legado também é rejeitado explicitamente. `platform`, `system-background` e `system-devui` não são identificadores de tenant válidos; operações globais usam `SystemOperationContext` interno, separado de claims, headers e `TenantId`. Rotas autenticadas que usam dados de tenant exigem um tenant existente; persistência vetorial e arquivos temporários de modelos também recusam dados sem `TenantId`. Dados tenant-owned, incluindo alertas de quota, são filtrados pelo tenant corrente. Quotas e alertas de providers globais pertencem aos stores de plataforma e às rotas `/api/platform/*` autorizadas para Platform Admin.
+
+Em banco vazio, configure `AgenticSystem__AdminApiKey` para provisionar o tenant `admin`, persistir somente o hash e criar a membership correspondente. Sem a chave, a API inicia sem tenant ou credencial e exige provisionamento explícito antes de operações tenant-owned. Em Development, as rotas de agente/DevUI que precisam de tenant não são mapeadas até existir um tenant ativo. Se já houver tenants, o bootstrap ignora a chave. O bootstrap não semeia agentes ou workflows de produto.
 
 A migration `AddTenantMembershipAndSupportAccess` copia vínculos de `role_assignments` e API keys existentes, mantendo tenant e papel. Ela não preenche `platform_administrators`. Novas atribuições de papel sincronizam a tabela legada e membership.
 
@@ -39,6 +41,8 @@ As rotas abaixo exigem autenticação e um registro explícito do `sub`/`NameIde
 | Método e rota | Entrada | Resultado e regra |
 |---|---|---|
 | `GET /api/platform/tenants` | — | Lista ID, nome, slug, plano, limites configurados e estado ativo. |
+| `GET /api/platform/alerts` | `limit` (1–200) | Lista alertas globais de plataforma; alertas de BYOK de tenants não aparecem aqui. |
+| `POST /api/platform/alerts/{id}/read` | — | Marca como lido somente um alerta global da plataforma. |
 | `PUT /api/platform/tenants/{tenantId}/plan` | `{ "plan": "Free" }` | Aceita `Free`, `Pro` ou `Enterprise`; altera plano e registra auditoria no tenant. Mantém `Tenant.Limits`, que podem restringir o teto do plano. |
 | `GET /api/platform/tenants/{tenantId}/memberships` | — | Lista memberships por tipo/identidade, papel e dados de concessão. |
 | `PUT /api/platform/tenants/{tenantId}/memberships/{subjectType}/{subjectId}` | `{ "role": "Viewer" }` | Cria ou altera membership. `subjectType` é `User` ou `ApiKey`; papéis aceitos: `Owner`, `Admin`, `Operator`, `Viewer`. API key precisa pertencer ao tenant. Para usuários, sincroniza `role_assignments`; para API keys, sincroniza o papel em `access_api_keys`. A operação é transacional e auditada. |

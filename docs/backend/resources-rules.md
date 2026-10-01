@@ -15,6 +15,9 @@ Este documento descreve os limites aplicados pelo backend. A fonte dos limites p
 | Documento/vetor | `vector_documents` + pgvector | `tenant_id` e `room_id` são persistidos. Busca PostgreSQL pré-filtra tenant/salas permitidas antes do ranking. Sem salas permitidas, retorna zero resultados. |
 | Agente dinâmico | Repositório de agentes e configuração YAML | Criação respeita `MaxAgents`; atualizar um agente existente continua permitido quando o tenant atingiu o teto. |
 | Quota diária | `tenant_quotas` | Contadores por tenant/data UTC são atualizados atomicamente no PostgreSQL e compartilhados por conexões/repositórios independentes. |
+| Quota de provider BYOK | `ExternalProviderQuotas` + `TenantId` real | Cotas e alertas de chaves próprias são isolados por tenant; queries sem contexto real falham. |
+| Quota de provider global | `platform_external_provider_quotas` | Cotas de chaves do host são globais e não usam TenantId. Alertas globais ficam em `SystemAlerts`, acessíveis em `/api/platform/alerts` só para Platform Admin. |
+| Alertas BYOK | `tenant_system_alerts` | Listagem e atualização de leitura em `/api/v1/alerts` usam o filtro global do tenant; tenant A não vê nem atualiza alertas do tenant B. |
 | Skill | `agent_skills` | Defaults são preparados por tenant; seed preenche ausentes e conserva customizações/IDs existentes. |
 | Workflow | Definições e execuções PostgreSQL | Tenant vem do contexto validado, é persistido e acompanha os eventos; ID de execução sozinho não autoriza acesso. |
 

@@ -465,6 +465,19 @@ Gerado do [OpenAPI Release](openapi-release.json) pelas registrations MVC/Swagge
 | appliedAgentVersionId | string | não |
 | proposedChanges | object | não |
 
+### SystemAlertResponse
+
+| Campo | Tipo/schema | Obrigatório no OpenAPI |
+|---|---|---|
+| id | string | não |
+| type | string | não |
+| severity | string | não |
+| message | string | não |
+| providerName | string | não |
+| percentage | number | não |
+| createdAt | string | não |
+| isRead | boolean | não |
+
 ### SetSkillEnabledRequest
 
 | Campo | Tipo/schema | Obrigatório no OpenAPI |
