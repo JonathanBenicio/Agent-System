@@ -16,18 +16,14 @@ namespace AgenticSystem.Tests;
 public sealed class SystemBootstrapServiceTests
 {
     [Fact]
-    public async Task BootstrapAsync_WithoutConfiguredKey_ThrowsAndLeavesDatabaseUnprovisioned()
+    public async Task BootstrapAsync_WithoutConfiguredKey_LeavesDatabaseUnprovisioned()
     {
-        await using var context = CreateContext(out var tenantScope);
+        await using var context = CreateContext(out var tenantScope, out var tenantAccessor, tenantId: null);
         using (tenantScope)
         {
-            var sut = CreateService(context);
+            var sut = CreateService(context, tenantAccessor);
 
-            Func<Task> act = () => sut.BootstrapAsync();
-
-            await act.Should()
-                .ThrowAsync<MissingTenantBootstrapConfigurationException>()
-                .WithMessage("*AgenticSystem:AdminApiKey*");
+            await sut.BootstrapAsync();
 
             (await context.Tenants.IgnoreQueryFilters().CountAsync()).Should().Be(0);
             (await context.AccessApiKeys.IgnoreQueryFilters().CountAsync()).Should().Be(0);
@@ -39,7 +35,7 @@ public sealed class SystemBootstrapServiceTests
     [Fact]
     public async Task BootstrapAsync_WhenTenantAlreadyExists_DoesNotRequireBootstrapKey()
     {
-        await using var context = CreateContext(out var tenantScope);
+        await using var context = CreateContext(out var tenantScope, out var tenantAccessor);
         using (tenantScope)
         {
             context.Tenants.Add(new Tenant
@@ -55,7 +51,7 @@ public sealed class SystemBootstrapServiceTests
             });
             await context.SaveChangesAsync();
 
-            var sut = CreateService(context);
+            var sut = CreateService(context, tenantAccessor);
 
             await sut.BootstrapAsync();
 
@@ -67,11 +63,11 @@ public sealed class SystemBootstrapServiceTests
     [Fact]
     public async Task BootstrapAsync_WithConfiguredKey_CreatesHashedAdminKeyWithoutProductSeeds()
     {
-        await using var context = CreateContext(out var tenantScope);
+        await using var context = CreateContext(out var tenantScope, out var tenantAccessor);
         using (tenantScope)
         {
             const string apiKey = "explicit-test-bootstrap-secret";
-            var sut = CreateService(context, apiKey);
+            var sut = CreateService(context, tenantAccessor, apiKey);
 
             await sut.BootstrapAsync();
 
@@ -88,10 +84,15 @@ public sealed class SystemBootstrapServiceTests
         }
     }
 
-    private static AgenticDbContext CreateContext(out IDisposable tenantScope)
+    private static AgenticDbContext CreateContext(
+        out IDisposable tenantScope,
+        out TenantContextAccessor accessor,
+        string? tenantId = "admin")
     {
-        var accessor = new TenantContextAccessor();
-        tenantScope = accessor.BeginScope(new TenantContext { TenantId = "system-bootstrap" });
+        accessor = new TenantContextAccessor();
+        tenantScope = tenantId is null
+            ? EmptyScope.Instance
+            : accessor.BeginScope(new TenantContext { TenantId = tenantId });
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
             .UseInMemoryDatabase($"system-bootstrap-tests-{Guid.NewGuid():N}")
             .Options;
@@ -100,7 +101,13 @@ public sealed class SystemBootstrapServiceTests
         return context;
     }
 
-    private static SystemBootstrapService CreateService(AgenticDbContext context, string? apiKey = null)
+    private sealed class EmptyScope : IDisposable
+    {
+        public static EmptyScope Instance { get; } = new();
+        public void Dispose() { }
+    }
+
+    private static SystemBootstrapService CreateService(AgenticDbContext context, TenantContextAccessor tenantAccessor, string? apiKey = null)
     {
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(apiKey is null
@@ -111,6 +118,8 @@ public sealed class SystemBootstrapServiceTests
         return new SystemBootstrapService(
             context,
             configuration,
-            Substitute.For<ILogger<SystemBootstrapService>>());
+            Substitute.For<ILogger<SystemBootstrapService>>(),
+            new SystemOperationContextAccessor(),
+            tenantAccessor);
     }
 }

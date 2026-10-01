@@ -188,7 +188,7 @@ public class SmartRouter : ISmartRouter
         var primaryModel = string.IsNullOrWhiteSpace(requestedModel) ? "gpt-4o-mini" : requestedModel;
 
         // Check if primary is available
-        var isPrimaryAvailable = await _quotaService.IsProviderAvailableAsync(primaryProvider);
+        var isPrimaryAvailable = await _quotaService.IsProviderAvailableAsync(primaryProvider, ExternalQuotaOwner.Platform);
 
         if (isPrimaryAvailable)
         {
@@ -201,7 +201,7 @@ public class SmartRouter : ISmartRouter
         var fallbacks = GetFallbackOptions(primaryProvider);
         foreach (var fallback in fallbacks)
         {
-            if (await _quotaService.IsProviderAvailableAsync(fallback.Provider))
+            if (await _quotaService.IsProviderAvailableAsync(fallback.Provider, ExternalQuotaOwner.Platform))
             {
                 _logger.LogInformation("✅ Auto-fallback successful: switching to {Provider} ({Model})", fallback.Provider, fallback.Model);
                 return BuildDecision(fallback.Provider, fallback.Model, fallbacks);

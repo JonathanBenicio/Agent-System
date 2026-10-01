@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.SignalR;
 using AgenticSystem.Api.Auth;
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
 using AgenticSystem.Api.Hubs;
 using AgenticSystem.Infrastructure.Persistence;
 
@@ -21,6 +22,7 @@ public class GatewayController : ControllerBase, IAsyncActionFilter
     private readonly ILogger<GatewayController> _logger;
     private readonly IHubContext<GatewayHub> _hubContext;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ISystemOperationContextAccessor _systemOperations;
     private readonly AgenticDbContext _dbContext;
 
     public GatewayController(
@@ -28,12 +30,14 @@ public class GatewayController : ControllerBase, IAsyncActionFilter
         ILogger<GatewayController> logger,
         IHubContext<GatewayHub> hubContext,
         ITenantContextAccessor tenantContextAccessor,
+        ISystemOperationContextAccessor systemOperations,
         AgenticDbContext dbContext)
     {
         _gateway = gateway;
         _logger = logger;
         _hubContext = hubContext;
         _tenantContextAccessor = tenantContextAccessor;
+        _systemOperations = systemOperations;
         _dbContext = dbContext;
     }
 
@@ -41,12 +45,14 @@ public class GatewayController : ControllerBase, IAsyncActionFilter
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
         if (!await PlatformAdminAuthorization.IsPlatformAdministratorAsync(
-                _dbContext, context.HttpContext.User, context.HttpContext.RequestAborted))
+                _dbContext, _systemOperations, context.HttpContext.User, context.HttpContext.RequestAborted))
         {
             context.Result = Forbid();
             return;
         }
 
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformGatewayOperation);
+        _systemOperations.Require(SystemOperationKind.PlatformGatewayOperation);
         await next();
     }
 

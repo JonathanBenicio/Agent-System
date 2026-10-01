@@ -519,6 +519,26 @@ public class OutboxMessageConfiguration : IEntityTypeConfiguration<OutboxMessage
     }
 }
 
+public sealed class TenantSystemAlertConfiguration : IEntityTypeConfiguration<TenantSystemAlertEntity>
+{
+    public void Configure(EntityTypeBuilder<TenantSystemAlertEntity> builder)
+    {
+        builder.ToTable("tenant_system_alerts");
+        builder.HasKey(alert => alert.Id);
+        builder.Property(alert => alert.Id).HasColumnName("id").HasMaxLength(64);
+        builder.Property(alert => alert.TenantId).HasColumnName("tenant_id").HasMaxLength(128).IsRequired();
+        builder.Property(alert => alert.Type).HasColumnName("type").HasMaxLength(64).IsRequired();
+        builder.Property(alert => alert.Severity).HasColumnName("severity").HasMaxLength(32).IsRequired();
+        builder.Property(alert => alert.Message).HasColumnName("message").IsRequired();
+        builder.Property(alert => alert.ProviderName).HasColumnName("provider_name");
+        builder.Property(alert => alert.Percentage).HasColumnName("percentage");
+        builder.Property(alert => alert.CreatedAt).HasColumnName("created_at");
+        builder.Property(alert => alert.IsRead).HasColumnName("is_read");
+        builder.HasIndex(alert => new { alert.TenantId, alert.CreatedAt })
+            .HasDatabaseName("ix_tenant_system_alerts_tenant_created_at");
+    }
+}
+
 public class AgentVersionConfiguration : IEntityTypeConfiguration<AgentVersionEntity>
 {
     public void Configure(EntityTypeBuilder<AgentVersionEntity> builder)
@@ -1167,6 +1187,88 @@ public class DbToolConfiguration : IEntityTypeConfiguration<DbToolEntity>
         builder.Property(e => e.UpdatedAt).HasColumnName("updated_at");
 
         builder.HasIndex(e => e.TenantId).HasDatabaseName("ix_agent_tools_tenant_id");
+    }
+}
+
+public sealed class PlatformAgentToolConfiguration : IEntityTypeConfiguration<PlatformAgentToolEntity>
+{
+    public void Configure(EntityTypeBuilder<PlatformAgentToolEntity> builder)
+    {
+        builder.ToTable("platform_agent_tools");
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id");
+        builder.Property(item => item.Name).HasColumnName("name").HasMaxLength(150).IsRequired();
+        builder.Property(item => item.Description).HasColumnName("description").IsRequired();
+        builder.Property(item => item.Category).HasColumnName("category").HasMaxLength(50).IsRequired();
+        builder.Property(item => item.RequiresAuth).HasColumnName("requires_auth").HasDefaultValue(false);
+        builder.Property(item => item.Type).HasColumnName("type").HasMaxLength(50).IsRequired();
+        builder.Property(item => item.MetadataJson).HasColumnName("metadata_json").HasColumnType("jsonb").IsRequired();
+        builder.Property(item => item.Version).HasColumnName("version").HasMaxLength(50).IsRequired();
+        builder.Property(item => item.VariantName).HasColumnName("variant_name").HasMaxLength(50);
+        builder.Property(item => item.RolloutPercentage).HasColumnName("rollout_percentage").HasDefaultValue(100);
+        builder.Property(item => item.IsDefault).HasColumnName("is_default").HasDefaultValue(true);
+        builder.Property(item => item.CreatedAt).HasColumnName("created_at");
+        builder.Property(item => item.UpdatedAt).HasColumnName("updated_at");
+    }
+}
+
+public sealed class PlatformAgentSkillConfiguration : IEntityTypeConfiguration<PlatformAgentSkillEntity>
+{
+    public void Configure(EntityTypeBuilder<PlatformAgentSkillEntity> builder)
+    {
+        builder.ToTable("platform_agent_skills");
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id");
+        builder.Property(item => item.Name).HasColumnName("name").HasMaxLength(150).IsRequired();
+        builder.Property(item => item.Domain).HasColumnName("domain").HasMaxLength(50).IsRequired();
+        builder.Property(item => item.Type).HasColumnName("type").HasMaxLength(50).IsRequired();
+        builder.Property(item => item.SystemPromptFragment).HasColumnName("system_prompt_fragment").IsRequired();
+        builder.Property(item => item.FewShotExamples).HasColumnName("few_shot_examples");
+        builder.Property(item => item.IsSystem).HasColumnName("is_system").HasDefaultValue(true);
+        builder.Property(item => item.IsEnabled).HasColumnName("is_enabled").HasDefaultValue(true);
+        builder.Property(item => item.MetadataJson).HasColumnName("metadata_json");
+        builder.Property(item => item.CreatedAt).HasColumnName("created_at");
+        builder.Property(item => item.UpdatedAt).HasColumnName("updated_at");
+    }
+}
+
+public sealed class PlatformExternalProviderQuotaConfiguration : IEntityTypeConfiguration<PlatformExternalProviderQuotaEntity>
+{
+    public void Configure(EntityTypeBuilder<PlatformExternalProviderQuotaEntity> builder)
+    {
+        builder.ToTable("platform_external_provider_quotas");
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id");
+        builder.Property(item => item.ProviderName).HasColumnName("provider_name").HasMaxLength(100).IsRequired();
+        builder.Property(item => item.ApiKeyId).HasColumnName("api_key_id").HasMaxLength(256).IsRequired();
+        builder.Property(item => item.LimitRequests).HasColumnName("limit_requests");
+        builder.Property(item => item.RemainingRequests).HasColumnName("remaining_requests");
+        builder.Property(item => item.LimitTokens).HasColumnName("limit_tokens");
+        builder.Property(item => item.RemainingTokens).HasColumnName("remaining_tokens");
+        builder.Property(item => item.ResetAt).HasColumnName("reset_at");
+        builder.Property(item => item.TotalBalance).HasColumnName("total_balance");
+        builder.Property(item => item.BalanceRemaining).HasColumnName("balance_remaining");
+        builder.Property(item => item.Currency).HasColumnName("currency").HasMaxLength(10).IsRequired();
+        builder.Property(item => item.LastSyncAt).HasColumnName("last_sync_at");
+        builder.HasIndex(item => new { item.ProviderName, item.ApiKeyId })
+            .IsUnique().HasDatabaseName("ux_platform_external_quotas_provider_key");
+    }
+}
+
+public sealed class PlatformOutboxMessageConfiguration : IEntityTypeConfiguration<PlatformOutboxMessageEntity>
+{
+    public void Configure(EntityTypeBuilder<PlatformOutboxMessageEntity> builder)
+    {
+        builder.ToTable("platform_outbox_messages");
+        builder.HasKey(item => item.Id);
+        builder.Property(item => item.Id).HasColumnName("id");
+        builder.Property(item => item.EventType).HasColumnName("event_type").HasMaxLength(256).IsRequired();
+        builder.Property(item => item.PayloadJson).HasColumnName("payload").HasColumnType("jsonb").IsRequired();
+        builder.Property(item => item.CreatedAt).HasColumnName("created_at");
+        builder.Property(item => item.ProcessedAt).HasColumnName("processed_at");
+        builder.Property(item => item.Error).HasColumnName("error");
+        builder.HasIndex(item => item.ProcessedAt).HasDatabaseName("ix_platform_outbox_processed_at");
+        builder.HasIndex(item => item.CreatedAt).HasDatabaseName("ix_platform_outbox_created_at");
     }
 }
 

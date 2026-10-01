@@ -16,7 +16,7 @@ public class TenantResolverTests
 
     public TenantResolverTests()
     {
-        _resolver = new TenantResolver(_store, _logger);
+        _resolver = new TenantResolver(_store, _logger, new SystemOperationContextAccessor());
     }
 
     [Fact]
@@ -46,6 +46,20 @@ public class TenantResolverTests
         _store.GetByIdAsync("nonexistent-tenant", Arg.Any<CancellationToken>()).Returns((Tenant?)null);
         var ctx = await _resolver.ResolveAsync("nonexistent-tenant");
         ctx.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData("default")]
+    [InlineData("platform")]
+    [InlineData("system-background")]
+    [InlineData("system-devui")]
+    [InlineData(" PLATFORM ")]
+    public async Task ResolveAsync_ReservedSystemIdentifier_ReturnsNullWithoutTenantLookup(string tenantId)
+    {
+        var context = await _resolver.ResolveAsync(tenantId);
+
+        context.Should().BeNull();
+        await _store.DidNotReceive().GetByIdAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

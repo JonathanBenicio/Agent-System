@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Services;
 using AgenticSystem.Core.Services.Ml;
 using AgenticSystem.Infrastructure.BackgroundServices;
 using AgenticSystem.Infrastructure.Persistence;
@@ -95,6 +96,11 @@ public class OnnxInferenceTests
         serviceScopeFactory.CreateScope().Returns(serviceScope);
         serviceProvider.GetService(typeof(IServiceScopeFactory)).Returns(serviceScopeFactory);
         serviceProvider.GetService(typeof(AgenticDbContext)).Returns(dbContext);
+        var tenantStore = Substitute.For<ITenantStore>();
+        tenantStore.GetAllAsync(Arg.Any<CancellationToken>()).Returns([new Tenant { Id = "tenant-1", Name = "Tenant 1" }]);
+        serviceProvider.GetService(typeof(ITenantStore)).Returns(tenantStore);
+        serviceProvider.GetService(typeof(ITenantContextAccessor)).Returns(tenantAccessor);
+        serviceProvider.GetService(typeof(ISystemOperationContextAccessor)).Returns(new SystemOperationContextAccessor());
 
         var queue = Substitute.For<IOnnxInferenceQueue>();
         var broadcaster = Substitute.For<IOnnxEventBroadcaster>();

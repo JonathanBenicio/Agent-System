@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.Persistence.Entities;
 
@@ -23,13 +24,16 @@ public class DbAgentSkillsSource
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<DbAgentSkillsSource> _logger;
+    private readonly ISystemOperationContextAccessor _systemOperations;
 
     public DbAgentSkillsSource(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
-        ILogger<DbAgentSkillsSource> logger)
+        ILogger<DbAgentSkillsSource> logger,
+        ISystemOperationContextAccessor systemOperations)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _systemOperations = systemOperations ?? throw new ArgumentNullException(nameof(systemOperations));
     }
 
     /// <summary>
@@ -47,19 +51,53 @@ public class DbAgentSkillsSource
             // 2. Se a lista de skills do Tenant estiver vazia, dispara a rotina automática de Auto-Seeding
             entities = await SeedDefaultSkillsAsync(db, entities, ct);
 
-            return entities.Where(e => e.IsEnabled).Select(e => new DbBasedSkill(
-                e.Id,
-                e.Name,
-                e.Domain,
-                Enum.TryParse<SkillType>(e.Type, true, out var parsedType) ? parsedType : SkillType.Instruction,
-                e.SystemPromptFragment,
-                e.FewShotExamples,
-                e.IsSystem,
-                string.IsNullOrEmpty(e.MetadataJson) 
-                    ? new Dictionary<string, string>() 
-                    : JsonSerializer.Deserialize<Dictionary<string, string>>(e.MetadataJson) ?? new()
-            ));
+            var platformSkills = await LoadPlatformSkillsAsync(db, ct);
+            var tenantSystemKeys = entities
+                .Where(skill => skill.IsSystem)
+                .Select(skill => BuildSkillKey(skill.Name, skill.Domain))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var merged = platformSkills
+                .Where(skill => skill.IsEnabled && !tenantSystemKeys.Contains(BuildSkillKey(skill.Name, skill.Domain)))
+                .Select(MapPlatformSkill)
+                .Concat(entities.Where(skill => skill.IsEnabled).Select(MapTenantSkill));
+
+            return merged.ToList();
     }
+
+    private async Task<List<PlatformAgentSkillEntity>> LoadPlatformSkillsAsync(AgenticDbContext db, CancellationToken ct)
+    {
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformCatalogRead);
+        _systemOperations.Require(SystemOperationKind.PlatformCatalogRead);
+        return await db.PlatformAgentSkills.AsNoTracking().ToListAsync(ct);
+    }
+
+    private static string BuildSkillKey(string name, string domain) => $"{domain.Trim()}\0{name.Trim()}";
+
+    private static ISkill MapTenantSkill(DbSkillEntity skill) => new DbBasedSkill(
+        skill.Id,
+        skill.Name,
+        skill.Domain,
+        Enum.TryParse<SkillType>(skill.Type, true, out var parsedType) ? parsedType : SkillType.Instruction,
+        skill.SystemPromptFragment,
+        skill.FewShotExamples,
+        skill.IsSystem,
+        DeserializeMetadata(skill.MetadataJson));
+
+    private static ISkill MapPlatformSkill(PlatformAgentSkillEntity skill) => new DbBasedSkill(
+        skill.Id,
+        skill.Name,
+        skill.Domain,
+        Enum.TryParse<SkillType>(skill.Type, true, out var parsedType) ? parsedType : SkillType.Instruction,
+        skill.SystemPromptFragment,
+        skill.FewShotExamples,
+        skill.IsSystem,
+        DeserializeMetadata(skill.MetadataJson));
+
+    private static Dictionary<string, string> DeserializeMetadata(string? json) =>
+        string.IsNullOrEmpty(json)
+            ? new Dictionary<string, string>()
+            : JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
 
     /// <summary>
     /// Provisiona automaticamente o catálogo de skills nativas do sistema para o Tenant atual no banco operacional.

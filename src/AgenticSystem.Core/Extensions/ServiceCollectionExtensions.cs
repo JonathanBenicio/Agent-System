@@ -20,6 +20,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddAgenticSystemCore(this IServiceCollection services)
     {
         services.AddMemoryCache();
+        services.AddSingleton<ISystemOperationContextAccessor, SystemOperationContextAccessor>();
 
         services.AddScoped<IMetaAgent, MetaAgentOrchestrator>();
         services.AddSingleton<IContextAnalyzer, ContextAnalyzer>();
@@ -38,8 +39,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IDirectAgentRequestExecutor, DirectAgentRequestExecutor>();
         services.AddSingleton<IQualityGateService, QualityGateService>();
         services.AddSingleton<ISessionConsolidator, SessionConsolidator>();
-        services.AddSingleton<ISkillManager, InMemorySkillManager>();
-        services.AddSingleton<IToolManager, InMemoryToolManager>();
+        services.AddSingleton<InMemorySkillManager>();
+        services.AddSingleton<ISkillManager>(sp => sp.GetRequiredService<InMemorySkillManager>());
+        services.AddSingleton<IPlatformSkillCatalog>(sp => sp.GetRequiredService<InMemorySkillManager>());
+        services.AddSingleton<InMemoryToolManager>();
+        services.AddSingleton<IToolManager>(sp => sp.GetRequiredService<InMemoryToolManager>());
+        services.AddSingleton<IPlatformToolCatalog>(sp => sp.GetRequiredService<InMemoryToolManager>());
         services.AddSingleton<IToolGovernanceService, ToolGovernanceService>();
         services.AddSingleton<IEventBus, InMemoryEventBus>();
         services.AddSingleton<IAuditLog, InMemoryAuditLog>();
@@ -241,24 +246,24 @@ public static class ServiceCollectionExtensions
     public static IServiceProvider SeedAgenticDefaults(this IServiceProvider serviceProvider)
     {
         // Register built-in tools
-        var toolManager = serviceProvider.GetRequiredService<IToolManager>();
-        toolManager.RegisterTool(new DateTimeTool());
-        toolManager.RegisterTool(new CalculatorTool());
-        toolManager.RegisterTool(new FileSearchTool());
-        toolManager.RegisterTool(new DynamicOnnxProcessorTool(
+        var toolCatalog = serviceProvider.GetRequiredService<IPlatformToolCatalog>();
+        toolCatalog.RegisterPlatformTool(new DateTimeTool());
+        toolCatalog.RegisterPlatformTool(new CalculatorTool());
+        toolCatalog.RegisterPlatformTool(new FileSearchTool());
+        toolCatalog.RegisterPlatformTool(new DynamicOnnxProcessorTool(
             serviceProvider,
             serviceProvider.GetRequiredService<ILogger<DynamicOnnxProcessorTool>>(),
             serviceProvider.GetRequiredService<IOnnxSessionCache>()));
-        toolManager.RegisterTool(new TenantAnalyticsTool(
+        toolCatalog.RegisterPlatformTool(new TenantAnalyticsTool(
             serviceProvider,
             serviceProvider.GetRequiredService<ILogger<TenantAnalyticsTool>>()));
 
         // Register built-in skills
-        var skillManager = serviceProvider.GetRequiredService<ISkillManager>();
-        skillManager.RegisterSkill(new CodingAssistantSkill());
-        skillManager.RegisterSkill(new ProductivitySkill());
-        skillManager.RegisterSkill(new CreativeWritingSkill());
-        skillManager.RegisterSkill(new DataAnalysisSkill());
+        var skillCatalog = serviceProvider.GetRequiredService<IPlatformSkillCatalog>();
+        skillCatalog.RegisterPlatformSkill(new CodingAssistantSkill());
+        skillCatalog.RegisterPlatformSkill(new ProductivitySkill());
+        skillCatalog.RegisterPlatformSkill(new CreativeWritingSkill());
+        skillCatalog.RegisterPlatformSkill(new DataAnalysisSkill());
 
         return serviceProvider;
     }

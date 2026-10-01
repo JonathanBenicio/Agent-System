@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -18,19 +18,27 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
     private readonly AgenticDbContext _dbContext;
     private readonly IConfiguration _configuration;
     private readonly ILogger<SystemBootstrapService> _logger;
+    private readonly ISystemOperationContextAccessor _systemOperations;
+    private readonly ITenantContextAccessor _tenantContext;
 
     public SystemBootstrapService(
         AgenticDbContext dbContext,
         IConfiguration configuration,
-        ILogger<SystemBootstrapService> logger)
+        ILogger<SystemBootstrapService> logger,
+        ISystemOperationContextAccessor systemOperations,
+        ITenantContextAccessor tenantContext)
     {
         _dbContext = dbContext;
         _configuration = configuration;
         _logger = logger;
+        _systemOperations = systemOperations;
+        _tenantContext = tenantContext;
     }
 
     public async Task BootstrapAsync(CancellationToken cancellationToken = default)
     {
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.Bootstrap);
+        _systemOperations.Require(SystemOperationKind.Bootstrap);
         try
         {
             var tenantExists = await _dbContext.Tenants.IgnoreQueryFilters().AnyAsync(cancellationToken);
@@ -38,7 +46,7 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
 
             if (!tenantExists && string.IsNullOrWhiteSpace(adminApiKey))
             {
-                throw new MissingTenantBootstrapConfigurationException();
+                _logger.LogWarning("No tenant is provisioned and AgenticSystem:AdminApiKey is not configured. The API will start without tenant access until an administrator provisions one.");
             }
             else if (!tenantExists)
             {
@@ -68,16 +76,19 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
                 };
 
                 _dbContext.Tenants.Add(tenant);
-                _dbContext.AccessApiKeys.Add(accessKey);
-                _dbContext.TenantMemberships.Add(new TenantMembershipEntity
+                using (_tenantContext.BeginScope(new TenantContext { TenantId = tenant.Id, TenantName = tenant.Name }))
                 {
-                    SubjectId = accessKey.Id.ToString(),
-                    SubjectType = "ApiKey",
-                    Role = accessKey.Role,
-                    TenantId = accessKey.TenantId,
-                    GrantedAt = DateTime.UtcNow
-                });
-                await _dbContext.SaveChangesAsync(cancellationToken);
+                    _dbContext.AccessApiKeys.Add(accessKey);
+                    _dbContext.TenantMemberships.Add(new TenantMembershipEntity
+                    {
+                        SubjectId = accessKey.Id.ToString(),
+                        SubjectType = "ApiKey",
+                        Role = accessKey.Role,
+                        TenantId = accessKey.TenantId,
+                        GrantedAt = DateTime.UtcNow
+                    });
+                    await _dbContext.SaveChangesAsync(cancellationToken);
+                }
                 _logger.LogInformation("Bootstrap tenant and configured API key were provisioned.");
             }
             else
@@ -124,13 +135,5 @@ public sealed class SystemBootstrapService : ISystemBootstrapService
             _logger.LogError(ex, "Unexpected error during system bootstrap.");
             throw;
         }
-    }
-}
-
-public sealed class MissingTenantBootstrapConfigurationException : InvalidOperationException
-{
-    public MissingTenantBootstrapConfigurationException()
-        : base("Cannot bootstrap an empty database without AgenticSystem:AdminApiKey. Configure the environment variable AgenticSystem__AdminApiKey.")
-    {
     }
 }

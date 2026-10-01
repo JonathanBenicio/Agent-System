@@ -26,7 +26,7 @@ public class PostgresWorkflowExecutionStoreTests
             .UseNpgsql(connectionString, postgres => postgres.UseVector())
             .Options;
         var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
-        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
         var definition = new WorkflowDefinition
         {
             Id = $"tenant-definition-{Guid.NewGuid():N}",
@@ -68,7 +68,7 @@ public class PostgresWorkflowExecutionStoreTests
             .UseNpgsql(connectionString, postgres => postgres.UseVector())
             .Options;
         var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
-        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
         var engine = new DefaultWorkflowEngine(
             store,
             Substitute.For<IDirectAgentRequestExecutor>(),
@@ -126,7 +126,7 @@ public class PostgresWorkflowExecutionStoreTests
             .UseNpgsql(connectionString, postgres => postgres.UseVector())
             .Options;
         var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
-        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
         var definition = new WorkflowDefinition
         {
             Id = $"scheduled-wait-{Guid.NewGuid():N}",
@@ -158,7 +158,7 @@ public class PostgresWorkflowExecutionStoreTests
             await Task.Delay(400);
 
             // Recreate the store/engine objects to exercise persisted wait recovery.
-            var restartedStore = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+            var restartedStore = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
             var restartedEngine = new DefaultWorkflowEngine(
                 restartedStore,
                 Substitute.For<IDirectAgentRequestExecutor>(),
@@ -188,7 +188,7 @@ public class PostgresWorkflowExecutionStoreTests
             .UseNpgsql(connectionString, postgres => postgres.UseVector())
             .Options;
         var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
-        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
         var execution = new WorkflowExecution
         {
             Id = $"lease-{Guid.NewGuid():N}",
@@ -249,7 +249,7 @@ public class PostgresWorkflowExecutionStoreTests
         {
             ContextCreator = () => new AgenticDbContext(options, tenantContext)
         };
-        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance);
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
         var definition = new WorkflowDefinition
         {
             Id = "snapshot-definition",

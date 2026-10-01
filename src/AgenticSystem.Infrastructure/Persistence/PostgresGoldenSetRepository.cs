@@ -15,29 +15,32 @@ public class PostgresGoldenSetRepository : IGoldenSetRepository
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresGoldenSetRepository> _logger;
+    private readonly ITenantContextAccessor _tenantAccessor;
 
     public PostgresGoldenSetRepository(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
-        ILogger<PostgresGoldenSetRepository> logger)
+        ILogger<PostgresGoldenSetRepository> logger,
+        ITenantContextAccessor tenantAccessor)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _tenantAccessor = tenantAccessor ?? throw new ArgumentNullException(nameof(tenantAccessor));
     }
 
     public async Task<GoldenSet?> GetByIdAsync(string id, string tenantId, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, tenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var entity = await db.GoldenSets
-            .IgnoreQueryFilters()
             .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
         return entity?.ToModel();
     }
 
     public async Task<IReadOnlyList<GoldenSet>> ListAsync(string tenantId, string? agentName, int page, int pageSize, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, tenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var query = db.GoldenSets
-            .IgnoreQueryFilters()
             .Where(x => x.TenantId == tenantId);
 
         if (!string.IsNullOrWhiteSpace(agentName))
@@ -56,6 +59,7 @@ public class PostgresGoldenSetRepository : IGoldenSetRepository
 
     public async Task AddAsync(GoldenSet model, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, model.TenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var entity = GoldenSetEntity.FromModel(model);
         db.GoldenSets.Add(entity);
@@ -65,6 +69,7 @@ public class PostgresGoldenSetRepository : IGoldenSetRepository
 
     public async Task UpdateAsync(GoldenSet model, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, model.TenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         model.UpdatedAt = DateTime.UtcNow;
         var entity = GoldenSetEntity.FromModel(model);
@@ -75,9 +80,9 @@ public class PostgresGoldenSetRepository : IGoldenSetRepository
 
     public async Task DeleteAsync(string id, string tenantId, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, tenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var entity = await db.GoldenSets
-            .IgnoreQueryFilters()
             .FirstOrDefaultAsync(x => x.Id == id && x.TenantId == tenantId, ct);
 
         if (entity != null)

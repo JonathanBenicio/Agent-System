@@ -15,29 +15,97 @@ public class PostgresEventBus : IEventBus
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresEventBus> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ISystemOperationContextAccessor _systemOperations;
 
-    public PostgresEventBus(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresEventBus> logger)
+    public PostgresEventBus(
+        IDbContextFactory<AgenticDbContext> dbContextFactory,
+        ILogger<PostgresEventBus> logger,
+        ITenantContextAccessor tenantContextAccessor,
+        ISystemOperationContextAccessor systemOperations)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
+        _systemOperations = systemOperations;
     }
 
     public async Task PublishAsync<TEvent>(TEvent @event, CancellationToken ct = default) where TEvent : class
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        
-        var message = new OutboxMessageEntity
+
+        var tenantId = GetCurrentTenantIdOrNull();
+        var systemEvent = @event as Core.Models.SystemBusEvent;
+        var platformEvent = systemEvent?.TenantId is null &&
+            _systemOperations.Current?.Operation == Core.Models.SystemOperationKind.PublishPlatformEvent;
+
+        if (platformEvent)
+        {
+            _systemOperations.Require(Core.Models.SystemOperationKind.PublishPlatformEvent);
+            db.PlatformOutboxMessages.Add(new PlatformOutboxMessageEntity
+            {
+                Id = Guid.NewGuid(),
+                EventType = @event.GetType().AssemblyQualifiedName ?? @event.GetType().Name,
+                PayloadJson = JsonSerializer.Serialize(@event),
+                CreatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync(ct);
+            _logger.LogDebug("Platform outbox message saved for event type {EventType}", @event.GetType());
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(tenantId))
+        {
+            _systemOperations.Require(Core.Models.SystemOperationKind.PublishPlatformEvent);
+            throw new InvalidOperationException("A global event must be published through the platform outbox.");
+        }
+
+        if (Core.Models.TenantIdPolicy.IsReservedSystemId(tenantId))
+            throw new InvalidOperationException("System operation identifiers cannot own tenant outbox messages.");
+
+        object eventToSerialize = @event;
+        if (systemEvent is not null)
+        {
+            if (systemEvent.TenantId is not null && !string.Equals(systemEvent.TenantId, tenantId, StringComparison.Ordinal))
+                throw new InvalidOperationException("An event cannot be published under a tenant other than its current context.");
+            if (systemEvent.TenantId is null)
+            {
+                eventToSerialize = new Core.Models.SystemBusEvent
+                {
+                    Id = systemEvent.Id,
+                    EventType = systemEvent.EventType,
+                    Source = systemEvent.Source,
+                    TenantId = tenantId,
+                    Payload = systemEvent.Payload,
+                    Timestamp = systemEvent.Timestamp,
+                    CorrelationId = systemEvent.CorrelationId
+                };
+            }
+        }
+
+        db.OutboxMessages.Add(new OutboxMessageEntity
         {
             Id = Guid.NewGuid(),
+            TenantId = tenantId,
             EventType = @event.GetType().AssemblyQualifiedName ?? @event.GetType().Name,
-            PayloadJson = JsonSerializer.Serialize(@event),
+            PayloadJson = JsonSerializer.Serialize(eventToSerialize),
             CreatedAt = DateTime.UtcNow
-        };
+        });
 
-        db.OutboxMessages.Add(message);
         await db.SaveChangesAsync(ct);
-        
-        _logger.LogDebug("Outbox message saved for event type {EventType}", message.EventType);
+        _logger.LogDebug("Outbox message saved for event type {EventType} in tenant {TenantId}", @event.GetType(), tenantId);
+    }
+
+    private string? GetCurrentTenantIdOrNull()
+    {
+        try
+        {
+            return _tenantContextAccessor.CurrentTenantId;
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     public async Task ExecuteInTransactionAsync(Func<Task> businessOperation, IEnumerable<object> events, CancellationToken ct = default)

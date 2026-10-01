@@ -55,26 +55,20 @@ public class SessionAutoConsolidator : BackgroundService
         var logger = scope.ServiceProvider.GetRequiredService<ILogger<SessionAutoConsolidator>>();
         var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
         var semanticCompressor = scope.ServiceProvider.GetService<ISemanticCompressor>();
-        var tenantStore = scope.ServiceProvider.GetService<ITenantStore>();
+        var tenantStore = scope.ServiceProvider.GetRequiredService<ITenantStore>();
 
-        var tenants = new List<string> { "admin" };
-        if (tenantStore != null)
+        IReadOnlyList<AgenticSystem.Core.Models.Tenant> allTenants;
+        try
         {
-            try
-            {
-                var allTenants = await tenantStore.GetAllAsync(ct);
-                if (allTenants != null && allTenants.Count > 0)
-                {
-                    tenants = allTenants.Select(t => t.Id).ToList();
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Failed to load tenants from TenantStore, falling back to admin tenant.");
-            }
+            allTenants = await tenantStore.GetAllAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to enumerate tenants; skipping session consolidation cycle.");
+            return;
         }
 
-        foreach (var tenantId in tenants)
+        foreach (var tenantId in allTenants.Select(tenant => tenant.Id))
         {
             using var tenantScope = tenantContextAccessor.BeginScope(new Core.Models.TenantContext { TenantId = tenantId });
 

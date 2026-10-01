@@ -23,8 +23,8 @@ public class PlatformConfigStoreTests
         {
             ContextCreator = () => new AgenticDbContext(options, tenantContext)
         };
-        await using (var db = factory.CreateDbContext())
-            await db.Database.EnsureCreatedAsync();
+        await using (var initialDb = factory.CreateDbContext())
+            await initialDb.Database.EnsureCreatedAsync();
 
         var encryption = Substitute.For<IConfigEncryptionService>();
         encryption.Encrypt(Arg.Any<string>()).Returns(call => $"cipher:{call.Arg<string>()}");
@@ -34,36 +34,31 @@ public class PlatformConfigStoreTests
             factory,
             encryption,
             reloadNotifier,
-            Substitute.For<ILogger<PostgresPlatformConfigStore>>());
+            Substitute.For<ILogger<PostgresPlatformConfigStore>>(),
+            new SystemOperationContextAccessor());
 
-        using (tenantContext.BeginScope(new TenantContext { TenantId = "tenant-a" }))
-        {
-            await store.SetValuesAsync(
+        await store.SetValuesAsync(
             [
                 new PlatformConfigValue("llm.providers.openai.apiKey", "platform-secret", IsSecret: true),
                 new PlatformConfigValue("llm.providers.openai.enabled", bool.TrueString)
             ],
             "platform-admin-a");
-        }
 
-        using (tenantContext.BeginScope(new TenantContext { TenantId = "tenant-b" }))
-        {
-            (await store.GetValueAsync("llm.providers.openai.apiKey")).Should().Be("platform-secret");
-            (await store.GetValueAsync("llm.providers.openai.enabled")).Should().Be(bool.TrueString);
-            await using var db = factory.CreateDbContext();
-            var platformSetting = await db.PlatformConfigs.SingleAsync(setting => setting.Key == "llm.providers.openai.apiKey");
-            platformSetting.Value.Should().Be("********");
-            platformSetting.EncryptedValue.Should().Be("cipher:platform-secret");
-            platformSetting.ChangedBy.Should().Be("platform-admin-a");
+        (await store.GetValueAsync("llm.providers.openai.apiKey")).Should().Be("platform-secret");
+        (await store.GetValueAsync("llm.providers.openai.enabled")).Should().Be(bool.TrueString);
+        await using var db = factory.CreateDbContext();
+        var platformSetting = await db.PlatformConfigs.SingleAsync(setting => setting.Key == "llm.providers.openai.apiKey");
+        platformSetting.Value.Should().Be("********");
+        platformSetting.EncryptedValue.Should().Be("cipher:platform-secret");
+        platformSetting.ChangedBy.Should().Be("platform-admin-a");
 
-            var tenantConfigCount = await db.ConfigEntries.CountAsync();
-            tenantConfigCount.Should().Be(0);
-            var audit = await db.PlatformConfigAudits.SingleAsync(item => item.Key == "llm.providers.openai.apiKey");
-            audit.ChangedBy.Should().Be("platform-admin-a");
-            audit.NewValueHash.Should().NotBe("platform-secret");
-            audit.NewValueHash.Should().NotBe("cipher:platform-secret");
-            audit.PreviousValueHash.Should().BeNull();
-        }
+        var tenantConfigCount = await db.ConfigEntries.IgnoreQueryFilters().CountAsync();
+        tenantConfigCount.Should().Be(0);
+        var audit = await db.PlatformConfigAudits.SingleAsync(item => item.Key == "llm.providers.openai.apiKey");
+        audit.ChangedBy.Should().Be("platform-admin-a");
+        audit.NewValueHash.Should().NotBe("platform-secret");
+        audit.NewValueHash.Should().NotBe("cipher:platform-secret");
+        audit.PreviousValueHash.Should().BeNull();
 
         reloadNotifier.Received(1).NotifyChange("llm.providers.openai.apiKey");
         reloadNotifier.Received(1).NotifyChange("llm.providers.openai.enabled");

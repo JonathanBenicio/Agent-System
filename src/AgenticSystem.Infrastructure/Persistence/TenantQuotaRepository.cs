@@ -14,22 +14,25 @@ public sealed class TenantQuotaRepository : ITenantQuotaRepository
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<TenantQuotaRepository> _logger;
+    private readonly ITenantContextAccessor _tenantAccessor;
 
     public TenantQuotaRepository(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
-        ILogger<TenantQuotaRepository> logger)
+        ILogger<TenantQuotaRepository> logger,
+        ITenantContextAccessor tenantAccessor)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;
+        _tenantAccessor = tenantAccessor;
     }
 
     /// <inheritdoc/>
     public async Task<TenantQuotaSnapshot> GetOrCreateAsync(string tenantId, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, tenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
         var entity = await db.TenantQuotas
-            .IgnoreQueryFilters()
             .AsNoTracking()
             .FirstOrDefaultAsync(q => q.TenantId == tenantId, ct);
 
@@ -42,7 +45,7 @@ public sealed class TenantQuotaRepository : ITenantQuotaRepository
                 VALUES ({tenantId}, 30, 1000000, 50.0, 0, 0, 0, {today}, {DateTime.UtcNow})
                 ON CONFLICT ("TenantId") DO NOTHING
                 """, ct);
-            entity = await db.TenantQuotas.IgnoreQueryFilters().AsNoTracking()
+            entity = await db.TenantQuotas.AsNoTracking()
                 .FirstOrDefaultAsync(q => q.TenantId == tenantId, ct)
                 ?? throw new InvalidOperationException($"Quota row for tenant '{tenantId}' could not be created or loaded.");
             _logger.LogInformation("Created default quota record for tenant {TenantId}", tenantId);
@@ -62,6 +65,7 @@ public sealed class TenantQuotaRepository : ITenantQuotaRepository
     /// <inheritdoc/>
     public async Task IncrementUsageAsync(string tenantId, int tokens, double costUsd, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, tenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var today = DateTime.UtcNow.Date;
         var now = DateTime.UtcNow;
@@ -81,10 +85,10 @@ public sealed class TenantQuotaRepository : ITenantQuotaRepository
     /// <inheritdoc/>
     public async Task UpsertConfigAsync(string tenantId, QuotaConfig config, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, tenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
 
         var entity = await db.TenantQuotas
-            .IgnoreQueryFilters()
             .FirstOrDefaultAsync(q => q.TenantId == tenantId, ct);
 
         if (entity is null)
@@ -104,8 +108,9 @@ public sealed class TenantQuotaRepository : ITenantQuotaRepository
     }
 
     /// <inheritdoc/>
-    public async Task ResetDailyCountersAsync(CancellationToken ct = default)
+    public async Task ResetDailyCountersAsync(string tenantId, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, tenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var today = DateTime.UtcNow.Date;
 
@@ -113,9 +118,9 @@ public sealed class TenantQuotaRepository : ITenantQuotaRepository
             UPDATE tenant_quotas
             SET "CurrentDailyTokens" = 0, "CurrentDailyCostUsd" = 0, "CurrentDailyRequests" = 0,
                 "LastResetAt" = {today}, "UpdatedAt" = {DateTime.UtcNow}
-            WHERE "LastResetAt" < {today}
+            WHERE "TenantId" = {tenantId} AND "LastResetAt" < {today}
             """, ct);
-        _logger.LogInformation("Daily quota counters reset for {Count} tenant(s)", updated);
+        _logger.LogInformation("Daily quota counters reset for tenant {TenantId}; changed {Count} row(s)", tenantId, updated);
     }
 
     private static TenantQuotaSnapshot ToSnapshot(TenantQuotaEntity e) => new(

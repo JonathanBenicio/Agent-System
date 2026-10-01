@@ -70,7 +70,8 @@ public class PostgresPlatformConfigStoreIntegrationTests
             factory,
             encryption,
             host1Notifier,
-            NullLogger<PostgresPlatformConfigStore>.Instance);
+            NullLogger<PostgresPlatformConfigStore>.Instance,
+            new SystemOperationContextAccessor());
 
         using (tenantContext.BeginScope(new TenantContext { TenantId = "platform-config-test" }))
         {
@@ -245,7 +246,7 @@ public class PostgresPlatformConfigStoreIntegrationTests
             ContextCreator = () => new AgenticDbContext(options, tenantContext)
         };
         var logger = NullLogger<SimpleSessionStoreAdapter>.Instance;
-        var sessionStore = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance);
+        var sessionStore = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance, tenantContext);
         var session = new SessionData
         {
             Id = sessionId,
@@ -337,7 +338,8 @@ public class PostgresPlatformConfigStoreIntegrationTests
             factory,
             encryption,
             reloadNotifier,
-            Substitute.For<ILogger<PostgresPlatformConfigStore>>());
+            Substitute.For<ILogger<PostgresPlatformConfigStore>>(),
+            new SystemOperationContextAccessor());
         var notification = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var notifier = new ConfigReloadNotifier();
         using var subscription = notifier.OnChange(key =>

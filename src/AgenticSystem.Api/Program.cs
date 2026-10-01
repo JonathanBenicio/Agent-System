@@ -181,17 +181,10 @@ using (var scope = app.Services.CreateScope())
             var bootstrapService = scope.ServiceProvider.GetService<AgenticSystem.Core.Interfaces.ISystemBootstrapService>();
             if (bootstrapService is not null)
             {
-                var tenantAccessor = scope.ServiceProvider.GetRequiredService<AgenticSystem.Core.Interfaces.ITenantContextAccessor>();
-                using var tenantScope = tenantAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext { TenantId = "system-bootstrap", TenantName = "System Bootstrap" });
                 Serilog.Log.Information("Executando auto-bootstrap do banco de dados...");
                 await bootstrapService.BootstrapAsync();
                 Serilog.Log.Information("Auto-bootstrap finalizado.");
             }
-        }
-        catch (AgenticSystem.Infrastructure.Services.MissingTenantBootstrapConfigurationException ex)
-        {
-            Serilog.Log.Fatal(ex, "Startup aborted because the initial tenant bootstrap configuration is missing.");
-            throw;
         }
         catch (Exception ex)
         {
@@ -221,15 +214,20 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI(c => c.SwaggerEndpoint("/swagger/v1/swagger.json", "Agentic System API v1"));
-    
-    using (app.Services.GetRequiredService<ITenantContextAccessor>().BeginScope(new AgenticSystem.Core.Models.TenantContext { TenantId = "system-devui", TenantName = "System DevUI" }))
+
+    var developmentTenants = await app.Services.GetRequiredService<ITenantStore>().GetAllAsync();
+    var developmentTenant = developmentTenants.FirstOrDefault(tenant => tenant.IsActive);
+    if (developmentTenant is not null)
     {
+        using var tenantScope = app.Services.GetRequiredService<ITenantContextAccessor>()
+            .BeginScope(new AgenticSystem.Core.Models.TenantContext { TenantId = developmentTenant.Id, TenantName = developmentTenant.Name });
         var agent = app.Services.GetRequiredKeyedService<Microsoft.Agents.AI.AIAgent>("AgenticSystem");
         app.MapOpenAIResponses(agent);
         app.MapOpenAIConversations();
-        
         app.MapDevUI();
     }
+    else
+        Log.Information("Development agent endpoints are not mapped until a real tenant is provisioned.");
 }
 
 app.UseSerilogRequestLogging();

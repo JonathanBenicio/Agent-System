@@ -9,6 +9,7 @@ using System.Text.Encodings.Web;
 using Microsoft.EntityFrameworkCore;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Services;
 using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Api.Auth;
 
@@ -64,7 +65,9 @@ public class ApiKeyAuthenticationTests
             optionsMonitor,
             loggerFactory,
             UrlEncoder.Default,
-            dbContext);
+            dbContext,
+            new SystemOperationContextAccessor(),
+            tenantAccessor);
 
         var scheme = new AuthenticationScheme(ApiKeyAuthenticationHandler.SchemeName, null, typeof(ApiKeyAuthenticationHandler));
         var context = new DefaultHttpContext();

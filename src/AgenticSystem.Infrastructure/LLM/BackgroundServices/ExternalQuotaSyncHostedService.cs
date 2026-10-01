@@ -1,4 +1,5 @@
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -85,22 +86,22 @@ public class ExternalQuotaSyncHostedService : BackgroundService
 
         if (settings.OpenAI.Enabled && !string.IsNullOrEmpty(settings.OpenAI.ApiKey))
         {
-            await syncService.SyncBillingAsync("OpenAI", null, "global_openai", settings.OpenAI.ApiKey);
+            await syncService.SyncBillingAsync("OpenAI", ExternalQuotaOwner.Platform, "global_openai", settings.OpenAI.ApiKey);
         }
 
         if (settings.OpenRouter.Enabled && !string.IsNullOrEmpty(settings.OpenRouter.ApiKey))
         {
-            await syncService.SyncBillingAsync("OpenRouter", null, "global_openrouter", settings.OpenRouter.ApiKey);
+            await syncService.SyncBillingAsync("OpenRouter", ExternalQuotaOwner.Platform, "global_openrouter", settings.OpenRouter.ApiKey);
         }
 
         if (settings.Claude.Enabled && !string.IsNullOrEmpty(settings.Claude.ApiKey))
         {
-            await syncService.SyncBillingAsync("Claude", null, "global_claude", settings.Claude.ApiKey);
+            await syncService.SyncBillingAsync("Claude", ExternalQuotaOwner.Platform, "global_claude", settings.Claude.ApiKey);
         }
 
         if (settings.Gemini.Enabled && !string.IsNullOrEmpty(settings.Gemini.ApiKey))
         {
-            await syncService.SyncBillingAsync("Gemini", null, "global_gemini", settings.Gemini.ApiKey);
+            await syncService.SyncBillingAsync("Gemini", ExternalQuotaOwner.Platform, "global_gemini", settings.Gemini.ApiKey);
         }
     }
 
@@ -117,7 +118,7 @@ public class ExternalQuotaSyncHostedService : BackgroundService
             if (provider.Equals("OpenAI", StringComparison.OrdinalIgnoreCase) || 
                 provider.Equals("OpenRouter", StringComparison.OrdinalIgnoreCase))
             {
-                await syncService.SyncBillingAsync(provider, tenant.Id, $"tenant_{tenant.Id}_{provider}", apiKey);
+                await syncService.SyncBillingAsync(provider, ExternalQuotaOwner.ForTenant(tenant.Id), $"tenant_{tenant.Id}_{provider}", apiKey);
             }
         }
     }

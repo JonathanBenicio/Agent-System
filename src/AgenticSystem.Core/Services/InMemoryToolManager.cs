@@ -6,7 +6,7 @@ using System.Collections.Concurrent;
 
 namespace AgenticSystem.Core.Services;
 
-public class InMemoryToolManager : IToolManager
+public class InMemoryToolManager : IToolManager, IPlatformToolCatalog
 {
     private readonly ConcurrentDictionary<string, ITool> _tools = new();
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, ToolRegistration>> _registrations = new(StringComparer.OrdinalIgnoreCase);
@@ -186,6 +186,8 @@ public class InMemoryToolManager : IToolManager
         RegisterToolVariant(tool.Id, tool, version: "1.0.0", isDefault: true);
         _logger.LogInformation("🔧 Tool registrada: {ToolName} ({Category})", tool.Name, tool.Category);
     }
+
+    public void RegisterPlatformTool(ITool tool) => RegisterTool(tool);
 
     public void RegisterToolVariant(
         string logicalToolId,

@@ -15,19 +15,25 @@ public class PostgresSessionStore : ISessionStore
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresSessionStore> _logger;
+    private readonly ITenantContextAccessor _tenantAccessor;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public PostgresSessionStore(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresSessionStore> logger)
+    public PostgresSessionStore(
+        IDbContextFactory<AgenticDbContext> dbContextFactory,
+        ILogger<PostgresSessionStore> logger,
+        ITenantContextAccessor tenantAccessor)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;
+        _tenantAccessor = tenantAccessor;
     }
 
     public async Task SaveAsync(SessionData session, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, session.TenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        var entity = await db.SessionRecords.IgnoreQueryFilters()
-            .FirstOrDefaultAsync(record => record.Id == session.Id, ct);
+        var entity = await db.SessionRecords
+            .FirstOrDefaultAsync(record => record.Id == session.Id && record.TenantId == session.TenantId, ct);
         var serialized = JsonSerializer.Serialize(session, JsonOptions);
 
         if (entity is null)

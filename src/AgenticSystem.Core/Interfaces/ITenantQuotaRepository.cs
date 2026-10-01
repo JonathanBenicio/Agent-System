@@ -27,10 +27,10 @@ public interface ITenantQuotaRepository
     Task UpsertConfigAsync(string tenantId, QuotaConfig config, CancellationToken ct = default);
 
     /// <summary>
-    /// Resets daily counters for all tenants whose <c>LastResetAt</c> is before today UTC.
-    /// Called by the daily reset job.
+    /// Resets daily counters for the active tenant when its <c>LastResetAt</c> is before today UTC.
+    /// A platform job must enumerate tenants and call this under each real tenant context.
     /// </summary>
-    Task ResetDailyCountersAsync(CancellationToken ct = default);
+    Task ResetDailyCountersAsync(string tenantId, CancellationToken ct = default);
 }
 
 /// <summary>

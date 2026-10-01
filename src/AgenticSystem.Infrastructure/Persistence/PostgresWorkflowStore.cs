@@ -13,21 +13,24 @@ public class PostgresWorkflowStore : IWorkflowStore
     private static readonly System.Threading.SemaphoreSlim _semaphore = new(1, 1);
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresWorkflowStore> _logger;
+    private readonly ITenantContextAccessor _tenantAccessor;
 
     public PostgresWorkflowStore(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
-        ILogger<PostgresWorkflowStore> logger)
+        ILogger<PostgresWorkflowStore> logger,
+        ITenantContextAccessor tenantAccessor)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;
+        _tenantAccessor = tenantAccessor;
     }
 
     public async Task SaveDefinitionAsync(string tenantId, WorkflowDefinition definition, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, tenantId);
         using var context = await _dbContextFactory.CreateDbContextAsync(ct);
         var entity = await context.WorkflowDefinitions
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(item => item.Id == definition.Id, ct);
+            .FirstOrDefaultAsync(item => item.Id == definition.Id && item.TenantId == tenantId, ct);
 
         if (entity == null)
         {
@@ -56,16 +59,18 @@ public class PostgresWorkflowStore : IWorkflowStore
         {
             await context.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex)
         {
             await using var ownershipContext = await _dbContextFactory.CreateDbContextAsync(ct);
-            var owner = await ownershipContext.WorkflowDefinitions
-                .IgnoreQueryFilters()
+            var existsForCurrentTenant = await ownershipContext.WorkflowDefinitions
                 .AsNoTracking()
-                .Where(item => item.Id == definition.Id)
-                .Select(item => item.TenantId)
-                .FirstOrDefaultAsync(ct);
-            if (owner is not null && !string.Equals(owner, tenantId, StringComparison.OrdinalIgnoreCase))
+                .AnyAsync(item => item.Id == definition.Id && item.TenantId == tenantId, ct);
+            if (!existsForCurrentTenant &&
+                ex.InnerException is PostgresException
+                {
+                    SqlState: PostgresErrorCodes.UniqueViolation,
+                    ConstraintName: "PK_workflow_definitions"
+                })
                 throw new InvalidOperationException("Workflow definition tenant ownership cannot be changed.");
 
             throw;

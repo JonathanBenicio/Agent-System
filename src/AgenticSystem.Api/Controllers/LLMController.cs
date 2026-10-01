@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using System.Security.Claims;
 using AgenticSystem.Api.Auth;
 using AgenticSystem.Core.LLM.Interfaces;
+using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Persistence;
 
 namespace AgenticSystem.Api.Controllers;
@@ -15,23 +17,30 @@ public class LLMController : ControllerBase, IAsyncActionFilter
 {
     private readonly ILLMAdministrationService _llmAdministrationService;
     private readonly AgenticDbContext? _dbContext;
+    private readonly ISystemOperationContextAccessor? _systemOperations;
 
-    public LLMController(ILLMAdministrationService llmAdministrationService, AgenticDbContext? dbContext = null)
+    public LLMController(
+        ILLMAdministrationService llmAdministrationService,
+        AgenticDbContext? dbContext = null,
+        ISystemOperationContextAccessor? systemOperations = null)
     {
         _llmAdministrationService = llmAdministrationService;
         _dbContext = dbContext;
+        _systemOperations = systemOperations;
     }
 
     [NonAction]
     public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
-        if (_dbContext is null || !await PlatformAdminAuthorization.IsPlatformAdministratorAsync(
-                _dbContext, context.HttpContext.User, context.HttpContext.RequestAborted))
+        if (_dbContext is null || _systemOperations is null || !await PlatformAdminAuthorization.IsPlatformAdministratorAsync(
+                _dbContext, _systemOperations, context.HttpContext.User, context.HttpContext.RequestAborted))
         {
             context.Result = Forbid();
             return;
         }
 
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformConfigRead);
+        _systemOperations.Require(SystemOperationKind.PlatformConfigRead);
         await next();
     }
 

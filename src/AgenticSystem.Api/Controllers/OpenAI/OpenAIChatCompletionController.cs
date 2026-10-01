@@ -26,17 +26,20 @@ public class OpenAIChatCompletionController : ControllerBase
     private readonly IFrameworkOrchestratorService _orchestrator;
     private readonly AgenticDbContext _dbContext;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ISystemOperationContextAccessor _systemOperations;
     private readonly ILogger<OpenAIChatCompletionController> _logger;
 
     public OpenAIChatCompletionController(
         IFrameworkOrchestratorService orchestrator,
         AgenticDbContext dbContext,
         ITenantContextAccessor tenantContextAccessor,
+        ISystemOperationContextAccessor systemOperations,
         ILogger<OpenAIChatCompletionController> logger)
     {
         _orchestrator = orchestrator;
         _dbContext = dbContext;
         _tenantContextAccessor = tenantContextAccessor;
+        _systemOperations = systemOperations;
         _logger = logger;
     }
 
@@ -55,7 +58,8 @@ public class OpenAIChatCompletionController : ControllerBase
         CancellationToken ct)
     {
         // 1. Autenticação via Bearer token (padrão OpenAI)
-        if (!await ValidateBearerTokenAsync())
+        var authenticatedTenantId = await ValidateBearerTokenAsync();
+        if (authenticatedTenantId is null)
         {
             return Unauthorized(new ChatCompletionError
             {
@@ -67,6 +71,12 @@ public class OpenAIChatCompletionController : ControllerBase
                 }
             });
         }
+
+        using var tenantScope = _tenantContextAccessor.BeginScope(new TenantContext
+        {
+            TenantId = authenticatedTenantId,
+            IsAuthenticated = true
+        });
 
         // 2. Validação do request
         if (request.Messages is not { Count: > 0 })
@@ -219,7 +229,7 @@ public class OpenAIChatCompletionController : ControllerBase
     [ProducesResponseType(200)]
     public async Task<IActionResult> ListModels()
     {
-        if (!await ValidateBearerTokenAsync())
+        if (await ValidateBearerTokenAsync() is null)
         {
             return Unauthorized(new ChatCompletionError
             {
@@ -250,11 +260,11 @@ public class OpenAIChatCompletionController : ControllerBase
         return Ok(models);
     }
 
-    private async Task<bool> ValidateBearerTokenAsync()
+    private async Task<string?> ValidateBearerTokenAsync()
     {
         var authHeader = Request.Headers.Authorization.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(authHeader))
-            return false;
+            return null;
 
         // Suporta "Bearer <token>" (padrão OpenAI) e token direto
         var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
@@ -262,7 +272,7 @@ public class OpenAIChatCompletionController : ControllerBase
             : authHeader.Trim();
 
         if (string.IsNullOrWhiteSpace(token))
-            return false;
+            return null;
 
         // Calcula o Hash SHA-256 da chave fornecida
         var keyBytes = Encoding.UTF8.GetBytes(token);
@@ -270,22 +280,19 @@ public class OpenAIChatCompletionController : ControllerBase
         var keyHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
 
         // Consulta no banco de dados se o hash corresponde a uma chave ativa
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.ApiKeyAuthentication);
+        _systemOperations.Require(SystemOperationKind.ApiKeyAuthentication);
         var accessKey = await _dbContext.AccessApiKeys
             .IgnoreQueryFilters() // Ignora o filtro de tenant
             .FirstOrDefaultAsync(k => k.KeyHash == keyHash && k.IsEnabled);
 
         if (accessKey is null)
-            return false;
+            return null;
 
-        // Estabelece o escopo do Tenant via ITenantContextAccessor (single source of truth)
-        _tenantContextAccessor.BeginScope(new TenantContext
-        {
-            TenantId = accessKey.TenantId,
-            TenantName = accessKey.Name,
-            IsAuthenticated = true
-        });
+        if (TenantIdPolicy.IsReservedSystemId(accessKey.TenantId))
+            return null;
 
-        return true;
+        return accessKey.TenantId;
     }
 }
 

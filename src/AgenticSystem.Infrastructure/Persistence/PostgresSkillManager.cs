@@ -13,30 +13,31 @@ using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Infrastructure.Persistence;
 
-public class PostgresSkillManager : ISkillManager
+public class PostgresSkillManager : ISkillManager, IPlatformSkillCatalog
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresSkillManager> _logger;
     private readonly DbAgentSkillsSource _skillsSource;
     private readonly ITenantContextAccessor _tenantAccessor;
+    private readonly ISystemOperationContextAccessor _systemOperations;
 
     public PostgresSkillManager(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
         DbAgentSkillsSource skillsSource,
         ILogger<PostgresSkillManager> logger,
-        ITenantContextAccessor tenantAccessor)
+        ITenantContextAccessor tenantAccessor,
+        ISystemOperationContextAccessor systemOperations)
     {
         _dbContextFactory = dbContextFactory;
         _skillsSource = skillsSource;
         _logger = logger;
         _tenantAccessor = tenantAccessor;
+        _systemOperations = systemOperations;
     }
 
     public async Task<IEnumerable<SkillContent>> GetSkillsForAgentAsync(string agentName, string domain)
     {
-        string? activeTenantId = null;
-        try { activeTenantId = _tenantAccessor.CurrentTenantId; } catch (InvalidOperationException) { }
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = activeTenantId ?? "system-background" });
+        _ = _tenantAccessor.CurrentTenantId;
 
         var skills = await _skillsSource.LoadSkillsAsync();
         var relevantSkills = skills
@@ -68,21 +69,21 @@ public class PostgresSkillManager : ISkillManager
 
     public void RegisterSkill(ISkill skill)
     {
-        string? activeTenantId = null;
-        try { activeTenantId = _tenantAccessor.CurrentTenantId; } catch (InvalidOperationException) { }
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = activeTenantId ?? "system-background" });
+        var activeTenantId = _tenantAccessor.CurrentTenantId;
+        if (TenantIdPolicy.IsReservedSystemId(activeTenantId))
+            throw new InvalidOperationException("Tenant skill registration requires a real tenant context.");
 
         try
         {
             using var db = _dbContextFactory.CreateDbContext();
-            var entity = db.AgentSkills.IgnoreQueryFilters().FirstOrDefault(s => s.Id == skill.Id);
+            var entity = db.AgentSkills.FirstOrDefault(s => s.Id == skill.Id && s.TenantId == activeTenantId);
             var content = skill.GetContentAsync(new SkillContext()).GetAwaiter().GetResult();
             if (entity == null)
             {
                 entity = new DbSkillEntity
                 {
                     Id = skill.Id,
-                    TenantId = db.CurrentTenantId,
+                    TenantId = activeTenantId,
                     Name = skill.Name,
                     Domain = skill.Domain,
                     Type = skill.Type.ToString(),
@@ -112,16 +113,53 @@ public class PostgresSkillManager : ISkillManager
         }
     }
 
+    public void RegisterPlatformSkill(ISkill skill)
+    {
+        ArgumentNullException.ThrowIfNull(skill);
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformCatalogWrite);
+        _systemOperations.Require(SystemOperationKind.PlatformCatalogWrite);
+
+        using var db = _dbContextFactory.CreateDbContext();
+        var entity = db.PlatformAgentSkills.FirstOrDefault(item => item.Id == skill.Id);
+        var content = skill.GetContentAsync(new SkillContext()).GetAwaiter().GetResult();
+        if (entity is null)
+        {
+            entity = new PlatformAgentSkillEntity { Id = skill.Id };
+            db.PlatformAgentSkills.Add(entity);
+        }
+
+        entity.Name = skill.Name;
+        entity.Domain = skill.Domain;
+        entity.Type = skill.Type.ToString();
+        entity.SystemPromptFragment = content.SystemPromptFragment;
+        entity.FewShotExamples = content.FewShotExamples;
+        entity.IsSystem = true;
+        entity.IsEnabled = true;
+        entity.MetadataJson = content.Metadata != null ? JsonSerializer.Serialize(content.Metadata) : "{}";
+        entity.UpdatedAt = DateTime.UtcNow;
+        db.SaveChanges();
+    }
+
+    public bool UnregisterPlatformSkill(string skillId)
+    {
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformCatalogWrite);
+        _systemOperations.Require(SystemOperationKind.PlatformCatalogWrite);
+        using var db = _dbContextFactory.CreateDbContext();
+        var entity = db.PlatformAgentSkills.FirstOrDefault(item => item.Id == skillId);
+        if (entity is null) return false;
+        db.PlatformAgentSkills.Remove(entity);
+        db.SaveChanges();
+        return true;
+    }
+
     public bool UnregisterSkill(string skillId)
     {
-        string? activeTenantId = null;
-        try { activeTenantId = _tenantAccessor.CurrentTenantId; } catch (InvalidOperationException) { }
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = activeTenantId ?? "system-background" });
+        var activeTenantId = _tenantAccessor.CurrentTenantId;
 
         try
         {
             using var db = _dbContextFactory.CreateDbContext();
-            var entity = db.AgentSkills.FirstOrDefault(s => s.Id == skillId);
+            var entity = db.AgentSkills.FirstOrDefault(s => s.Id == skillId && s.TenantId == activeTenantId);
             if (entity != null)
             {
                 db.AgentSkills.Remove(entity);
@@ -140,9 +178,7 @@ public class PostgresSkillManager : ISkillManager
 
     public IEnumerable<ISkill> GetAllSkills()
     {
-        string? activeTenantId = null;
-        try { activeTenantId = _tenantAccessor.CurrentTenantId; } catch (InvalidOperationException) { }
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = activeTenantId ?? "system-background" });
+        _ = _tenantAccessor.CurrentTenantId;
 
         try
         {

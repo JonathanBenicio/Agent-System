@@ -29,8 +29,8 @@ public class TenantMiddleware
         IPermissionService? permissionService = null,
         IQuotaEnforcer? quotaEnforcer = null)
     {
-        // Platform administration is authenticated and authorized by the explicit
-        // platform_administrators registry in PlatformAdminController. It has no tenant context.
+        // The platform administration API is authenticated and authorized by the explicit
+        // platform_administrators registry. It has no tenant context.
         if (context.Request.Path.StartsWithSegments("/api/platform", StringComparison.OrdinalIgnoreCase))
         {
             await _next(context);
@@ -216,6 +216,7 @@ public class TenantMiddleware
 
         return null;
     }
+
 }
 
 public static class TenantMiddlewareExtensions

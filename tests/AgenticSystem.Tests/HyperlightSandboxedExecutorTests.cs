@@ -84,11 +84,11 @@ public sealed class HyperlightSandboxedExecutorTests
     {
         var hostEnvironment = Substitute.For<IHostEnvironment>();
         hostEnvironment.EnvironmentName.Returns(environmentName);
-        var toolManager = Substitute.For<AgenticSystem.Core.Interfaces.IToolManager>();
+        var toolCatalog = Substitute.For<AgenticSystem.Core.Interfaces.IPlatformToolCatalog>();
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddHttpClient();
-        services.AddSingleton<AgenticSystem.Core.Interfaces.IToolManager>(toolManager);
+        services.AddSingleton<AgenticSystem.Core.Interfaces.IPlatformToolCatalog>(toolCatalog);
         services.AddSingleton<IHostEnvironment>(hostEnvironment);
         services.AddSingleton<IOptions<HyperlightExecutionSettings>>(
             Options.Create(new HyperlightExecutionSettings { Enabled = enabled }));
@@ -98,7 +98,7 @@ public sealed class HyperlightSandboxedExecutorTests
         using var provider = services.BuildServiceProvider();
         provider.SeedInfrastructureTools();
 
-        toolManager.DidNotReceive().RegisterTool(Arg.Is<AgenticSystem.Core.Interfaces.ITool>(tool =>
+        toolCatalog.DidNotReceive().RegisterPlatformTool(Arg.Is<AgenticSystem.Core.Interfaces.ITool>(tool =>
             tool.Id == "hyperlight-execute-code"));
     }
 
@@ -107,11 +107,11 @@ public sealed class HyperlightSandboxedExecutorTests
     {
         var hostEnvironment = Substitute.For<IHostEnvironment>();
         hostEnvironment.EnvironmentName.Returns("Lab");
-        var toolManager = Substitute.For<AgenticSystem.Core.Interfaces.IToolManager>();
+        var toolCatalog = Substitute.For<AgenticSystem.Core.Interfaces.IPlatformToolCatalog>();
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddHttpClient();
-        services.AddSingleton<AgenticSystem.Core.Interfaces.IToolManager>(toolManager);
+        services.AddSingleton<AgenticSystem.Core.Interfaces.IPlatformToolCatalog>(toolCatalog);
         services.AddSingleton<IHostEnvironment>(hostEnvironment);
         services.AddSingleton<IOptions<HyperlightExecutionSettings>>(
             Options.Create(new HyperlightExecutionSettings { Enabled = true }));
@@ -121,7 +121,7 @@ public sealed class HyperlightSandboxedExecutorTests
         using var provider = services.BuildServiceProvider();
         provider.SeedInfrastructureTools();
 
-        toolManager.Received(1).RegisterTool(Arg.Is<AgenticSystem.Core.Interfaces.ITool>(tool =>
+        toolCatalog.Received(1).RegisterPlatformTool(Arg.Is<AgenticSystem.Core.Interfaces.ITool>(tool =>
             tool.Id == "hyperlight-execute-code"));
     }
 

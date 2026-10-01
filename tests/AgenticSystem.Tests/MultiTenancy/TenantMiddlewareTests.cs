@@ -22,7 +22,7 @@ public class TenantMiddlewareTests
     public TenantMiddlewareTests()
     {
         _store = Substitute.For<ITenantStore>();
-        _resolver = new TenantResolver(_store, Substitute.For<ILogger<TenantResolver>>());
+        _resolver = new TenantResolver(_store, Substitute.For<ILogger<TenantResolver>>(), new SystemOperationContextAccessor());
         _tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
         _permissionService = Substitute.For<IPermissionService>();
         _tenantContextAccessor.BeginScope(Arg.Any<TenantContext>()).Returns(Substitute.For<IDisposable>());

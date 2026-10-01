@@ -149,7 +149,7 @@ if (args.Contains("--skills-before-restart") || args.Contains("--skills-after-re
     var baseline = core.RootElement.GetProperty("baseline").GetString()!;
     var tenantIds = new[] { run + "-a", run + "-b" };
     var catalogs = new Dictionary<string, string[]>();
-    var skillsSource = new DbAgentSkillsSource(factory, NullLogger<DbAgentSkillsSource>.Instance);
+    var skillsSource = new DbAgentSkillsSource(factory, NullLogger<DbAgentSkillsSource>.Instance, new SystemOperationContextAccessor());
 
     foreach (var tenantId in tenantIds)
     {
@@ -165,7 +165,7 @@ if (args.Contains("--skills-before-restart") || args.Contains("--skills-after-re
     if (idsA.Overlaps(idsB))
         throw new InvalidOperationException("Default skill IDs were shared between validation tenants.");
 
-    var quotaRepository = new TenantQuotaRepository(factory, NullLogger<TenantQuotaRepository>.Instance);
+    var quotaRepository = new TenantQuotaRepository(factory, NullLogger<TenantQuotaRepository>.Instance, accessor);
     TenantQuotaSnapshot quotaSnapshot;
     using (accessor.BeginScope(new TenantContext { TenantId = tenantIds[0] }))
         quotaSnapshot = await quotaRepository.GetOrCreateAsync(tenantIds[0]);
@@ -234,7 +234,7 @@ if (args.Contains("--maf-session-fixture"))
     var tenantId = run + "-a";
     var userId = run + "-alice";
     using var tenantScope = accessor.BeginScope(new TenantContext { TenantId = tenantId });
-    var store = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance);
+    var store = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance, accessor);
     var session = await store.GetAsync(sessionId)
         ?? throw new InvalidOperationException("Real chat session was not persisted.");
     if (session.UserId != userId || session.TenantId != tenantId)
@@ -270,7 +270,7 @@ if (args.Contains("--maf-restore-verify"))
         throw new InvalidOperationException("MAF fixture belongs to another validation run/revision.");
 
     using var tenantScope = accessor.BeginScope(new TenantContext { TenantId = tenantId });
-    var store = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance);
+    var store = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance, accessor);
     var session = await store.GetAsync(sessionId) ?? throw new InvalidOperationException("Resumed MAF session is missing.");
     if (!session.RuntimeSettings.TryGetValue("frameworkSessionRestoredAt:orchestrator", out var restoredAt))
         throw new InvalidOperationException("The restarted API did not successfully deserialize the MAF orchestrator state.");
@@ -300,7 +300,7 @@ if (args.Contains("--session-fixture"))
     var fixtureId = "persistence-" + Guid.NewGuid().ToString("N");
     var prompt = "Persistence fixture prompt " + run;
     var answer = "Persistence fixture answer " + run;
-    var store = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance);
+    var store = new PostgresSessionStore(factory, NullLogger<PostgresSessionStore>.Instance, accessor);
     await store.SaveAsync(new SessionData
     {
         Id = fixtureId, UserId = run + "-alice", TenantId = fixtureTenant, StartedAt = DateTime.UtcNow,
@@ -370,7 +370,7 @@ await Test("STORE-03", "empty allowed-room list fails closed", async () =>
 });
 await Test("SKILL-01", "defaults are tenant-scoped, stable, and preserve customized legacy entries", async () =>
 {
-    var source = new DbAgentSkillsSource(factory, NullLogger<DbAgentSkillsSource>.Instance);
+    var source = new DbAgentSkillsSource(factory, NullLogger<DbAgentSkillsSource>.Instance, new SystemOperationContextAccessor());
     using (accessor.BeginScope(new TenantContext { TenantId = tenant }))
     {
         await using var db = factory.CreateDbContext();
@@ -408,12 +408,12 @@ await Test("SKILL-01", "defaults are tenant-scoped, stable, and preserve customi
     }
     return "customized ID retained; defaults stable and isolated; concurrent catalog has 4 entries";
 });
-var repository = new TenantQuotaRepository(factory, NullLogger<TenantQuotaRepository>.Instance);
+var repository = new TenantQuotaRepository(factory, NullLogger<TenantQuotaRepository>.Instance, accessor);
 await Test("QUOTA-01", "daily counters survive new repository/context", async () =>
 {
     await repository.GetOrCreateAsync(tenant);
     await repository.IncrementUsageAsync(tenant, 10, 0.01);
-    var reloaded = await new TenantQuotaRepository(factory, NullLogger<TenantQuotaRepository>.Instance).GetOrCreateAsync(tenant);
+    var reloaded = await new TenantQuotaRepository(factory, NullLogger<TenantQuotaRepository>.Instance, accessor).GetOrCreateAsync(tenant);
     Check(reloaded.CurrentDailyTokens == 10 && reloaded.CurrentDailyRequests == 1, "counters not persisted");
     return "tokens=10 requests=1 from new repository";
 });
@@ -442,7 +442,7 @@ await Test("QUOTA-04", "daily reset persists zero counters", async () =>
         quota.LastResetAt = DateTime.UtcNow.Date.AddDays(-1);
         await db.SaveChangesAsync();
     }
-    await repository.ResetDailyCountersAsync();
+    await repository.ResetDailyCountersAsync(tenant);
     await using var checkDb = factory.CreateDbContext();
     var reset = await checkDb.TenantQuotas.AsNoTracking().SingleAsync(q => q.TenantId == tenant);
     Check(reset.CurrentDailyTokens == 0 && reset.CurrentDailyRequests == 0 && reset.LastResetAt.Date == DateTime.UtcNow.Date, "reset not persisted");
@@ -481,11 +481,11 @@ await Test("QUOTA-06", "two independent repository and context-factory instances
         await db.SaveChangesAsync();
     }
 
-    var firstInstance = new TenantQuotaRepository(new ValidationFactory(options, accessor), NullLogger<TenantQuotaRepository>.Instance);
-    var secondInstance = new TenantQuotaRepository(new ValidationFactory(options, accessor), NullLogger<TenantQuotaRepository>.Instance);
+    var firstInstance = new TenantQuotaRepository(new ValidationFactory(options, accessor), NullLogger<TenantQuotaRepository>.Instance, accessor);
+    var secondInstance = new TenantQuotaRepository(new ValidationFactory(options, accessor), NullLogger<TenantQuotaRepository>.Instance, accessor);
     await Task.WhenAll(Enumerable.Range(0, 32).Select(index =>
         (index % 2 == 0 ? firstInstance : secondInstance).IncrementUsageAsync(multiTenant, 1, 0.01)));
-    var snapshot = await new TenantQuotaRepository(new ValidationFactory(options, accessor), NullLogger<TenantQuotaRepository>.Instance)
+    var snapshot = await new TenantQuotaRepository(new ValidationFactory(options, accessor), NullLogger<TenantQuotaRepository>.Instance, accessor)
         .GetOrCreateAsync(multiTenant);
     Check(snapshot.CurrentDailyTokens == 32 && snapshot.CurrentDailyRequests == 32 && Math.Abs(snapshot.CurrentDailyCostUsd - 0.32) < 0.0001,
         $"tokens={snapshot.CurrentDailyTokens} requests={snapshot.CurrentDailyRequests} cost={snapshot.CurrentDailyCostUsd}");

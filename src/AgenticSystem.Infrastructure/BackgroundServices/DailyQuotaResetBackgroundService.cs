@@ -58,8 +58,15 @@ public sealed class DailyQuotaResetBackgroundService : BackgroundService
         {
             await using var scope = _scopeFactory.CreateAsyncScope();
             var repository = scope.ServiceProvider.GetRequiredService<ITenantQuotaRepository>();
-            await repository.ResetDailyCountersAsync(ct);
-            _logger.LogInformation("Daily quota counters reset at {UtcNow:O}", DateTime.UtcNow);
+            var tenantStore = scope.ServiceProvider.GetRequiredService<ITenantStore>();
+            var tenantAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+            var tenants = await tenantStore.GetAllAsync(ct);
+            foreach (var tenant in tenants)
+            {
+                using var tenantScope = tenantAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext { TenantId = tenant.Id });
+                await repository.ResetDailyCountersAsync(tenant.Id, ct);
+            }
+            _logger.LogInformation("Daily quota counters reset for {TenantCount} tenant(s) at {UtcNow:O}", tenants.Count, DateTime.UtcNow);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {

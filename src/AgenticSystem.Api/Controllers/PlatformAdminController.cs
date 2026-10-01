@@ -1,10 +1,12 @@
 using System.Security.Claims;
+using AgenticSystem.Api.Auth;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgenticSystem.Api.Controllers;
@@ -12,16 +14,43 @@ namespace AgenticSystem.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/platform")]
-public sealed class PlatformAdminController : ControllerBase
+public sealed class PlatformAdminController : ControllerBase, IAsyncActionFilter
 {
     private static readonly TimeSpan MaximumSupportGrantDuration = TimeSpan.FromDays(7);
     private readonly AgenticDbContext _db;
     private readonly ITenantContextAccessor _tenantAccessor;
+    private readonly ISystemOperationContextAccessor _systemOperations;
 
-    public PlatformAdminController(AgenticDbContext db, ITenantContextAccessor tenantAccessor)
+    public PlatformAdminController(
+        AgenticDbContext db,
+        ITenantContextAccessor tenantAccessor,
+        ISystemOperationContextAccessor systemOperations)
     {
         _db = db;
         _tenantAccessor = tenantAccessor;
+        _systemOperations = systemOperations;
+    }
+
+    [NonAction]
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        if (!await PlatformAdminAuthorization.IsPlatformAdministratorAsync(
+                _db, _systemOperations, context.HttpContext.User, context.HttpContext.RequestAborted))
+        {
+            context.Result = Forbid();
+            return;
+        }
+
+        if (context.RouteData.Values.TryGetValue("tenantId", out var rawTenantId) &&
+            rawTenantId is string tenantId && TenantIdPolicy.IsReservedSystemId(tenantId))
+        {
+            context.Result = NotFound();
+            return;
+        }
+
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformAdministration);
+        _systemOperations.Require(SystemOperationKind.PlatformAdministration);
+        await next();
     }
 
     [HttpGet("tenants")]
@@ -29,8 +58,42 @@ public sealed class PlatformAdminController : ControllerBase
     {
         if (!await IsPlatformAdministratorAsync(ct)) return Forbid();
 
-        var tenants = await _db.Tenants.AsNoTracking().OrderBy(tenant => tenant.Name).ToListAsync(ct);
+        var tenants = (await _db.Tenants.AsNoTracking().OrderBy(tenant => tenant.Name).ToListAsync(ct))
+            .Where(tenant => !TenantIdPolicy.IsReservedSystemId(tenant.Id));
         return Ok(tenants.Select(tenant => new TenantSummary(tenant.Id, tenant.Name, tenant.Slug, tenant.Plan, tenant.Limits, tenant.IsActive)));
+    }
+
+    [HttpGet("alerts")]
+    [ProducesResponseType(typeof(IReadOnlyList<SystemAlertResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> ListPlatformAlerts([FromQuery] int limit = 50, CancellationToken ct = default)
+    {
+        if (!await IsPlatformAdministratorAsync(ct)) return Forbid();
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformAdministration);
+        _systemOperations.Require(SystemOperationKind.PlatformAdministration);
+        var alerts = await _db.SystemAlerts
+            .AsNoTracking()
+            .OrderByDescending(alert => alert.CreatedAt)
+            .Take(Math.Clamp(limit, 1, 200))
+            .ToListAsync(ct);
+        return Ok(alerts.Select(SystemAlertResponse.From));
+    }
+
+    [HttpPost("alerts/{id}/read")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> MarkPlatformAlertAsRead(string id, CancellationToken ct)
+    {
+        if (!await IsPlatformAdministratorAsync(ct)) return Forbid();
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformAdministration);
+        _systemOperations.Require(SystemOperationKind.PlatformAdministration);
+        var alert = await _db.SystemAlerts.FirstOrDefaultAsync(item => item.Id == id, ct);
+        if (alert is null) return NotFound();
+
+        alert.IsRead = true;
+        await _db.SaveChangesAsync(ct);
+        return Ok();
     }
 
     [HttpPut("tenants/{tenantId}/plan")]
@@ -314,7 +377,7 @@ public sealed class PlatformAdminController : ControllerBase
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
         if (string.IsNullOrWhiteSpace(userId)) return null;
-        return await _db.PlatformAdministrators.AsNoTracking().AnyAsync(admin => admin.UserId == userId, ct) ? userId : null;
+        return await PlatformAdminAuthorization.IsPlatformAdministratorAsync(_db, _systemOperations, User, ct) ? userId : null;
     }
 
     private async Task<bool> IsPlatformAdministratorAsync(CancellationToken ct) =>

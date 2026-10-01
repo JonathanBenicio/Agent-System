@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.Persistence.Entities;
 using AgenticSystem.Infrastructure.AgentFramework;
@@ -27,13 +28,16 @@ public class AgentSkillsController : ControllerBase
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly DbAgentSkillsSource _skillsSource;
+    private readonly ISystemOperationContextAccessor _systemOperations;
 
     public AgentSkillsController(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
-        DbAgentSkillsSource skillsSource)
+        DbAgentSkillsSource skillsSource,
+        ISystemOperationContextAccessor systemOperations)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _skillsSource = skillsSource ?? throw new ArgumentNullException(nameof(skillsSource));
+        _systemOperations = systemOperations ?? throw new ArgumentNullException(nameof(systemOperations));
     }
 
     /// <summary>
@@ -46,7 +50,29 @@ public class AgentSkillsController : ControllerBase
         await _skillsSource.LoadSkillsAsync();
         await using var db = await _dbContextFactory.CreateDbContextAsync();
         var skills = await db.AgentSkills.AsNoTracking().OrderBy(item => item.Name).ToListAsync();
-        var summary = skills.Select(s => new
+        List<PlatformAgentSkillEntity> platformSkills;
+        using (_systemOperations.BeginScope(SystemOperationKind.PlatformCatalogRead))
+        {
+            _systemOperations.Require(SystemOperationKind.PlatformCatalogRead);
+            platformSkills = await db.PlatformAgentSkills.AsNoTracking().OrderBy(item => item.Name).ToListAsync();
+        }
+
+        var tenantSystemKeys = skills.Where(skill => skill.IsSystem)
+            .Select(skill => $"{skill.Domain.Trim()}\0{skill.Name.Trim()}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var platformSummary = platformSkills
+            .Where(skill => skill.IsEnabled && !tenantSystemKeys.Contains($"{skill.Domain.Trim()}\0{skill.Name.Trim()}"))
+            .Select(skill => new
+            {
+                skill.Id,
+                skill.Name,
+                skill.Domain,
+                type = skill.Type,
+                isSystem = true,
+                isEnabled = skill.IsEnabled,
+                canManage = false
+            });
+        var tenantSummary = skills.Select(s => new
         {
             s.Id,
             s.Name,
@@ -57,7 +83,7 @@ public class AgentSkillsController : ControllerBase
             canManage = User.IsInRole("Owner") || User.IsInRole("Admin")
         });
 
-        return Ok(summary);
+        return Ok(platformSummary.Concat(tenantSummary).OrderBy(skill => skill.Name));
     }
 
     /// <summary>
@@ -68,10 +94,30 @@ public class AgentSkillsController : ControllerBase
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync();
         var entity = await db.AgentSkills.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
-        
-        if (entity == null)
+
+        if (entity is null)
         {
-            return NotFound(new { error = $"Skill '{id}' não encontrada." });
+            using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformCatalogRead);
+            _systemOperations.Require(SystemOperationKind.PlatformCatalogRead);
+            var platformSkill = await db.PlatformAgentSkills.AsNoTracking().FirstOrDefaultAsync(s => s.Id == id);
+            if (platformSkill is null)
+                return NotFound(new { error = $"Skill '{id}' não encontrada." });
+
+            return Ok(new
+            {
+                platformSkill.Id,
+                platformSkill.Name,
+                platformSkill.Domain,
+                type = platformSkill.Type,
+                isSystem = true,
+                isEnabled = platformSkill.IsEnabled,
+                canManage = false,
+                systemPrompt = platformSkill.SystemPromptFragment,
+                examples = platformSkill.FewShotExamples,
+                metadata = string.IsNullOrEmpty(platformSkill.MetadataJson)
+                    ? new Dictionary<string, string>()
+                    : JsonSerializer.Deserialize<Dictionary<string, string>>(platformSkill.MetadataJson)
+            });
         }
 
         return Ok(new
@@ -176,7 +222,15 @@ public class AgentSkillsController : ControllerBase
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
         var entity = await db.AgentSkills.FirstOrDefaultAsync(item => item.Id == id, ct);
-        if (entity is null) return NotFound(new { error = $"Skill '{id}' não encontrada." });
+        if (entity is null)
+        {
+            using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformCatalogRead);
+            _systemOperations.Require(SystemOperationKind.PlatformCatalogRead);
+            var platformSkill = await db.PlatformAgentSkills.AsNoTracking().AnyAsync(item => item.Id == id, ct);
+            return platformSkill
+                ? StatusCode(StatusCodes.Status403Forbidden, new { error = "Habilidades globais da plataforma não podem ser ativadas ou desativadas por um tenant." })
+                : NotFound(new { error = $"Skill '{id}' não encontrada." });
+        }
         entity.IsEnabled = request.Enabled;
         entity.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);

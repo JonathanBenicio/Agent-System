@@ -14,35 +14,43 @@ using AgenticSystem.Infrastructure.Persistence.Entities;
 
 namespace AgenticSystem.Infrastructure.Persistence;
 
-public class PostgresToolManager : IToolManager
+public class PostgresToolManager : IToolManager, IPlatformToolCatalog
 {
-    private readonly ConcurrentDictionary<string, ITool> _tools = new();
+    private readonly ConcurrentDictionary<string, ITool> _platformTools = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<(string TenantId, string ToolId), ITool> _tenantTools = new();
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly IToolGovernanceService? _toolGovernance;
     private readonly IAgentRuntimeCoordinator? _runtimeCoordinator;
     private readonly ILogger<PostgresToolManager> _logger;
     private readonly ITenantContextAccessor _tenantAccessor;
+    private readonly ISystemOperationContextAccessor _systemOperations;
 
     public PostgresToolManager(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
         ILogger<PostgresToolManager> logger,
         ITenantContextAccessor tenantAccessor,
+        ISystemOperationContextAccessor systemOperations,
         IToolGovernanceService? toolGovernance = null,
         IAgentRuntimeCoordinator? runtimeCoordinator = null)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;
         _tenantAccessor = tenantAccessor;
+        _systemOperations = systemOperations;
         _toolGovernance = toolGovernance;
         _runtimeCoordinator = runtimeCoordinator;
     }
 
     public async Task<ToolResult> ExecuteToolAsync(string toolId, ToolInput input, CancellationToken ct = default)
     {
+        var tenantId = _tenantAccessor.CurrentTenantId;
         var registration = await ResolveRegistrationAsync(toolId, input, ct);
-        var tool = registration?.Tool;
+        var tool = registration is null ? null : GetRegisteredTool(tenantId, registration.Tool.Id);
 
-        if (tool is null && !_tools.TryGetValue(toolId, out tool))
+        if (tool is null)
+            tool = GetRegisteredTool(tenantId, toolId);
+
+        if (tool is null)
         {
             _logger.LogWarning("🔧 Tool não encontrada no PostgresToolManager: {ToolId}", toolId);
             return ToolResult.Fail($"Tool '{toolId}' não encontrada.");
@@ -148,9 +156,14 @@ public class PostgresToolManager : IToolManager
 
     public async Task<IEnumerable<ITool>> GetAvailableToolsAsync(string? category = null)
     {
+        var tenantId = _tenantAccessor.CurrentTenantId;
         await SyncFromDbAsync();
 
-        IEnumerable<ITool> tools = _tools.Values;
+        var toolsById = new Dictionary<string, ITool>(_platformTools, StringComparer.OrdinalIgnoreCase);
+        foreach (var item in _tenantTools.Where(item => item.Key.TenantId == tenantId))
+            toolsById[item.Key.ToolId] = item.Value;
+
+        IEnumerable<ITool> tools = toolsById.Values;
 
         if (!string.IsNullOrWhiteSpace(category) && Enum.TryParse<ToolCategory>(category, true, out var cat))
         {
@@ -162,8 +175,35 @@ public class PostgresToolManager : IToolManager
 
     public void RegisterTool(ITool tool)
     {
-        _tools[tool.Id] = tool;
+        _ = _tenantAccessor.CurrentTenantId;
         RegisterToolVariant(tool.Id, tool, version: "1.0.0", isDefault: true);
+    }
+
+    public void RegisterPlatformTool(ITool tool)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+        _platformTools[tool.Id] = tool;
+
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformCatalogWrite);
+        _systemOperations.Require(SystemOperationKind.PlatformCatalogWrite);
+        using var db = _dbContextFactory.CreateDbContext();
+        var entity = db.PlatformAgentTools.FirstOrDefault(item => item.Id == tool.Id);
+        if (entity is null)
+        {
+            entity = new PlatformAgentToolEntity { Id = tool.Id };
+            db.PlatformAgentTools.Add(entity);
+        }
+
+        entity.Name = tool.Name;
+        entity.Description = tool.Description;
+        entity.Category = tool.Category.ToString();
+        entity.RequiresAuth = tool.RequiresAuth;
+        entity.Type = "Builtin";
+        entity.Version = "1.0.0";
+        entity.IsDefault = true;
+        entity.RolloutPercentage = 100;
+        entity.UpdatedAt = DateTime.UtcNow;
+        db.SaveChanges();
     }
 
     public void RegisterToolVariant(
@@ -174,22 +214,21 @@ public class PostgresToolManager : IToolManager
         int rolloutPercentage = 100,
         bool isDefault = false)
     {
-        _tools[tool.Id] = tool;
-
-        string? activeTenantId = null;
-        try { activeTenantId = _tenantAccessor.CurrentTenantId; } catch (InvalidOperationException) { }
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = activeTenantId ?? "system-background" });
+        var activeTenantId = _tenantAccessor.CurrentTenantId;
+        if (TenantIdPolicy.IsReservedSystemId(activeTenantId))
+            throw new InvalidOperationException("Tool variants require a real tenant context.");
+        _tenantTools[(activeTenantId, tool.Id)] = tool;
 
         try
         {
             using var db = _dbContextFactory.CreateDbContext();
-            var entity = db.AgentTools.IgnoreQueryFilters().FirstOrDefault(t => t.Id == tool.Id && t.Version == version);
+            var entity = db.AgentTools.FirstOrDefault(t => t.Id == tool.Id && t.Version == version && t.TenantId == activeTenantId);
             if (entity == null)
             {
                 entity = new DbToolEntity
                 {
                     Id = tool.Id,
-                    TenantId = db.CurrentTenantId,
+                    TenantId = activeTenantId,
                     Name = tool.Name,
                     Description = tool.Description,
                     Category = tool.Category.ToString(),
@@ -225,44 +264,51 @@ public class PostgresToolManager : IToolManager
 
     public async Task<IReadOnlyList<ToolRegistration>> GetRegistrationsAsync(string logicalToolId, CancellationToken ct = default)
     {
-        string? activeTenantId = null;
-        try { activeTenantId = _tenantAccessor.CurrentTenantId; } catch (InvalidOperationException) { }
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = activeTenantId ?? "system-background" });
-
+        var activeTenantId = _tenantAccessor.CurrentTenantId;
         await SyncFromDbAsync(ct);
 
         using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        var entities = await db.AgentTools
+        var platformEntities = await ReadPlatformToolCatalogAsync(db, logicalToolId, ct);
+        var tenantEntities = await db.AgentTools
             .Where(t => t.Id.StartsWith(logicalToolId))
+            .Where(t => t.TenantId == activeTenantId)
             .ToListAsync(ct);
 
-        return entities.Select(e => new ToolRegistration
+        var tenantRegistrations = tenantEntities.Select(e => new ToolRegistration
         {
             LogicalToolId = logicalToolId,
-            Tool = _tools.TryGetValue(e.Id, out var t) ? t : new DummyDbTool(e),
+            Tool = GetRegisteredTool(activeTenantId, e.Id) ?? new DummyDbTool(e),
             Version = e.Version,
             VariantName = e.VariantName,
             RolloutPercentage = e.RolloutPercentage,
             IsDefault = e.IsDefault
-        }).ToList();
+        });
+        var platformRegistrations = platformEntities.Select(e => new ToolRegistration
+        {
+            LogicalToolId = logicalToolId,
+            Tool = _platformTools.TryGetValue(e.Id, out var tool) ? tool : new DummyDbTool(e),
+            Version = e.Version,
+            VariantName = e.VariantName,
+            RolloutPercentage = e.RolloutPercentage,
+            IsDefault = e.IsDefault
+        });
+
+        return tenantRegistrations.Concat(platformRegistrations).ToList();
     }
 
     public bool UnregisterTool(string toolId)
     {
-        var removed = _tools.TryRemove(toolId, out _);
-
-        string? activeTenantId = null;
-        try { activeTenantId = _tenantAccessor.CurrentTenantId; } catch (InvalidOperationException) { }
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = activeTenantId ?? "system-background" });
+        var activeTenantId = _tenantAccessor.CurrentTenantId;
 
         try
         {
             using var db = _dbContextFactory.CreateDbContext();
-            var entities = db.AgentTools.Where(t => t.Id == toolId).ToList();
+            var entities = db.AgentTools.Where(t => t.Id == toolId && t.TenantId == activeTenantId).ToList();
             if (entities.Count > 0)
             {
                 db.AgentTools.RemoveRange(entities);
                 db.SaveChanges();
+                _tenantTools.TryRemove((activeTenantId, toolId), out _);
                 _logger.LogInformation("🔧 Postgres Tool removed: {ToolId}", toolId);
                 return true;
             }
@@ -272,32 +318,34 @@ public class PostgresToolManager : IToolManager
             _logger.LogError(ex, "Failed to unregister tool {ToolId} in PostgreSQL", toolId);
         }
 
-        return removed;
+        return false;
     }
 
     public ITool? GetTool(string toolId)
     {
-        _tools.TryGetValue(toolId, out var tool);
-        return tool;
+        var tenantId = _tenantAccessor.CurrentTenantId;
+        return GetRegisteredTool(tenantId, toolId);
     }
 
     private async Task SyncFromDbAsync(CancellationToken ct = default)
     {
-        string? activeTenantId = null;
-        try { activeTenantId = _tenantAccessor.CurrentTenantId; } catch (InvalidOperationException) { }
-        using var tenantScope = _tenantAccessor.BeginScope(new TenantContext { TenantId = activeTenantId ?? "system-background" });
+        var activeTenantId = _tenantAccessor.CurrentTenantId;
 
         try
         {
             using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-            var entities = await db.AgentTools.AsNoTracking().ToListAsync(ct);
+            var platformEntities = await ReadPlatformToolCatalogAsync(db, null, ct);
+            foreach (var entity in platformEntities)
+            {
+                if (!_platformTools.ContainsKey(entity.Id))
+                    _platformTools[entity.Id] = new DummyDbTool(entity);
+            }
 
+            var entities = await db.AgentTools.AsNoTracking().ToListAsync(ct);
             foreach (var entity in entities)
             {
-                if (!_tools.ContainsKey(entity.Id))
-                {
-                    _tools[entity.Id] = new DummyDbTool(entity);
-                }
+                if (entity.TenantId == activeTenantId && !_tenantTools.ContainsKey((activeTenantId, entity.Id)))
+                    _tenantTools[(activeTenantId, entity.Id)] = new DummyDbTool(entity);
             }
         }
         catch (Exception ex)
@@ -305,6 +353,24 @@ public class PostgresToolManager : IToolManager
             _logger.LogError(ex, "Error syncing tools from PostgreSQL");
         }
     }
+
+    private async Task<IReadOnlyList<PlatformAgentToolEntity>> ReadPlatformToolCatalogAsync(
+        AgenticDbContext db,
+        string? logicalToolId,
+        CancellationToken ct)
+    {
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformCatalogRead);
+        _systemOperations.Require(SystemOperationKind.PlatformCatalogRead);
+        var query = db.PlatformAgentTools.AsNoTracking().AsQueryable();
+        if (!string.IsNullOrWhiteSpace(logicalToolId))
+            query = query.Where(item => item.Id.StartsWith(logicalToolId));
+        return await query.ToListAsync(ct);
+    }
+
+    private ITool? GetRegisteredTool(string tenantId, string toolId) =>
+        _tenantTools.TryGetValue((tenantId, toolId), out var tenantTool)
+            ? tenantTool
+            : _platformTools.TryGetValue(toolId, out var platformTool) ? platformTool : null;
 
     private async Task<ToolRegistration?> ResolveRegistrationAsync(string logicalToolId, ToolInput input, CancellationToken ct)
     {
@@ -374,6 +440,15 @@ public class PostgresToolManager : IToolManager
         public bool RequiresAuth { get; }
 
         public DummyDbTool(DbToolEntity entity)
+        {
+            Id = entity.Id;
+            Name = entity.Name;
+            Description = entity.Description;
+            Category = Enum.TryParse<ToolCategory>(entity.Category, true, out var cat) ? cat : ToolCategory.Api;
+            RequiresAuth = entity.RequiresAuth;
+        }
+
+        public DummyDbTool(PlatformAgentToolEntity entity)
         {
             Id = entity.Id;
             Name = entity.Name;

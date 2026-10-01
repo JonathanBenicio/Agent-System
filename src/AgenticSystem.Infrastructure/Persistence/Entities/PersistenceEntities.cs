@@ -543,7 +543,7 @@ public class LlmPricingRuleEntity
 /// <summary>
 /// Entidade para rastreamento de cotas e limites de provedores externos (OpenAI, Claude, etc).
 /// </summary>
-public class ExternalProviderQuotaEntity : ITenantEntity
+public class ExternalProviderQuotaEntity : ITenantEntity, IExternalProviderQuotaRecord
 {
     public string Id { get; set; } = string.Empty;
     public string ProviderName { get; set; } = string.Empty;
@@ -578,6 +578,20 @@ public class SystemAlertEntity
     public double? Percentage { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public bool IsRead { get; set; } = false;
+}
+
+/// <summary>A quota or reliability alert that belongs to one real tenant.</summary>
+public sealed class TenantSystemAlertEntity : ITenantEntity
+{
+    public string Id { get; set; } = string.Empty;
+    public string TenantId { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Severity { get; set; } = string.Empty;
+    public string Message { get; set; } = string.Empty;
+    public string? ProviderName { get; set; }
+    public double? Percentage { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsRead { get; set; }
 }
 
 public class InboundWebhookEntity : ITenantEntity

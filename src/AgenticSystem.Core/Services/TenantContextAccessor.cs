@@ -16,6 +16,17 @@ public sealed class TenantContextAccessor : ITenantContextAccessor
 
     public IDisposable BeginScope(TenantContext context)
     {
+        ArgumentNullException.ThrowIfNull(context);
+        if (string.IsNullOrWhiteSpace(context.TenantId))
+        {
+            throw new ArgumentException("A real TenantId is required for a tenant scope.", nameof(context));
+        }
+
+        if (TenantIdPolicy.IsReservedSystemId(context.TenantId))
+        {
+            throw new ArgumentException("System operation identifiers are not valid tenant IDs.", nameof(context));
+        }
+
         var previous = AmbientContext.Value;
         AmbientContext.Value = context;
         return new Scope(() => AmbientContext.Value = previous);

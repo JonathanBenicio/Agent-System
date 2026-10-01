@@ -2,6 +2,8 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Encodings.Web;
+using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
@@ -14,15 +16,21 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
     public const string SchemeName = "ApiKey";
     public const string HeaderName = "X-Api-Key";
     private readonly AgenticDbContext _dbContext;
+    private readonly ISystemOperationContextAccessor _systemOperations;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
     public ApiKeyAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        AgenticDbContext dbContext)
+        AgenticDbContext dbContext,
+        ISystemOperationContextAccessor systemOperations,
+        ITenantContextAccessor tenantContextAccessor)
         : base(options, logger, encoder)
     {
         _dbContext = dbContext;
+        _systemOperations = systemOperations;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -73,6 +81,8 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         var keyHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
 
         // 2. Consulta no banco de dados se o hash corresponde a uma chave ativa
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.ApiKeyAuthentication);
+        _systemOperations.Require(SystemOperationKind.ApiKeyAuthentication);
         var accessKey = await _dbContext.AccessApiKeys
             .IgnoreQueryFilters() // Ignora o filtro de tenant para permitir autenticação global cruzada
             .FirstOrDefaultAsync(k => k.KeyHash == keyHash && k.IsEnabled);
@@ -91,6 +101,7 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         // 3. Atualiza o timestamp de último uso de forma assíncrona
         try
         {
+            using var tenantScope = _tenantContextAccessor.BeginScope(new TenantContext { TenantId = accessKey.TenantId });
             accessKey.LastUsedAt = DateTime.UtcNow;
             await _dbContext.SaveChangesAsync();
         }

@@ -560,8 +560,12 @@ public static class ServiceCollectionExtensions
         ReplaceSingleton<IRerankingAssetStore, PostgresRerankingAssetStore>(services);
         ReplaceSingleton<IDynamicAgentRepository, PostgresDynamicAgentRepository>(services);
         
-        ReplaceSingleton<ISkillManager, PostgresSkillManager>(services);
-        ReplaceSingleton<IToolManager, PostgresToolManager>(services);
+        services.AddSingleton<PostgresSkillManager>();
+        ReplaceSingleton<ISkillManager>(services, sp => sp.GetRequiredService<PostgresSkillManager>());
+        ReplaceSingleton<IPlatformSkillCatalog>(services, sp => sp.GetRequiredService<PostgresSkillManager>());
+        services.AddSingleton<PostgresToolManager>();
+        ReplaceSingleton<IToolManager>(services, sp => sp.GetRequiredService<PostgresToolManager>());
+        ReplaceSingleton<IPlatformToolCatalog>(services, sp => sp.GetRequiredService<PostgresToolManager>());
         ReplaceSingleton<IPermissionService, PostgresPermissionService>(services);
         ReplaceSingleton<IPolicyStore, PostgresPolicyStore>(services);
         ReplaceSingleton<IExternalQuotaSyncService, ExternalQuotaSyncService>(services);
@@ -738,7 +742,14 @@ public static class ServiceCollectionExtensions
 
     public static IServiceProvider SeedInfrastructureTools(this IServiceProvider serviceProvider)
     {
-        var toolManager = serviceProvider.GetRequiredService<IToolManager>();
+        var toolCatalog = serviceProvider.GetService<IPlatformToolCatalog>();
+        if (toolCatalog is null)
+        {
+            serviceProvider.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("InfrastructureToolSeeding")
+                .LogDebug("Platform tool catalog is not registered; skipping infrastructure tool seeding.");
+            return serviceProvider;
+        }
 
         // Registrar automaticamente todas as ferramentas adicionais (ITool) cadastradas no contêiner de DI (ex: BannerProductionTool)
         var diTools = serviceProvider.GetServices<ITool>();
@@ -746,14 +757,14 @@ public static class ServiceCollectionExtensions
         {
             if (tool != null)
             {
-                toolManager.RegisterTool(tool);
+                toolCatalog.RegisterPlatformTool(tool);
             }
         }
 
         var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
         var logger = serviceProvider.GetRequiredService<ILogger<HttpTool>>();
         var httpClient = httpClientFactory.CreateClient("AgenticTools");
-        toolManager.RegisterTool(new HttpTool(httpClient, logger));
+        toolCatalog.RegisterPlatformTool(new HttpTool(httpClient, logger));
 
         var hyperlightSettings = serviceProvider.GetRequiredService<IOptions<HyperlightExecutionSettings>>().Value;
         var environment = serviceProvider.GetRequiredService<IHostEnvironment>();
@@ -762,7 +773,7 @@ public static class ServiceCollectionExtensions
             var executor = serviceProvider.GetRequiredService<Security.HyperlightSandboxedExecutor>();
             var tool = new Security.HyperlightExecuteCodeTool(executor);
             if (executor.IsAvailable)
-                toolManager.RegisterTool(tool);
+                toolCatalog.RegisterPlatformTool(tool);
         }
         else if (hyperlightSettings.Enabled)
         {

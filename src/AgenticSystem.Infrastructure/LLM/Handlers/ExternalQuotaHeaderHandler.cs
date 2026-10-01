@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
 using System.Net.Http.Headers;
 
 namespace AgenticSystem.Infrastructure.LLM.Handlers;
@@ -86,9 +87,13 @@ public class ExternalQuotaHeaderHandler : DelegatingHandler
 
         if (remainingRequests != -1 || remainingTokens != -1)
         {
+            var owner = string.IsNullOrWhiteSpace(tenantId)
+                ? ExternalQuotaOwner.Platform
+                : ExternalQuotaOwner.ForTenant(tenantId);
+
             await _quotaService.UpdateFromHeadersAsync(
                 providerName,
-                tenantId,
+                owner,
                 apiKeyId,
                 limitRequests,
                 remainingRequests,

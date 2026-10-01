@@ -1,6 +1,7 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.Persistence.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -13,22 +14,27 @@ public sealed class PostgresPlatformConfigStore : IPlatformConfigStore
     private readonly IConfigEncryptionService _encryption;
     private readonly IConfigReloadNotifier _reloadNotifier;
     private readonly ILogger<PostgresPlatformConfigStore> _logger;
+    private readonly ISystemOperationContextAccessor _systemOperations;
 
     public PostgresPlatformConfigStore(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
         IConfigEncryptionService encryption,
         IConfigReloadNotifier reloadNotifier,
-        ILogger<PostgresPlatformConfigStore> logger)
+        ILogger<PostgresPlatformConfigStore> logger,
+        ISystemOperationContextAccessor systemOperations)
     {
         _dbContextFactory = dbContextFactory ?? throw new ArgumentNullException(nameof(dbContextFactory));
         _encryption = encryption ?? throw new ArgumentNullException(nameof(encryption));
         _reloadNotifier = reloadNotifier ?? throw new ArgumentNullException(nameof(reloadNotifier));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _systemOperations = systemOperations ?? throw new ArgumentNullException(nameof(systemOperations));
     }
 
     public async Task<string?> GetValueAsync(string key, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformConfigRead);
+        _systemOperations.Require(SystemOperationKind.PlatformConfigRead);
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         var entity = await db.PlatformConfigs.AsNoTracking()
             .SingleOrDefaultAsync(setting => setting.Key == key, cancellationToken);
@@ -59,6 +65,9 @@ public sealed class PostgresPlatformConfigStore : IPlatformConfigStore
             return;
         if (values.Any(entry => string.IsNullOrWhiteSpace(entry.Key) || entry.Value is null))
             throw new ArgumentException("Platform configuration keys and values are required.", nameof(values));
+
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformConfigWrite);
+        _systemOperations.Require(SystemOperationKind.PlatformConfigWrite);
 
         await using var db = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);

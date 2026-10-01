@@ -86,37 +86,51 @@ public class OnnxInferenceBackgroundWorker : BackgroundService
     {
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
-
-        // Ignora filtros de tenant para buscar todos os jobs pendentes/processando no banco
-        var interruptedJobs = await dbContext.CustomOnnxInferenceJobs
-            .IgnoreQueryFilters()
-            .Where(j => j.Status == "Pending" || j.Status == "Processing")
-            .OrderBy(j => j.CreatedAt)
-            .ToListAsync(ct);
-
-        if (interruptedJobs.Count == 0) return;
-
-        _logger.LogInformation("🔄 Found {Count} interrupted/pending ONNX inference jobs in DB. Re-enqueuing...", interruptedJobs.Count);
-
-        foreach (var job in interruptedJobs)
+        var tenantStore = scope.ServiceProvider.GetRequiredService<ITenantStore>();
+        var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+        var systemOperations = scope.ServiceProvider.GetRequiredService<ISystemOperationContextAccessor>();
+        IReadOnlyList<AgenticSystem.Core.Models.Tenant> tenants;
+        using (systemOperations.BeginScope(AgenticSystem.Core.Models.SystemOperationKind.ProcessOnnxJobs))
         {
-            // Reseta status 'Processing' interrompidos de volta para 'Pending'
-            if (job.Status == "Processing")
-            {
-                job.Status = "Pending";
-                dbContext.Entry(job).State = EntityState.Modified;
-            }
-
-            await _queue.EnqueueJobAsync(new OnnxInferenceJobRequest(
-                job.Id,
-                job.TenantId,
-                job.ModelId,
-                job.InputImagePath ?? string.Empty
-            ), ct);
+            systemOperations.Require(AgenticSystem.Core.Models.SystemOperationKind.ProcessOnnxJobs);
+            tenants = await tenantStore.GetAllAsync(ct);
         }
 
-        await dbContext.SaveChangesAsync(ct);
-        _logger.LogInformation("✅ Interrupted ONNX inference jobs successfully re-enqueued.");
+        foreach (var tenant in tenants)
+        {
+            using var tenantScope = tenantContextAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext
+            {
+                TenantId = tenant.Id,
+                IsAuthenticated = true
+            });
+
+            var interruptedJobs = await dbContext.CustomOnnxInferenceJobs
+                .Where(job => job.Status == "Pending" || job.Status == "Processing")
+                .OrderBy(job => job.CreatedAt)
+                .ToListAsync(ct);
+            if (interruptedJobs.Count == 0) continue;
+
+            _logger.LogInformation("🔄 Found {Count} interrupted/pending ONNX inference jobs for tenant {TenantId}. Re-enqueuing...", interruptedJobs.Count, tenant.Id);
+            foreach (var job in interruptedJobs)
+            {
+                if (job.Status == "Processing")
+                {
+                    job.Status = "Pending";
+                    dbContext.Entry(job).State = EntityState.Modified;
+                }
+
+                await _queue.EnqueueJobAsync(new OnnxInferenceJobRequest(
+                    job.Id,
+                    tenant.Id,
+                    job.ModelId,
+                    job.InputImagePath ?? string.Empty
+                ), ct);
+            }
+
+            await dbContext.SaveChangesAsync(ct);
+        }
+
+        _logger.LogInformation("✅ Interrupted ONNX inference jobs successfully re-enqueued by tenant.");
     }
 
     private async Task ProcessJobAsync(OnnxInferenceJobRequest request, CancellationToken ct)
@@ -126,24 +140,28 @@ public class OnnxInferenceBackgroundWorker : BackgroundService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
         var toolManager = scope.ServiceProvider.GetRequiredService<IToolManager>();
+        var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
 
-        // Busca o job ignorando o filtro global de multitenancy da thread
+        if (AgenticSystem.Core.Models.TenantIdPolicy.IsReservedSystemId(request.TenantId))
+        {
+            _logger.LogError("ONNX job {JobId} carries a reserved synthetic tenant ID; refusing to process it.", request.JobId);
+            return;
+        }
+
+        using var tenantScope = tenantContextAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext
+        {
+            TenantId = request.TenantId,
+            IsAuthenticated = true
+        });
+
         var jobEntity = await dbContext.CustomOnnxInferenceJobs
-            .IgnoreQueryFilters()
-            .FirstOrDefaultAsync(j => j.Id == request.JobId, ct);
+            .FirstOrDefaultAsync(j => j.Id == request.JobId && j.TenantId == request.TenantId, ct);
 
         if (jobEntity == null)
         {
             _logger.LogWarning("⚠️ ONNX inference job {JobId} was not found in DB. Skipping.", request.JobId);
             return;
         }
-
-        var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
-        using var tenantScope = tenantContextAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext
-        {
-            TenantId = request.TenantId,
-            IsAuthenticated = true
-        });
 
         try
         {
@@ -288,30 +306,50 @@ public class OnnxInferenceBackgroundWorker : BackgroundService
             // Varre arquivos .png
             var files = Directory.GetFiles(resultsDir, "*.png", SearchOption.AllDirectories);
             int deletedFilesCount = 0;
-            foreach (var file in files)
+            using (var filesystemScope = _serviceProvider.CreateScope())
             {
-                var fileInfo = new FileInfo(file);
-                if (fileInfo.LastWriteTimeUtc < cutoffTime)
+                var systemOperations = filesystemScope.ServiceProvider.GetRequiredService<ISystemOperationContextAccessor>();
+                using (systemOperations.BeginScope(AgenticSystem.Core.Models.SystemOperationKind.ProcessOnnxJobs))
                 {
-                    File.Delete(file);
-                    deletedFilesCount++;
+                    systemOperations.Require(AgenticSystem.Core.Models.SystemOperationKind.ProcessOnnxJobs);
+                    foreach (var file in files)
+                    {
+                        var fileInfo = new FileInfo(file);
+                        if (fileInfo.LastWriteTimeUtc < cutoffTime)
+                        {
+                            File.Delete(file);
+                            deletedFilesCount++;
+                        }
+                    }
                 }
             }
 
             // Exclui do banco de dados registros criados há mais de 7 dias
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
-            var oldJobs = await dbContext.CustomOnnxInferenceJobs
-                .IgnoreQueryFilters()
-                .Where(j => j.CreatedAt < cutoffTime)
-                .ToListAsync(ct);
-
-            if (oldJobs.Count > 0)
+            var tenantStore = scope.ServiceProvider.GetRequiredService<ITenantStore>();
+            var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
+            var tenants = await tenantStore.GetAllAsync(ct);
+            var deletedJobsCount = 0;
+            foreach (var tenant in tenants)
             {
+                using var tenantScope = tenantContextAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext
+                {
+                    TenantId = tenant.Id,
+                    IsAuthenticated = true
+                });
+                var oldJobs = await dbContext.CustomOnnxInferenceJobs
+                    .Where(job => job.CreatedAt < cutoffTime)
+                    .ToListAsync(ct);
+                if (oldJobs.Count == 0) continue;
+
                 dbContext.CustomOnnxInferenceJobs.RemoveRange(oldJobs);
+                deletedJobsCount += oldJobs.Count;
                 await dbContext.SaveChangesAsync(ct);
-                _logger.LogInformation("🧹 Physical purge complete. Deleted {DeletedFiles} files and {DeletedJobs} DB records.", deletedFilesCount, oldJobs.Count);
             }
+
+            if (deletedJobsCount > 0)
+                _logger.LogInformation("🧹 Physical purge complete. Deleted {DeletedFiles} files and {DeletedJobs} DB records.", deletedFilesCount, deletedJobsCount);
             else if (deletedFilesCount > 0)
             {
                 _logger.LogInformation("🧹 Physical purge complete. Deleted {DeletedFiles} files (0 records found in DB).", deletedFilesCount);

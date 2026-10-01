@@ -25,6 +25,8 @@ public class SessionAutoConsolidatorTests
         _logger = Substitute.For<ILogger<SessionAutoConsolidator>>();
         var tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
         var tenantStore = Substitute.For<ITenantStore>();
+        tenantStore.GetAllAsync(Arg.Any<CancellationToken>())
+            .Returns([new Tenant { Id = "admin", Name = "Admin tenant" }]);
 
         var services = new ServiceCollection();
         services.AddSingleton(_sessionStore);

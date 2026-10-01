@@ -66,15 +66,13 @@ public sealed class InMemoryTenantQuotaRepository : ITenantQuotaRepository
         return Task.CompletedTask;
     }
 
-    public Task ResetDailyCountersAsync(CancellationToken ct = default)
+    public Task ResetDailyCountersAsync(string tenantId, CancellationToken ct = default)
     {
         lock (_lock)
         {
-            var keys = _store.Keys.ToList();
-            foreach (var key in keys)
+            if (_store.TryGetValue(tenantId, out var snapshot))
             {
-                var s = _store[key];
-                _store[key] = s with { CurrentDailyTokens = 0, CurrentDailyCostUsd = 0, CurrentDailyRequests = 0 };
+                _store[tenantId] = snapshot with { CurrentDailyTokens = 0, CurrentDailyCostUsd = 0, CurrentDailyRequests = 0 };
             }
         }
 

@@ -32,25 +32,21 @@ public class AgentCleanupHostedService : BackgroundService
             {
                 using var scope = _serviceProvider.CreateScope();
                 var metaAgent = scope.ServiceProvider.GetRequiredService<IMetaAgent>();
-                var tenantStore = scope.ServiceProvider.GetService<ITenantStore>();
+                var tenantStore = scope.ServiceProvider.GetRequiredService<ITenantStore>();
                 var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
 
-                var tenants = new List<string> { "admin" };
-                if (tenantStore != null)
+                IReadOnlyList<AgenticSystem.Core.Models.Tenant> allTenants;
+                try
                 {
-                    try
-                    {
-                        var allTenants = await tenantStore.GetAllAsync(stoppingToken);
-                        if (allTenants != null && allTenants.Count > 0)
-                            tenants = allTenants.Select(t => t.Id).ToList();
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to load tenants for agent cleanup, falling back to admin");
-                    }
+                    allTenants = await tenantStore.GetAllAsync(stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to enumerate tenants for agent cleanup; skipping this cycle.");
+                    continue;
                 }
 
-                foreach (var tenantId in tenants)
+                foreach (var tenantId in allTenants.Select(tenant => tenant.Id))
                 {
                     using var tenantScope = tenantContextAccessor.BeginScope(new AgenticSystem.Core.Models.TenantContext { TenantId = tenantId });
                     try

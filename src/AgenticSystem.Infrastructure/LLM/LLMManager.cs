@@ -226,7 +226,7 @@ public class LLMManager : ILLMAdministrationService
 
             // Verificação proativa de cotas antes do disparo
             var quotaService = _serviceProvider.GetService<IExternalQuotaSyncService>();
-            if (quotaService != null && !await quotaService.IsProviderAvailableAsync(candidate.Provider))
+            if (quotaService != null && !await quotaService.IsProviderAvailableAsync(candidate.Provider, ExternalQuotaOwner.Platform))
             {
                 _logger.LogWarning("⏭️ Skipping {Provider} (Quota Exceeded - Proactive check)", candidate.Provider);
                 exceptions.Add(new InvalidOperationException($"Quota exceeded for {candidate.Provider}."));
@@ -375,7 +375,7 @@ public class LLMManager : ILLMAdministrationService
         var defaultProviderName = ResolveDefaultProviderName();
         var quotaService = _serviceProvider.GetService<IExternalQuotaSyncService>();
         var quotas = quotaService != null 
-            ? await quotaService.GetAllQuotasAsync(null) // Global quotas
+            ? await quotaService.GetAllQuotasAsync(ExternalQuotaOwner.Platform)
             : new List<ExternalProviderQuota>();
 
         var result = new List<LLMProviderInfo>();
@@ -675,7 +675,7 @@ public class LLMManager : ILLMAdministrationService
             if (string.IsNullOrWhiteSpace(apiKey)) continue;
 
             // Trigger sync
-            await quotaService.SyncBillingAsync(p.Name, null, "infrastructure-global", apiKey);
+            await quotaService.SyncBillingAsync(p.Name, ExternalQuotaOwner.Platform, "infrastructure-global", apiKey);
         }
     }
 

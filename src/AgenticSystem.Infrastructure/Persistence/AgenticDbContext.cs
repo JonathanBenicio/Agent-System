@@ -64,6 +64,7 @@ public class AgenticDbContext : DbContext
     public DbSet<LlmPricingRuleEntity> LlmPricingRules => Set<LlmPricingRuleEntity>();
     public DbSet<ExternalProviderQuotaEntity> ExternalProviderQuotas => Set<ExternalProviderQuotaEntity>();
     public DbSet<SystemAlertEntity> SystemAlerts => Set<SystemAlertEntity>();
+    public DbSet<TenantSystemAlertEntity> TenantSystemAlerts => Set<TenantSystemAlertEntity>();
     public DbSet<InboundWebhookEntity> InboundWebhooks => Set<InboundWebhookEntity>();
     public DbSet<KnowledgeRoomEntity> KnowledgeRooms => Set<KnowledgeRoomEntity>();
     public DbSet<KnowledgeRoomPermissionEntity> KnowledgeRoomPermissions => Set<KnowledgeRoomPermissionEntity>();
@@ -82,6 +83,10 @@ public class AgenticDbContext : DbContext
     public DbSet<DbToolEntity> AgentTools => Set<DbToolEntity>();
     public DbSet<TenantQuotaEntity> TenantQuotas => Set<TenantQuotaEntity>();
     public DbSet<GoldenSetEntity> GoldenSets => Set<GoldenSetEntity>();
+    public DbSet<PlatformAgentToolEntity> PlatformAgentTools => Set<PlatformAgentToolEntity>();
+    public DbSet<PlatformAgentSkillEntity> PlatformAgentSkills => Set<PlatformAgentSkillEntity>();
+    public DbSet<PlatformExternalProviderQuotaEntity> PlatformExternalProviderQuotas => Set<PlatformExternalProviderQuotaEntity>();
+    public DbSet<PlatformOutboxMessageEntity> PlatformOutboxMessages => Set<PlatformOutboxMessageEntity>();
 
 
 
@@ -145,19 +150,27 @@ public class AgenticDbContext : DbContext
 
     private void OnBeforeSaving()
     {
-        var tenantId = _tenantContext.CurrentTenantId;
+        var tenantEntries = ChangeTracker.Entries<ITenantEntity>()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToList();
+        if (tenantEntries.Count == 0)
+            return;
 
-        foreach (var entry in ChangeTracker.Entries<ITenantEntity>())
+        var tenantId = _tenantContext.CurrentTenantId;
+        if (TenantIdPolicy.IsReservedSystemId(tenantId))
+            throw new InvalidOperationException("A system operation cannot be used as a tenant context.");
+
+        foreach (var entry in tenantEntries)
         {
-            switch (entry.State)
+            if (entry.State == EntityState.Added && string.IsNullOrWhiteSpace(entry.Entity.TenantId))
             {
-                case EntityState.Added:
-                    if (string.IsNullOrEmpty(entry.Entity.TenantId))
-                    {
-                        entry.Entity.TenantId = tenantId;
-                    }
-                    break;
+                entry.Entity.TenantId = tenantId;
             }
+
+            if (TenantIdPolicy.IsReservedSystemId(entry.Entity.TenantId) ||
+                !string.Equals(entry.Entity.TenantId, tenantId, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"Tenant-owned entity '{entry.Metadata.ClrType.Name}' must be written under its real tenant context.");
         }
     }
 }
