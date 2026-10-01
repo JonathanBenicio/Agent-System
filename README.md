@@ -8,11 +8,13 @@
 
 > .NET 10 + Microsoft Agent Framework + Microsoft.Extensions.AI — orquestração framework-first hospedada, memória Obsidian + PostgreSQL/pgvector e superfícies A2A, AG-UI e OpenAI-compatible. Plugins MCP cliente disponíveis; servidor HTTP /mcp não mapeado na baseline.
 
-## Atualização Maio/2026 — Runtime V2
+## Registro histórico — Runtime V2 (maio/2026)
+
+Os itens abaixo descrevem uma proposta/estado histórico e não definem os endpoints disponíveis na baseline atual. Consulte [contratos e transportes do backend](docs/backend/README.md) para a superfície vigente.
 
 - Execução centralizada em `AgentExecutionWorkflow` (orquestração operacional fora do `MetaAgentOrchestrator`)
 - Streaming fim a fim via SignalR (`ChatHub`) e SSE (`POST /api/chat/stream`)
-- MCP server HTTP autenticado em `/mcp` com tools para listar agents, consultar RAG, inventariar tools e executar o MetaAgent
+- Plugins MCP cliente para conectar o backend a servidores externos; a API atual não hospeda um servidor HTTP em `/mcp`
 - Governança de tools com políticas de risco, aprovação e auditoria
 - Artefatos operacionais persistidos por sessão (plan, steps, review, handoff, tool outputs)
 - Human-in-the-loop para resposta final sensível (`final-approvals`)
@@ -66,7 +68,7 @@ curl -X POST https://localhost:5001/api/chat \
   -d '{"message": "Crie um lembrete para amanhã às 14h"}'
 ```
 
-**MCP server**: `https://localhost:5001/mcp` via Streamable HTTP/SSE, protegido pela autenticação padrão da API.
+**MCP**: a baseline atual oferece plugins MCP cliente; ela não mapeia um servidor HTTP em `/mcp`.
 
 ## 🧠 O que este sistema faz?
 
@@ -313,7 +315,7 @@ GET  /api/admin/mcp/plugins                    # Listar plugins
 POST /api/admin/mcp/plugins                    # Registrar plugin
 ```
 
-**MCP Server**: `/mcp` — expõe `list_agents`, `search_knowledge`, `list_runtime_tools` e `execute_agent`
+**MCP**: plugins cliente são administrados por `/api/admin/mcp/plugins`; não há servidor HTTP `/mcp` mapeado na baseline.
 
 **SignalR Hub**: `/hubs/gateway` — eventos: `ServiceStatusChanged`, `CostAlertTriggered`, `CircuitStateChanged`, `RateLimitWarning`
 

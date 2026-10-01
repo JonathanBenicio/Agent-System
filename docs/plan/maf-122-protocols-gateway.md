@@ -1,6 +1,6 @@
 # Plano — Atualizar MAF e integrar providers ao Gateway
 
-Status: implementação MAF/Gateway concluída e validada; worker recuperou Wait após encerramento forçado da API. A geração de Banner foi exercitada com MAF e client determinístico, com imagem, modelo e duas ferramentas reais. Faltam a deduplicação de efeitos externos sob crash e a publicação das evidências em #120. [Evidência de runtime](../backend/validation/maf-122-workflow-runtime-2026-09-29.md) · Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](../architecture/adr/036-maf-122-protocols-and-gateway.md) · Story: BACK-MAF-120.
+Status: MAF 1.22, store global e composição Gateway de validação estão implementados na pilha; #120 permanece parcial porque a integração/configuração de provider em produção, streaming e reload cross-host não foram comprovados. Esses critérios foram migrados para [#133](https://github.com/JonathanBenicio/Agent-System/issues/133) para execução após o merge do #132. [Evidência de runtime](../backend/validation/maf-122-workflow-runtime-2026-09-29.md) · [ADR-036](../architecture/adr/036-maf-122-protocols-and-gateway.md) · Story: BACK-MAF-120.
 
 Baseline: `f941198` · 2026-09-29 · Branch: `fix/backend-core-tenancy`. Matriz de breaking changes MAF 1.9 para 1.22 concluída antes do bump; supervisor dinâmico implementado separadamente em [dynamic-orchestrator-implementation.md](dynamic-orchestrator-implementation.md). Compose PostgreSQL/Ollama isolado usado; A2A/AG-UI E2E permanece despriorizado em #121 por ser preview. `.gitignore` staged e arquivos pessoais foram preservados.
 
@@ -14,7 +14,7 @@ Atualizar os pacotes MAF efetivamente usados após revisar mudanças incompatív
 
 | Entrega | Dependência | Verificação | Estado/evidência |
 |---|---|---|---|
-| Issue, ADR, story e rastreabilidade | Nenhuma | Links cruzados e índices sincronizados | #120 continua aberto; o corpo público ainda precisa receber 753/1 e as novas evidências. O conector GitHub não está disponível nesta sessão. #121 (A2A/AG-UI preview) permanece separado/despriorizado. |
+| Issue, ADR, story e rastreabilidade | Nenhuma | Links cruzados e índices sincronizados | #120 segue aberto; o corpo foi atualizado com o PR #132 e follow-up #133. #121 (A2A/AG-UI preview) continua separado/despriorizado. |
 | Matriz de compatibilidade 1.9.0 para 1.22.0 | Issue/ADR/story | APIs comparadas às releases oficiais; dependências NuGet registradas | Concluída antes do bump em `maf-122-compatibility-review.md`. |
 | Atualização coordenada dos pacotes e sessão | Matriz concluída | Restore/build Release, partições de sessão, migrations | MAF 1.22 e build limpo. Sessões MAF persistidas/reabertas no PostgreSQL, tenant cruzado negado e sessão do supervisor reaberta após reinício real da API. Suíte: 755 aprovados, 1 skip vetorial, 0 falhas. |
 | Compatibilidade de hosting A2A/AG-UI | Build atualizado | Mapeamento com `ValidateScopes=true`, sem alegar E2E | 2 testes de registro passaram; E2E em #121 |
@@ -24,7 +24,7 @@ Atualizar os pacotes MAF efetivamente usados após revisar mudanças incompatív
 
 ## Limite com o plano do orquestrador
 
-O upgrade MAF/Gateway e o supervisor dinâmico estão implementados. O Banner agora preserva o contrato de start/status e gera arquivo final com um client determinístico que usa as duas skills reais. A inferência multimodal completa com os modelos Ollama semeados não foi executada, pois esses modelos não estão instalados no Compose isolado.
+O upgrade MAF 1.22 e parte do Gateway estão incluídos; o supervisor dinâmico tem implementação funcional no PR #132. Banner preserva o contrato de start/status e gera arquivo final com client determinístico/skills reais. Lacunas de Gateway/produção e continuação do supervisor foram transferidas para #133/#134. A inferência multimodal completa com os modelos Ollama semeados não foi executada.
 
 ## Critérios de aceite
 

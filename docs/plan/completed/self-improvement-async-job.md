@@ -1,8 +1,8 @@
 # Plano: Automação do Self-Improvement Engine via Background Job
 
 **ID do Plano:** `self-improvement-async-job`
-**Status:** ✅ COMPLETED
-**Objetivo:** Transformar o ciclo de melhoria contínua em um processo batch diário e resiliente.
+**Status:** SUPERSEDED por [ADR-040](../../architecture/adr/040-self-improvement-human-approval.md) e implementação integrada do PR #132.
+**Objetivo histórico:** Transformar o ciclo de melhoria contínua em um processo batch diário. O job batch/cursor foi implementado; a regra antiga de auto-aplicar por confidence foi rejeitada e não deve ser usada como critério vigente.
 
 ## 1. Mudanças na Estrutura de Dados
 Para suportar os novos requisitos:
@@ -29,8 +29,9 @@ Utilizaremos a infraestrutura nativa do .NET 10:
 - [x] Adicionar o serviço no `Program.cs`.
 - [x] Configurar o tempo de execução via `appsettings.json`.
 
-## 4. Critérios de Aceite
-- [x] O Job executa apenas uma vez por dia.
-- [x] Apenas agentes com novas reflexões críticas são analisados.
-- [x] Melhorias com confiança > 0.8 são aplicadas automaticamente.
-- [x] O sistema não re-processa reflexões antigas.
+## Critérios vigentes após supersessão
+- [x] O job batch é tenant-scoped e processa reflexões críticas novas.
+- [x] O processamento cria propostas persistidas; confiança não autoriza auto-aplicação.
+- [x] Owner/Admin do tenant aprova/rejeita; a aplicação gera versão, auditoria e rollback.
+- [x] O cursor evita reprocessar reflexões antigas dentro do tenant.
+- [superseded] “Confiança > 0.8 aplica automaticamente” foi rejeitado pela decisão de produto.

@@ -216,6 +216,8 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 - [x] Roteamento para `DotNetExpertAgent` quando detectado domínio técnico de backend
 - [x] Resiliência: se o modelo local falhar, o sistema faz fallback gracioso para LLM
 
+Este aceite também cobre a referência de #16 ao especialista `DotNetExpertAgent`; a classe e o roteamento estão implementados/testados. Uma função nova de triagem de propostas de auto-melhoria pelo agente exigiria aceite separado.
+
 ---
 
 ### Quality (ML6–ML7)
@@ -557,7 +559,7 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 #### ML19.1 — Auto-Bootstrap e Remoção do Tenant Default
 
 **Como** arquiteto do sistema,  
-**quero** que a plataforma gerencie credenciais dinamicamente via banco de dados e auto-provisione o tenant inicial admin,  
+**quero** que a plataforma gerencie credenciais dinamicamente via banco de dados e só provisione o tenant inicial quando a chave de bootstrap estiver configurada explicitamente,
 **para que** o fallback inseguro "default" seja eliminado e haja isolamento multi-tenant real e estrito.
 
 | Item | Detalhe |
@@ -565,14 +567,15 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 | Serviços | `SystemBootstrapService` · `ApiKeyAuthenticationHandler` · `TenantMiddleware` |
 | Responsabilidade | Auto-bootstrap de tenant/chaves no startup, validação de chaves hashed SHA-256 e remoção de referências hardcoded a "default" |
 | Testes | Unitários (xUnit) e Integração/E2E |
-| Status | ✅ Implementado na pilha de integração para develop; PR #127 mergeado na branch-base intermediária |
+| Status | ⚠ Parcial na pilha de integração; bootstrap/default estão implementados, mas a separação tipada de system scope ainda está pendente |
 
 **Critérios de Aceite:**
 - [x] Banco vazio com `AgenticSystem:AdminApiKey` explícita cria o tenant `admin`, hash da chave e membership; tenant já provisionado não recebe outra chave.
 - [x] Banco vazio sem a configuração lança `MissingTenantBootstrapConfigurationException` e aborta o startup com orientação para `AgenticSystem__AdminApiKey`.
 - [x] Chaves persistidas são localizadas pelo hash e resolvidas ao tenant e papel de membership associados.
 - [x] Requisições protegidas sem tenant explícito ou com tenant desconhecido/inativo são rejeitadas; rotas públicas seguem as exceções documentadas.
-- [x] Bootstrap não semeia agentes de produto nem cria Platform Admin; fallbacks de tenant são removidos do runtime coberto pela implementação.
+- [x] Bootstrap não semeia agentes de produto nem cria Platform Admin; fallback `default` foi removido do runtime coberto pela implementação.
+- [ ] Operações globais/background usam contexto de sistema tipado, não `TenantId=platform`/`system-background`; esses valores não são aceitos por header/claim e nenhum registro tenant-owned é gravado sob eles.
 
 ---
 
@@ -1311,28 +1314,79 @@ TriggerEngine.EvaluateAsync(rule)
 
 ---
 
-#### ML39 — FinOps & Auto-Melhoria
+#### ML39 — FinOps & Auto-Melhoria (índice de escopo)
 
 Issue [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) · decisão de aprovação humana: [ADR-040](architecture/adr/040-self-improvement-human-approval.md) · [especificação/status](plan/open-issues-specification-audit-2026-09-29.md#issue-16).
 
-**Como** administrador do sistema,
-**quero** cotas proativas de uso de LLM e processamento em batch para auto-melhoria,
-**para que** os custos sejam controlados e o sistema aprenda sem impactar a latência das respostas em tempo real.
+ML39 foi decomposta para separar implementação atual de trabalho futuro:
+- **ML40 — Forecast proativo de quotas LLM:** pendente, [issue #135](https://github.com/JonathanBenicio/Agent-System/issues/135) e [plano](plan/proactive-llm-quota-forecast.md).
+- **BACK-ML39-BATCH — Propostas batch de auto-melhoria:** implementado na pilha do PR #132; reflexões críticas tenant-scoped geram propostas persistidas, sem aplicação por confidence; Owner/Admin aprova/rejeita, com auditoria, versionamento e rollback. Ver [ADR-040](architecture/adr/040-self-improvement-human-approval.md).
+- **DotNetExpertAgent:** classe/roteamento existente e coberto em ML35. Não criar issue duplicada enquanto não houver aceite específico para outra função.
+
+**Status de ML39:** Parcial; a previsão de quota continua planejada em ML40. As quotas rígidas continuam sendo a autoridade de bloqueio.
+
+#### ML40 — Forecast proativo de quotas LLM
+
+Issue [#135](https://github.com/JonathanBenicio/Agent-System/issues/135) · parent de origem: [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) · ADR de referência: [ADR-008](architecture/adr/008-quota-monitoring-finops.md) · [plano](plan/proactive-llm-quota-forecast.md).
+
+**Como** Owner/Admin de um tenant,
+**quero** prever o ritmo de consumo e receber alertas tenant-scoped antes do esgotamento da quota,
+**para que** eu possa ajustar o uso sem depender de uma estimativa escondida ou cruzar dados de outros tenants.
 
 | Item | Detalhe |
 |------|---------|
-| Serviços | `ProactiveQuotaManager` · `SelfImprovementService` |
-| Responsabilidade | Controle de custos e limites de tokens; execução assíncrona de rotinas de auto-melhoria |
-| Status | ⏳ Planejado |
+| Serviços atuais | `QuotaEnforcer` · `ExternalQuotaSyncService` |
+| Lacuna | Existe enforcement rígido/sincronização externa; ainda não há forecast de consumo ou ETA confiável |
+| Status | ⏳ Planejado; janela, horizonte, confiança e canal serão especificados antes da implementação |
 
 **Critérios de Aceite:**
-- [ ] Bloqueio de requisições que excedam a quota diária de tokens/custo.
-- [ ] Processamento diário de reflexões em background (Hosted Service).
-- [ ] Mudanças sugeridas são propostas tenant-scoped, persistidas e versionadas; `confidence` informa prioridade, mas nunca autoriza aplicação automática.
-- [ ] Owner/Admin do tenant revisa e aprova/rejeita a proposta antes de aplicar; aprovação, ator, versão anterior/nova, avaliação e rollback ficam auditáveis. `confidence` não substitui aprovação humana.
+- [ ] Contrato expõe consumo observado, quota efetiva, janela/horizonte e previsão ou estado de dados insuficientes.
+- [ ] Plano é teto; quota configurada mais restritiva continua prevalecendo.
+- [ ] Previsões/alertas não bloqueiam chamadas nem expõem dados de outro tenant.
+- [ ] Validação cobre histórico insuficiente, virada de janela, mudança de quota e isolamento tenant.
+
+#### BACK-ML39-BATCH — Propostas batch de auto-melhoria
+
+Issue parent [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) · [ADR-040](architecture/adr/040-self-improvement-human-approval.md) · implementação no PR #132.
+
+**Como** Owner/Admin de um tenant,
+**quero** que reflexões críticas sejam analisadas em background e gerem propostas revisáveis,
+**para que** a melhoria não atrase requisições interativas e nenhuma instrução seja aplicada sem aprovação humana.
+
+| Item | Detalhe |
+|------|---------|
+| Serviço | `SelfImprovementBackgroundJob` · `SelfImprovementService` · `ISelfImprovementProposalStore` |
+| Status | ✅ Implementado na pilha #132; aguarda merge/revisão da consolidação |
+
+**Critérios de Aceite:**
+- [x] Job processa reflexões novas de forma periódica por tenant e persiste propostas.
+- [x] `confidence` nunca aplica proposta automaticamente.
+- [x] Owner/Admin aprova ou rejeita; decisão é auditada, versionada e pode ser revertida.
 
 ---
 
+
+### Follow-ups de validação do PR #132
+
+#### BACK-MAF-133 — Provider global na composição Gateway de produção
+
+Issue [#133](https://github.com/JonathanBenicio/Agent-System/issues/133), follow-up de #120 · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [plano](plan/maf-gateway-production-validation.md).
+
+**Como** operador da plataforma,
+**quero** comprovar que a configuração global de providers chega ao Gateway na composição normal da API,
+**para que** um registro validado apenas no ambiente `Validation` não seja confundido com integração de produção.
+
+**Critérios:** provider habilitado/desabilitado correto; geração e streaming pelo Gateway usando stub local; NOTIFY entre dois hosts; BYOK/quota tenant-scoped; relatório distingue stub de provider externo real.
+
+#### BACK-ORCH-134 — Retomar supervisor e especialistas após restart
+
+Issue [#134](https://github.com/JonathanBenicio/Agent-System/issues/134), follow-up de #122 · [ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md) · [plano](plan/dynamic-supervisor-session-recovery.md).
+
+**Como** tenant Owner/Admin,
+**quero** que a conversa supervisionada preserve as sessões do supervisor e dos especialistas efetivamente chamados após restart,
+**para que** a recuperação mantenha tenant/usuário e estado da execução sem promessas de exactly-once para efeitos externos.
+
+**Critérios:** catálogo/fingerprint dinâmicos sem restart; retomada em processo recriado; negação cross-tenant/user; erros/quota/cancelamento explícitos; idempotência/compensação documentada quando houver efeito externo.
 
 ## Backend — Resumo de Cobertura
 
@@ -1351,9 +1405,9 @@ Issue [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) · decis�
 | Vision | ML26 | 1 | ✅ |
 | MCP & Extensibility | ML27–ML28 | 3 | ✅ |
 | Agent Runtime Platform | ML29–ML34 | 6 | ✅ |
-| Advanced Capabilities | ML35–ML39 | 3 | ⏳ |
+| Advanced Capabilities | ML35–ML40 | 3 implementados + ML40 planejado | Parcial |
 | Transversal | T1–T10 | 10 | ✅ |
-| **Total** | **39 MLs + 10 Transversais** | **57 serviços** | **549+ testes** |
+| **Total** | **40 MLs + 10 Transversais** | **57 serviços** | **771 passaram, 16 ignorados na validação da integração #132** |
 
 ---
 

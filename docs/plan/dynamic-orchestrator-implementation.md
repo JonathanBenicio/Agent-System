@@ -1,6 +1,6 @@
 # Plano — Implementar o orquestrador supervisor dinâmico
 
-Status: implementação funcional do supervisor dinâmico concluída; dois DI graphs/LLMManagers atualizaram via PostgreSQL NOTIFY e fizeram inferência Ollama. A API reabriu uma sessão MAF persistida após reinício real. Suíte: 755 aprovados, 1 skip vetorial, 0 falhas; build limpo. Evidência: [runtime](../backend/validation/maf-122-workflow-runtime-2026-09-29.md). Story: BACK-ORCH-122 · [ADR-038](../architecture/adr/038-dynamic-supervisor-orchestrator.md) · MAF/session-store 1.22 em [#120](maf-122-protocols-gateway.md).
+Status: implementação funcional incluída no PR #132; testes reabriram sessão do supervisor após restart, mas a retomada entre processos das sessões dos especialistas e a cobertura completa do catálogo/fingerprint permanecem abertas em [#134](https://github.com/JonathanBenicio/Agent-System/issues/134), a executar após o merge de #132. A validação de dois DI graphs ocorreu no mesmo processo. Story: BACK-ORCH-122 · [ADR-038](../architecture/adr/038-dynamic-supervisor-orchestrator.md) · MAF/session-store 1.22 em [#120](maf-122-protocols-gateway.md).
 
 ## Objetivo
 
@@ -23,7 +23,7 @@ O supervisor já é executado diretamente pelo `ChatClientAgent`, com bindings v
 
 ## Pendências
 
-Follow-up explícito: testar interrupção durante efeito externo e deduplicação pelo handler. Dois grafos independentes de DI/LLMManager/Gateway receberam reload PostgreSQL e inferência Ollama; esses managers rodaram no mesmo processo, portanto não demonstram propagação entre processos. Manter commits por contexto.
+Follow-up [#134](https://github.com/JonathanBenicio/Agent-System/issues/134): testar catálogo/fingerprint dinâmicos, retomada das sessões do supervisor e especialistas após restart de processo e isolamento tenant/user. Interrupção durante efeito externo exige idempotência/compensação; não afirmar exactly-once. Reload de dois DI graphs no mesmo processo não prova propagação entre hosts.
 
 ## Critérios de aceite
 

@@ -61,7 +61,7 @@ As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo con
 
 **Fontes:** [ADR-039](../architecture/adr/039-chat-session-user-tenant-settings.md), [BACK-CHAT-123](../USER-STORIES.md#back-chat-123--chat-sessoes-e-configuracoes-efetivamente-usadas), [plano](chat-session-user-settings.md), [contrato](../backend/chat-sessions-settings.md), [validação](../backend/validation/chat-session-settings-2026-09-29.md), [PR #124](https://github.com/JonathanBenicio/Agent-System/pull/124).
 
-**Pendência real:** PR #124 ainda draft devido ao lint global do frontend (22 erros + 1 aviso fora dos arquivos desta entrega). O review recebido nesta sessão também apontou P2 na regra staged `.agents/` do `.gitignore`; essa regra está apenas no índice local e não consta no head publicado de #124. Tratar como alteração local separada, estreitar o padrão e preservar o staging antes de qualquer commit. Manter issue aberta até revisão do gate.
+**Estado após consolidação:** PR #124 de origem continua draft e sua branch isolada ainda carrega o histórico do gate de lint. O PR integrado #132 incluiu as correções de lint e teve `lint/build` aprovados na árvore consolidada; considerar #123 entregue somente depois do merge de #132 e revisão dos critérios funcionais. A observação histórica sobre `.gitignore` staged não consta no head publicado e não faz parte desta consolidação.
 
 ## issue-122
 
@@ -291,7 +291,7 @@ As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo con
 
 **Classificação:** especificação histórica de “expurgo total”; `default` pode continuar em fixture/config legado, mas não deve ser confundido com fallback de autorização.
 
-**Decisão do usuário:** remover todos os fallbacks de tenant no runtime; tenant deve ser explícito; `default` pode ficar somente em migrações/fixtures. O PR #126 removeu os fallbacks de quotas, ferramentas/skills, arquivos ONNX, retomada de workflow por webhook e partição de rate-limit; Qdrant passa a exigir TenantId explícito. Na árvore integrada, buscas pelos padrões de fallback aprovados não encontraram fallback nos projetos API/Core/Infrastructure fora de migrations; a suíte consolidada ainda deve confirmar o comportamento.
+**Decisão do usuário:** dados tenant-owned exigem tenant real; `platform`/`system-background` não são TenantIds nem valores aceitos por header/claim. Operações globais/background devem usar `SystemOperationContext` tipado e separado; jobs sobre dados tenant-owned enumeram e processam cada tenant real. O desenho foi aprovado em 2026-10-01, mas a implementação ainda não foi feita. Usos atuais permanecem em `ExternalQuotaSyncService`, `PostgresToolManager`, `PostgresSkillManager`, `OutboxProcessorBackgroundService` e `SecretRotationBackgroundService`; plano: [tenant-system-scope-remediation.md](tenant-system-scope-remediation.md). O gate de #132 para esse trabalho está pendente de decisão.
 
 **Fonte:** ADR-026, middleware/DBContext atual e testes. A frase “nenhuma ocorrência da palavra default” é critério excessivo e não mede isolamento; substituir por buscas comportamentais e referências de runtime.
 
@@ -537,11 +537,16 @@ As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo con
 
 **Classificação:** descrição contém três capacidades distintas e não acceptance; story ML39 já existe mas trata controle de quota/budget e auto-melhoria de forma combinada.
 
-**Decisão do usuário:** auto-melhoria gera uma proposta e exige aprovação humana; o confidence threshold nunca aprova/aplica sozinho. Aprovador: Owner/Admin do tenant. Ver [ADR-040](../architecture/adr/040-self-improvement-human-approval.md). **Spec restante:** quota proativa precisa de forecast/alerta e de métricas verificáveis; batch deve persistir proposta, versão, avaliação, aprovação, rejeição e rollback; `DotNetExpertAgent` já existe, mas a inclusão futura como domínio de triagem precisa de acceptance próprio.
+**Decisão do usuário:** auto-melhoria gera proposta tenant-scoped e exige aprovação humana de Owner/Admin; `confidence` não autoriza auto-aplicação. Ver [ADR-040](../architecture/adr/040-self-improvement-human-approval.md).
 
-**Implementação na pilha:** propostas tenant-scoped persistidas; flag Lab off por padrão; aprovação/rejeição por Owner/Admin, versionamento de prompt/agente, auditoria e rollback. Dois testes focados e build Release foram registrados no PR #128. A issue #16 é mais ampla que auto-melhoria; as partes FinOps/batch/expert agent continuam precisando de requisitos próprios.
+**Decomposição avaliada:**
+- Forecast de esgotamento de quota não existe como previsão por ritmo/ETA; enforcement rígido e sincronização de billing/rate headers já existem. Foi separado em [#135](https://github.com/JonathanBenicio/Agent-System/issues/135), Story ML40 e [plano](proactive-llm-quota-forecast.md).
+- Processamento batch diário tenant-scoped já existe em `SelfImprovementBackgroundJob`/`ProcessBatchImprovementsAsync`; gera propostas, sem auto-apply. A antiga aceitação do plano `self-improvement-async-job.md` que aplicava acima de threshold está supersedida por ADR-040.
+- `DotNetExpertAgent` e o roteamento para domínio técnico já são cobertos por ML35 e teste da `HierarchicalAgentFactory`. Não abrir issue duplicada; se o pedido for usá-lo como avaliador de propostas de auto-melhoria, isso requer aceite específico.
 
-**Fonte:** ML39 em `USER-STORIES.md`; `docs/backend/resources-rules.md`; issue #16. Dividir em stories/novas issues se todos permanecerem escopo.
+**Implementação na pilha:** propostas tenant-scoped, revisão Owner/Admin, versionamento, auditoria e rollback estão incluídos no PR #132. #16 permanece aberta até revisão/merge e para manter o link do forecast futuro #135.
+
+**Fonte:** ML35/ML39/ML40 em `USER-STORIES.md`; `docs/backend/resources-rules.md`; [#16](https://github.com/JonathanBenicio/Agent-System/issues/16). A issue #16 continua como pai/rastreabilidade, não como aceite único para todas as capacidades.
 
 ## issue-14
 
@@ -583,9 +588,9 @@ As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo con
 
 ## Integração para develop — 2026-09-30
 
-A branch `integration/develop-pr-stack-2026-09-30` parte de `develop` e reúne a base do PR #73, PRs #118/#119, alterações associadas a #120/#122, mudanças #126–#130, PRs #124/#125 e decisões atuais. #120 cobre a atualização MAF 1.22 e parte do Gateway; #122 cobre o supervisor dinâmico. Ambas continuam abertas porque seus critérios completos não foram todos demonstrados. O PR #31 não foi incluído: sua issue #30 está fechada e a limpeza documental é independente, parcialmente sobreposta e contém remoções amplas fora desta entrega. `docs/backend-contracts-validation` também não foi mesclada separadamente porque seu tree é idêntico ao head documental incluído em #118.
+A branch `integration/develop-pr-stack-2026-09-30` parte de `develop` e reúne a base do PR #73, PRs #118/#119, alterações associadas a #120/#122, mudanças #126–#130, PRs #124/#125 e decisões atuais. #120/#122 estão implementados parcialmente; os gaps técnicos foram migrados para follow-ups pós-merge [#133](https://github.com/JonathanBenicio/Agent-System/issues/133) e [#134](https://github.com/JonathanBenicio/Agent-System/issues/134). #16 foi decomposta; a quota forecast futura está em [#135](https://github.com/JonathanBenicio/Agent-System/issues/135). O escopo do PR #31 será analisado depois do merge de #132, conforme decisão do usuário; sua issue #30 está fechada e a limpeza não foi incluída. `docs/backend-contracts-validation` também não foi mesclada separadamente porque seu tree é idêntico ao head documental incluído em #118.
 
-Escopo de issues nesta proposta: #97, #99, #105, #106, #16, #110–#117, #120, #121, #122 e #123. #120 e #122 são referências de implementação parcial; #121 é follow-up separado para E2E de protocolos preview. PR #132 usa referências sem fechamento automático. As issues permanecem abertas.
+Escopo de issues nesta proposta: #97, #99, #105, #106, #16 (fluxo de aprovação), #110–#117, #120 (parcial), #121 (somente referência ao follow-up preview), #122 (parcial) e #123. Os gaps de #120/#122 e forecast de #16 foram transferidos para follow-ups futuros #133/#134/#135; não são implementações deste PR. PR #132 usa referências sem fechamento automático. As issues permanecem abertas.
 
 O PR #132 está aberto para revisão contra `develop`; no snapshot de 2026-10-01, o GitHub o informou como mergeável e ainda não mesclado. A descrição registra as validações da árvore consolidada; as issues permanecem abertas até revisão e merge.
 
@@ -593,13 +598,15 @@ O PR #132 está aberto para revisão contra `develop`; no snapshot de 2026-10-01
 
 | Issue | Implementação incluída | Verificação desta consolidação |
 |---|---|---|
-| #120 | Família MAF 1.22 e registro/roteamento de providers pelo Gateway | Build Release e integrações PostgreSQL passaram; o registro foi validado na composição de teste. Provider real em produção/streaming e recarga real entre hosts seguem sem prova e a issue continua aberta |
-| #122 | Supervisor MAF dinâmico e execução de especialistas | Suíte consolidada passou; revisão dos critérios de cache/fingerprint e persistência de sessão por especialista continua necessária antes de fechar a issue |
-| #97 | Remoção dos fallbacks de tenant no runtime; Qdrant exige TenantId explícito | Busca estática e suíte completa passaram nesta árvore; issue continua aberta para revisão |
+| #120 | MAF 1.22 e integração parcial do Gateway | Registro validado apenas na composição de teste; follow-up #133 cobre provider real/stub de produção e reload multi-host |
+| #122 | Supervisor MAF dinâmico e execução de especialistas parcial | Follow-up #134 cobre fingerprint/catálogo e retomada de sessões entre processos |
+| #97 | Fallback `default` removido; system scope tipado aprovado | Persistem pseudo-TenantIds em 5 fluxos; implementation plan criado, gate do PR #132 ainda precisa ser decidido |
 | #99 | Bootstrap cria `admin` só com segredo; banco vazio sem `AdminApiKey` aborta startup; sem seeds Banner | Build e testes consolidados passaram; issue continua aberta para revisão |
 | #16 | Propostas persistidas por tenant; aprovação Owner/Admin, versionamento, auditoria e rollback | Suíte consolidada passou; issue #16 é mais ampla, então apenas o fluxo aprovado faz parte desta entrega |
 | #105 | Hyperlight CodeAct para JavaScript, flag off e registro somente em Lab | Build e suíte passaram; preview não equivale a auditoria independente de segurança nem autoriza promoção fora de Lab |
 | #106 | Toggles FIDES tenant-scoped, regras built-in, OCR local de imagem/PDF e fail-closed | Integrações focadas PostgreSQL/Ollama/OCR passaram (11/11); issue continua aberta para revisão |
+
+#16 foi decomposta em ML39 (batch proposal-only já implementado) e ML40 (quota forecast, futura #135). O roteamento DotNetExpertAgent já está em ML35; só abrir outro trabalho se for aprovada a função de avaliador de propostas.
 
 As issues permanecem abertas para revisão. O PR #31 (issue #30 fechada) não foi incluído: a limpeza documental é independente, parcialmente sobreposta e contém remoções amplas fora desta entrega. `docs/backend-contracts-validation` também não foi mesclada separadamente porque seu tree é idêntico ao head documental incluído em #118.
 

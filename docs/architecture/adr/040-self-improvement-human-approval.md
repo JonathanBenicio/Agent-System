@@ -4,11 +4,11 @@ Data: 2026-09-29 · Issue: [#16](https://github.com/JonathanBenicio/Agent-System
 
 ## Status
 
-Aceito. Implementação atual não cumpre esta decisão.
+Aceito. Fluxo de proposta, revisão Owner/Admin, persistência/versionamento, auditoria e rollback está implementado na pilha do PR #132; forecast de quota é follow-up separado em #135.
 
 ## Contexto
 
-O job de Self-Improvement processa reflexões e usa `AutoApplyThreshold` para tentar aplicar sugestões. `ApplyImprovementAsync` atualmente é no-op, portanto o comportamento do código não é uma aplicação real nem um fluxo confiável de aprovação. Mesmo após a implementação de apply, confiança calculada não deve alterar instruções/versões do agente sem revisão humana.
+O plano histórico `self-improvement-async-job.md` descrevia auto-apply por `AutoApplyThreshold`; essa regra foi rejeitada. O fluxo atual processa reflexões críticas em background e gera propostas tenant-scoped. Mesmo que `confidence` seja calculada, ela só prioriza a revisão e nunca altera instruções/versões do agente sem aprovação humana.
 
 ## Decisão
 
@@ -20,14 +20,14 @@ O job de Self-Improvement processa reflexões e usa `AutoApplyThreshold` para te
 
 ## Fora do escopo desta decisão
 
-- O schema, endpoints e UX de revisão/aprovação ainda serão especificados numa etapa de implementação própria.
+- UX de forecast proativo de quota e trabalho de triagem específico de `DotNetExpertAgent` não são aceitos por esta ADR; forecast está separado em #135 e a rota existente do agente já está coberta por ML35.
 - Platform Admin não recebe acesso implícito ao conteúdo tenant; aprovação permanece sob papel Owner/Admin do tenant.
 
 ## Consequências
 
 - Sugestões podem acumular até revisão humana; isso reduz velocidade de adaptação, mas evita modificar comportamento de agentes com heurísticas de confiança sem responsabilização.
-- A aplicação precisa versionar a configuração, permitir rollback e produzir evidência antes de declarar a mudança ativa.
-- O job atual deve permanecer sem auto-aplicar. A API/UX de aprovação e o armazenamento auditável ainda precisam ser implementados.
+- A aplicação versiona configurações, permite rollback e produz auditoria antes de declarar uma mudança ativa.
+- O job permanece proposal-only; o endpoint de aprovação não substitui autorização Owner/Admin. O plano antigo foi marcado `SUPERSEDED` para que o critério de auto-apply não volte a orientar implementação.
 
 ## Verificação necessária
 

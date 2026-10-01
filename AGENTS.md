@@ -8,7 +8,7 @@
 cp src/AgenticSystem.Api/appsettings.example.json src/AgenticSystem.Api/appsettings.json  # Configure API keys
 dotnet restore
 dotnet run --project src/AgenticSystem.Api --urls http://localhost:5001
-dotnet test                                 # 688 unit tests, 80% coverage required
+dotnet test                                 # Full suite; test count varies by branch
 
 # Build & publish
 dotnet build --configuration Release
@@ -42,6 +42,11 @@ reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coverage-report
 ## Documentation workflow
 
 Follow [workflow](conductor/workflow.md) and [templates](templates/README.md). Current operational contracts: [backend hub](docs/backend/README.md). Record decision/implementation/validation separately and report gaps honestly.
+
+### Branch and PR targets
+- Feature, fix, and documentation PRs target `develop`.
+- `master` receives only a promotion PR whose source branch is `develop`; do not open feature branches directly against `master`.
+- Superseded direct-to-`master` PRs must be reviewed/closed or retargeted after their changes are consolidated into `develop`.
 
 ## Architecture Boundaries
 
@@ -113,7 +118,7 @@ await dbContext.Database.MigrateAsync();
 ### Test Commands
 ```bash
 # Backend
-dotnet test                              # Full suite (688 tests)
+dotnet test                              # Full suite (count varies by branch)
 dotnet test --filter "Name~Tests"       # Specific tests
 
 # Frontend
