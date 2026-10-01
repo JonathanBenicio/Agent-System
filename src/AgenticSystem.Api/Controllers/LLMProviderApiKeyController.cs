@@ -22,6 +22,7 @@ public class LLMProviderApiKeyController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Roles = "Owner,Admin")]
     public async Task<IActionResult> GetKeys(string providerName, CancellationToken ct)
     {
         var keys = await _apiKeyService.GetKeysByProviderAsync(providerName, ct);

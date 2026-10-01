@@ -1,11 +1,17 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { workflowApi } from '@/lib/api'
+import { useKnowledgeStore } from '@/store/useKnowledgeStore'
 import type { WorkflowDefinition, WorkflowExecution } from '@/types/api'
 
 export function useWorkflows() {
   const queryClient = useQueryClient()
-  const queryKey = ['workflow-definitions']
-  const query = useQuery({ queryKey, queryFn: () => workflowApi.listDefinitions() })
+  const tenantId = useKnowledgeStore(state => state.activeWorkspaceId)
+  const queryKey = ['workflow-definitions', tenantId]
+  const query = useQuery({
+    queryKey,
+    queryFn: () => workflowApi.listDefinitions(),
+    enabled: Boolean(tenantId),
+  })
   const workflows = query.data ?? []
   const refresh = () => query.refetch()
 
@@ -63,10 +69,11 @@ export function useWorkflows() {
 }
 
 export function useWorkflowExecution(executionId: string | null) {
+  const tenantId = useKnowledgeStore(state => state.activeWorkspaceId)
   return useQuery({
-    queryKey: ['workflow-execution', executionId],
+    queryKey: ['workflow-execution', tenantId, executionId],
     queryFn: () => executionId ? workflowApi.getExecution(executionId) : Promise.resolve(null),
-    enabled: !!executionId,
+    enabled: Boolean(tenantId && executionId),
     refetchInterval: (query) => {
       // Poll every 2 seconds if running
       const data = query.state.data as WorkflowExecution | null

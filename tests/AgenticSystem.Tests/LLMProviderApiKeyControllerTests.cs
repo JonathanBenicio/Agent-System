@@ -3,6 +3,7 @@ using AgenticSystem.Api.Controllers;
 using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.LLM.Models;
 using FluentAssertions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 
@@ -10,6 +11,19 @@ namespace AgenticSystem.Tests;
 
 public sealed class LLMProviderApiKeyControllerTests
 {
+    [Fact]
+    public void GetKeys_RequiresTenantOwnerOrAdminRole()
+    {
+        var action = typeof(LLMProviderApiKeyController).GetMethod(nameof(LLMProviderApiKeyController.GetKeys));
+        action.Should().NotBeNull();
+        var authorization = action!
+            .GetCustomAttributes(typeof(AuthorizeAttribute), inherit: true)
+            .Cast<AuthorizeAttribute>()
+            .Single();
+
+        authorization.Roles.Should().Be("Owner,Admin");
+    }
+
     [Fact]
     public async Task TestKey_ValidatesSavedCredentialWithProviderAndRedactsEchoedSecret()
     {
