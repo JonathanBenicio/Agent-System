@@ -15,3 +15,7 @@ Branch feat/chat-session-user-settings, ambiente .NET Validation e Compose isola
 | ESLint de todo o frontend | npm run lint ainda encontra 22 erros e 1 warning em componentes/hooks fora desta entrega (AgentDetailModal, Alerts, Gateway, ONNX, plugins, scheduled tasks, Settings, workflows, dashboard e hooks de gateway/providers/plugins/tools/workflows). | Gate de repositório pendente |
 
 O smoke é reproduzível com tests/backend-validation/chat-session-settings-smoke.mjs; a prova visual é frontend/cypress/e2e/chat-session-settings.ui.cy.js. Memberships de teste, chaves, skills, sessões e a preferência sintética foram removidos depois da validação. Os volumes do Compose são preservados. O stub local registra o Bearer só no arquivo de evidência; o valor é sintético e não é credencial externa.
+
+## Atualização da consolidação #132 — 2026-10-01
+
+Os resultados acima pertencem à branch de origem e ao snapshot de 2026-09-29; o registro de 22 erros e 1 warning no ESLint global é histórico, não o estado da consolidação. Na árvore consolidada antes do commit documental `eb4fa07`, `npm run lint` e `npm run build` globais passaram, Cypress da story #123 passou (1 spec), e a suíte .NET totalizou 771 aprovados/16 ignorados. O PR #132 permanece aberto para revisão em `develop`, portanto isso não fecha a issue #123.

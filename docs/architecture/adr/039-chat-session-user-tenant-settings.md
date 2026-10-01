@@ -2,7 +2,7 @@
 
 Data: 2026-09-29 · Issue: [#123](https://github.com/JonathanBenicio/Agent-System/issues/123) · Story: BACK-CHAT-123 · [Plano](../../plan/chat-session-user-settings.md).
 
-Decisão: aceita e implementada para os fluxos de usuário/tenant. O smoke confirma API key login com subject id sem discovery global; PostgreSQL, provider compatível local e Cypress passaram. Veja o [relatório de validação](../../backend/validation/chat-session-settings-2026-09-29.md). O gate global de ESLint continua pendente em módulos fora do escopo.
+Decisão: aceita e implementada na pilha do PR #132 para os fluxos de usuário/tenant. O smoke confirma API key login com subject id sem discovery global; PostgreSQL, provider compatível local e Cypress passaram. O relatório de 2026-09-29 registra 22 erros e 1 warning no ESLint global daquele snapshot; lint e build global do frontend passaram na árvore consolidada do PR #132. Veja o [relatório de validação](../../backend/validation/chat-session-settings-2026-09-29.md) e a atualização da integração nele. A issue #123 permanece aberta até revisão e merge.
 
 ## Contexto
 

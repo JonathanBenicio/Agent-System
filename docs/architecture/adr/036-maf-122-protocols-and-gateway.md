@@ -2,7 +2,7 @@
 
 Data: 2026-09-29 · Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · Story: BACK-MAF-120 · [Plano](../../plan/maf-122-protocols-gateway.md). Validação E2E A2A/AG-UI foi separada para [#121](https://github.com/JonathanBenicio/Agent-System/issues/121), [ADR-037](037-a2a-agui-preview-validation.md).
 
-Decisão: aceita · Implementação MAF/Gateway validada com build Release e suíte PostgreSQL/Ollama de 755 aprovados/1 skip. Dois grafos DI de LLMManager/Gateway receberam NOTIFY e fizeram inferência Ollama real no mesmo processo. Sessão MAF e Wait foram retomados após reinício real da API. Banner gerou arquivo com MAF/client determinístico e skills reais; inferência vision/editor e efeito externo interrompido seguem sem prova. [Evidência](../../backend/validation/maf-122-workflow-runtime-2026-09-29.md).
+Decisão: aceita. MAF 1.22 e o store global foram implementados na pilha do PR #132; o Gateway foi parcialmente validado por composição de DI e inferência Ollama, mas o registro/configuração de produção, streaming e reload entre processos ainda não foram demonstrados. Esses gaps seguem em [#133](https://github.com/JonathanBenicio/Agent-System/issues/133), para depois do merge de #132. A evidência de 2026-09-29 registra 755 aprovados/1 skip naquele snapshot; a suíte consolidada do PR #132 registrou 771 aprovados/16 ignorados. Sessão MAF e Wait foram retomados após reinício real da API. Banner gerou arquivo com MAF/client determinístico e skills reais; inferência vision/editor e efeito externo interrompido seguem sem prova. [Evidência](../../backend/validation/maf-122-workflow-runtime-2026-09-29.md).
 
 ## Contexto
 
