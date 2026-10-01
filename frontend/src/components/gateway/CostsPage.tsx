@@ -1,5 +1,6 @@
 import { DollarSign, TrendingUp, AlertTriangle } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { gatewayApi } from '@/lib/api'
 import { PageLoading, PageError } from '@/components/shared/Loading'
 import { Badge } from '@/components/shared/Badge'
@@ -19,33 +20,24 @@ interface TurnCostSummary {
   costBreakdown: Record<string, number>
 }
 
-export function CostsPage() {
-  const [data, setData] = useState<CostReport | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+const costsQueryKey = ['gateway-costs'] as const
 
-  const refresh = async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      const costs = await gatewayApi.costs()
-      setData(costs)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar custos')
-    } finally {
-      setLoading(false)
-    }
-  }
+export function CostsPage() {
+  const queryClient = useQueryClient()
+  const query = useQuery({ queryKey: costsQueryKey, queryFn: () => gatewayApi.costs() })
+  const data = query.data ?? null
+  const loading = query.isLoading
+  const error = query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null
+  const refresh = () => query.refetch()
 
   useEffect(() => {
-    refresh()
 
     // Conectar SignalR Gateway Hub para atualizações de custo em tempo real (P2 FinOps)
     const conn = getGatewayConnection()
     startGatewayConnection().catch(err => console.error('Erro ao iniciar Gateway Hub:', err))
 
     const handleCostUpdated = (summary: TurnCostSummary) => {
-      setData(prev => {
+      queryClient.setQueryData<CostReport>(costsQueryKey, prev => {
         if (!prev) return prev
         const newTotal = prev.totalCost + Number(summary.totalCost)
         const newPercent = prev.dailyBudget > 0 ? (newTotal / prev.dailyBudget) : 0
@@ -74,7 +66,7 @@ export function CostsPage() {
     return () => {
       conn.off('TurnCostSummaryUpdated', handleCostUpdated)
     }
-  }, [])
+  }, [queryClient])
 
   if (loading) return <PageLoading />
   if (error || !data) return <PageError message={error ?? 'Sem dados'} onRetry={refresh} />

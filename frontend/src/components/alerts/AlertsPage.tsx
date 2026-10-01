@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { alertsApi } from '@/lib/api'
 import type { SystemAlert } from '@/types/api'
 import { PageLoading, PageError } from '@/components/shared/Loading'
@@ -6,30 +6,18 @@ import { AlertTriangle, Check, Inbox } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export default function AlertsPage() {
-  const [alerts, setAlerts] = useState<SystemAlert[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchAlerts = async () => {
-    try {
-      setLoading(true)
-      const data = await alertsApi.getAlerts()
-      setAlerts(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar alertas')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchAlerts()
-  }, [])
+  const queryClient = useQueryClient()
+  const queryKey = ['alerts']
+  const query = useQuery({ queryKey, queryFn: () => alertsApi.getAlerts() })
+  const alerts = query.data ?? []
+  const loading = query.isLoading
+  const error = query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null
+  const fetchAlerts = () => query.refetch()
 
   const handleMarkAsRead = async (id: string) => {
     try {
       await alertsApi.markAsRead(id)
-      setAlerts(prev => prev.map(a => a.id === id ? { ...a, isRead: true } : a))
+      queryClient.setQueryData<SystemAlert[]>(queryKey, prev => (prev ?? []).map(alert => alert.id === id ? { ...alert, isRead: true } : alert))
     } catch (err) {
       console.error('Erro ao marcar como lido:', err)
     }
@@ -44,7 +32,7 @@ export default function AlertsPage() {
         hour: '2-digit',
         minute: '2-digit'
       })
-    } catch (e) {
+    } catch {
       return dateStr
     }
   }
@@ -53,7 +41,7 @@ export default function AlertsPage() {
   if (error) return <PageError message={error} />
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="p-6 space-y-6 max-w-5xl mx-auto" aria-label="Histórico de Alertas">
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
@@ -63,7 +51,7 @@ export default function AlertsPage() {
             Acompanhe os alertas de cota e saldo do sistema.
           </p>
         </div>
-        <button 
+        <button
           onClick={fetchAlerts}
           className="px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
         >
@@ -82,7 +70,7 @@ export default function AlertsPage() {
           </div>
         ) : (
           alerts.map(alert => (
-            <div 
+            <div
               key={alert.id}
               className={cn(
                 "p-5 bg-card rounded-xl border border-border/50 hover:border-border transition-all flex items-start gap-4 backdrop-blur-sm",
@@ -95,7 +83,7 @@ export default function AlertsPage() {
               )}>
                 <AlertTriangle className="w-5 h-5" />
               </div>
-              
+
               <div className="flex-1 space-y-1 min-w-0">
                 <div className="flex justify-between items-start gap-2">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -114,7 +102,7 @@ export default function AlertsPage() {
                     {formatDate(alert.createdAt)}
                   </span>
                 </div>
-                
+
                 <p className="text-muted-foreground text-sm md:text-base">
                   {alert.message}
                 </p>

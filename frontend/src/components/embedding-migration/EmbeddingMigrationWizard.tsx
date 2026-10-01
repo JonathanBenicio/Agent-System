@@ -71,13 +71,13 @@ export function EmbeddingMigrationWizard() {
   }, [selectedJobId])
 
   async function fetchModels() {
-    try { const res = await fetch(`${API_BASE}/models`); setModels(await res.json()) } catch {}
+    try { const res = await fetch(`${API_BASE}/models`); setModels(await res.json()) } catch { /* ignore */ }
   }
   async function fetchJobs() {
-    try { const res = await fetch(`${API_BASE}/jobs`); setJobs(await res.json()) } catch {}
+    try { const res = await fetch(`${API_BASE}/jobs`); setJobs(await res.json()) } catch { /* ignore */ }
   }
   async function fetchJobStatus(jobId: string) {
-    try { const res = await fetch(`${API_BASE}/jobs/${jobId}/status`); setJobStatus(await res.json()) } catch {}
+    try { const res = await fetch(`${API_BASE}/jobs/${jobId}/status`); setJobStatus(await res.json()) } catch { /* ignore */ }
   }
 
   async function saveModel(e: React.FormEvent) {

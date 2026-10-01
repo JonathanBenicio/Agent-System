@@ -1,19 +1,47 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using System.Security.Claims;
+using AgenticSystem.Api.Auth;
 using AgenticSystem.Core.LLM.Interfaces;
+using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
+using AgenticSystem.Infrastructure.Persistence;
 
 namespace AgenticSystem.Api.Controllers;
 
 [Authorize]
 [ApiController]
 [Route("api/admin/llm")]
-public class LLMController : ControllerBase
+public class LLMController : ControllerBase, IAsyncActionFilter
 {
     private readonly ILLMAdministrationService _llmAdministrationService;
+    private readonly AgenticDbContext? _dbContext;
+    private readonly ISystemOperationContextAccessor? _systemOperations;
 
-    public LLMController(ILLMAdministrationService llmAdministrationService)
+    public LLMController(
+        ILLMAdministrationService llmAdministrationService,
+        AgenticDbContext? dbContext = null,
+        ISystemOperationContextAccessor? systemOperations = null)
     {
         _llmAdministrationService = llmAdministrationService;
+        _dbContext = dbContext;
+        _systemOperations = systemOperations;
+    }
+
+    [NonAction]
+    public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        if (_dbContext is null || _systemOperations is null || !await PlatformAdminAuthorization.IsPlatformAdministratorAsync(
+                _dbContext, _systemOperations, context.HttpContext.User, context.HttpContext.RequestAborted))
+        {
+            context.Result = Forbid();
+            return;
+        }
+
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.PlatformConfigRead);
+        _systemOperations.Require(SystemOperationKind.PlatformConfigRead);
+        await next();
     }
 
     [HttpGet("configuration")]
@@ -89,19 +117,31 @@ public class LLMController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.ProviderName))
             return BadRequest(new { error = "ProviderName is required." });
 
-        var configuration = await _llmAdministrationService.UpdateDefaultSelectionAsync(request, ct);
-        return Ok(configuration);
+        try
+        {
+            var configuration = await _llmAdministrationService.UpdateDefaultSelectionAsync(request, ct, GetPlatformActorId());
+            return Ok(configuration);
+        }
+        catch (System.InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPut("providers/{name}")]
     public async Task<IActionResult> UpdateProvider(string name, [FromBody] UpdateProviderRequest request, CancellationToken ct)
     {
-        var info = await _llmAdministrationService.UpdateProviderAsync(name, request, ct);
+        var info = await _llmAdministrationService.UpdateProviderAsync(name, request, ct, GetPlatformActorId());
         if (info is null)
             return NotFound(new { error = $"Provider '{name}' not found." });
 
         return Ok(info);
     }
+
+    private string GetPlatformActorId() =>
+        User.FindFirstValue(ClaimTypes.NameIdentifier)
+        ?? User.FindFirstValue("sub")
+        ?? throw new InvalidOperationException("Platform administrator identity is required.");
 
     [HttpPost("providers/sync-quotas")]
     public async Task<IActionResult> SyncQuotas(CancellationToken ct)

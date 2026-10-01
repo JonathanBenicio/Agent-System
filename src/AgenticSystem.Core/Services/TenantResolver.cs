@@ -12,11 +12,16 @@ public class TenantResolver : ITenantResolver
 {
     private readonly ITenantStore _tenantStore;
     private readonly ILogger<TenantResolver> _logger;
+    private readonly ISystemOperationContextAccessor _systemOperations;
 
-    public TenantResolver(ITenantStore tenantStore, ILogger<TenantResolver> logger)
+    public TenantResolver(
+        ITenantStore tenantStore,
+        ILogger<TenantResolver> logger,
+        ISystemOperationContextAccessor systemOperations)
     {
         _tenantStore = tenantStore;
         _logger = logger;
+        _systemOperations = systemOperations;
     }
 
     public async Task<TenantContext?> ResolveAsync(string tenantId)
@@ -24,6 +29,14 @@ public class TenantResolver : ITenantResolver
         if (string.IsNullOrWhiteSpace(tenantId))
             return null;
 
+        if (TenantIdPolicy.IsReservedSystemId(tenantId))
+        {
+            _logger.LogWarning("Reserved system operation ID cannot resolve as a tenant: {TenantId}", tenantId);
+            return null;
+        }
+
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.TenantResolution);
+        _systemOperations.Require(SystemOperationKind.TenantResolution);
         var tenant = await _tenantStore.GetByIdAsync(tenantId);
         if (tenant is null || !tenant.IsActive)
         {

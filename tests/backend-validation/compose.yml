@@ -1,0 +1,22 @@
+name: agent-system-doc-validation
+services:
+  postgres:
+    image: pgvector/pgvector:pg16@sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b
+    ports: ["127.0.0.1:55432:5432"]
+    environment:
+      POSTGRES_DB: backend_validation
+      POSTGRES_USER: validation
+      POSTGRES_PASSWORD: validation_local_only
+    volumes: ["validation-postgres:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U validation -d backend_validation"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+  ollama:
+    image: ollama/ollama:latest@sha256:8262851b2846b87c649eddf3e76beb270c52f4d1bc94559f47efde16b0841551
+    ports: ["127.0.0.1:11435:11434"]
+    volumes: ["validation-ollama:/root/.ollama"]
+volumes:
+  validation-postgres:
+  validation-ollama:

@@ -15,18 +15,25 @@ public class PostgresSessionStore : ISessionStore
 {
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresSessionStore> _logger;
+    private readonly ITenantContextAccessor _tenantAccessor;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public PostgresSessionStore(IDbContextFactory<AgenticDbContext> dbContextFactory, ILogger<PostgresSessionStore> logger)
+    public PostgresSessionStore(
+        IDbContextFactory<AgenticDbContext> dbContextFactory,
+        ILogger<PostgresSessionStore> logger,
+        ITenantContextAccessor tenantAccessor)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;
+        _tenantAccessor = tenantAccessor;
     }
 
     public async Task SaveAsync(SessionData session, CancellationToken ct = default)
     {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, session.TenantId);
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        var entity = await db.SessionRecords.FirstOrDefaultAsync(record => record.Id == session.Id, ct);
+        var entity = await db.SessionRecords
+            .FirstOrDefaultAsync(record => record.Id == session.Id && record.TenantId == session.TenantId, ct);
         var serialized = JsonSerializer.Serialize(session, JsonOptions);
 
         if (entity is null)
@@ -44,8 +51,8 @@ public class PostgresSessionStore : ISessionStore
         }
         else
         {
-            entity.UserId = session.UserId;
-            entity.TenantId = session.TenantId;
+            if (entity.UserId != session.UserId || entity.TenantId != session.TenantId)
+                throw new InvalidOperationException("Session owner and tenant cannot be changed.");
             entity.DataJson = serialized;
             entity.StartedAt = session.StartedAt;
             entity.EndedAt = session.EndedAt;
@@ -70,7 +77,47 @@ public class PostgresSessionStore : ISessionStore
 
         try
         {
-            return JsonSerializer.Deserialize<SessionData>(json, JsonOptions);
+            var session = JsonSerializer.Deserialize<SessionData>(json, JsonOptions);
+            if (session is not null)
+            {
+                // Carregar resumo executivo se houver
+                var summaryEntity = await db.SessionSummaries
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(s => s.SessionId == sessionId, ct);
+
+                if (summaryEntity is not null)
+                {
+                    session.Summary = new SessionSummary
+                    {
+                        SessionId = summaryEntity.SessionId,
+                        Summary = summaryEntity.Summary,
+                        TopicsDiscussed = JsonSerializer.Deserialize<List<string>>(summaryEntity.TopicsJson, JsonOptions) ?? [],
+                        AgentsUsed = JsonSerializer.Deserialize<List<string>>(summaryEntity.AgentsJson, JsonOptions) ?? [],
+                        EventCount = summaryEntity.EventCount,
+                        CreatedAt = summaryEntity.CreatedAt,
+                        SessionDuration = summaryEntity.SessionDuration
+                    };
+                }
+
+                // Carregar insights se houver
+                var insightEntity = await db.SessionInsights
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(i => i.SessionId == sessionId, ct);
+
+                if (insightEntity is not null)
+                {
+                    session.Insights = new SessionInsights
+                    {
+                        SessionId = insightEntity.SessionId,
+                        Facts = JsonSerializer.Deserialize<List<string>>(insightEntity.FactsJson, JsonOptions) ?? [],
+                        Decisions = JsonSerializer.Deserialize<List<string>>(insightEntity.DecisionsJson, JsonOptions) ?? [],
+                        Preferences = JsonSerializer.Deserialize<List<string>>(insightEntity.PreferencesJson, JsonOptions) ?? [],
+                        ActionItems = JsonSerializer.Deserialize<List<string>>(insightEntity.ActionItemsJson, JsonOptions) ?? []
+                    };
+                }
+            }
+
+            return session;
         }
         catch (JsonException ex)
         {
@@ -79,18 +126,57 @@ public class PostgresSessionStore : ISessionStore
         }
     }
 
-    public async Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, string? search = null, CancellationToken ct = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        var jsonRows = await db.SessionRecords
+        var query = db.SessionRecords
             .AsNoTracking()
-            .Where(record => record.UserId == userId)
+            .Where(record => record.UserId == userId);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var searchLower = $"%{search.Trim().ToLower()}%";
+            query = query.Where(record =>
+                EF.Functions.ILike(record.DataJson, searchLower) ||
+                db.SessionSummaries.Any(s => s.SessionId == record.Id && EF.Functions.ILike(s.Summary, searchLower))
+            );
+        }
+
+        var jsonRows = await query
             .OrderByDescending(record => record.StartedAt)
             .Take(maxResults)
             .Select(record => record.DataJson)
             .ToListAsync(ct);
 
-        return DeserializeSessions(jsonRows);
+        var sessions = DeserializeSessions(jsonRows);
+        if (sessions.Count > 0)
+        {
+            var sessionIds = sessions.Select(s => s.Id).ToList();
+            var summaries = await db.SessionSummaries
+                .AsNoTracking()
+                .Where(s => sessionIds.Contains(s.SessionId))
+                .ToListAsync(ct);
+
+            foreach (var session in sessions)
+            {
+                var summaryEntity = summaries.FirstOrDefault(s => s.SessionId == session.Id);
+                if (summaryEntity is not null)
+                {
+                    session.Summary = new SessionSummary
+                    {
+                        SessionId = summaryEntity.SessionId,
+                        Summary = summaryEntity.Summary,
+                        TopicsDiscussed = JsonSerializer.Deserialize<List<string>>(summaryEntity.TopicsJson, JsonOptions) ?? [],
+                        AgentsUsed = JsonSerializer.Deserialize<List<string>>(summaryEntity.AgentsJson, JsonOptions) ?? [],
+                        EventCount = summaryEntity.EventCount,
+                        CreatedAt = summaryEntity.CreatedAt,
+                        SessionDuration = summaryEntity.SessionDuration
+                    };
+                }
+            }
+        }
+
+        return sessions;
     }
 
     public async Task<IReadOnlyList<SessionData>> GetByTenantAsync(string tenantId, string? userId = null, int maxResults = 10, CancellationToken ct = default)
@@ -111,7 +197,35 @@ public class PostgresSessionStore : ISessionStore
             .Select(record => record.DataJson)
             .ToListAsync(ct);
 
-        return DeserializeSessions(jsonRows);
+        var sessions = DeserializeSessions(jsonRows);
+        if (sessions.Count > 0)
+        {
+            var sessionIds = sessions.Select(s => s.Id).ToList();
+            var summaries = await db.SessionSummaries
+                .AsNoTracking()
+                .Where(s => sessionIds.Contains(s.SessionId))
+                .ToListAsync(ct);
+
+            foreach (var session in sessions)
+            {
+                var summaryEntity = summaries.FirstOrDefault(s => s.SessionId == session.Id);
+                if (summaryEntity is not null)
+                {
+                    session.Summary = new SessionSummary
+                    {
+                        SessionId = summaryEntity.SessionId,
+                        Summary = summaryEntity.Summary,
+                        TopicsDiscussed = JsonSerializer.Deserialize<List<string>>(summaryEntity.TopicsJson, JsonOptions) ?? [],
+                        AgentsUsed = JsonSerializer.Deserialize<List<string>>(summaryEntity.AgentsJson, JsonOptions) ?? [],
+                        EventCount = summaryEntity.EventCount,
+                        CreatedAt = summaryEntity.CreatedAt,
+                        SessionDuration = summaryEntity.SessionDuration
+                    };
+                }
+            }
+        }
+
+        return sessions;
     }
 
     public async Task DeleteAsync(string sessionId, CancellationToken ct = default)

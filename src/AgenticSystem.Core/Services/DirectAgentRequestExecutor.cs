@@ -16,6 +16,8 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
     private readonly IAgentRuntimeCoordinator _runtimeCoordinator;
     private readonly IAgentExecutionPostProcessingPipeline _postProcessingPipeline;
     private readonly ILogger<DirectAgentRequestExecutor> _logger;
+    private readonly ISessionStore? _sessionStore;
+    private readonly ILLMRuntimeContextAccessor? _llmContextAccessor;
 
     public DirectAgentRequestExecutor(
         IAgentFactory agentFactory,
@@ -24,7 +26,9 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
         IAgentRuntimeCoordinator runtimeCoordinator,
         IAgentExecutionPostProcessingPipeline postProcessingPipeline,
         ILogger<DirectAgentRequestExecutor> logger,
-        IDirectAgentExecutionService? directAgentExecutionService = null)
+        IDirectAgentExecutionService? directAgentExecutionService = null,
+        ISessionStore? sessionStore = null,
+        ILLMRuntimeContextAccessor? llmContextAccessor = null)
     {
         _agentFactory = agentFactory;
         _preProcessingPipeline = preProcessingPipeline;
@@ -33,6 +37,8 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
         _runtimeCoordinator = runtimeCoordinator;
         _postProcessingPipeline = postProcessingPipeline;
         _logger = logger;
+        _sessionStore = sessionStore;
+        _llmContextAccessor = llmContextAccessor;
     }
 
     public async Task<AgentResponse> ExecuteAsync(
@@ -44,6 +50,23 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
     {
         try
         {
+            if (context.WorkflowOptions is { } workflowOptions)
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(context.UserId);
+                ArgumentException.ThrowIfNullOrWhiteSpace(context.TenantId);
+                sessionId = workflowOptions.SessionId;
+                var store = _sessionStore ?? throw new InvalidOperationException("Workflow agent sessions require ISessionStore.");
+                var existing = await store.GetAsync(sessionId, ct);
+                if (existing is not null && (existing.UserId != context.UserId || existing.TenantId != context.TenantId))
+                    throw new UnauthorizedAccessException("Workflow agent session belongs to another owner or tenant.");
+                if (existing is null)
+                    await store.SaveAsync(new SessionData
+                    {
+                        Id = sessionId, UserId = context.UserId, TenantId = context.TenantId, StartedAt = DateTime.UtcNow
+                    }, ct);
+            }
+            using var executionScope = context.WorkflowOptions is null ? null : _runtimeCoordinator.BeginExecutionScope(sessionId, context);
+            using var llmScope = context.WorkflowOptions is null ? null : _llmContextAccessor?.BeginScope(context, sessionId);
             IEnumerable<AgentInfo> agents;
             try
             {
@@ -103,7 +126,10 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
             }, ct);
 
             var executionSw = System.Diagnostics.Stopwatch.StartNew();
-            using var agentScope = _runtimeCoordinator.BeginAgentScope(selectedAgent.Name, selectedAgent.AvailableTools);
+            var allowedTools = context.WorkflowOptions?.AllowedTools is { } restrictedTools
+                ? selectedAgent.AvailableTools.Intersect(restrictedTools, StringComparer.OrdinalIgnoreCase)
+                : selectedAgent.AvailableTools;
+            using var agentScope = _runtimeCoordinator.BeginAgentScope(selectedAgent.Name, allowedTools);
             
             if (_directAgentExecutionService is null)
             {
@@ -160,9 +186,6 @@ public class DirectAgentRequestExecutor : IDirectAgentRequestExecutor
                     ["targetAgent"] = targetAgent
                 }
             }, ct);
-
-            try { await _sessionManager.EndSessionAsync(sessionId); }
-            catch (Exception endEx) { _logger.LogWarning(endEx, "Falha ao finalizar sessão {SessionId}", sessionId); }
 
             return AgentResponse.Error("Erro interno ao processar requisição direta.", nameof(DirectAgentRequestExecutor));
         }

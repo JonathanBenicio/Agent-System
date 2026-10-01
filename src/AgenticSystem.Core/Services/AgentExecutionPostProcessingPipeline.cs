@@ -1,6 +1,8 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using Microsoft.Extensions.Logging;
+using System.Text.RegularExpressions;
+using System.Text.Json;
 
 namespace AgenticSystem.Core.Services;
 
@@ -17,8 +19,7 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
     private readonly ICitationEngine? _citationEngine;
     private readonly IAgentEvaluationService? _evaluationService;
     private readonly ISelfImprovementEngine? _selfImprovementEngine;
-    private readonly IPromptManager? _promptManager;
-    private readonly IAgentVersioningService? _versioningService;
+    private readonly IWorkflowStore? _workflowStore;
     private readonly ILogger<AgentExecutionPostProcessingPipeline> _logger;
 
     public AgentExecutionPostProcessingPipeline(
@@ -35,7 +36,8 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
         IAgentEvaluationService? evaluationService = null,
         ISelfImprovementEngine? selfImprovementEngine = null,
         IPromptManager? promptManager = null,
-        IAgentVersioningService? versioningService = null)
+        IAgentVersioningService? versioningService = null,
+        IWorkflowStore? workflowStore = null)
     {
         _sessionManager = sessionManager;
         _runtimeCoordinator = runtimeCoordinator;
@@ -49,8 +51,9 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
         _citationEngine = citationEngine;
         _evaluationService = evaluationService;
         _selfImprovementEngine = selfImprovementEngine;
-        _promptManager = promptManager;
-        _versioningService = versioningService;
+        _ = promptManager;
+        _ = versioningService;
+        _workflowStore = workflowStore;
     }
 
     public async Task<AgentResponse> ProcessAsync(
@@ -109,32 +112,10 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
             reflections: reflectionOutcome.Reflections,
             toolAvailability: null);
 
-        // 2. Self-Improvement & Versioning (Phase 3 Integration)
-        if (_selfImprovementEngine != null && reflectionOutcome.LatestReflection != null && _promptManager != null && _versioningService != null)
+        // Self-improvement may propose a change, but only a tenant Owner/Admin can approve it.
+        if (_selfImprovementEngine != null && reflectionOutcome.LatestReflection != null)
         {
-            var improvement = await _selfImprovementEngine.AnalyzeAndImproveAsync(response.AgentName, ct);
-            if (improvement.Status == "Proposed" && improvement.ProposedChanges.TryGetValue("instructions_update", out var newInstructions))
-            {
-                _logger.LogInformation("Proposed improvement found for {Agent}. Updating template.", response.AgentName);
-                
-                await _promptManager.SaveTemplateAsync(new PromptTemplate
-                {
-                    AgentName = response.AgentName,
-                    TemplateBody = newInstructions,
-                    Name = "Auto-improved Template",
-                    Description = $"Improved based on reflection in session {context.SessionId}",
-                    CreatedBy = "SelfImprovementEngine"
-                }, ct);
-
-                await _versioningService.CreateVersionAsync(
-                    response.AgentName, 
-                    description: $"Auto-improved via reflection in session {context.SessionId}", 
-                    changeLog: improvement.Rationale, 
-                    createdBy: "System", 
-                    ct: ct);
-
-                await _selfImprovementEngine.ApplyImprovementAsync(improvement.Id, ct);
-            }
+            await _selfImprovementEngine.AnalyzeAndImproveAsync(response.AgentName, ct);
         }
 
         var approvalResponse = await ApplyFinalApprovalAsync(context, ct);
@@ -144,6 +125,12 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
         }
 
         await PersistExecutionResultAsync(context, ct);
+
+        // Detect and Record Workflows (Phase 2: Prompt-to-Workflow)
+        if (!string.IsNullOrWhiteSpace(response.Content))
+        {
+            await DetectAndRecordWorkflowsAsync(context, response.Content, ct);
+        }
 
         if (_agentMemoryService is not null)
         {
@@ -330,6 +317,56 @@ public class AgentExecutionPostProcessingPipeline : IAgentExecutionPostProcessin
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "⚠️ Falha ao consolidar sessão {SessionId}", context.SessionId);
+        }
+    }
+
+    private async Task DetectAndRecordWorkflowsAsync(
+        AgentExecutionPostProcessingContext context,
+        string content,
+        CancellationToken ct)
+    {
+        // Search for ```json-workflow ... ``` blocks
+        var match = Regex.Match(content, @"```json-workflow\s*([\s\S]*?)\s*```", RegexOptions.IgnoreCase);
+        if (!match.Success) return;
+
+        var json = match.Groups[1].Value;
+        try
+        {
+            var workflowDef = JsonSerializer.Deserialize<WorkflowDefinition>(json, new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true
+            });
+
+            if (workflowDef == null) return;
+
+            _logger.LogInformation("🧩 Workflow detected in agent response: {WorkflowName}", workflowDef.Name);
+
+            // 1. Persist in Workflow Store if available
+            if (_workflowStore != null)
+            {
+                await _workflowStore.SaveDefinitionAsync(context.UserContext.TenantId, workflowDef, ct);
+            }
+
+            // 2. Record as Artifact to trigger SignalR broadcast
+            await _runtimeCoordinator.RecordArtifactAsync(new AgentExecutionArtifact
+            {
+                SessionId = context.SessionId,
+                Type = AgentExecutionArtifactType.Plan, // Using Plan as a proxy for WorkflowDefinition artifact
+                Name = "GeneratedWorkflow",
+                AgentName = context.Response.AgentName,
+                Status = "Created",
+                Summary = $"Workflow '{workflowDef.Name}' generated via chat.",
+                Data = new Dictionary<string, object>
+                {
+                    ["workflowId"] = workflowDef.Id,
+                    ["workflowName"] = workflowDef.Name,
+                    ["definition"] = workflowDef
+                }
+            }, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "⚠️ Failed to parse or save detected workflow in session {SessionId}", context.SessionId);
         }
     }
 

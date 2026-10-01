@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Api.Hubs;
+using AgenticSystem.Api.SignalR;
 using System.Security.Claims;
 
 namespace AgenticSystem.Api.Controllers;
@@ -12,25 +15,73 @@ namespace AgenticSystem.Api.Controllers;
 public class SessionController : ControllerBase
 {
     private readonly ISessionStore _sessionStore;
+    private readonly IHubContext<ChatHub> _hubContext;
     private readonly ILogger<SessionController> _logger;
+    private readonly IVectorStore _vectorStore;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public SessionController(ISessionStore sessionStore, ILogger<SessionController> logger)
+    public SessionController(ISessionStore sessionStore, IHubContext<ChatHub> hubContext, ILogger<SessionController> logger, IVectorStore vectorStore, ITenantContextAccessor tenantContextAccessor)
     {
         _sessionStore = sessionStore;
+        _hubContext = hubContext;
         _logger = logger;
+        _vectorStore = vectorStore;
+        _tenantContextAccessor = tenantContextAccessor;
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateSession(CancellationToken ct = default)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+        var session = new SessionData
+        {
+            Id = $"session-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}",
+            UserId = userId,
+            TenantId = _tenantContextAccessor.CurrentTenantId,
+            StartedAt = DateTime.UtcNow
+        };
+        await _sessionStore.SaveAsync(session, ct);
+        await _hubContext.Clients.Group(TenantSignalRGroups.User(session.TenantId, userId))
+            .SendAsync("SessionCreated", session.Id, ct);
+        return CreatedAtAction(nameof(GetSession), new { id = session.Id }, SessionDtoMapper.ToDetail(session));
+    }
+
+    [HttpPost("{id}/end")]
+    public async Task<IActionResult> EndSession(string id, CancellationToken ct = default)
+    {
+        var userId = GetUserId();
+        if (userId == null) return Unauthorized();
+        var session = await _sessionStore.GetAsync(id, ct);
+        if (session is null || session.UserId != userId || session.TenantId != _tenantContextAccessor.CurrentTenantId)
+            return NotFound(new { error = $"Session '{id}' not found." });
+        if (session.EndedAt is null)
+        {
+            session.EndedAt = DateTime.UtcNow;
+            await _sessionStore.SaveAsync(session, ct);
+        }
+        await _hubContext.Clients.Group(TenantSignalRGroups.User(session.TenantId, userId))
+            .SendAsync("SessionUpdated", session.Id, ct);
+        return Ok(SessionDtoMapper.ToDetail(session));
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetSessions([FromQuery] int limit = 50, CancellationToken ct = default)
+    public async Task<IActionResult> GetSessions([FromQuery] int limit = 50, [FromQuery] string? search = null, CancellationToken ct = default)
     {
         var userId = GetUserId();
         if (userId == null) return Unauthorized();
 
-        var sessions = await _sessionStore.GetByUserAsync(userId, limit, ct);
+        if (limit is < 1 or > 100) return BadRequest(new { error = "Limit must be between 1 and 100." });
+        if (search?.Length > 100) return BadRequest(new { error = "Search is too long." });
+        var sessions = await _sessionStore.GetByTenantAsync(_tenantContextAccessor.CurrentTenantId, userId, 100, ct);
 
         var items = sessions
-            .OrderByDescending(s => s.EndedAt ?? s.StartedAt)
             .Select(SessionDtoMapper.ToListItem)
+            .Where(item => string.IsNullOrWhiteSpace(search) ||
+                item.Title.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (item.Summary?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+            .OrderByDescending(s => s.LastActivity)
+            .Take(limit)
             .ToList();
 
         return Ok(items);
@@ -43,7 +94,7 @@ public class SessionController : ControllerBase
         if (userId == null) return Unauthorized();
 
         var session = await _sessionStore.GetAsync(id, ct);
-        if (session is null || session.UserId != userId)
+        if (session is null || session.UserId != userId || session.TenantId != _tenantContextAccessor.CurrentTenantId)
             return NotFound(new { error = $"Session '{id}' not found." });
 
         return Ok(SessionDtoMapper.ToDetail(session));
@@ -56,7 +107,7 @@ public class SessionController : ControllerBase
         if (userId == null) return Unauthorized();
 
         var session = await _sessionStore.GetAsync(id, ct);
-        if (session is null || session.UserId != userId)
+        if (session is null || session.UserId != userId || session.TenantId != _tenantContextAccessor.CurrentTenantId)
             return NotFound(new { error = $"Session '{id}' not found." });
 
         return Ok(SessionDtoMapper.ToMessages(session));
@@ -69,11 +120,22 @@ public class SessionController : ControllerBase
         if (userId == null) return Unauthorized();
 
         var session = await _sessionStore.GetAsync(id, ct);
-        if (session is null || session.UserId != userId)
+        if (session is null || session.UserId != userId || session.TenantId != _tenantContextAccessor.CurrentTenantId)
             return NotFound(new { error = $"Session '{id}' not found." });
 
         await _sessionStore.DeleteAsync(id, ct);
         _logger.LogInformation("Session {SessionId} deleted by user {UserId}", id, userId);
+
+        try
+        {
+            await _vectorStore.DeleteCollectionAsync(id);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to purge session documents from vector store for session {SessionId}", id);
+        }
+
+        await _hubContext.Clients.Group(TenantSignalRGroups.User(_tenantContextAccessor.CurrentTenantId, userId)).SendAsync("SessionDeleted", id, ct);
 
         return NoContent();
     }
@@ -88,13 +150,15 @@ public class SessionController : ControllerBase
             return BadRequest(new { error = "Title cannot be empty." });
 
         var session = await _sessionStore.GetAsync(id, ct);
-        if (session is null || session.UserId != userId)
+        if (session is null || session.UserId != userId || session.TenantId != _tenantContextAccessor.CurrentTenantId)
             return NotFound(new { error = $"Session '{id}' not found." });
 
         session.RuntimeSettings["title"] = request.Title.Trim();
         await _sessionStore.SaveAsync(session, ct);
 
         _logger.LogInformation("Session {SessionId} title updated by user {UserId}", id, userId);
+
+        await _hubContext.Clients.Group(TenantSignalRGroups.User(_tenantContextAccessor.CurrentTenantId, userId)).SendAsync("SessionUpdated", id, request.Title.Trim(), ct);
 
         return Ok(new { id = session.Id, title = request.Title.Trim() });
     }

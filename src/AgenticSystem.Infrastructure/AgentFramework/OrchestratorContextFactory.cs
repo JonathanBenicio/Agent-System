@@ -29,15 +29,10 @@ public class OrchestratorContextFactory
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>
-    /// Resolve o orquestrador de forma síncrona (compatibilidade DI).
-    /// [DEPRECATED] Use OrchestratorHostBuilder.Build() diretamente.
-    /// </summary>
+    [System.Obsolete("Use ResolveAsync instead.")]
     public OrchestratorContext Resolve()
     {
-        return ResolveAsync(CancellationToken.None)
-            .GetAwaiter()
-            .GetResult();
+        throw new System.NotSupportedException("Synchronous Resolve is not supported. Use ResolveAsync instead.");
     }
 
     /// <summary>

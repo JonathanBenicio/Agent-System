@@ -20,7 +20,8 @@ public enum ToolCategory
     Tasks,
     Search,
     Api,
-    Database
+    Database,
+    AI
 }
 
 public record ToolInput
@@ -28,6 +29,8 @@ public record ToolInput
     public string Action { get; init; } = string.Empty;
     public Dictionary<string, object> Parameters { get; init; } = new();
     public string? UserId { get; init; }
+    /// <summary>Stable across retries/recovery for the same workflow step; tools with external effects should deduplicate this key.</summary>
+    public string? IdempotencyKey { get; init; }
 }
 
 public record ToolResult

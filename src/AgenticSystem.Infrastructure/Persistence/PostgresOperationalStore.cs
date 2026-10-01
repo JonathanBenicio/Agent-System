@@ -287,16 +287,45 @@ public class PostgresOperationalStore : IOperationalStore
 
     // ── System State ──────────────────────────────────────
 
-    public Task<SystemState?> GetSystemStateAsync(string id, CancellationToken ct = default)
+    public async Task<SystemState?> GetSystemStateAsync(string id, CancellationToken ct = default)
     {
-        // TODO: Implementar persistência de SystemState no Postgres
-        return Task.FromResult<SystemState?>(null);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entity = await db.SystemStates
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == id, ct);
+
+        if (entity == null) return null;
+
+        return new SystemState
+        {
+            Id = entity.Id,
+            Value = entity.Value,
+            UpdatedAt = entity.UpdatedAt
+        };
     }
 
-    public Task SaveSystemStateAsync(SystemState state, CancellationToken ct = default)
+    public async Task SaveSystemStateAsync(SystemState state, CancellationToken ct = default)
     {
-        // TODO: Implementar persistência de SystemState no Postgres
-        return Task.CompletedTask;
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        var entity = await db.SystemStates.FirstOrDefaultAsync(s => s.Id == state.Id, ct);
+
+        if (entity == null)
+        {
+            entity = new SystemStateEntity
+            {
+                Id = state.Id,
+                Value = state.Value,
+                UpdatedAt = state.UpdatedAt
+            };
+            db.SystemStates.Add(entity);
+        }
+        else
+        {
+            entity.Value = state.Value;
+            entity.UpdatedAt = state.UpdatedAt;
+        }
+
+        await db.SaveChangesAsync(ct);
     }
 
     // ── Mapping helpers ───────────────────────────────────

@@ -4,6 +4,9 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Exceptions;
+using AgenticSystem.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace AgenticSystem.Api.Controllers.OpenAI;
 
@@ -13,7 +16,7 @@ namespace AgenticSystem.Api.Controllers.OpenAI;
 /// permitindo integração com ferramentas que consomem a API OpenAI
 /// (Continue, Cursor, LangChain, etc.).
 /// 
-/// Autenticação via Bearer token (padrão OpenAI) — valida contra AdminApiKey.
+/// Autenticação via Bearer token (padrão OpenAI) — valida contra banco de dados.
 /// </summary>
 [ApiController]
 [Route("v1")]
@@ -21,16 +24,22 @@ namespace AgenticSystem.Api.Controllers.OpenAI;
 public class OpenAIChatCompletionController : ControllerBase
 {
     private readonly IFrameworkOrchestratorService _orchestrator;
-    private readonly IConfiguration _configuration;
+    private readonly AgenticDbContext _dbContext;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ISystemOperationContextAccessor _systemOperations;
     private readonly ILogger<OpenAIChatCompletionController> _logger;
 
     public OpenAIChatCompletionController(
         IFrameworkOrchestratorService orchestrator,
-        IConfiguration configuration,
+        AgenticDbContext dbContext,
+        ITenantContextAccessor tenantContextAccessor,
+        ISystemOperationContextAccessor systemOperations,
         ILogger<OpenAIChatCompletionController> logger)
     {
         _orchestrator = orchestrator;
-        _configuration = configuration;
+        _dbContext = dbContext;
+        _tenantContextAccessor = tenantContextAccessor;
+        _systemOperations = systemOperations;
         _logger = logger;
     }
 
@@ -42,13 +51,15 @@ public class OpenAIChatCompletionController : ControllerBase
     [ProducesResponseType(typeof(ChatCompletionResponse), 200)]
     [ProducesResponseType(typeof(ChatCompletionError), 401)]
     [ProducesResponseType(typeof(ChatCompletionError), 400)]
+    [ProducesResponseType(typeof(ChatCompletionError), 429)]
     [ProducesResponseType(typeof(ChatCompletionError), 500)]
     public async Task<IActionResult> CreateChatCompletion(
         [FromBody] ChatCompletionRequest request,
         CancellationToken ct)
     {
         // 1. Autenticação via Bearer token (padrão OpenAI)
-        if (!ValidateBearerToken())
+        var authenticatedTenantId = await ValidateBearerTokenAsync();
+        if (authenticatedTenantId is null)
         {
             return Unauthorized(new ChatCompletionError
             {
@@ -60,6 +71,12 @@ public class OpenAIChatCompletionController : ControllerBase
                 }
             });
         }
+
+        using var tenantScope = _tenantContextAccessor.BeginScope(new TenantContext
+        {
+            TenantId = authenticatedTenantId,
+            IsAuthenticated = true
+        });
 
         // 2. Validação do request
         if (request.Messages is not { Count: > 0 })
@@ -119,12 +136,25 @@ public class OpenAIChatCompletionController : ControllerBase
             agentResponse = await _orchestrator.ExecuteAsync(
                 sessionId,
                 lastUserMessage.Content,
-                new UserContext { UserId = sessionId },
+                new UserContext { UserId = sessionId, TenantId = _tenantContextAccessor.CurrentTenantId },
                 ct);
         }
         catch (OperationCanceledException)
         {
             throw; // Let ASP.NET handle cancellation
+        }
+        catch (Exception ex) when (QuotaExceededException.Find(ex) is not null)
+        {
+            var quotaError = QuotaExceededException.Find(ex)!;
+            return StatusCode(StatusCodes.Status429TooManyRequests, new ChatCompletionError
+            {
+                Error = new ChatCompletionErrorDetail
+                {
+                    Message = quotaError.Message,
+                    Type = "rate_limit_error",
+                    Code = "quota_exceeded"
+                }
+            });
         }
         catch (Exception ex)
         {
@@ -135,6 +165,19 @@ public class OpenAIChatCompletionController : ControllerBase
                 {
                     Message = "Internal server error during agent execution.",
                     Type = "server_error"
+                }
+            });
+        }
+
+        if (!agentResponse.Success && agentResponse.ErrorMessage?.StartsWith("Quota Exceeded:", StringComparison.Ordinal) == true)
+        {
+            return StatusCode(StatusCodes.Status429TooManyRequests, new ChatCompletionError
+            {
+                Error = new ChatCompletionErrorDetail
+                {
+                    Message = agentResponse.ErrorMessage,
+                    Type = "rate_limit_error",
+                    Code = "quota_exceeded"
                 }
             });
         }
@@ -184,9 +227,9 @@ public class OpenAIChatCompletionController : ControllerBase
     [HttpGet("models")]
     [Produces("application/json")]
     [ProducesResponseType(200)]
-    public IActionResult ListModels()
+    public async Task<IActionResult> ListModels()
     {
-        if (!ValidateBearerToken())
+        if (await ValidateBearerTokenAsync() is null)
         {
             return Unauthorized(new ChatCompletionError
             {
@@ -217,17 +260,11 @@ public class OpenAIChatCompletionController : ControllerBase
         return Ok(models);
     }
 
-    private bool ValidateBearerToken()
+    private async Task<string?> ValidateBearerTokenAsync()
     {
-        var configuredKey = _configuration["AgenticSystem:AdminApiKey"];
-
-        // Se nenhuma chave configurada, endpoint desabilitado
-        if (string.IsNullOrWhiteSpace(configuredKey))
-            return false;
-
         var authHeader = Request.Headers.Authorization.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(authHeader))
-            return false;
+            return null;
 
         // Suporta "Bearer <token>" (padrão OpenAI) e token direto
         var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
@@ -235,10 +272,27 @@ public class OpenAIChatCompletionController : ControllerBase
             : authHeader.Trim();
 
         if (string.IsNullOrWhiteSpace(token))
-            return false;
+            return null;
 
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.UTF8.GetBytes(token),
-            Encoding.UTF8.GetBytes(configuredKey));
+        // Calcula o Hash SHA-256 da chave fornecida
+        var keyBytes = Encoding.UTF8.GetBytes(token);
+        var hashBytes = SHA256.HashData(keyBytes);
+        var keyHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
+
+        // Consulta no banco de dados se o hash corresponde a uma chave ativa
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.ApiKeyAuthentication);
+        _systemOperations.Require(SystemOperationKind.ApiKeyAuthentication);
+        var accessKey = await _dbContext.AccessApiKeys
+            .IgnoreQueryFilters() // Ignora o filtro de tenant
+            .FirstOrDefaultAsync(k => k.KeyHash == keyHash && k.IsEnabled);
+
+        if (accessKey is null)
+            return null;
+
+        if (TenantIdPolicy.IsReservedSystemId(accessKey.TenantId))
+            return null;
+
+        return accessKey.TenantId;
     }
 }
+

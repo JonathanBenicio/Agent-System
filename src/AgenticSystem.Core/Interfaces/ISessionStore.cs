@@ -10,7 +10,7 @@ public interface ISessionStore
 {
     Task SaveAsync(SessionData session, CancellationToken ct = default);
     Task<SessionData?> GetAsync(string sessionId, CancellationToken ct = default);
-    Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, CancellationToken ct = default);
+    Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, string? search = null, CancellationToken ct = default);
     Task<IReadOnlyList<SessionData>> GetByTenantAsync(string tenantId, string? userId = null, int maxResults = 10, CancellationToken ct = default);
     Task DeleteAsync(string sessionId, CancellationToken ct = default);
     Task<bool> ExistsAsync(string sessionId, CancellationToken ct = default);

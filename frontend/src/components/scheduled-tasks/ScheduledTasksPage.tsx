@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   Clock,
   Play,
@@ -18,10 +19,7 @@ import { PageLoading, PageError } from '@/components/shared/Loading'
 import { Badge } from '@/components/shared/Badge'
 import { cn } from '@/lib/utils'
 import type {
-  ScheduledTask,
   TriggerRule,
-  ChannelInfo,
-  ScheduledTasksHealthReport,
   ScheduledTaskStatus,
   TriggerSourceType,
   ConditionType,
@@ -72,25 +70,12 @@ export function ScheduledTasksPage() {
 // ═══════════════════════════════════════════════════════════
 
 function TasksTab() {
-  const [tasks, setTasks] = useState<ScheduledTask[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
-
-  const refresh = useCallback(async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      const data = await scheduledTasksApi.listTasks()
-      setTasks(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar tasks')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { refresh() }, [refresh])
+  const query = useQuery({ queryKey: ['scheduled-tasks'], queryFn: () => scheduledTasksApi.listTasks() })
+  const tasks = query.data ?? []
+  const loading = query.isLoading
+  const error = query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null
+  const refresh = () => query.refetch()
 
   const handlePause = async (id: string) => {
     await scheduledTasksApi.pauseTask(id)
@@ -267,25 +252,12 @@ function CreateTaskForm({ onCreated }: { onCreated: () => void }) {
 // ═══════════════════════════════════════════════════════════
 
 function RulesTab() {
-  const [rules, setRules] = useState<TriggerRule[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
-
-  const refresh = useCallback(async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      const data = await scheduledTasksApi.listRules()
-      setRules(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar rules')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { refresh() }, [refresh])
+  const query = useQuery({ queryKey: ['scheduled-task-rules'], queryFn: () => scheduledTasksApi.listRules() })
+  const rules = query.data ?? []
+  const loading = query.isLoading
+  const error = query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null
+  const refresh = () => query.refetch()
 
   const handleToggle = async (rule: TriggerRule) => {
     if (rule.enabled) {
@@ -468,27 +440,14 @@ function CreateRuleForm({ onCreated }: { onCreated: () => void }) {
 // ═══════════════════════════════════════════════════════════
 
 function ChannelsTab() {
-  const [channels, setChannels] = useState<ChannelInfo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [testChannel, setTestChannel] = useState<string | null>(null)
   const [testConfig, setTestConfig] = useState<Record<string, string>>({})
   const [testResult, setTestResult] = useState<string | null>(null)
-
-  const refresh = useCallback(async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      const data = await scheduledTasksApi.listChannels()
-      setChannels(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar channels')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { refresh() }, [refresh])
+  const query = useQuery({ queryKey: ['scheduled-task-channels'], queryFn: () => scheduledTasksApi.listChannels() })
+  const channels = query.data ?? []
+  const loading = query.isLoading
+  const error = query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null
+  const refresh = () => query.refetch()
 
   const handleTest = async (name: string) => {
     try {
@@ -582,24 +541,11 @@ function ChannelsTab() {
 // ═══════════════════════════════════════════════════════════
 
 function HealthTab() {
-  const [health, setHealth] = useState<ScheduledTasksHealthReport | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const refresh = useCallback(async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      const data = await scheduledTasksApi.health()
-      setHealth(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar health')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { refresh() }, [refresh])
+  const query = useQuery({ queryKey: ['scheduled-tasks-health'], queryFn: () => scheduledTasksApi.health() })
+  const health = query.data ?? null
+  const loading = query.isLoading
+  const error = query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null
+  const refresh = () => query.refetch()
 
   if (loading) return <PageLoading />
   if (error || !health) return <PageError message={error ?? 'Sem dados'} onRetry={refresh} />

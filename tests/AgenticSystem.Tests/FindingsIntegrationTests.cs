@@ -353,7 +353,7 @@ public class AgentFrameworkFactoryMcpTests
     }
 
     [Fact]
-    public void CreateFromAgent_WorksWithoutMcpAdapter()
+    public async Task CreateFromAgent_WorksWithoutMcpAdapter()
     {
         // No adapter (null) — should still create agent
         var sut = new AgentFrameworkFactory(_chatClient, _loggerFactory, _serviceProvider, mcpToolsAdapter: null);
@@ -363,14 +363,14 @@ public class AgentFrameworkFactoryMcpTests
         agent.Description.Returns("desc");
         agent.Instructions.Returns("instructions");
 
-        var result = sut.CreateFromAgent(agent);
+        var result = await sut.CreateFromAgentAsync(agent);
 
         result.Should().NotBeNull();
         result.Name.Should().Be("test");
     }
 
     [Fact]
-    public void CreateFromAgent_WithMcpAdapter_PassesTools()
+    public async Task CreateFromAgent_WithMcpAdapter_PassesTools()
     {
         var pluginManager = Substitute.For<IMCPPluginManager>();
         var adapterLogger = Substitute.For<ILogger<McpToolsAIFunctionAdapter>>();
@@ -394,13 +394,13 @@ public class AgentFrameworkFactoryMcpTests
         agent.Instructions.Returns("instructions");
 
         // Should not throw and should create agent successfully
-        var result = sut.CreateFromAgent(agent);
+        var result = await sut.CreateFromAgentAsync(agent);
 
         result.Should().NotBeNull();
     }
 
     [Fact]
-    public void CreateFromSpecification_WithMcpAdapter_PassesTools()
+    public async Task CreateFromSpecification_WithMcpAdapter_PassesTools()
     {
         var pluginManager = Substitute.For<IMCPPluginManager>();
         var adapterLogger = Substitute.For<ILogger<McpToolsAIFunctionAdapter>>();
@@ -424,14 +424,14 @@ public class AgentFrameworkFactoryMcpTests
             Instructions = "Help with things."
         };
 
-        var result = sut.CreateFromSpecification(spec);
+        var result = await sut.CreateFromSpecificationAsync(spec);
 
         result.Should().NotBeNull();
         result.Name.Should().Be("dynamic");
     }
 
     [Fact]
-    public void CreateFromAgent_AdapterWithNoTools_StillWorks()
+    public async Task CreateFromAgent_AdapterWithNoTools_StillWorks()
     {
         var pluginManager = Substitute.For<IMCPPluginManager>();
         var adapterLogger = Substitute.For<ILogger<McpToolsAIFunctionAdapter>>();
@@ -447,7 +447,7 @@ public class AgentFrameworkFactoryMcpTests
         agent.Description.Returns("desc");
         agent.Instructions.Returns("instructions");
 
-        var result = sut.CreateFromAgent(agent);
+        var result = await sut.CreateFromAgentAsync(agent);
 
         result.Should().NotBeNull();
     }

@@ -21,6 +21,7 @@ public class AgentYamlDto
     public AgentYamlGovernanceDto? Governance { get; set; }
     public AgentYamlAbilitiesDto? Abilities { get; set; }
     public string? Instructions { get; set; }
+    public Dictionary<string, string>? Rules { get; set; }
 }
 
 public class AgentYamlMetadataDto
@@ -50,31 +51,9 @@ public class AgentYamlAbilitiesDto
 }
 
 /// <summary>
-/// Modelo contendo detalhes sobre eventuais erros de validação sintática ou semântica do YAML.
-/// </summary>
-public class YamlValidationError
-{
-    public int Line { get; set; }
-    public int Column { get; set; }
-    public string ErrorCode { get; set; } = string.Empty;
-    public string Message { get; set; } = string.Empty;
-    public string Severity { get; set; } = "Error"; // "Error" ou "Warning"
-}
-
-/// <summary>
-/// Resultado da operação de validação de YAML.
-/// </summary>
-public class YamlValidationResult
-{
-    public bool IsValid { get; set; }
-    public List<YamlValidationError> Errors { get; set; } = new();
-    public AgentSpecification? Specification { get; set; }
-}
-
-/// <summary>
 /// Validador declarativo de agentes para carregar e inspecionar YAMLs de configuração.
 /// </summary>
-public class AgentYamlValidator
+public class AgentYamlValidator : IAgentYamlValidator
 {
     private readonly IToolManager? _toolManager;
 
@@ -287,6 +266,47 @@ public class AgentYamlValidator
             }
         }
 
+        // ─── Validação Semântica de Fórmulas PowerFx (Fase 4) ───
+        if (dto.Rules is not null && dto.Rules.Count > 0)
+        {
+            var engine = new Microsoft.PowerFx.RecalcEngine();
+
+            foreach (var rule in dto.Rules)
+            {
+                var formula = rule.Value;
+                if (string.IsNullOrWhiteSpace(formula)) continue;
+
+                try
+                {
+                    // Usa o parser real do PowerFx para validar a fórmula sintaticamente
+                    var checkResult = engine.Check(formula);
+                    if (!checkResult.IsSuccess)
+                    {
+                        var powerFxErrors = string.Join("; ", checkResult.Errors.Select(e => e.Message));
+                        errors.Add(new YamlValidationError
+                        {
+                            Line = 1,
+                            Column = 1,
+                            ErrorCode = "INVALID_POWERFX_SYNTAX",
+                            Message = $"A regra '{rule.Key}' contém expressão PowerFx inválida: {powerFxErrors}",
+                            Severity = "Error"
+                        });
+                    }
+                }
+                catch (Exception pfxEx)
+                {
+                    errors.Add(new YamlValidationError
+                    {
+                        Line = 1,
+                        Column = 1,
+                        ErrorCode = "POWERFX_ENGINE_ERROR",
+                        Message = $"Erro no compilador PowerFx ao validar a regra '{rule.Key}': {pfxEx.Message}",
+                        Severity = "Error"
+                    });
+                }
+            }
+        }
+
         if (errors.Any(e => e.Severity == "Error"))
         {
             return new YamlValidationResult
@@ -311,6 +331,11 @@ public class AgentYamlValidator
         if (dto.Metadata is not null && Enum.TryParse<AgentTier>(dto.Metadata.Tier, true, out var tierVal))
         {
             specification.Tier = tierVal;
+        }
+
+        if (dto.Rules is not null && dto.Rules.Count > 0)
+        {
+            specification.Configuration["rules"] = dto.Rules;
         }
 
         if (dto.Execution is not null)

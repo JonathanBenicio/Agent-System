@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AgenticSystem.Core.Models;
 
 // ═══════════════════════════════════════════════════════════
@@ -14,10 +16,22 @@ public class WorkflowDefinition
     public string? Description { get; init; }
     public int Version { get; set; } = 1;
     public List<WorkflowStep> Steps { get; init; } = [];
+    public List<WorkflowEdge> Edges { get; init; } = [];
+    public string? PromptTemplate { get; init; }
     public Dictionary<string, object> Variables { get; init; } = new();
     public WorkflowTriggerType TriggerType { get; init; } = WorkflowTriggerType.Manual;
     public string? CronExpression { get; init; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// A directed connection (edge) between two workflow steps.
+/// </summary>
+public class WorkflowEdge
+{
+    public string FromStepId { get; init; } = string.Empty;
+    public string ToStepId { get; init; } = string.Empty;
+    public string? ConditionExpression { get; init; }
 }
 
 /// <summary>
@@ -33,6 +47,8 @@ public class WorkflowStep
     public string? ActionDescription { get; init; }
     public Dictionary<string, object> Input { get; init; } = new();
     public Dictionary<string, object> Output { get; set; } = new();
+    public string? ModelOverride { get; init; }
+    public List<string>? AllowedToolsOverride { get; init; }
 
     // ─── Flow control ───
     public List<string> DependsOn { get; init; } = []; // Step IDs that must complete first
@@ -52,9 +68,17 @@ public class WorkflowStep
 public class WorkflowExecution
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
-    public string TenantId { get; set; } = "default";
+    public string TenantId { get; set; } = string.Empty;
     public string WorkflowId { get; init; } = string.Empty;
     public string WorkflowName { get; init; } = string.Empty;
+    public int WorkflowDefinitionVersion { get; set; }
+    public string WorkflowDefinitionHash { get; set; } = string.Empty;
+    [JsonIgnore]
+    public string WorkflowDefinitionSnapshotJson { get; set; } = string.Empty;
+    [JsonIgnore]
+    public string? LeaseOwner { get; set; }
+    [JsonIgnore]
+    public DateTime? LeaseExpiresAt { get; set; }
     public WorkflowExecutionStatus Status { get; set; } = WorkflowExecutionStatus.Pending;
     public List<WorkflowStepExecution> StepExecutions { get; init; } = [];
     public Dictionary<string, object> Variables { get; set; } = new();
@@ -79,11 +103,13 @@ public class WorkflowStepExecution
     public bool CompensationExecuted { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public DateTime? WaitUntilUtc { get; set; }
 }
 
 public enum WorkflowStepType
 {
-    Action,      // Execute a tool or agent
+    Action,      // Execute a tool
+    Agent,       // Execute a dynamic agent
     Decision,    // Branch based on condition
     Parallel,    // Execute sub-steps in parallel
     Wait,        // Wait for external event or timer
@@ -117,4 +143,14 @@ public enum WorkflowTriggerType
     Scheduled,
     Event,
     Webhook
+}
+
+public sealed record WorkflowExecutionClaim(string TenantId, string ExecutionId, string WorkerId);
+
+public sealed class WorkflowExecutionLeaseLostException : InvalidOperationException
+{
+    public WorkflowExecutionLeaseLostException(string executionId)
+        : base($"The worker lease for workflow execution '{executionId}' is no longer owned by this worker.")
+    {
+    }
 }

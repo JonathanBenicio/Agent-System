@@ -1,30 +1,16 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, RefreshCw } from 'lucide-react'
 import { gatewayApi } from '@/lib/api'
 import { PageLoading, PageError } from '@/components/shared/Loading'
 import { Badge } from '@/components/shared/Badge'
 import { cn } from '@/lib/utils'
-import type { HealthReport } from '@/types/api'
 
 export function HealthPage() {
-  const [data, setData] = useState<HealthReport | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const refresh = async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      const health = await gatewayApi.health()
-      setData(health)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar saúde')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => { refresh() }, [])
+  const query = useQuery({ queryKey: ['gateway-health'], queryFn: () => gatewayApi.health() })
+  const data = query.data ?? null
+  const loading = query.isLoading
+  const error = query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null
+  const refresh = () => query.refetch()
 
   if (loading) return <PageLoading />
   if (error || !data) return <PageError message={error ?? 'Sem dados'} onRetry={refresh} />

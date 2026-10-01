@@ -15,6 +15,9 @@ public interface IWorkflowStore
 
     // Executions
     Task SaveExecutionAsync(string tenantId, WorkflowExecution execution, CancellationToken ct = default);
+    Task<WorkflowExecutionClaim?> ClaimNextExecutionAsync(string workerId, TimeSpan leaseDuration, CancellationToken ct = default);
+    Task<bool> RenewExecutionLeaseAsync(WorkflowExecutionClaim claim, TimeSpan leaseDuration, CancellationToken ct = default);
+    Task ReleaseExecutionLeaseAsync(WorkflowExecutionClaim claim, CancellationToken ct = default);
     Task<WorkflowExecution?> GetExecutionAsync(string tenantId, string executionId, CancellationToken ct = default);
     Task<IReadOnlyList<WorkflowExecution>> ListExecutionsAsync(string tenantId, WorkflowExecutionStatus? status = null, int limit = 50, CancellationToken ct = default);
     Task DeleteExecutionAsync(string tenantId, string executionId, CancellationToken ct = default);

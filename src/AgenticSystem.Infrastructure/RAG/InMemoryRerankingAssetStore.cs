@@ -16,7 +16,11 @@ public sealed class InMemoryRerankingAssetStore : IRerankingAssetStore
 
     public Task<StoredRerankingAsset> SaveAsync(RerankingAssetUpload upload, CancellationToken ct = default)
     {
-        var tenantId = string.IsNullOrWhiteSpace(upload.TenantId) ? Tenant.DefaultTenantId : upload.TenantId;
+        if (string.IsNullOrWhiteSpace(upload.TenantId))
+        {
+            throw new ArgumentException("Zero Trust: TenantId is required for saving reranking assets.", nameof(upload));
+        }
+        var tenantId = upload.TenantId;
         var asset = new StoredRerankingAsset
         {
             TenantId = tenantId,

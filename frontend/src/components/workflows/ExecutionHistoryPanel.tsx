@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
-import { 
-  Play, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
+import { useQuery } from '@tanstack/react-query';
+import {
+  Play,
+  CheckCircle2,
+  XCircle,
+  Clock,
   ChevronRight,
   X,
   Activity,
@@ -12,7 +12,6 @@ import {
   TerminalSquare
 } from 'lucide-react';
 import { useWorkflows, useWorkflowExecution } from '@/hooks/useWorkflows';
-import type { WorkflowExecution } from '@/types/api';
 
 interface ExecutionHistoryPanelProps {
   workflowId: string | null;
@@ -22,38 +21,27 @@ interface ExecutionHistoryPanelProps {
   onSelectExecution: (executionId: string | null) => void;
 }
 
-export function ExecutionHistoryPanel({ 
-  workflowId, 
-  isOpen, 
+export function ExecutionHistoryPanel({
+  workflowId,
+  isOpen,
   onClose,
   selectedExecutionId,
   onSelectExecution
 }: ExecutionHistoryPanelProps) {
   const { listExecutions } = useWorkflows();
-  const [executions, setExecutions] = useState<WorkflowExecution[]>([]);
-  const [loading, setLoading] = useState(false);
+  const executionsQuery = useQuery({
+    queryKey: ['workflow-execution-history', workflowId],
+    queryFn: async () => {
+      if (!workflowId) return []
+      const data = await listExecutions()
+      return data.filter(execution => execution.workflowId === workflowId)
+    },
+    enabled: isOpen && !!workflowId && !selectedExecutionId,
+  })
+  const executions = executionsQuery.data ?? []
+  const loading = executionsQuery.isLoading
 
   const { data: executionDetails, isLoading: loadingDetails } = useWorkflowExecution(selectedExecutionId);
-
-  useEffect(() => {
-    if (isOpen && workflowId && !selectedExecutionId) {
-      loadExecutions();
-    }
-  }, [isOpen, workflowId, selectedExecutionId]);
-
-  const loadExecutions = async () => {
-    if (!workflowId) return;
-    setLoading(true);
-    try {
-      const data = await listExecutions();
-      const filtered = data.filter(e => e.workflowId === workflowId);
-      setExecutions(filtered);
-    } catch (error) {
-      console.error("Failed to load executions", error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -63,7 +51,7 @@ export function ExecutionHistoryPanel({
         <>
           <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/50">
             <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => onSelectExecution(null)}
                 className="hover:bg-zinc-800 p-1 rounded-md text-zinc-400 hover:text-white transition-colors"
               >
@@ -71,14 +59,14 @@ export function ExecutionHistoryPanel({
               </button>
               Execution Details
             </h3>
-            <button 
+            <button
               onClick={onClose}
               className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-100"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {loadingDetails || !executionDetails ? (
               <div className="flex justify-center py-8">
@@ -87,13 +75,13 @@ export function ExecutionHistoryPanel({
             ) : (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-sm font-semibold">
-                  Status: 
+                  Status:
                   {executionDetails.status === 1 ? (
-                    <span className="text-teal-400 flex items-center gap-1"><CheckCircle2 className="w-4 h-4"/> Completed</span>
+                    <span className="text-teal-400 flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> Completed</span>
                   ) : executionDetails.status === 2 ? (
-                    <span className="text-rose-500 flex items-center gap-1"><XCircle className="w-4 h-4"/> Failed</span>
+                    <span className="text-rose-500 flex items-center gap-1"><XCircle className="w-4 h-4" /> Failed</span>
                   ) : (
-                    <span className="text-blue-400 flex items-center gap-1"><Loader2 className="w-4 h-4 animate-spin"/> Running</span>
+                    <span className="text-blue-400 flex items-center gap-1"><Loader2 className="w-4 h-4 animate-spin" /> Running</span>
                   )}
                 </div>
 
@@ -106,13 +94,12 @@ export function ExecutionHistoryPanel({
                 <div className="space-y-2 relative before:absolute before:inset-0 before:ml-[11px] before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-zinc-800 before:to-transparent">
                   {executionDetails.stepExecutions?.map((step, idx) => (
                     <div key={idx} className="relative flex items-start gap-3">
-                      <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center border-4 border-zinc-925 z-10 ${
-                        step.status === 1 ? 'bg-teal-500' :
-                        step.status === 2 ? 'bg-rose-500' : 'bg-blue-500 animate-pulse'
-                      }`}>
+                      <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center border-4 border-zinc-925 z-10 ${step.status === 1 ? 'bg-teal-500' :
+                          step.status === 2 ? 'bg-rose-500' : 'bg-blue-500 animate-pulse'
+                        }`}>
                         {step.status === 1 ? <CheckCircle2 className="w-3 h-3 text-white" /> :
-                         step.status === 2 ? <XCircle className="w-3 h-3 text-white" /> :
-                         <Play className="w-3 h-3 text-white" />}
+                          step.status === 2 ? <XCircle className="w-3 h-3 text-white" /> :
+                            <Play className="w-3 h-3 text-white" />}
                       </div>
                       <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg p-3">
                         <div className="text-xs font-bold text-white mb-1">{step.stepName}</div>
@@ -147,14 +134,14 @@ export function ExecutionHistoryPanel({
               Execution History
             </h3>
             <div className="flex items-center gap-2">
-              <button 
-                onClick={loadExecutions}
+              <button
+                onClick={() => void executionsQuery.refetch()}
                 className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-100"
                 title="Refresh"
               >
                 <Clock className="w-4 h-4" />
               </button>
-              <button 
+              <button
                 onClick={onClose}
                 className="p-1.5 hover:bg-zinc-800 rounded-md text-zinc-400 hover:text-zinc-100"
               >
@@ -176,7 +163,7 @@ export function ExecutionHistoryPanel({
               <p className="text-xs text-zinc-500 text-center py-4">No executions found for this workflow.</p>
             )}
             {executions.map(exec => (
-              <div 
+              <div
                 key={exec.id}
                 onClick={() => onSelectExecution(exec.id)}
                 className="p-3 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl cursor-pointer group transition-all"

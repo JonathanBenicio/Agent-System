@@ -50,6 +50,9 @@ public class ChunkMetadata
     public int TotalChunks { get; set; }
     public bool HasOverlap { get; set; }
     public string? AgentId { get; set; }
+    public string? RoomId { get; set; }
+    public string? DocumentId { get; set; }
+    public long SourceBytes { get; set; }
     public List<string> Tags { get; set; } = new();
     public DateTime DocumentDate { get; set; }
 
@@ -72,6 +75,15 @@ public class ChunkMetadata
 
         if (!string.IsNullOrEmpty(AgentId))
             dict["agent_id"] = AgentId;
+
+        if (!string.IsNullOrEmpty(RoomId))
+            dict["room_id"] = RoomId;
+
+        if (!string.IsNullOrEmpty(DocumentId))
+            dict["document_id"] = DocumentId;
+
+        if (SourceBytes > 0)
+            dict["source_bytes"] = SourceBytes.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         if (Tags.Count > 0)
             dict["tags"] = string.Join(",", Tags);
@@ -105,6 +117,7 @@ public class ChunkingConfig
 
     public string? TenantId { get; set; }
     public string? AgentId { get; set; }
+    public string? RoomId { get; set; }
 }
 
 /// <summary>

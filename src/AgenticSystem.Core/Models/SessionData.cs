@@ -6,7 +6,7 @@ public class SessionData
 {
     public string Id { get; set; } = string.Empty;
     public string UserId { get; set; } = string.Empty;
-    public string TenantId { get; set; } = Tenant.DefaultTenantId;
+    public string TenantId { get; set; } = string.Empty;
     public DateTime StartedAt { get; set; }
     public DateTime? EndedAt { get; set; }
     public bool IsConsolidated { get; set; }

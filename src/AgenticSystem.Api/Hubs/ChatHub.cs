@@ -1,8 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using AgenticSystem.Api.Helpers;
+using AgenticSystem.Api.SignalR;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using System.Security.Claims;
+using AgenticSystem.Api.Services;
 
 namespace AgenticSystem.Api.Hubs;
 
@@ -16,12 +19,21 @@ public class ChatHub : Hub
     private readonly IMetaAgent _metaAgent;
     private readonly ISessionStore _sessionStore;
     private readonly ILogger<ChatHub> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly ChatConfigurationService _configuration;
 
-    public ChatHub(IMetaAgent metaAgent, ISessionStore sessionStore, ILogger<ChatHub> logger)
+    public ChatHub(
+        IMetaAgent metaAgent, 
+        ISessionStore sessionStore, 
+        ILogger<ChatHub> logger,
+        ITenantContextAccessor tenantContextAccessor,
+        ChatConfigurationService configuration)
     {
         _metaAgent = metaAgent;
         _sessionStore = sessionStore;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
+        _configuration = configuration;
     }
 
     public async Task SendMessage(
@@ -29,7 +41,9 @@ public class ChatHub : Hub
         string? targetAgent = null,
         string? provider = null,
         string? model = null,
-        string? apiKey = null)
+        string? apiKey = null,
+        string? sessionId = null,
+        string? selectedRoomId = null)
     {
         // Identity from authenticated principal — never trust client-supplied userId
         var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
@@ -37,22 +51,53 @@ public class ChatHub : Hub
             ?? Context.User?.Identity?.Name
             ?? "authenticated-user";
 
-        _logger.LogInformation("💬 Message from {UserId}: {Message} (target: {Target})", userId, message[..Math.Min(50, message.Length)], targetAgent ?? "auto");
+        if (!await SessionAccessValidator.CanAccessAsync(
+                _sessionStore,
+                sessionId,
+                userId,
+                _tenantContextAccessor.CurrentTenantId,
+                Context.ConnectionAborted))
+        {
+            await Clients.Caller.SendAsync("ReceiveError", new
+            {
+                error = "Session not found or access denied.",
+                timestamp = DateTime.UtcNow
+            }, Context.ConnectionAborted);
+            return;
+        }
+
+        _logger.LogInformation("💬 Message from {UserId}: {Message} (target: {Target}, session: {SessionId}, room: {RoomId})", userId, message[..Math.Min(50, message.Length)], targetAgent ?? "auto", sessionId ?? "new", selectedRoomId ?? "none");
+
+        var preferences = BuildLlmPreferences(provider, model, apiKey);
+        if (!string.IsNullOrWhiteSpace(selectedRoomId))
+        {
+            preferences["rag.knowledgeRoomId"] = selectedRoomId;
+        }
 
         var userContext = new UserContext
         {
             UserId = userId,
             Name = userId,
+            TenantId = _tenantContextAccessor.CurrentTenantId,
             Language = "pt-BR",
-            Preferences = BuildLlmPreferences(provider, model, apiKey)
+            Preferences = preferences
         };
+        try
+        {
+            await _configuration.ApplyAsync(userContext, sessionId, provider, model, Context.ConnectionAborted);
+        }
+        catch (InvalidOperationException ex)
+        {
+            await Clients.Caller.SendAsync("ReceiveError", new { error = ex.Message, timestamp = DateTime.UtcNow }, Context.ConnectionAborted);
+            return;
+        }
 
         // Notify client that processing started
         await Clients.Caller.SendAsync("ProcessingStarted", new { timestamp = DateTime.UtcNow });
 
         try
         {
-            await foreach (var streamEvent in ResolveStream(message, userContext, targetAgent, Context.ConnectionAborted))
+            await foreach (var streamEvent in ResolveStream(message, userContext, targetAgent, sessionId, Context.ConnectionAborted))
             {
                 await Clients.Caller.SendAsync("StreamEvent", streamEvent, Context.ConnectionAborted);
 
@@ -67,7 +112,9 @@ public class ChatHub : Hub
                         tools = streamEvent.Data.TryGetValue("tools", out var tools) ? tools : null,
                         success = streamEvent.Data.TryGetValue("success", out var success) && success is bool ok && ok,
                         sessionId = streamEvent.SessionId,
-                        timestamp = streamEvent.Timestamp
+                        timestamp = streamEvent.Timestamp,
+                        memoryInjected = streamEvent.Data.TryGetValue("memoryInjected", out var mi) && mi is bool b && b,
+                        citations = streamEvent.Data.TryGetValue("citations", out var c) ? c : null
                     }, Context.ConnectionAborted);
                 }
             }
@@ -91,7 +138,8 @@ public class ChatHub : Hub
             ?? "authenticated-user";
 
         var session = await _sessionStore.GetAsync(sessionId, Context.ConnectionAborted);
-        if (session is null || session.UserId != userId)
+        if (session is null || session.UserId != userId ||
+            !string.Equals(session.TenantId, _tenantContextAccessor.CurrentTenantId, StringComparison.OrdinalIgnoreCase))
         {
             await Clients.Caller.SendAsync("JoinSessionError", new
             {
@@ -108,37 +156,10 @@ public class ChatHub : Hub
             sessionId = session.Id,
             title = session.RuntimeSettings.TryGetValue("title", out var t) ? t : null,
             startedAt = session.StartedAt,
-            messageCount = session.Events.Count
+            messageCount = session.Events.Count,
+            summary = session.Summary != null ? SessionDtoMapper.ToSummary(session.Summary) : null,
+            insights = session.Insights != null ? SessionDtoMapper.ToInsights(session.Insights) : null
         });
-
-        foreach (var evt in session.Events.OrderBy(e => e.Timestamp))
-        {
-            await Clients.Caller.SendAsync("ReceiveMessage", new
-            {
-                content = evt.UserInput,
-                agentName = (string?)null,
-                agentTier = (string?)null,
-                actions = (object?)null,
-                tools = (object?)null,
-                success = true,
-                sessionId = evt.SessionId,
-                timestamp = evt.Timestamp,
-                isHistory = true
-            });
-
-            await Clients.Caller.SendAsync("ReceiveMessage", new
-            {
-                content = evt.AgentResponse,
-                agentName = evt.AgentName,
-                agentTier = evt.AgentTier.ToString(),
-                actions = evt.ActionsPerformed.Count > 0 ? evt.ActionsPerformed : null,
-                tools = evt.ToolsUsed.Count > 0 ? evt.ToolsUsed : null,
-                success = true,
-                sessionId = evt.SessionId,
-                timestamp = evt.Timestamp,
-                isHistory = true
-            });
-        }
     }
 
     public Task SendMessageStream(
@@ -146,12 +167,23 @@ public class ChatHub : Hub
         string? targetAgent = null,
         string? provider = null,
         string? model = null,
-        string? apiKey = null)
-        => SendMessage(message, targetAgent, provider, model, apiKey);
+        string? apiKey = null,
+        string? sessionId = null,
+        string? selectedRoomId = null)
+        => SendMessage(message, targetAgent, provider, model, apiKey, sessionId, selectedRoomId);
 
     public override async Task OnConnectedAsync()
     {
         _logger.LogInformation("🔌 Client connected: {ConnectionId}", Context.ConnectionId);
+        
+        // Add connection to tenant group for targeted notifications (like LlmCatalogUpdated)
+        var tenantId = _tenantContextAccessor.CurrentTenantId;
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"tenant:{tenantId}");
+        var userId = Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? Context.User?.FindFirst("sub")?.Value;
+        if (!string.IsNullOrWhiteSpace(userId))
+            await Groups.AddToGroupAsync(Context.ConnectionId, TenantSignalRGroups.User(tenantId, userId));
+        
         await Clients.Caller.SendAsync("Connected", new
         {
             connectionId = Context.ConnectionId,
@@ -187,17 +219,15 @@ public class ChatHub : Hub
         if (!string.IsNullOrWhiteSpace(apiKey))
         {
             preferences["llm.request.apiKey"] = apiKey;
-            preferences["llm.session.apiKey"] = apiKey;
-            preferences["llm.apiKey"] = apiKey;
         }
 
         return preferences;
     }
 
-    private IAsyncEnumerable<AgentStreamEvent> ResolveStream(string message, UserContext userContext, string? targetAgent, CancellationToken ct)
+    private IAsyncEnumerable<AgentStreamEvent> ResolveStream(string message, UserContext userContext, string? targetAgent, string? sessionId, CancellationToken ct)
     {
         return !string.IsNullOrWhiteSpace(targetAgent)
-            ? _metaAgent.ProcessDirectRequestStreamAsync(message, userContext, targetAgent, ct)
-            : _metaAgent.ProcessRequestStreamAsync(message, userContext, ct);
+            ? _metaAgent.ProcessDirectRequestStreamAsync(message, userContext, targetAgent, sessionId, ct)
+            : _metaAgent.ProcessRequestStreamAsync(message, userContext, sessionId, ct);
     }
 }

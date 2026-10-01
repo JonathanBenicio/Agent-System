@@ -122,9 +122,17 @@ export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
     // In a real app, we'd store them in DefinitionJson or a separate field.
     // For now, let's just arrange them horizontally.
     
+    const getNodeType = (step: WorkflowStep): string => {
+      if (step.stepType === 1) return 'decision';
+      if (step.stepType === 3) return 'wait';
+      if (step.agentName) return 'agent';
+      if (step.toolName) return 'tool';
+      return 'agent';
+    };
+
     const nodes: Node[] = def.steps.map((step, index) => ({
       id: step.id,
-      type: 'default',
+      type: getNodeType(step),
       position: { x: 100 + (index * 250), y: 100 + (index % 2 * 100) },
       data: { 
         label: step.name,

@@ -1,4 +1,20 @@
-﻿# CONSOLIDATED_DOCS.md
+# CONSOLIDATED_DOCS.md
+
+> Snapshot 2026-09-29: [especificações das 46 issues abertas](docs/plan/open-issues-specification-audit-2026-09-29.md).
+
+> Contratos operacionais atuais: [hub do backend](docs/backend/README.md). Evidências: [validação](docs/backend/validation/2026-09-28.md).
+> Meta de chat, sessões e configurações efetivamente usadas: [Issue #123](https://github.com/JonathanBenicio/Agent-System/issues/123), [ADR-039](docs/architecture/adr/039-chat-session-user-tenant-settings.md), [story](docs/USER-STORIES.md#back-chat-123--chat-sessoes-e-configuracoes-efetivamente-usadas) e [plano](docs/plan/chat-session-user-settings.md).
+> Decisões recentes para Hyperlight/PowerFx/FIDES e aprovação de auto-melhoria: [ADR-040](docs/architecture/adr/040-self-improvement-human-approval.md), [registro de decisões/46 issues](docs/plan/open-issues-specification-audit-2026-09-29.md).
+> Correções da revisão: [PR #118](docs/backend/validation/2026-09-28-review-fixes.md).
+> Correção de backend #111–#117: [ADR-035](docs/architecture/adr/035-backend-core-isolation-and-reliability.md), [plano/status](docs/plan/backend-core-remediation.md) e [evidências atuais](docs/backend/validation/backend-core-remediation.md).
+> Issue #120 — MAF 1.22 e Gateway: [ADR-036](docs/architecture/adr/036-maf-122-protocols-and-gateway.md), [story](docs/USER-STORIES.md#back-maf-120--maf-atualizado-e-providers-integrados-ao-gateway), [análise de compatibilidade](docs/plan/maf-122-compatibility-review.md) e [plano](docs/plan/maf-122-protocols-gateway.md).
+> Issue #121 — A2A/AG-UI em hosting preview, follow-up não bloqueante: [ADR-037](docs/architecture/adr/037-a2a-agui-preview-validation.md), [story](docs/USER-STORIES.md#back-proto-121--validar-a2a-e-ag-ui-sob-hosting-preview) e [plano](docs/plan/a2a-agui-preview-validation.md).
+> Issue #105 — Hyperlight CodeAct preview, flag global desligada por padrão e ativação somente em Lab: contrato em [operations](docs/backend/operations.md).
+> BACK-ORCH-122 — supervisor dinâmico implementado parcialmente no PR #132; retomada de sessões entre processos e especialistas segue em #134: [issue #122](https://github.com/JonathanBenicio/Agent-System/issues/122), [ADR-038](docs/architecture/adr/038-dynamic-supervisor-orchestrator.md), [story](docs/USER-STORIES.md#back-orch-122--orquestrar-agentes-dinamicos-pelo-supervisor-maf), [plano](docs/plan/dynamic-orchestrator-implementation.md) e [evidência de runtime](docs/backend/validation/maf-122-workflow-runtime-2026-09-29.md). A sessão do supervisor foi reaberta após reinício real da API; recuperação de Wait foi demonstrada. Banner gerou arquivo final com client MAF determinístico e skills reais; inferência vision/editor segue sem teste.
+> Follow-ups de #120/#122 pós-merge do #132: [Gateway de produção #133](docs/plan/maf-gateway-production-validation.md), [recuperação do supervisor #134](docs/plan/dynamic-supervisor-session-recovery.md). Forecast de quotas extraído de #16 em [#135 / ML40](docs/plan/proactive-llm-quota-forecast.md); o batch proposal-only está em BACK-ML39-BATCH e o roteamento DotNetExpertAgent já é parte de ML35.
+> #97: `default`/`platform`/`system-background`/`system-devui` não são tenants; o [plano de contexto de sistema tipado](docs/plan/tenant-system-scope-remediation.md) registra a implementação validada nesta branch, necessária para concluir a revisão de #132.
+> Issue #16 — auto-melhoria com flag Lab desligada por padrão, aprovação Owner/Admin, versionamento, auditoria e rollback: contrato em [API do backend](docs/backend/api-core.md).
+> Issue #106 — FIDES usa detectores built-in e toggles por tenant; OCR Tesseract local redige imagens e rasteriza PDFs, com falha fechada para conteúdo incerto. Contrato em [acesso/tenants](docs/backend/access-tenants.md).
 
 Este arquivo foi substituído por um índice de navegação. Consulte a documentação canônica diretamente:
 
@@ -6,6 +22,16 @@ Este arquivo foi substituído por um índice de navegação. Consulte a document
 - **Índice geral**: [docs/INDEX.md](docs/INDEX.md)
 - **Product Requirements**: [docs/PRD-Sistema-Agentic.md](docs/PRD-Sistema-Agentic.md)
 - **User Stories**: [docs/USER-STORIES.md](docs/USER-STORIES.md)
+- **Master Roadmap Q2 2026**: [plan/master-roadmap-2026.md](docs/plan/master-roadmap-2026.md)
+- **Backend Architecture Audit**: [docs/plan/backend-architecture-audit.md](docs/plan/backend-architecture-audit.md)
+- **Fase 1 — Correções Críticas**: [docs/plan/phase-1-critical-fixes.md](docs/plan/phase-1-critical-fixes.md)
+- **Fase 2 — Migração MAF 1.9.0**: [docs/plan/phase-2-maf-migration.md](docs/plan/phase-2-maf-migration.md)
+- **Fase 3 — Roadmap Q2 2026**: [docs/plan/phase-3-roadmap-completion.md](docs/plan/phase-3-roadmap-completion.md)
+- **ADR 031 — PGVector SQL Filter + Quota Persistence**: [docs/architecture/adr/031-pgvector-sql-filter-tenant-quota-persistence.md](docs/architecture/adr/031-pgvector-sql-filter-tenant-quota-persistence.md)
+- **ADR 032 — Golden Sets REST API**: [docs/architecture/adr/032-evaluation-golden-sets-rest-api.md](docs/architecture/adr/032-evaluation-golden-sets-rest-api.md)
+- **ADR 033 — MAF 1.9.0 Upgrade + DI Cleanup**: [docs/architecture/adr/033-maf-190-upgrade-di-cleanup.md](docs/architecture/adr/033-maf-190-upgrade-di-cleanup.md)
 - **Design Manifesto**: [docs/agentic-design-manifesto.md](docs/agentic-design-manifesto.md)
 - **BDD Scenarios**: [docs/bdd/README.md](docs/bdd/README.md)
 - **Planejamento**: [docs/planejamento/README.md](docs/planejamento/README.md)
+
+- **Revisão das alterações pendentes (28/09/2026)**: [docs/plan/pending-changes-review-2026-09-28.md](docs/plan/pending-changes-review-2026-09-28.md)

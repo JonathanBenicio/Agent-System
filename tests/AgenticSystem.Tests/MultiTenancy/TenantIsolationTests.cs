@@ -58,17 +58,17 @@ public class TenantIsolationTests
     }
 
     [Fact]
-    public async Task SessionData_DefaultsTenantId_ToDefault()
+    public async Task SessionData_DefaultsTenantId_ToEmpty()
     {
         var session = new SessionData { Id = "s1", UserId = "u1" };
-        session.TenantId.Should().Be(Tenant.DefaultTenantId);
+        session.TenantId.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task UserContext_DefaultsTenantId_ToDefault()
+    public async Task UserContext_DefaultsTenantId_ToEmpty()
     {
         var ctx = new UserContext { UserId = "u1" };
-        ctx.TenantId.Should().Be(Tenant.DefaultTenantId);
+        ctx.TenantId.Should().BeEmpty();
     }
 
     [Fact]

@@ -43,7 +43,7 @@ public class PostgresVectorStore : IVectorStore
             entity.Content = document.Content;
             entity.Type = document.Type;
             entity.Collection = document.Collection;
-            entity.Embedding = document.Embedding != null ? new Pgvector.Vector(document.Embedding) : null;
+            entity.Embedding = document.Embedding is { Length: > 0 } ? new Pgvector.Vector(document.Embedding) : null;
             entity.MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions);
             entity.ContextualSummary = document.ContextualSummary;
             entity.IndexedAt = DateTime.UtcNow;
@@ -273,6 +273,8 @@ public class PostgresVectorStore : IVectorStore
         await using var db = await _dbContextFactory.CreateDbContextAsync();
         var dataQuery = db.VectorDocuments.AsNoTracking().AsQueryable();
 
+        // SQL-level filters: applied before the vector search to prevent unauthorized data leaking
+        // into the semantic candidate pool.
         if (filters.TryGetValue("type", out var typeFilter))
         {
             dataQuery = dataQuery.Where(item => item.Type == typeFilter);
@@ -286,6 +288,35 @@ public class PostgresVectorStore : IVectorStore
         if (filters.TryGetValue("id", out var idFilter))
         {
             dataQuery = dataQuery.Where(item => item.Id == idFilter);
+        }
+
+        // SECURITY: room_ids filter MUST be enforced at SQL level before the semantic search runs.
+        // Applying it in-memory after fetching top-K candidates creates a false-negative security gap:
+        // if none of the top-50 semantic results belong to the authorized room, the result is empty
+        // even when authorized documents exist — and cross-room documents may populate the top-50.
+        if (filters.TryGetValue("room_ids", out var roomIdsFilter))
+        {
+            var allowedRooms = roomIdsFilter
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToArray();
+
+            if (allowedRooms.Length == 0)
+            {
+                sw.Stop();
+                return new SearchResult { Query = query, Matches = new List<SearchMatch>(), TotalFound = 0, ExecutionTime = sw.Elapsed };
+            }
+
+            var currentTenantId = db.CurrentTenantId;
+            var matchingIds = await db.Database.SqlQuery<string>($"SELECT id AS \"Value\" FROM vector_documents WHERE \"TenantId\" = {currentTenantId} AND (metadata->>'room_id' = ANY({allowedRooms}) OR metadata->>'roomId' = ANY({allowedRooms}))").ToListAsync();
+            if (matchingIds.Count == 0)
+            {
+                sw.Stop();
+                return new SearchResult { Query = query, Matches = new List<SearchMatch>(), TotalFound = 0, ExecutionTime = sw.Elapsed };
+            }
+
+            dataQuery = dataQuery.Where(item => matchingIds.Contains(item.Id));
+
+            _logger.LogDebug("Applied SQL-level room_ids filter for {Count} room(s)", allowedRooms.Length);
         }
 
         float[]? queryEmbedding = null;
@@ -325,8 +356,10 @@ public class PostgresVectorStore : IVectorStore
                 .ToListAsync();
         }
 
+        // Remaining in-memory filters: only non-security metadata fields that don't require
+        // SQL-level enforcement (room_ids is now excluded as it was enforced at SQL level above).
         var remainingFilters = filters
-            .Where(item => item.Key is not ("type" or "collection" or "id"))
+            .Where(item => item.Key is not ("type" or "collection" or "id" or "room_ids"))
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
 
         var filtered = candidates.Where(item => MetadataMatches(item.MetadataJson, remainingFilters));
@@ -391,20 +424,40 @@ public class PostgresVectorStore : IVectorStore
     public async Task<VectorStoreStats> GetStatsAsync(string tenantId, CancellationToken ct = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        var stats = await db.VectorDocuments
-            .AsNoTracking()
-            .Where(x => x.TenantId == tenantId)
-            .GroupBy(x => x.TenantId)
-            .Select(g => new VectorStoreStats
-            {
-                TenantId = g.Key,
-                DocumentCount = g.Count(),
-                // Simplification for Postgres: length of text and embeddings roughly calculated
-                TotalBytes = g.Sum(x => x.Content.Length * 2 + (x.EmbeddingData != null ? x.EmbeddingData.Length : 0))
-            })
-            .FirstOrDefaultAsync(ct);
+        var connection = db.Database.GetDbConnection();
+        await db.Database.OpenConnectionAsync(ct);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT id, metadata->>'document_id', NULLIF(metadata->>'source_bytes', '')::bigint,
+                       length(content)::bigint * 2, COALESCE(vector_dims(embedding) * 4, 0)
+                FROM vector_documents
+                WHERE "TenantId" = @tenantId
+                """;
+            var tenantParameter = command.CreateParameter();
+            tenantParameter.ParameterName = "tenantId";
+            tenantParameter.Value = tenantId;
+            command.Parameters.Add(tenantParameter);
 
-        return stats ?? new VectorStoreStats { TenantId = tenantId, DocumentCount = 0, TotalBytes = 0 };
+            var documents = new List<VectorDocumentUsage>();
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                documents.Add(new VectorDocumentUsage(
+                    reader.GetString(0),
+                    reader.IsDBNull(1) ? null : reader.GetString(1),
+                    reader.IsDBNull(2) ? null : reader.GetInt64(2),
+                    reader.GetInt64(3),
+                    reader.GetInt32(4)));
+            }
+
+            return VectorUsageCalculator.Calculate(tenantId, documents);
+        }
+        finally
+        {
+            await db.Database.CloseConnectionAsync();
+        }
     }
 
     private static EmbeddingDocument MapToModel(VectorDocumentEntity entity)
@@ -415,7 +468,7 @@ public class PostgresVectorStore : IVectorStore
             Content = entity.Content,
             Type = entity.Type,
             Collection = entity.Collection,
-            Embedding = entity.Embedding?.ToArray() ?? Array.Empty<float>(),
+            Embedding = entity.Embedding?.ToArray(),
             Metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(entity.MetadataJson, JsonOptions) ?? new(),
             ContextualSummary = entity.ContextualSummary,
             IndexedAt = entity.IndexedAt
@@ -430,7 +483,7 @@ public class PostgresVectorStore : IVectorStore
             Content = document.Content,
             Type = document.Type,
             Collection = document.Collection,
-            Embedding = document.Embedding != null ? new Pgvector.Vector(document.Embedding) : null,
+            Embedding = document.Embedding is { Length: > 0 } ? new Pgvector.Vector(document.Embedding) : null,
             MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions),
             ContextualSummary = document.ContextualSummary,
             IndexedAt = DateTime.UtcNow
@@ -463,7 +516,27 @@ public class PostgresVectorStore : IVectorStore
         }
 
         var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(metadataJson, JsonOptions) ?? new();
-        return filters.All(filter => metadata.TryGetValue(filter.Key, out var value) && string.Equals(value, filter.Value, StringComparison.OrdinalIgnoreCase));
+
+        foreach (var filter in filters)
+        {
+            if (string.Equals(filter.Key, "room_ids", StringComparison.OrdinalIgnoreCase))
+            {
+                var allowedRooms = filter.Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var hasRoomId = metadata.TryGetValue("room_id", out var docRoomId) || metadata.TryGetValue("roomId", out docRoomId);
+                if (!hasRoomId || string.IsNullOrWhiteSpace(docRoomId) || !allowedRooms.Contains(docRoomId, StringComparer.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+                continue;
+            }
+
+            if (!metadata.TryGetValue(filter.Key, out var value) || !string.Equals(value, filter.Value, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static double CalculateCosineDistanceLocal(float[] v1, float[] v2)
@@ -505,4 +578,24 @@ public class PostgresVectorStore : IVectorStore
         SearchScope.Domain => "domain",
         _ => ""
     };
+
+    public async Task DeleteCollectionAsync(string collection)
+    {
+        if (string.IsNullOrWhiteSpace(collection))
+            return;
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var entities = await db.VectorDocuments.Where(item => item.Collection == collection).ToListAsync();
+        
+        if (entities.Count > 0)
+        {
+            db.VectorDocuments.RemoveRange(entities);
+            await db.SaveChangesAsync();
+            _logger.LogInformation("🗑️ Deleted collection {Collection} from PostgresVectorStore. Removed {Count} chunks.", collection, entities.Count);
+        }
+        else
+        {
+            _logger.LogDebug("⚠️ Collection {Collection} not found or empty in PostgresVectorStore", collection);
+        }
+    }
 }

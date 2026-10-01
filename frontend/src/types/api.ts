@@ -154,6 +154,9 @@ export interface SkillSummary {
   domain?: string
   type: string
   agentName?: string
+  isSystem?: boolean
+  isEnabled?: boolean
+  canManage?: boolean
 }
 
 export interface SkillContent {
@@ -247,6 +250,32 @@ export interface LLMProviderInfo {
   lastQuotaUpdate?: string
 }
 
+export interface LLMProviderApiKey {
+  id: string
+  providerName: string
+  name: string
+  lastFour: string
+  isEnabled: boolean
+  isDefault: boolean
+  models: string[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RegisterApiKeyRequest {
+  name: string
+  apiKey: string
+  isDefault: boolean
+}
+
+export interface UpdateApiKeyRequest {
+  name?: string
+  apiKey?: string
+  isEnabled?: boolean
+  isDefault?: boolean
+  models?: string[]
+}
+
 export interface LLMConfigurationInfo {
   defaultProvider: string
   defaultModel: string
@@ -283,21 +312,25 @@ export interface PluginSummary {
   description: string
   version: string
   isEnabled: boolean
+  status?: string
   isConnected?: boolean
   transport?: string
   toolCount?: number
   providedTools: string[]
   providedResources: string[]
   tools?: { name: string; description?: string }[]
+  config?: LoadPluginRequest
 }
 
 export interface LoadPluginRequest {
   pluginPath?: string
   name?: string
   command?: string
-  args?: string[]
-  transport?: 'stdio' | 'sse'
-  url?: string
+  arguments?: string[]
+  transportType?: 'stdio' | 'sse'
+  endpoint?: string
+  environmentVariables?: Record<string, string>
+  headers?: Record<string, string>
 }
 
 export interface MCPToolInfo {
@@ -671,6 +704,16 @@ export interface WorkflowExecution {
 // RAG & Embedding Migration Models
 // ══════════════════════════════════════
 
+export type KnowledgeRoomRole = 'Reader' | 'Editor' | 'Admin';
+
+export interface KnowledgeRoomPermission {
+  id: string;
+  roomId: string;
+  userId: string;
+  role: KnowledgeRoomRole;
+  grantedAt: string;
+}
+
 export interface KnowledgeRoom {
   id: string;
   name: string;
@@ -758,6 +801,7 @@ export interface SessionListItem {
   lastActivity: string
   messageCount: number
   summary?: string
+  isEnded?: boolean
 }
 
 export interface SessionDetail {
@@ -768,6 +812,8 @@ export interface SessionDetail {
   messages: ChatMessageDto[]
   summary?: SessionSummaryDto
   insights?: SessionInsightsDto
+  provider?: string
+  model?: string
 }
 
 export interface ChatMessageDto {
@@ -780,6 +826,7 @@ export interface ChatMessageDto {
   tools?: string[]
   success?: boolean
   timestamp: string
+  memoryInjected?: boolean
 }
 
 export interface SessionSummaryDto {
@@ -794,4 +841,92 @@ export interface SessionInsightsDto {
   decisions: string[]
   preferences: string[]
   actionItems: string[]
+}
+
+// ══════════════════════════════════════
+// ONNX Model Management
+// ══════════════════════════════════════
+
+export interface OnnxModelSummary {
+  id: string
+  name: string
+  description: string | null
+  inputWidth: number
+  inputHeight: number
+  channels: number
+  outputFormat: string
+  isActive: boolean
+  fileSizeBytes: number
+  storedOnDisk: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OnnxModelDetail extends OnnxModelSummary {
+  inputNodeName: string
+  outputNodeName: string
+  scaleFactor: number
+  meanRed: number
+  meanGreen: number
+  meanBlue: number
+  postProcessConfigJson: string
+}
+
+export interface OnnxInspectResult {
+  inputNodes: { name: string; shape: number[]; type: string }[]
+  outputNodes: { name: string; shape: number[]; type: string }[]
+}
+
+export interface OnnxTestResult {
+  outputImage?: string
+  outputTensor?: number[]
+  latencyMs: number
+  inputShape: number[]
+  outputShape: number[]
+}
+
+export interface OnnxInferenceJob {
+  id: string
+  tenantId: string
+  modelId: string
+  modelName: string
+  status: 'Pending' | 'Processing' | 'Completed' | 'Failed'
+  inputImagePath: string | null
+  outputImagePath: string | null
+  latencyMs: number | null
+  errorMessage: string | null
+  createdAt: string
+  completedAt: string | null
+}
+
+export interface OnnxJobsPagedResponse {
+  jobs: OnnxInferenceJob[]
+  page: number
+  pageSize: number
+  totalItems: number
+  totalPages: number
+}
+
+// ══════════════════════════════════════
+// Webhook & Hot-Swap Models
+// ══════════════════════════════════════
+
+export interface InboundWebhook {
+  id: string;
+  name: string;
+  secret: string;
+  targetWorkflowId?: string;
+  targetAgentName?: string;
+  isActive: boolean;
+  createdAt: string;
+  lastTriggeredAt?: string;
+}
+
+export type HotSwapSubsystem = 'vectorstore' | 'llm' | 'embedding' | 'all'
+
+export interface HotSwapResult {
+  subsystem: string
+  status: string
+  message: string
+  timestamp: string
 }

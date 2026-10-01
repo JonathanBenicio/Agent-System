@@ -13,15 +13,18 @@ public class WorkflowController : ControllerBase
     private readonly IWorkflowStore _store;
     private readonly IWorkflowEngine _engine;
     private readonly ILogger<WorkflowController> _logger;
+    private readonly ITenantContextAccessor _tenantContextAccessor;
 
-    public WorkflowController(IWorkflowStore store, IWorkflowEngine engine, ILogger<WorkflowController> logger)
+    public WorkflowController(IWorkflowStore store, IWorkflowEngine engine, ILogger<WorkflowController> logger, ITenantContextAccessor tenantContextAccessor)
     {
         _store = store;
         _engine = engine;
         _logger = logger;
+        _tenantContextAccessor = tenantContextAccessor;
     }
 
-    private string GetTenantId() => Request.Headers["X-Tenant-Id"].FirstOrDefault() ?? "default-tenant";
+    private string GetTenantId() => _tenantContextAccessor.CurrentTenantId
+        ?? throw new UnauthorizedAccessException("Tenant identity is required.");
 
     // ─── Definitions ───
 
@@ -67,17 +70,34 @@ public class WorkflowController : ControllerBase
         var definition = await _store.GetDefinitionAsync(tenantId, definitionId, ct);
         if (definition == null) return NotFound("Workflow definition not found");
 
-        var userId = User.Identity?.Name ?? "anonymous";
-        var execution = await _engine.StartAsync(definition, variables, userId, ct);
-        
-        return Ok(execution);
+        var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? User.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(userId)) return Unauthorized();
+        var execution = await _engine.StartAsync(tenantId, definition, variables, userId, ct);
+
+        // Async HTTP API Pattern: return 202 Accepted — client polls statusUrl for completion.
+        // This prevents HTTP timeout on long-running LLM/agent workflows.
+        var statusUrl = $"/api/workflow/executions/{Uri.EscapeDataString(execution.Id)}";
+        Response.Headers.Location = statusUrl;
+
+        return Accepted(new
+        {
+            id = execution.Id,
+            executionId = execution.Id,
+            workflowId = execution.WorkflowId,
+            workflowName = execution.WorkflowName,
+            status = execution.Status.ToString(),
+            startedAt = execution.StartedAt,
+            statusUrl,
+            message = "Workflow started. Poll statusUrl for completion."
+        });
     }
 
     [HttpGet("executions/{id}")]
     public async Task<IActionResult> GetExecution(string id, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
-        var execution = await _store.GetExecutionAsync(tenantId, id, ct);
+        var execution = await _engine.GetExecutionAsync(tenantId, id, ct);
         if (execution == null) return NotFound();
         return Ok(execution);
     }
@@ -86,7 +106,7 @@ public class WorkflowController : ControllerBase
     public async Task<IActionResult> ListExecutions([FromQuery] WorkflowExecutionStatus? status, [FromQuery] int limit = 50, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
-        var executions = await _store.ListExecutionsAsync(tenantId, status, limit, ct);
+        var executions = await _engine.ListExecutionsAsync(tenantId, status, limit, ct);
         return Ok(executions);
     }
 
@@ -94,7 +114,66 @@ public class WorkflowController : ControllerBase
     public async Task<IActionResult> CancelExecution(string id, [FromQuery] string? reason, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
-        var execution = await _engine.CancelAsync(id, reason, ct);
-        return Ok(execution);
+        try
+        {
+            var execution = await _engine.CancelAsync(tenantId, id, reason, ct);
+            return Ok(execution);
+        }
+        catch (System.ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Failed to cancel workflow execution: execution {ExecutionId} not found.", id);
+            return NotFound(new { error = ex.Message });
+        }
     }
+
+    [HttpPost("executions/{id}/approve")]
+    public async Task<IActionResult> ApproveExecution(string id, CancellationToken ct = default)
+    {
+        var tenantId = GetTenantId();
+        if (!CanApproveWorkflow()) return Forbid();
+        var approver = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? User.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(approver)) return Unauthorized();
+
+        try
+        {
+            return Ok(await _engine.ApproveAsync(tenantId, id, approver, ct));
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Approval target not found: {ExecutionId}", id);
+            return NotFound();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+    }
+
+    [HttpPost("executions/{id}/reject")]
+    public async Task<IActionResult> RejectExecution(string id, [FromQuery] string? reason, CancellationToken ct = default)
+    {
+        var tenantId = GetTenantId();
+        if (!CanApproveWorkflow()) return Forbid();
+        var rejector = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+            ?? User.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(rejector)) return Unauthorized();
+
+        try
+        {
+            return Ok(await _engine.RejectAsync(tenantId, id, rejector, reason, ct));
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Rejection target not found: {ExecutionId}", id);
+            return NotFound();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+    }
+
+    private bool CanApproveWorkflow() =>
+        User.IsInRole("Owner") || User.IsInRole("Admin") || User.IsInRole("Operator");
 }

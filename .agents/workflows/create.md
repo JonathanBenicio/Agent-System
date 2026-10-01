@@ -22,7 +22,8 @@ This command starts a new application creation process.
    - Use `project-planner` agent for task breakdown
    - Determine tech stack
    - Plan file structure
-   - Create plan file and proceed to building
+   - **MANDATORY**: Create plan file using `templates/plan-template.md`.
+   - **MANDATORY**: Create User Stories using `templates/user-stories-template.md`.
 
 3. **Application Building (After Approval)**
    - Orchestrate with `app-builder` skill
@@ -42,9 +43,6 @@ This command starts a new application creation process.
 ```
 /create blog site
 /create e-commerce app with product listing and cart
-/create todo app
-/create Instagram clone
-/create crm system with customer management
 ```
 
 ---

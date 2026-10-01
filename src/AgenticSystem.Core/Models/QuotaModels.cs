@@ -15,7 +15,7 @@ public class QuotaConfig
     public int RequestsPerHour { get; init; } = 1000;
     public int RequestsPerDay { get; init; } = 10000;
     public int MaxTokensPerRequest { get; init; } = 8000;
-    public int MaxTokensPerDay { get; init; } = 1_000_000;
+    public long MaxTokensPerDay { get; init; } = 1_000_000;
     public double MaxDailyBudgetUsd { get; init; } = 50;
     public double MaxMonthlyBudgetUsd { get; init; } = 500;
     public List<QuotaAlert> Alerts { get; init; } = [];

@@ -13,7 +13,8 @@ $ARGUMENTS
 1. **NO CODE WRITING** - This command creates plan file only
 2. **Use project-planner agent** - NOT Antigravity Agent's native Plan mode
 3. **Socratic Gate** - Ask clarifying questions before planning
-4. **Dynamic Naming** - Plan file named based on task
+4. **Use Template** - Use the template in `templates/plan-template.md` as the base for the plan file.
+5. **Dynamic Naming** - Plan file named based on task
 
 ---
 
@@ -36,8 +37,8 @@ NAMING RULES:
 RULES:
 1. Follow project-planner.md Phase -1 (Context Check)
 2. Follow project-planner.md Phase 0 (Socratic Gate)
-3. Create {slug}.md under docs/plan/ with task breakdown
-4. Enforce Conductor Blueprint rules (Trade-offs comparing at least 2 paths, Risk Matrix with mitigations, detailed Rollback strategies, and absolute/relative file pathing details).
+3. Create {slug}.md under docs/plan/ using templates/plan-template.md
+4. Fill in all sections of the template with task-specific details.
 5. DO NOT write any code files
 6. REPORT the exact file name created
 ```
@@ -49,10 +50,6 @@ RULES:
 | Deliverable | Location |
 |-------------|----------|
 | Project Plan | `docs/plan/{task-slug}.md` |
-| Conductor Blueprint (Trade-offs, Risks, Rollback, Paths) | Inside plan file |
-| Task Breakdown | Inside plan file |
-| Agent Assignments | Inside plan file |
-| Verification Checklist | Phase X in plan file |
 
 ---
 
@@ -60,7 +57,7 @@ RULES:
 
 Tell user:
 ```
-[OK] Plan created: docs/plan/{slug}.md
+[OK] Plan created: docs/plan/{slug}.md using templates/plan-template.md
 
 Next steps:
 - Review the plan
@@ -70,22 +67,8 @@ Next steps:
 
 ---
 
-## Naming Examples
-
-| Request | Plan File |
-|---------|-----------|
-| `/plan e-commerce site with cart` | `docs/plan/ecommerce-cart.md` |
-| `/plan mobile app for fitness` | `docs/plan/fitness-app.md` |
-| `/plan add dark mode feature` | `docs/plan/dark-mode.md` |
-| `/plan fix authentication bug` | `docs/plan/auth-fix.md` |
-| `/plan SaaS dashboard` | `docs/plan/saas-dashboard.md` |
-
----
-
 ## Usage
-
 ```
 /plan e-commerce site with cart
 /plan mobile app for fitness tracking
-/plan SaaS dashboard with analytics
 ```

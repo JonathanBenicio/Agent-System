@@ -1,3 +1,14 @@
+export interface Citation {
+  id: string
+  sourceDocumentId: string
+  sourceDocumentName: string
+  pageNumber?: number
+  section?: string
+  relevantExcerpt: string
+  confidence: number
+  type: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant' | 'system'
@@ -10,6 +21,11 @@ export interface ChatMessage {
   sessionId?: string
   timestamp: string
   isStreaming?: boolean
+  isHistory?: boolean
+  memoryInjected?: boolean
+  citations?: Citation[]
+  workflowExecutionId?: string
+  workflowName?: string
 }
 
 export interface ChatSession {
@@ -36,6 +52,19 @@ export interface ChatResponse {
   metadata?: Record<string, unknown>
 }
 
+export interface AgentResponse {
+  content: string
+  agentName: string
+  agentTier: number
+  actionsPerformed: string[]
+  toolsUsed: string[]
+  success: boolean
+  errorMessage?: string
+  sessionId?: string
+  timestamp: string
+  metadata?: Record<string, unknown>
+}
+
 export interface SignalRMessage {
   content: string
   agentName: string
@@ -45,4 +74,7 @@ export interface SignalRMessage {
   success: boolean
   sessionId: string
   timestamp: string
+  isHistory?: boolean
+  memoryInjected?: boolean
+  citations?: Citation[]
 }

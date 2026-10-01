@@ -2,6 +2,9 @@ using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using AgenticSystem.Core.LLM.Interfaces;
+using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Services;
+using Microsoft.Extensions.DependencyInjection;
 using AgenticSystem.Infrastructure.LLM;
 
 namespace AgenticSystem.Tests;
@@ -94,5 +97,27 @@ public class LLMManagerUpdateTests
         await _sut.UpdateProviderAsync("OpenAI", request);
 
         _openAi.Received(1).Configure("sk-new", "gpt-4-turbo", null, null);
+    }
+
+    [Fact]
+    public async Task UpdateProvider_PersistsPlatformSettingsOutsideTenantConfig()
+    {
+        var notifier = Substitute.For<IConfigReloadNotifier>();
+        var platformStore = new InMemoryPlatformConfigStore(notifier);
+        using var services = new ServiceCollection()
+            .AddSingleton<IPlatformConfigStore>(platformStore)
+            .AddSingleton(notifier)
+            .BuildServiceProvider();
+        var manager = new LLMManager([_openAi, _claude], Substitute.For<ILogger<LLMManager>>(), services);
+
+        await manager.UpdateProviderAsync(
+            "OpenAI",
+            new UpdateProviderRequest { ApiKey = "platform-secret", Enabled = true, DefaultModel = "gpt-4.1" },
+            changedBy: "platform-admin-1");
+
+        (await platformStore.GetValueAsync("llm.providers.openai.apiKey")).Should().Be("platform-secret");
+        (await platformStore.GetValueAsync("llm.providers.openai.enabled")).Should().Be(bool.TrueString);
+        (await platformStore.GetValueAsync("llm.providers.openai.model")).Should().Be("gpt-4.1");
+        notifier.Received().NotifyChange("llm.providers.openai.apiKey");
     }
 }

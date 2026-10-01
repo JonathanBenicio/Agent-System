@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   ReactFlow, 
   Background, 
@@ -7,7 +7,6 @@ import {
   useReactFlow,
   ReactFlowProvider
 } from '@xyflow/react';
-import type { Node, Edge } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { 
   Play, 
@@ -28,6 +27,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWorkflows, useWorkflowExecution } from '@/hooks/useWorkflows';
 import { useToast } from '@/components/shared/Toast';
 import { ExecutionHistoryPanel } from './ExecutionHistoryPanel';
+import { useOnnxModelsList } from '@/hooks/useOnnxModels';
 
 // Helper to determine node border color based on status
 const getBorderClass = (status?: number) => {
@@ -37,7 +37,15 @@ const getBorderClass = (status?: number) => {
   return 'border-zinc-800'; // Default
 };
 
+const getOnnxModelId = (input: unknown): string => {
+  if (!input || typeof input !== 'object' || !('parameters' in input)) return '';
+  const parameters = input.parameters;
+  if (!parameters || typeof parameters !== 'object' || !('modelId' in parameters)) return '';
+  return typeof parameters.modelId === 'string' ? parameters.modelId : '';
+};
+
 // Simple Custom Node Components
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const AgentNode = ({ data }: any) => (
   <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-teal-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
@@ -49,17 +57,60 @@ const AgentNode = ({ data }: any) => (
   </div>
 );
 
-const ToolNode = ({ data }: any) => (
-  <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-blue-500/50'}`}>
-    <div className="flex items-center gap-2 mb-1">
-      <Wrench className="w-4 h-4 text-blue-400" />
-      <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Tool</span>
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const ToolNode = ({ data }: any) => {
+  const isOnnx = data.toolName === 'onnx_processor';
+  return (
+    <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-blue-500/50'}`}>
+      <div className="flex items-center gap-2 mb-1">
+        <Wrench className="w-4 h-4 text-blue-400" />
+        <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Tool</span>
+      </div>
+      <div className="text-sm font-semibold text-white">{data.label}</div>
+      <div className="text-[10px] text-zinc-500 mt-1">
+        {isOnnx ? 'ONNX Inference Engine' : data.toolName}
+      </div>
     </div>
-    <div className="text-sm font-semibold text-white">{data.label}</div>
-    <div className="text-[10px] text-zinc-500 mt-1">{data.toolName}</div>
-  </div>
-);
+  );
+};
 
+interface OnnxModelSelectorProps {
+  value: string;
+  onChange: (val: string) => void;
+}
+
+function OnnxModelSelector({ value, onChange }: OnnxModelSelectorProps) {
+  const { data: models, isLoading } = useOnnxModelsList();
+
+  return (
+    <div className="mt-3">
+      <label className="block text-xs text-zinc-400 mb-1">Modelo ONNX</label>
+      {isLoading ? (
+        <div className="text-xs text-zinc-500 animate-pulse py-2">Carregando modelos...</div>
+      ) : (
+        <select
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200 focus:outline-none focus:ring-1 focus:ring-teal-500"
+        >
+          <option value="">Selecione um modelo...</option>
+          {models?.filter(m => m.isActive).map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.name} ({model.inputWidth}x{model.inputHeight})
+            </option>
+          ))}
+        </select>
+      )}
+      {!isLoading && (!models || models.filter(m => m.isActive).length === 0) && (
+        <p className="text-[10px] text-amber-500 mt-1">
+          Nenhum modelo ONNX ativo. Cadastre um na página "Modelos IA".
+        </p>
+      )}
+    </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const DecisionNode = ({ data }: any) => (
   <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-amber-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
@@ -71,11 +122,12 @@ const DecisionNode = ({ data }: any) => (
   </div>
 );
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const WaitNode = ({ data }: any) => (
-  <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-purple-500/50'}`}>
+  <div className={`px-4 py-3 shadow-xl rounded-xl bg-zinc-900 border-2 transition-all min-w-[150px] ${data.executionStatus !== undefined ? getBorderClass(data.executionStatus) : 'border-pink-500/50'}`}>
     <div className="flex items-center gap-2 mb-1">
-      <Clock className="w-4 h-4 text-purple-400" />
-      <span className="text-xs font-bold text-purple-400 uppercase tracking-wider">Wait</span>
+      <Clock className="w-4 h-4 text-pink-400" />
+      <span className="text-xs font-bold text-pink-400 uppercase tracking-wider">Wait</span>
     </div>
     <div className="text-sm font-semibold text-white">{data.label}</div>
     <div className="text-[10px] text-zinc-500 mt-1 font-mono">{data.timeout || 'No timeout'}</div>
@@ -109,7 +161,6 @@ export function WorkflowBuilderPage() {
     onConnect, 
     addNode,
     setNodes,
-    setEdges,
     setWorkflowName,
     setActiveWorkflowId,
     toWorkflowDefinition,
@@ -120,7 +171,6 @@ export function WorkflowBuilderPage() {
   const { screenToFlowPosition } = useReactFlow();
 
   // Sync execution status to nodes visually
-  import { useEffect } from 'react';
   useEffect(() => {
     if (!selectedExecutionId) {
       // Clear execution status from all nodes
@@ -136,6 +186,7 @@ export function WorkflowBuilderPage() {
         // Match step execution by node Id (stepName is the nodeId in this architecture, or we need to find how they match)
         // Wait, in DefaultWorkflowEngine, stepName is saved. Let's assume stepName == node.id or node.data.label.
         // Actually, looking at the store `toWorkflowDefinition`, the node.id is the Key of the step. So stepName = node.id
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const step = executionDetails.stepExecutions.find((s: any) => s.stepName === n.id);
         return {
           ...n,
@@ -143,6 +194,7 @@ export function WorkflowBuilderPage() {
         };
       }));
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [executionDetails, selectedExecutionId]); // Omit nodes to avoid infinite loop when updating
 
 
@@ -152,7 +204,7 @@ export function WorkflowBuilderPage() {
       const saved = await saveWorkflow(definition);
       setActiveWorkflowId(saved.id);
       addToast('Workflow salvo com sucesso', 'success');
-    } catch (err) {
+    } catch {
       addToast('Erro ao salvar workflow', 'error');
     }
   };
@@ -251,7 +303,7 @@ export function WorkflowBuilderPage() {
             onClick={onAddWait}
             className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 rounded-lg text-xs font-medium transition-all"
           >
-            <Clock className="w-3.5 h-3.5 text-purple-400" />
+            <Clock className="w-3.5 h-3.5 text-pink-400" />
             Wait
           </button>
           <div className="w-px h-6 bg-zinc-800 mx-1" />
@@ -273,7 +325,7 @@ export function WorkflowBuilderPage() {
           <button 
             onClick={async () => {
               if (!activeWorkflowId) {
-                addToast('Salve o workflow antes de executar', 'warning');
+                addToast('Salve o workflow antes de executar', 'info');
                 return;
               }
               try {
@@ -412,15 +464,35 @@ export function WorkflowBuilderPage() {
                     </div>
                   )}
                   {node.type === 'tool' && (
-                    <div>
-                      <label className="block text-xs text-zinc-400 mb-1">Tool Name</label>
-                      <input 
-                        value={node.data.toolName as string || ''}
-                        onChange={(e) => {
-                          setNodes(nodes.map(n => n.id === node.id ? { ...n, data: { ...n.data, toolName: e.target.value } } : n));
-                        }}
-                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200"
-                      />
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-xs text-zinc-400 mb-1">Tool Name</label>
+                        <input 
+                          value={node.data.toolName as string || ''}
+                          onChange={(e) => {
+                            setNodes(nodes.map(n => n.id === node.id ? { ...n, data: { ...n.data, toolName: e.target.value } } : n));
+                          }}
+                          className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-zinc-200"
+                        />
+                      </div>
+                      
+                      {node.data.toolName === 'onnx_processor' && (
+                        <OnnxModelSelector 
+                          value={getOnnxModelId(node.data.input)}
+                          onChange={(modelId) => {
+                            setNodes(nodes.map(n => n.id === node.id ? {
+                              ...n,
+                              data: {
+                                ...n.data,
+                                input: {
+                                  action: 'process',
+                                  parameters: { modelId }
+                                }
+                              }
+                            } : n));
+                          }}
+                        />
+                      )}
                     </div>
                   )}
                   {node.type === 'decision' && (
@@ -469,6 +541,7 @@ export function WorkflowBuilderPage() {
           isOpen={isHistoryOpen}
           onClose={() => setIsHistoryOpen(false)}
           onSelectExecution={setSelectedExecutionId}
+          selectedExecutionId={selectedExecutionId}
         />
       </div>
     </div>
