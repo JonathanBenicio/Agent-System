@@ -75,7 +75,7 @@ As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo con
 
 **Fontes:** [ADR-038](../architecture/adr/038-dynamic-supervisor-orchestrator.md), story [BACK-ORCH-122](../USER-STORIES.md#back-orch-122--orquestrar-agentes-dinamicos-pelo-supervisor-maf), [plano](dynamic-orchestrator-implementation.md), [#120](https://github.com/JonathanBenicio/Agent-System/issues/120), [#121](https://github.com/JonathanBenicio/Agent-System/issues/121).
 
-**Lacuna de rastreabilidade:** o corpo da issue ainda diz “PR/commits a vincular”; determinar, pelo diff/commit list de #119, se esta implementação está incluída. Atualizar o link da issue para o PR correto. Não dizer que crash no meio de efeito externo é exactly-once; handlers precisam deduplicar ou compensar.
+**Rastreabilidade e pendências:** a implementação do supervisor está na proposta consolidada [PR #132](https://github.com/JonathanBenicio/Agent-System/pull/132). A issue continua aberta: revisar evidência de seleção/fingerprint dinâmica, persistência e retomada das sessões do supervisor/especialistas e casos de quota/erro/cancelamento. Não dizer que crash no meio de efeito externo é exactly-once; handlers precisam deduplicar ou compensar.
 
 ## issue-121
 
@@ -103,7 +103,7 @@ As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo con
 
 **Fontes:** [ADR-036](../architecture/adr/036-maf-122-protocols-and-gateway.md), story BACK-MAF-120, [compatibilidade](maf-122-compatibility-review.md), [plano](maf-122-protocols-gateway.md), [evidência](../backend/validation/maf-122-workflow-runtime-2026-09-29.md), PR #119.
 
-**Lacunas a alinhar antes de fechar:** contagens publicadas não coincidem entre corpo da issue, story, PR e relatório; serviço Gateway fixture não prova chamada de LLM de produção nem atualização de LLMManager entre hosts; restart real em efeito externo, provider real, semântica retry/idempotência, cancelamento longo, atualização do hook frontend e A2A/AG-UI E2E permanecem explicitamente pendentes. Atualizar a issue com resultados e limites atuais; manter os itens de workflow dinâmico vinculados a #122.
+**Rastreabilidade e lacunas:** a atualização para MAF 1.22 e parte da integração Gateway estão na proposta consolidada [PR #132](https://github.com/JonathanBenicio/Agent-System/pull/132). As integrações provaram registro de um serviço na composição de validação; não provaram registro de serviços configurados em produção nem chamada real de provider. Atualização do LLMManager entre hosts, restart no meio de efeito externo, retry/idempotência configurável, cancelamento longo e A2A/AG-UI E2E continuam pendentes. Manter a issue aberta e os requisitos de supervisor dinâmico em #122.
 
 ## issue-117
 
@@ -583,19 +583,23 @@ As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo con
 
 ## Integração para develop — 2026-09-30
 
-A branch `integration/develop-pr-stack-2026-09-30` parte de `develop` e reúne a base do PR #73, PRs #118/#119, mudanças #126–#130, PRs #124/#125 e as decisões atuais. O PR #31 não foi incluído: sua issue #30 está fechada e a limpeza documental é independente, parcialmente sobreposta e contém remoções amplas fora desta entrega. `docs/backend-contracts-validation` também não foi mesclada separadamente porque seu tree é idêntico ao head documental incluído em #118.
+A branch `integration/develop-pr-stack-2026-09-30` parte de `develop` e reúne a base do PR #73, PRs #118/#119, alterações associadas a #120/#122, mudanças #126–#130, PRs #124/#125 e decisões atuais. #120 cobre a atualização MAF 1.22 e parte do Gateway; #122 cobre o supervisor dinâmico. Ambas continuam abertas porque seus critérios completos não foram todos demonstrados. O PR #31 não foi incluído: sua issue #30 está fechada e a limpeza documental é independente, parcialmente sobreposta e contém remoções amplas fora desta entrega. `docs/backend-contracts-validation` também não foi mesclada separadamente porque seu tree é idêntico ao head documental incluído em #118.
 
-O PR de integração será aberto como draft enquanto as validações PostgreSQL/Ollama/OCR e o Cypress integrado permanecerem pendentes. Os relatórios dos PRs empilhados são evidência das respectivas branches/ambientes e não substituem a validação da árvore consolidada.
+Escopo de issues nesta proposta: #97, #99, #105, #106, #16, #110–#117, #120, #121, #122 e #123. #120 e #122 são referências de implementação parcial; #121 é follow-up separado para E2E de protocolos preview. PR #132 usa referências sem fechamento automático. As issues permanecem abertas.
+
+O PR #132 está aberto para revisão, contra `develop`, no head `41da275`. O GitHub o informa como mergeável, mas ainda não foi mesclado. A descrição registra as validações da árvore consolidada; as issues permanecem abertas até revisão e merge.
 
 ### Estado das decisões implementadas nesta árvore
 
 | Issue | Implementação incluída | Verificação desta consolidação |
 |---|---|---|
-| #97 | Remoção dos fallbacks de tenant no runtime; Qdrant exige TenantId explícito | Busca estática pelos padrões aprovados sem fallback em API/Core/Infrastructure, exceto migrations; suíte completa pendente |
-| #99 | Bootstrap cria `admin` só com segredo; banco vazio sem `AdminApiKey` aborta startup; sem seeds Banner | Testes focados 3/3 e build Release no PR #127; repetir na árvore consolidada |
-| #16 | Propostas persistidas por tenant; aprovação Owner/Admin, versionamento, auditoria e rollback | Testes focados 2/2 e build Release no PR #128; repetir na árvore consolidada |
-| #105 | Hyperlight CodeAct para JavaScript, flag off e registro somente em Lab | Testes focados 8/8 e build Release no PR #129; preview não equivale a auditoria independente de segurança |
-| #106 | Toggles FIDES tenant-scoped, regras built-in, OCR local de imagem/PDF e fail-closed | Testes focados, PostgreSQL Compose e Docker registrados no PR #130; repetir teste/build consolidados |
+| #120 | Família MAF 1.22 e registro/roteamento de providers pelo Gateway | Build Release e integrações PostgreSQL passaram; o registro foi validado na composição de teste. Provider real em produção/streaming e recarga real entre hosts seguem sem prova e a issue continua aberta |
+| #122 | Supervisor MAF dinâmico e execução de especialistas | Suíte consolidada passou; revisão dos critérios de cache/fingerprint e persistência de sessão por especialista continua necessária antes de fechar a issue |
+| #97 | Remoção dos fallbacks de tenant no runtime; Qdrant exige TenantId explícito | Busca estática e suíte completa passaram nesta árvore; issue continua aberta para revisão |
+| #99 | Bootstrap cria `admin` só com segredo; banco vazio sem `AdminApiKey` aborta startup; sem seeds Banner | Build e testes consolidados passaram; issue continua aberta para revisão |
+| #16 | Propostas persistidas por tenant; aprovação Owner/Admin, versionamento, auditoria e rollback | Suíte consolidada passou; issue #16 é mais ampla, então apenas o fluxo aprovado faz parte desta entrega |
+| #105 | Hyperlight CodeAct para JavaScript, flag off e registro somente em Lab | Build e suíte passaram; preview não equivale a auditoria independente de segurança nem autoriza promoção fora de Lab |
+| #106 | Toggles FIDES tenant-scoped, regras built-in, OCR local de imagem/PDF e fail-closed | Integrações focadas PostgreSQL/Ollama/OCR passaram (11/11); issue continua aberta para revisão |
 
 As issues permanecem abertas para revisão. O PR #31 (issue #30 fechada) não foi incluído: a limpeza documental é independente, parcialmente sobreposta e contém remoções amplas fora desta entrega. `docs/backend-contracts-validation` também não foi mesclada separadamente porque seu tree é idêntico ao head documental incluído em #118.
 
@@ -604,12 +608,13 @@ As issues permanecem abertas para revisão. O PR #31 (issue #30 fechada) não fo
 | Verificação | Resultado | Limite |
 |---|---|---|
 | Build Release da solução .NET | Passou, 0 avisos/erros | Executado na árvore integrada |
-| Suíte .NET, paralelismo xUnit desativado | 771 aprovados, 16 ignorados, 0 falhas | Os ignorados incluem testes PostgreSQL/Ollama e OCR; sem Compose não há prova integrada nova |
-| Build frontend | Passou | `npm run build` no WSL com Node 22 Linux |
-| ESLint global | Passou | `npm run lint` no WSL; regra mantida e os carregamentos iniciais migrados para TanStack Query |
-| Cypress #123 | Não repetido na integração | PR #124 registrou 1 spec aprovada; API/DB local não estavam disponíveis nesta sessão WSL |
-| Endpoint inventory/OpenAPI | 222 actions de controllers; 217 operações MVC visíveis; 0 faltantes/extra | Gerados do mesmo tree `81820bb` |
+| Suíte .NET serial | 771 aprovados, 16 ignorados, 0 falhas | Testes de integração condicionais têm seus resultados separados abaixo |
+| Build frontend | Passou | `npm run build` |
+| ESLint global | Passou | `npm run lint` no WSL com Node 22 |
+| Cypress #123 | 1 aprovado, 0 falhas | `chat-session-settings.ui.cy.js`, API/DB de validação e provider stub locais |
+| Integrações PostgreSQL/Ollama/OCR | 11 aprovados, 0 ignorados/falhas | PostgreSQL Compose na porta 55432; Ollama na 11435; banco local 5432 não usado |
+| Endpoint inventory/OpenAPI | 222 ações de controllers; 217 operações MVC visíveis; 0 faltantes/extra | Gerados em conjunto na árvore consolidada do PR #132 |
 | Links de documentação | 161 arquivos, 832 links, 0 quebrados | Verificador do repositório |
-| `git diff --check` | Passou | Mudanças locais da branch de integração |
+| `git diff --check` | Passou | Árvore integrada |
 
-Docker Desktop está parado e o serviço `com.docker.service` não pôde ser iniciado neste ambiente; o listener `localhost:5432` existente foi deixado intocado. Portanto não alegar que a validação PostgreSQL/Ollama/OCR passou nesta árvore.
+O Cypress usou uma membership de fixture para o usuário sintético no banco isolado `backend_cypress_validation`. Os containers e bancos de validação foram mantidos no Compose; o PostgreSQL local na porta 5432 não foi usado nem alterado.
