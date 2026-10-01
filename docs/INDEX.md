@@ -168,7 +168,7 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 | [plan/completed/architectural-refactoring-plan.md](plan/completed/architectural-refactoring-plan.md) | Roadmap/Plan: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
 | [plan/completed/chat-enhancements.md](plan/completed/chat-enhancements.md) | Roadmap/Plan: Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) (Issue #93) |
 | [plan/completed/db-skills-dynamic-system.md](plan/completed/db-skills-dynamic-system.md) | Roadmap/Plan: Implementação do DbAgentSkillsSource e Dynamic Skills System |
-| [plan/dynamic-maf-workflows-engine.md](plan/dynamic-maf-workflows-engine.md) | Roadmap/Plan: Orquestração Dinâmica de Grafos de Agentes (Abordagem B) |
+| [plan/dynamic-maf-workflows-engine.md](plan/dynamic-maf-workflows-engine.md) | Proposta histórica supersedida; engine atual usa IWorkflowEngine + MAF 1.22 |
 | [plan/ci-pipelines.md](plan/ci-pipelines.md) | Roadmap/Plan: Configuração de Pipelines de CI (GitHub Actions) |
 | [plan/frontend-refactoring-plan.md](plan/frontend-refactoring-plan.md) | Roadmap/Plan: Refatoração do Frontend (React Query, useChat decomposition) |
 | [plan/master-roadmap-2026.md](plan/master-roadmap-2026.md) | Master Roadmap Q2 2026: Entregáveis e prioridades estratégicas |
@@ -185,9 +185,9 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 | [plan/completed/cap-suggestions-ptbr.md](plan/completed/cap-suggestions-ptbr.md) | Roadmap/Plan: Sugestões de Capacidades em PT-BR com Dicas Visuais |
 | [plan/completed/architectural-refactoring-phase-2.md](plan/completed/architectural-refactoring-phase-2.md) | Roadmap/Plan: Refatoração Arquitetural e Limpeza do Backend - Fase 2 |
 | [plan/completed/refactoring-session-list.md](plan/completed/refactoring-session-list.md) | Roadmap/Plan: Refinamento de Listagem de Sessões de Usuário |
-| [plan/completed/p2-gateway-observability-finops.md](plan/completed/p2-gateway-observability-finops.md) | Roadmap/Plan: Gateway Observability & FinOps (Fase P2) |
+| [plan/completed/p2-gateway-observability-finops.md](plan/completed/p2-gateway-observability-finops.md) | Implementação parcial; projeção mensal fica para issue futura após #132 |
 | [plan/completed/p4-selfhost-ollama-stabilization.md](plan/completed/p4-selfhost-ollama-stabilization.md) | Roadmap/Plan: Estabilização e Self-Hosting com Ollama (Fase P4) |
-| [plan/completed/agent-yaml-orchestration.md](plan/completed/agent-yaml-orchestration.md) | Roadmap/Plan: Editor de Agentes Declarativo com Suporte a YAML e Validação |
+| [plan/completed/agent-yaml-orchestration.md](plan/completed/agent-yaml-orchestration.md) | Plano arquivado com implementação visível no código e critérios/checklists a reconciliar |
 | [plan/completed/MAF_NATIVE_REFACTORING.md](plan/completed/MAF_NATIVE_REFACTORING.md) | Roadmap/Plan: Trilha de Refatoração e Aproximação ao MAF Nativo |
 | [plan/completed/framework-first-migration-plan.md](plan/completed/framework-first-migration-plan.md) | Roadmap/Plan: Resumo Histórico da Migração Framework-First |
 | [plan/completed/REFACTORING_PROGRESS.md](plan/completed/REFACTORING_PROGRESS.md) | Roadmap/Plan: Consolidação e Progresso de Refatoração do MAF Native Runtime |

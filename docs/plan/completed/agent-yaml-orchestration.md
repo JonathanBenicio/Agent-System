@@ -1,5 +1,7 @@
 # Editor de Agentes Declarativo com Suporte a YAML, Validação e Versionamento Histórico
 
+> **Estado atual (2026-10-01):** validador/rotas YAML, editor visual↔YAML, histórico, diff e rollback aparecem no código atual. Os cinco checkboxes originais continuam sem evidência atual vinculada; reconciliar os critérios e seus testes na revisão documental do PR #31 após o merge de #132. Não tratar a pasta `completed/` como confirmação de todos os critérios.
+
 Este plano propõe a implementação de um fluxo completo para criação e edição declarativa de agentes através de duas interfaces integradas (Formulário Visual Simples e Editor YAML Avançado), com validação em tempo real e controle de histórico de versões integrado ao banco de dados PostgreSQL do ecossistema.
 
 ---

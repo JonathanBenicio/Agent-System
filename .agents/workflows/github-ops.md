@@ -26,9 +26,11 @@ Assim que os documentos forem criados pelo agente (ADR, Story, Plan):
 Após concluir a implementação, passar nos testes e realizar o commit:
 1. Use a ferramenta `mcp_github_create_pull_request`.
 2. O corpo do PR deve seguir o template em `templates/pr-template.md`.
-3. Certifique-se de preencher a seção `Closes #ID` na descrição do PR para fechar a issue automaticamente.
+3. Use `Refs #ID` para progresso parcial ou issues que permanecem abertas. Use `Closes #ID` somente quando todos os critérios foram atendidos e a issue deve ser fechada no merge.
 
 ## 🔴 Regras de Ouro
 - **Zero Tolerância**: Nunca inicie código sem uma issue aberta ou vinculada.
 - **Uso de Templates**: Sempre use os templates fornecidos na pasta `templates/`.
 - **Commits**: Respeite o padrão de commits semânticos descrito em `templates/commit-rules.md`.
+- **Promoção para `master`**: revise os trailers de fechamento nos commits históricos, além da descrição do PR; `Refs` na descrição não neutraliza um `Closes #ID` existente em commit que será incorporado à branch padrão.
+- A promoção `develop` → `master` deve usar squash merge para não reaplicar os trailers históricos de `Closes #ID`; use palavra de fechamento no PR de promoção somente se o usuário quiser fechar aquelas issues.

@@ -1,6 +1,8 @@
 # Roadmap: Orquestração Dinâmica de Grafos de Agentes (Abordagem B)
 
-> **Status documental:** Draft (Planejamento)  
+> **Status documental:** SUPERSEDED — proposta histórica de 2026-05
+>
+> **Estado atual:** proposta histórica supersedida; o runtime canônico usa `IWorkflowEngine`/`IWorkflowStore` para o ciclo de execução e MAF 1.22 para agentes. Não iniciar este compilador MAF de grafos como segunda engine. Ver [ADR-030](../architecture/adr/030-maf-durable-task-migration.md), [ADR-036](../architecture/adr/036-maf-122-protocols-and-gateway.md), [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) e [#122](https://github.com/JonathanBenicio/Agent-System/issues/122).
 > **Escopo:** Backend (.NET 10, Core, Infrastructure, Api) e persistência em PostgreSQL.  
 > **Fonte de verdade operacional:** [ADR 029](../architecture/adr/029-dynamic-maf-workflows-engine.md) e [US-032](../user-stories/us-032-dynamic-maf-workflows-engine.md).  
 > **Gerado em:** 25 de Maio de 2026  

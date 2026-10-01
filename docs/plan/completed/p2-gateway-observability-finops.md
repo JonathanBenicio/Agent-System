@@ -1,10 +1,12 @@
 ---
 title: "Plano de Implementação: Fase P2 — Gateway Observability & FinOps (.NET 10 & React 19)"
-status: PLANNING
+status: PARTIALLY IMPLEMENTED; remaining scope retained for a post-#132 issue
 tier: TIER 0 / TIER 1
 agent: project-planner
 updated: 2026-05-13
 ---
+
+**Estado atual (2026-10-01):** o backend já possui auditoria de tokens/preços, persistência de custo e painel de custos/SignalR. Projeção mensal e decomposição futura por agente/tenant não estão comprovadas. O usuário decidiu manter esse restante como trabalho futuro e abrir issue depois do merge de #132; isso é distinto da forecast de quota em #135. A pasta `completed/` é histórica e não significa que todos os critérios abaixo estejam cumpridos.
 
 # Plano de Implementação: Fase P2 — Gateway Observability & FinOps
 

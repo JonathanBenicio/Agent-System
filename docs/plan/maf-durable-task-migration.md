@@ -1,6 +1,7 @@
 # Roadmap: Migração para DurableTask e Resiliência (Gaps 2 e 3)
 
 > **Status documental:** CONCLUÍDO (COMPLETED)\
+> **Nota de escopo:** este marco entregou a API assíncrona e o engine PostgreSQL próprio; não comprova migração para `Microsoft.Agents.AI.DurableTask` nem recuperação completa de workflows. O caminho atual e seus gaps estão em [ADR-030](../architecture/adr/030-maf-durable-task-migration.md), [ADR-036](../architecture/adr/036-maf-122-protocols-and-gateway.md), [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) e [#122](https://github.com/JonathanBenicio/Agent-System/issues/122).
 > **Escopo:** Arquitetura de Orquestração Nativa baseada em `DefaultWorkflowEngine` + PostgreSQL, Padrão Async HTTP API (202 Accepted + Polling), Timeouts de Step com CancellationToken e remoção de código Azure-only.\
 > **Fonte de verdade operacional:** [ADR 030](../architecture/adr/030-maf-durable-task-migration.md)
 > **Revisado e Concluído em:** 26 de Maio de 2026\

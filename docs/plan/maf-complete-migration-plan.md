@@ -1,8 +1,10 @@
 # Plano de Migração Completa — MAF 1.6.2 (Revisado)
 
-> **Decisões vigentes (2026-09-29):** #104 valida sintaxe PowerFx apenas; não há avaliação em runtime até novo caso aprovado. #105 integrará o pacote Hyperlight Preview atrás de flag global desligada por padrão, habilitável somente em Lab após testes de segurança; o executor atual continua simulado. #106 usará padrões FIDES built-in revisados, política/toggles por tenant e detectores obrigatórios que Owner/Admin não pode desligar. DurableTask não será scheduler de grafos dinâmicos; ver [especificações das issues](open-issues-specification-audit-2026-09-29.md), [ADR-006](../architecture/adr/006-manutencao-custom-session-e-sandbox.md) e [ADR-040](../architecture/adr/040-self-improvement-human-approval.md).
+> **Decisões de produto (registradas em 2026-09-29; estado atualizado em 2026-10-01):** #104 valida sintaxe PowerFx apenas; #105 Hyperlight Preview está integrado com flag global off e habilitação somente em Lab; #106 FIDES usa detectores built-in, políticas/toggles por tenant, OCR e fail-closed; DurableTask não agenda grafos dinâmicos. Ver [especificações das issues](open-issues-specification-audit-2026-09-29.md), [ADR-036](../architecture/adr/036-maf-122-protocols-and-gateway.md), [ADR-037](../architecture/adr/037-a2a-agui-preview-validation.md), [ADR-040](../architecture/adr/040-self-improvement-human-approval.md) e os planos correntes.
 
-> **Status:** Planejamento  
+> **Status:** Histórico / supersedido pela linha MAF 1.22
+>
+> **Estado atual:** fotografia histórica da linha MAF 1.6.x, supersedida pela atualização para MAF 1.22 registrada em [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) e [ADR-036](../architecture/adr/036-maf-122-protocols-and-gateway.md). Os itens #104–#106 abaixo são referências de decisões, não aceite para implementação pendente nesta versão.
 > **Data:** 25 de Maio de 2026  
 > **Princípio Arquitetural:** Tudo é criado dinamicamente pelo chat e persistido no PostgreSQL. Nada deve depender de arquivos em disco ou configuração estática em C#.
 

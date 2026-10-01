@@ -1,5 +1,5 @@
 # Plano — Documentação e validação do backend
-Status: entregue para revisão; PR draft [#118](https://github.com/JonathanBenicio/Agent-System/pull/118)
+Status: entregue na consolidação [#132](https://github.com/JonathanBenicio/Agent-System/pull/132) para `develop`; PR #118 continua draft como origem. Finalizar este plano após o merge de #132 e confirmar que os contratos publicados continuam alinhados.
 Issue: [#110](https://github.com/JonathanBenicio/Agent-System/issues/110)
 ADR: [034](../architecture/adr/034-backend-contracts-and-access-target.md)
 Story: BACK-DOC-001 em [catálogo](../USER-STORIES.md)

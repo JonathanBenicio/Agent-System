@@ -621,7 +621,36 @@ As issues permanecem abertas para revisão. O PR #31 (issue #30 fechada) não fo
 | Cypress #123 | 1 aprovado, 0 falhas | `chat-session-settings.ui.cy.js`, API/DB de validação e provider stub locais |
 | Integrações PostgreSQL/Ollama/OCR | 11 aprovados, 0 ignorados/falhas | PostgreSQL Compose na porta 55432; Ollama na 11435; banco local 5432 não usado |
 | Endpoint inventory/OpenAPI | 222 ações de controllers; 217 operações MVC visíveis; 0 faltantes/extra | Gerados em conjunto na árvore consolidada do PR #132 |
-| Links de documentação | 161 arquivos, 832 links, 0 quebrados | Verificador do repositório |
+| Links de documentação | 165 arquivos, 890 links, 0 quebrados na revisão de 2026-10-01 | Verificador do repositório; substituir o snapshot anterior de 161/832 |
 | `git diff --check` | Passou | Árvore integrada |
 
 O Cypress usou uma membership de fixture para o usuário sintético no banco isolado `backend_cypress_validation`. Os containers e bancos de validação foram mantidos no Compose; o PostgreSQL local na porta 5432 não foi usado nem alterado.
+
+## Disposição dos planos no PR #132 — revisão 2026-10-01
+
+Esta tabela distingue entregas incorporadas ao PR de planos que podem ser finalizados depois do merge. Uma pasta `completed/` ou uma suíte verde não prova, por si só, que todos os critérios do plano foram cumpridos.
+
+| Plano | Relação com #132 e estado observado | Disposição recomendada |
+|---|---|---|
+| [backend-documentation-validation.md](backend-documentation-validation.md) / #110 / PR #118 | Contratos, templates e diagnóstico entraram na consolidação; o PR de origem #118 permanece draft. | Finalizar como entrega documental depois do merge de #132; manter #110 aberta até conferir o aceite original e os links publicados. |
+| [backend-core-remediation.md](backend-core-remediation.md) / #111–#117 / PR #119 | Correções funcionais estão na pilha; permanecem limites declarados no plano, inclusive cobertura abaixo do gate de CI e itens não demonstrados em multi-host/protocolos. | Manter como parcialmente concluído até revisão dos critérios restantes; não converter a cobertura em prova de funcionalidade nem reduzir o gate de CI. |
+| [chat-session-user-settings.md](chat-session-user-settings.md) / #123 / PR #124 | A funcionalidade, Cypress e validação global de lint/build foram consolidados em #132; #124 continua draft como PR de origem. | Finalizar o plano após merge de #132; então tratar #124 como supersedido pela consolidação, sem fechar #123 antes do merge/revisão. |
+| [maf-122-protocols-gateway.md](maf-122-protocols-gateway.md) / #120 | MAF 1.22 e store global foram validados; a composição normal de produção, streaming e reload entre hosts não foram demonstrados. | Manter parcial; acompanhar os critérios transferidos para [#133](https://github.com/JonathanBenicio/Agent-System/issues/133). |
+| [dynamic-orchestrator-implementation.md](dynamic-orchestrator-implementation.md) / #122 | O caminho supervisor-com-tools está incluído; retomada das sessões dos especialistas e verificação completa do catálogo/fingerprint continuam abertas. | Manter parcial; acompanhar [#134](https://github.com/JonathanBenicio/Agent-System/issues/134). |
+| [a2a-agui-preview-validation.md](a2a-agui-preview-validation.md) / #121 | Validação E2E dos protocolos preview foi despriorizada por decisão do usuário. | Manter separada e planejada; não declarar A2A/AG-UI como validados pelo PR #132. |
+| [tenant-system-scope-remediation.md](tenant-system-scope-remediation.md) / #97 | O desenho tipado foi aprovado, mas o código ainda usa IDs sintéticos em cinco fluxos. | Manter aberta. A decisão se a implementação é gate do merge de #132 está pendente do usuário. |
+| [self-improvement-async-job.md](completed/self-improvement-async-job.md) / #16 | O critério antigo de autoaplicação por threshold foi rejeitado; ADR-040 exige aprovação Owner/Admin. Forecast futuro está em #135/ML40. | Tratar o plano antigo como supersedido. Não reabrir o auto-apply; manter o fluxo proposal-only no escopo de #132 e #135 como trabalho futuro. |
+| [open-issues-specification-audit-2026-09-29.md](open-issues-specification-audit-2026-09-29.md) / #125 | O snapshot de 46 issues e suas decisões foram incorporados ao PR #132; PR #125 permanece draft como origem. | Depois do merge, marcar a execução do plano como concluída e conservar o snapshot com sua data, sem apresentá-lo como inventário corrente. |
+
+### Planos históricos/arquivados que não devem ser chamados de concluídos sem reconciliação
+
+- `completed/p2-gateway-observability-finops.md` continuava com `status: PLANNING` e critérios desmarcados. Há rastreamento de tokens/custos e dashboard no código; projeção mensal e decomposição por agente/tenant não estão demonstradas. O usuário decidiu manter esse restante como futuro e abrir issue após o merge de #132; não confundir com a quota forecast de #135.
+- `completed/agent-yaml-orchestration.md` mantém cinco critérios desmarcados apesar de existirem validador, rotas de salvar/histórico/rollback e telas YAML/histórico/diff. O arquivo não registra uma validação atual desses critérios nem tem issue ativa associada.
+- `completed/operation-expurgate-default.md` contém critérios e decisões antigas de bootstrap/fallback que foram refinadas por #99, ADR-026 e pelo plano ativo de #97. Deve ser rotulado como supersedido, não como plano vigente.
+- `dynamic-maf-workflows-engine.md`, `maf-durable-task-migration.md` e `maf-complete-migration-plan.md` preservam propostas para MAF 1.6.x/DurableTask. O contrato atual está em ADR-030/036 e nos planos #120/#122; os documentos antigos precisam apontar para esse estado para não sugerirem outra arquitetura ativa.
+- `phase-3-roadmap-completion.md` recomendava documentar um `ProactiveQuotaManager` como implementado, mas a busca atual não encontrou essa classe; a afirmação foi corrigida nesta revisão. Forecast de esgotamento por tenant está planejado em #135.
+- Outros planos arquivados com checkboxes abertos (incluindo `p2-gateway-observability-finops.md`, `agent-yaml-orchestration.md`, `ARCHITECTURE_REFACTORING_PLAN.md`, `remediation-backend.md` e `strategic-alignment.md`) ficam para a revisão do PR #31 depois do merge de #132, conforme instrução do usuário. Não mover/remover esses arquivos nesta consolidação.
+
+### Promoção de `develop` para `master`
+
+O usuário decidiu que a promoção `develop` → `master` será squash merge. O repositório aceita squash, merge commit e rebase; a regra agora fica em `AGENTS.md` e no workflow GitHub. O branch atual contém 174 commits e trailers históricos como `Closes #73`, `#76`, `#78`, `#97` e `#99`, enquanto essas issues continuam abertas. A descrição do PR #132 usa `Refs`, mas isso não neutraliza trailers em commits que cheguem à branch padrão. O GitHub documenta o fechamento automático quando commits com palavras de fechamento chegam à branch padrão ([linking PRs and issues](https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue)); portanto, aplicar a decisão de squash e manter o PR de promoção com `Refs` salvo fechamento intencional.

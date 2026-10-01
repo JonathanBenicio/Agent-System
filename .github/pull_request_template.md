@@ -2,7 +2,7 @@
 Trigger, antes/depois, comportamento atual e alvo.
 ## Rastreabilidade
 Issue: ... • ADR: ... • Story: ... • Plano: ...
-Refs #ID (Closes somente com todos os critérios cumpridos).
+Refs #ID para progresso parcial. Closes #ID somente com todos os critérios cumpridos e fechamento intencional; promoção `develop` → `master` usa squash.
 ## Escopo e riscos
 Componentes/exclusões/migração ou N/A justificado.
 ## Validação

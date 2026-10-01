@@ -117,11 +117,11 @@ Após a correção do filtro PGVector (Fase 1), a documentação arquitetural at
 
 ### Por que implementar?
 
-Após a implementação da persistência de quotas (Fase 1), o `ProactiveQuotaManager` deve ser documentado como ativo, e as referências a `ConcurrentDictionary` em memória devem ser removidas da documentação.
+Após a implementação da persistência de quotas (Fase 1), a documentação precisa distinguir o enforcement e a auditoria de consumo já existentes de uma previsão proativa, que ainda não está implementada. Não afirmar que existe `ProactiveQuotaManager`; o forecast futuro foi separado em #135.
 
 ### Plano por etapas
 
-1. **Atualizar** `docs/planejamento/p2-gateway-observability-finops.md` — confirmar que `ProactiveQuotaManager` é implementado via PostgreSQL + IMemoryCache.
+1. **Atualizar** o plano P2 de FinOps com o estado observado: pricing/token audit e custo persistido existem; não há `ProactiveQuotaManager` nem previsão mensal demonstrados. O forecast de esgotamento por tenant está planejado separadamente em [#135](https://github.com/JonathanBenicio/Agent-System/issues/135).
 2. **Atualizar** `docs/architecture/adr/008-quota-monitoring-finops.md` — adicionar nota de implementação da Fase 1.
 3. **Verificar** `docs/USER-STORIES.md` para stories de FinOps e marcar as implementadas.
 

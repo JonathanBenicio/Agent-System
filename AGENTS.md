@@ -46,6 +46,7 @@ Follow [workflow](conductor/workflow.md) and [templates](templates/README.md). C
 ### Branch and PR targets
 - Feature, fix, and documentation PRs target `develop`.
 - `master` receives only a promotion PR whose source branch is `develop`; do not open feature branches directly against `master`.
+- Promote `develop` to `master` with squash merge so historical `Closes #ID` trailers in the stack do not auto-close issues that remain under review. Keep the promotion PR body free of closing keywords unless the user explicitly intends those issues to close.
 - Superseded direct-to-`master` PRs must be reviewed/closed or retargeted after their changes are consolidated into `develop`.
 
 ## Architecture Boundaries
@@ -60,7 +61,7 @@ Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem:
 2. **ADR (Architectural Decision Record)**: Definição de padrões em `docs/architecture/adr/`.
 3. **User Story**: Critérios de aceite em `docs/USER-STORIES.md`.
 4. **Implementation Plan**: Roteiro técnico em `docs/plan/`.
-5. **Rastreabilidade**: Commits vinculados à issue (ex: `feat: ... Closes #ID`).
+5. **Rastreabilidade**: usar `Refs #ID` para trabalho parcial/diagnóstico; usar `Closes #ID` somente quando todos os critérios foram atendidos e a issue deve ser fechada no merge.
 6. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
 
 Consulte o [Master Roadmap Q2 2026](docs/plan/master-roadmap-2026.md) para prioridades.

@@ -1,6 +1,6 @@
 # Roadmap: Auto-Bootstrap e Remoção do Tenant Default
 
-> **Status documental:** Revisado & Aprovado para Implementação
+> **Status documental:** SUPERSEDED — proposta de 2026-05 substituída pela decisão atual em [ADR-026](../../architecture/adr/026-auto-bootstrap-remove-default-tenant.md), implementação de bootstrap em [#99](https://github.com/JonathanBenicio/Agent-System/issues/99) e remediação de escopo tipado em [#97](https://github.com/JonathanBenicio/Agent-System/issues/97) / [plano atual](../tenant-system-scope-remediation.md). As caixas abaixo são históricas e não comprovam conclusão.
 > **Escopo:** Substituição do uso de "default" tenant em toda a aplicação por uma gestão estrita de Tenants baseada em banco de dados e auto-provisionamento no startup.
 > **Fonte de verdade operacional:** Código-fonte atual e documentação do sistema.
 > **Gerado em:** 2026-05-23
