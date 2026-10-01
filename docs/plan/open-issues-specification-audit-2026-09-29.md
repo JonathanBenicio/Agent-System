@@ -587,7 +587,7 @@ A branch `integration/develop-pr-stack-2026-09-30` parte de `develop` e reúne a
 
 Escopo de issues nesta proposta: #97, #99, #105, #106, #16, #110–#117, #120, #121, #122 e #123. #120 e #122 são referências de implementação parcial; #121 é follow-up separado para E2E de protocolos preview. PR #132 usa referências sem fechamento automático. As issues permanecem abertas.
 
-O PR #132 está aberto para revisão, contra `develop`, no head `41da275`. O GitHub o informa como mergeável, mas ainda não foi mesclado. A descrição registra as validações da árvore consolidada; as issues permanecem abertas até revisão e merge.
+O PR #132 está aberto para revisão contra `develop`; no snapshot de 2026-10-01, o GitHub o informou como mergeável e ainda não mesclado. A descrição registra as validações da árvore consolidada; as issues permanecem abertas até revisão e merge.
 
 ### Estado das decisões implementadas nesta árvore
 
