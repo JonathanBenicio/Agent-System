@@ -24,7 +24,7 @@ DurableTask permanece opcional. MAF 1.23, A2A/AG-UI em preview, Gateway e provid
 | [#141 — Proteção FIDES nos despachos MAF](https://github.com/JonathanBenicio/Agent-System/issues/141) | R01 | BACK-REVIEW-139-02 | Implementada; chamadas diretas, streaming e tools passaram; OCR de imagem/PDF e persistência tenant-scoped passaram em testes dedicados com dados/DB isolados. |
 | [#142 — Limites seguros para ONNX](https://github.com/JonathanBenicio/Agent-System/issues/142) | R04 | BACK-REVIEW-139-03 | Implementada; regressões de dimensões, canais, overflow e orçamento passaram. |
 | [#143 — ACL, RAG e isolamento](https://github.com/JonathanBenicio/Agent-System/issues/143) | R06, R07, R19, R23 | BACK-REVIEW-139-04 | Implementada; testes API, armazenamento e jornada RAG passaram com os limites de integração descritos no relatório. |
-| [#144 — Quotas e sessões](https://github.com/JonathanBenicio/Agent-System/issues/144) | R08–R11 | BACK-REVIEW-139-05 | Implementada; suite backend, REST/SSE/SignalR, concorrência PostgreSQL isolada e retomada no teto passaram. |
+| [#144 — Quotas e sessões](https://github.com/JonathanBenicio/Agent-System/issues/144) | R08–R11 | BACK-REVIEW-139-05 | Implementada; reset/cancelamento, REST/SSE/SignalR, retomada no teto, concorrência de sessões e persistência de uso PostgreSQL passaram. |
 | [#145 — Workflows e aprovação](https://github.com/JonathanBenicio/Agent-System/issues/145) | R12–R16, R25 | BACK-REVIEW-139-06 | Implementada; backend, PostgreSQL, round-trip e decisões UI com erros passaram. |
 | [#146 — Escopo de analytics](https://github.com/JonathanBenicio/Agent-System/issues/146) | R17 | BACK-REVIEW-139-07 | Implementada; consultas aguardam a vida do escopo e mantêm isolamento de tenant. |
 | [#147 — Cache de memória](https://github.com/JonathanBenicio/Agent-System/issues/147) | R18 | BACK-REVIEW-139-08 | Implementada; consulta, filtros, usuário, tenant e invalidação são testados. |
@@ -74,8 +74,8 @@ DurableTask permanece opcional. MAF 1.23, A2A/AG-UI em preview, Gateway e provid
 
 | Verificação | Resultado | Limites |
 |---|---|---|
-| Suíte completa .NET 10 (`dotnet test --no-restore`) | 924 aprovados, 23 ignorados, 0 falhas; 947 testes | Execução sem variáveis PostgreSQL/OCR; testes condicionais foram ignorados. |
-| Regressões por contexto | #140: 23 backend e 4 Chromium; #141: 28 FIDES/MAF, 2 OCR, 1 PostgreSQL; #142: 49; #143: 65/1 ignorado; #144: 28 + HTTP + PostgreSQL; #145: 34 backend + 8 browser + 5 PostgreSQL; #146/#147: 14; #148: rotas/manifesto/persistência; #149: verificações abaixo | Doubles, EF InMemory e HTTP fake estão identificados por contexto no relatório; não equivalem a provider externo real. |
+| Suíte completa .NET 10 (`dotnet test --no-restore`) | 924 aprovados, 24 ignorados, 0 falhas; 948 testes | Execução sem variáveis PostgreSQL/OCR; testes condicionais foram ignorados. |
+| Regressões por contexto | #140: 23 backend e 4 Chromium; #141: 28 FIDES/MAF, 2 OCR, 1 PostgreSQL; #142: 49; #143: 65/1 ignorado; #144: 28 + HTTP + 2 PostgreSQL; #145: 34 backend + 8 browser + 5 PostgreSQL; #146/#147: 14; #148: rotas/manifesto/persistência; #149: verificações abaixo | Doubles, EF InMemory e HTTP fake estão identificados por contexto no relatório; não equivalem a provider externo real. |
 | Playwright configurado para CI | 48 aprovados: 24 Chromium e 24 Firefox; 0 falhas | API mockada nos fluxos UI. Os testes de login que exigem API real ficam excluídos sem `REAL_E2E=true`; a regressão específica de approval também passou 8/8 no harness. |
 | Cypress | 1 aprovado, 0 falhas; servidor Vite gerenciado pelo runner | Teste de UI com API mockada. |
 | Frontend | `npm run lint` e `npm run build` passaram | Executado no WSL sobre este checkout. |

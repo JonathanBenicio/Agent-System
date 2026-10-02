@@ -12,7 +12,7 @@ Branch: `codex/pr132-review-remediation`. Base do PR #152: `integration/develop-
 | FIDES | #141 | 28 testes FIDES/MAF cobrem chamada direta, streaming, instruções, tools, política A/B e bloqueio antes do provider. Dois testes OCR usam PNG e PDF reais; teste PostgreSQL valida persistência/versionamento e isolamento da política. | 28 + 2 OCR + 1 PostgreSQL passaram. OCR usou o modelo inglês oficial baixado para uma pasta temporária; provider das regressões continuou fake. PostgreSQL usou DB exclusivo em 55432. |
 | ONNX | #142 | 49 regressões cobrem dimensão/canais, overflow, orçamento, configuração, upload/update, worker e preprocessing com imagem pequena real. | 49 passaram. Não força OOM nem valida pesos/modelos de produção. |
 | ACL/RAG/tenancy | #143 | 65 regressões de permissões, grants, isolamento A/B, filtros de salas e upload; a suite Playwright inclui o fluxo RAG. | 65 passaram, 1 teste PostgreSQL ignorado na execução sem DB. Store PostgreSQL/SQLite e Pinecone foram substituídos por InMemory/HTTP fake nos testes de contexto. |
-| Quota/sessões | #144 | 28 testes de quota/stream/reserva e regressões HTTP para REST, SSE, SignalR e chamadas diretas. Teste PostgreSQL concorrente usa 12 instâncias de store e sessões encerradas. | Regressões direcionadas passaram. Na suite completa as três falhas das antigas fixtures NSubstitute foram corrigidas usando o store InMemory real; a execução completa passou. |
+| Quota/sessões | #144 | 28 testes de quota/stream/reserva e regressões HTTP para REST, SSE, SignalR e chamadas diretas. Teste PostgreSQL concorrente usa 12 instâncias de store; teste de quota grava e lê uso após recriar o repositório. | Regressões direcionadas passaram. PostgreSQL confirmou contador de tokens/custo/requisições após recriação e isolamento de tenant. A suite completa passou após substituir as fixtures NSubstitute por store InMemory real. |
 | Workflows | #145 | 34 regressões de backend; 8 testes Chromium de enum/round-trip, múltiplas aprovações e respostas 403/409/500. Cinco testes PostgreSQL cobrem store, lease, espera e snapshot. | Backend/browser/PostgreSQL passaram. Dados de negócio usam store InMemory/fakes quando indicado; os cinco testes SQL foram executados na base isolada. |
 | Analytics/memória | #146/#147 | 14 regressões com escopo DI real, EF InMemory, isolamento A/B, cache por consulta/filtros e invalidação. | 14 passaram. Não demonstra consultas analíticas em servidor PostgreSQL externo. |
 | Tools/YAML | #148 | TestServer cobre rotas, membership revogada, papel Viewer, salvamento/edição da especificação e manifesto versionado. Playwright cobre edição visual/YAML com strings, escapes e configuração. PostgreSQL cobre persistência e isolamento após migration. | Testes direcionados e E2E passaram; migration e persistência foram validadas numa base nova descrita abaixo. |
@@ -22,7 +22,7 @@ Branch: `codex/pr132-review-remediation`. Base do PR #152: `integration/develop-
 
 ## Suíte completa e navegador
 
-- `dotnet test --no-restore`: **924 aprovados, 23 ignorados, 0 falhas; 947 testes**. PostgreSQL, OCR e Ollama condicionais foram ignorados quando as variáveis/serviços não foram configurados. A execução completa não recebeu `AGENTIC_TEST_POSTGRES`.
+- `dotnet test --no-restore`: **924 aprovados, 24 ignorados, 0 falhas; 948 testes**. PostgreSQL, OCR e Ollama condicionais foram ignorados quando as variáveis/serviços não foram configurados. A execução completa não recebeu `AGENTIC_TEST_POSTGRES`/`AGENTIC_REVIEW_POSTGRES`; os gates condicionais foram executados separadamente em bancos isolados.
 - Playwright pelo comando padrão: **48 aprovadas, 0 falhas** — 24 em Chromium e 24 em Firefox. Os testes de login com API real são excluídos quando `REAL_E2E` está desligado; os fluxos UI incluídos usam API mockada e interface React real.
 - Regressões de aprovação/workflow: **8 aprovadas** com a UI, store e hook reais; a API foi mockada para controlar HTTP 403/409/500.
 - Cypress: **1 aprovado** em Vite iniciado pelo runner na porta 5193; a resposta REST usa API mockada.
@@ -30,7 +30,7 @@ Branch: `codex/pr132-review-remediation`. Base do PR #152: `integration/develop-
 
 ## Banco novo e migrations
 
-Compose: projeto exclusivo `agent-system-pr152-review-20261002x`, imagem PostgreSQL/pgvector 16, binding apenas `127.0.0.1:55432`. Bases temporárias `review_pr152_dynamicagents_20261002` e `review_pr152_gate_20261002` foram criadas dentro desse projeto e migradas do zero. A segunda execução aplicou **20 migrations**, comparou todas as colunas do modelo EF e encontrou **70 tabelas públicas**; os probes de `dt.complete_tasks` passaram para lotes, rollback, término e concorrência. A persistência dinâmica e cinco regressões de `PostgresWorkflowExecutionStoreTests` também passaram. O teste de concorrência de sessões PostgreSQL passou na base nova. `dotnet ef migrations has-pending-model-changes` informou que o snapshot está sincronizado.
+Compose: projetos exclusivos usaram PostgreSQL/pgvector 16, publicado apenas em `127.0.0.1:55432`. As bases temporárias `review_pr152_dynamicagents_20261002`, `review_pr152_gate_20261002`, `review_pr152_fides_20261002` e `review_pr152_quota_persistence_20261002` foram criadas e migradas do zero. A execução de schema aplicou **20 migrations**, comparou todas as colunas do modelo EF e encontrou **70 tabelas públicas**; os probes de `dt.complete_tasks` passaram para lotes, rollback, término e concorrência. Persistência dinâmica, política FIDES, contador de uso de quota e regressões de workflow/sessão também passaram. `dotnet ef migrations has-pending-model-changes` informou que o snapshot está sincronizado.
 
 Depois dos testes, apenas os bancos temporários criados por esta validação foram removidos e o serviço do Compose foi parado; o volume da execução foi preservado. A porta 5432 e outros projetos/bancos não foram usados.
 
@@ -44,9 +44,9 @@ O smoke do launcher verificou manifesto `api-target.json`, `/health` com HTTP 20
 
 ## Ambientes e evidências anteriores
 
-As execuções direcionadas registraram: #140 23 backend/4 Chromium; #141 28 testes FIDES/MAF, 2 OCR e 1 PostgreSQL; #142 49; #143 65/1 PostgreSQL ignorado; #144 28 e concorrência PostgreSQL; #145 34 backend/8 browser/5 PostgreSQL; #146/#147 14. A suite completa atual passou com 924 aprovados, 23 ignorados e zero falhas.
+As execuções direcionadas registraram: #140 23 backend/4 Chromium; #141 28 testes FIDES/MAF, 2 OCR e 1 PostgreSQL; #142 49; #143 65/1 PostgreSQL ignorado; #144 28, HTTP, concorrência e persistência PostgreSQL; #145 34 backend/8 browser/5 PostgreSQL; #146/#147 14. A suite completa atual passou com 924 aprovados, 24 ignorados e zero falhas.
 
-Testes com provider fake provam o conteúdo enviado ao contrato fake e a ordem de bloqueio. Eles não provam disponibilidade, registro em produção, streaming de provider real ou integração Gateway. OCR de imagem e PDF passou em execução separada com o modelo inglês oficial; a suite completa sem configurar OCR os mantém entre os 23 ignorados. A2A/AG-UI permanecem preview; retomada do supervisor em outro host segue na issue futura #134.
+Testes com provider fake provam o conteúdo enviado ao contrato fake e a ordem de bloqueio. Eles não provam disponibilidade, registro em produção, streaming de provider real ou integração Gateway. OCR de imagem e PDF passou em execução separada com o modelo inglês oficial; a suite completa sem configurar OCR os mantém entre os 24 ignorados. A2A/AG-UI permanecem preview; retomada do supervisor em outro host segue na issue futura #134.
 
 ## Gates ainda abertos
 
