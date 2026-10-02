@@ -34,7 +34,7 @@ Fora do escopo: MAF 1.23, A2A/AGUI preview (#121), Gateway produção/reload (#1
 | #147 memory | R18 | BACK-REVIEW-139-08 | implementado;cache por consulta/filtros/geração; regressões passaram |
 | #148 agent-contracts | R22, R24 | BACK-REVIEW-139-09 | pendente |
 | #149 ci | R05, R26, R27, R28, R31 | BACK-REVIEW-139-10 | pendente |
-| #150 docs | R29, R30 | BACK-REVIEW-139-11 | pendente |
+| #150 docs | R29, R30 | BACK-REVIEW-139-11 | implementados; IDs/refs e PT-BR/issue por commit; reconciliação final pendente |
 | #151 durabletask | R32 | BACK-REVIEW-139-12 | pendente |
 
 ### Matriz integral dos achados
@@ -69,7 +69,7 @@ $165 regressões + lint/build por contexto; PG/browser upload pendentes |
 | R26 | Teste XSS não renderiza payload | chat-security.e2e.spec.ts | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
 | R27 | Timeout E2E divergente | chat-timeout.e2e.spec.ts | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
 | R28 | Diagnósticos usam Compose de outro projeto | core/session-diagnostics.mjs | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
-| R29 | Story US-42 duplicada | USER-STORIES / story dedicada | [#150](https://github.com/JonathanBenicio/Agent-System/issues/150) | pendente |
+| R29 | Story US-42 duplicada | USER-STORIES / story dedicada | [#150](https://github.com/JonathanBenicio/Agent-System/issues/150) | multi-key BACK-KEYS-020;US-42 FinOps preservada; caminho histórico mantido |
 | R30 | GEMINI orienta Closes indevido | GEMINI / commit-rules | [#150](https://github.com/JonathanBenicio/Agent-System/issues/150) | documentação corrigida em 169c3f8; revisão final pendente |
 | R31 | Cypress não acessa servidor frontend | Cypress config / package scripts | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
 | R32 | dt.complete_tasks usa SQL inválido | migration DurableTask opcional | [#151](https://github.com/JonathanBenicio/Agent-System/issues/151) | pendente |

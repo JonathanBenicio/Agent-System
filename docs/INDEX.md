@@ -43,7 +43,7 @@ Documento canônico de arquitetura atual:
 | [PRD-Sistema-Agentic.md](PRD-Sistema-Agentic.md) | Visão de produto para stakeholders e áreas de negócio |
 | [USER-STORIES.md](USER-STORIES.md) | Catálogo funcional consolidado de MLs, épicos e user stories |
 | [user-stories/us-skills-crud-and-brainstorm.md](user-stories/us-skills-crud-and-brainstorm.md) | US-012: Gestão Dinâmica de Skills via Tela e Brainstorming assistido por IA |
-| [user-stories/us-multi-provider-api-keys.md](user-stories/us-multi-provider-api-keys.md) | US-42: Gerenciamento e Roteamento de Múltiplas API Keys |
+| [user-stories/us-multi-provider-api-keys.md](user-stories/us-multi-provider-api-keys.md) | BACK-KEYS-020: Gerenciamento e Roteamento de Múltiplas API Keys |
 | [user-stories/unified-chat-integration.md](user-stories/unified-chat-integration.md) | US-021: Integração Unificada de Pilares Tecnológicos no Chat Principal |
 | [user-stories/us-async-onnx-processing.md](user-stories/us-async-onnx-processing.md) | US-43: Processamento Assíncrono de Inferência ONNX |
 | [user-stories/us-advanced-chat-session-management.md](user-stories/us-advanced-chat-session-management.md) | US-44: Chat Avançado e Gerenciamento Unificado de Sessões |

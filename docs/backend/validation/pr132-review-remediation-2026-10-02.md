@@ -22,6 +22,9 @@ Status: em execução; gate integrado da correção ainda não executado.
 
 ## Gate final
 
+### Contexto #150 — IDs e regras de commits
+R29: story de multi-key agora BACK-KEYS-020, referências em ADR020/índice/specs/issue61 alinhadas; US-42 FinOps e caminhos preservados. R30: contribuição do usuário em169c3f8 alinha PT-BR/descrição/issues/Refs-Closes. Checker atual:169docs/928links,0quebrados. Reconciliar estados de issues/contratos no gate final antes de conclusão.
+
 ### Contexto #144 — quota/sessões em execução
 28 regressões direcionadas passaram,0falhas/skips: resetUTC com clock, configuração/concorrência, stream completo/cancelado/interrompido/break e reserva InMemory/retomada no teto. PostgreSQL real:1regressão passou criando DB exclusivo review_pr152_sessions_20261002_1708 na porta55432;12instâncias do store concorreram e criaram3sessões, com30registros encerrados sem esconder ativas.18migrations aplicadas,70tabelas public incluindo history; DB removido e serviço parado, volume preservado.
 Implementação ainda em execução: regressão HTTP REST/SSE/SignalR/direct, ausência de usage na interrupção e gate integrado devem ser concluídos antes de marcar R08–R11 totalmente validados. Suite geral/CI não executadas.
