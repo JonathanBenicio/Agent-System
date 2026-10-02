@@ -59,6 +59,8 @@ public static class WorkflowGraphValidator
                 {
                     throw new ArgumentException($"Aresta circular inválida: Etapa '{edge.FromStepId}' não pode referenciar a si mesma.");
                 }
+                if (!stepsMap[edge.ToStepId].DependsOn.Contains(edge.FromStepId, StringComparer.Ordinal))
+                    throw new ArgumentException($"Aresta '{edge.FromStepId}->{edge.ToStepId}' não corresponde a DependsOn.");
             }
         }
 

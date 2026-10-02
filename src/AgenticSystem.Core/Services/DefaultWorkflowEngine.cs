@@ -647,8 +647,30 @@ public class DefaultWorkflowEngine : IWorkflowEngine
             }
             else if (step.StepType == WorkflowStepType.Parallel && step.ParallelSteps.Count > 0)
             {
-                await ExecuteParallelStepsAsync(tenantId, execution, step.ParallelSteps, ct);
-                stepExec.Status = WorkflowExecutionStatus.Completed;
+                var childDefinition = new WorkflowDefinition { Steps = step.ParallelSteps };
+                var ready = GetReadySteps(childDefinition, execution);
+                if (ready.Count > 0)
+                    await ExecuteParallelStepsAsync(tenantId, execution, ready, ct);
+                var childIds = step.ParallelSteps.Select(child => child.Id).ToHashSet(StringComparer.Ordinal);
+                var children = execution.StepExecutions.Where(child => childIds.Contains(child.StepId)).ToArray();
+                if (children.Any(child => child.Status == WorkflowExecutionStatus.Failed))
+                    throw new InvalidOperationException($"Parallel step '{step.Name}' contains a failed child.");
+                if (IsWorkflowComplete(childDefinition, execution))
+                {
+                    stepExec.Status = WorkflowExecutionStatus.Completed;
+                    stepExec.WaitUntilUtc = null;
+                }
+                else
+                {
+                    stepExec.Status = WorkflowExecutionStatus.Pending;
+                    stepExec.WaitUntilUtc = children
+                        .Where(child => child.Status == WorkflowExecutionStatus.Pending && child.WaitUntilUtc.HasValue)
+                        .Select(child => child.WaitUntilUtc).Min();
+                    execution.Status = children.Any(child => child.Status == WorkflowExecutionStatus.WaitingForApproval)
+                        ? WorkflowExecutionStatus.WaitingForApproval : WorkflowExecutionStatus.Pending;
+                    await SaveExecutionAsync(tenantId, execution, ct);
+                    return;
+                }
             }
             else if (step.StepType == WorkflowStepType.Subworkflow)
             {
