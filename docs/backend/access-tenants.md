@@ -4,12 +4,16 @@ Este documento descreve os contratos da branch `fix/backend-core-tenancy`. O est
 
 ## Identidade, membership e papéis
 
+Correção #140/PR #152: o navegador autentica API keys por cookie HttpOnly, sem gravar ou reenviar a chave no localStorage, store JavaScript ou headers dos clientes/hubs. `GET /api/auth/session` valida a sessão pelo pipeline e retorna o subject/tenant/papéis; logout exige sucesso do backend antes de limpar a interface. JWT explícito continua sendo um modo separado.
+
+OpenAI compatível (`/v1/chat/completions` e `/v1/models`) usa o mesmo pipeline de autenticação e middleware tenant/membership. `Authorization: <raw-key>` é suportado por compatibilidade apenas sob `/v1`, com as mesmas negações de revogação, tenant inativo e spoofing do Bearer opaco. O campo `user` do request não vira identidade de autorização; o principal autenticado define o owner. O controller conserva o contexto e o plano resolvidos pelo middleware. [Evidência da correção](validation/pr132-review-remediation-2026-10-02.md).
+
 | Camada | Fonte | Regra |
 |---|---|---|
 | Identidade | API key ou JWT/Supabase | API keys são localizadas por SHA-256; MVC normalmente recebe `X-Api-Key`, enquanto `/v1/chat/completions` recebe API key opaca no Bearer. JWT de tenant/Supabase usa o handler configurado. |
 | Tenant | `tenant_id`, `app_metadata.tenant_id`, `X-Tenant-Id` | Tenant precisa existir e estar ativo. Identidade autenticada não pode selecionar outro tenant pelo header. |
 | Membership | `tenant_memberships` | Liga principal, tenant, tipo de principal e papel. Papéis efetivos são carregados para o tenant selecionado. |
-| API key | `access_api_keys` + membership `ApiKey` | A role armazenada é usada; roles desconhecidas falham fechadas. |
+| API key | `access_api_keys` + membership `ApiKey` | A chave identifica o principal, não concede membership; papel efetivo vem do vínculo no tenant selecionado. Roles desconhecidas falham fechadas. |
 | Papel de plataforma | `platform_administrators` | Registro explícito e separado; Admin/Owner do tenant nunca são promovidos automaticamente. |
 | Sala | `knowledge_room_permissions` | ACL por usuário é obrigatória para ler uma sala, inclusive quando há suporte temporário. |
 

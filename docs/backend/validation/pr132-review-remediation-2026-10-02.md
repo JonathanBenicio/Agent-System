@@ -21,6 +21,14 @@ Status: em execução; gate integrado da correção ainda não executado.
 | durabletask | #151 | pendente | PostgreSQL 16 executa dt.complete_tasks para lote0/1/2+ sem DISTINCT+FOR UPDATE inválido e sem ROW_COUNT agregado incorreto. Probe transacional valida deleção/conclusão atômica e concorrência/retry conforme contrato; erro não publica resultado parcial. Instalação limpa aplica migrations e cria tabelas/modelo corretos; engine padrão permanece dinâmico e DurableTask opcional. Se correção exigir nova migration, manter cadeia explícita e has-pending-model-changes limpo. | não executado |
 
 ## Gate final
+
+### Contexto #140 — autenticação e preview
+- Backend: `dotnet test ... --configuration Release --filter 'FullyQualifiedName~CookieAndOpenAiAuthorizationTests|FullyQualifiedName~ApiKeyAuthenticationTests|FullyQualifiedName~TenantMiddlewareTests'`: **23 aprovados,0 falhas/ignorados**. TestServer usa os controllers/handler/middleware reais e PostgresPermissionService com EF InMemory; orquestrador/quota são doubles. Revogação, inatividade, spoofing, vínculo em outro tenant, papel Viewer e cookie foram exercitados.
+- Frontend: `npm run lint` e `npm run build`: passaram após `npm ci` no lockfile, sem mudar dependências/versões.
+- `auth-cookie-skills.e2e.spec.ts`, Chromium: **4 aprovados**. UI React real, API mockada; asserts provam cookie HttpOnly/sem chave JS, restore/logout/erro e renderização Markdown antes da negação de XSS.
+- Ambiente local: Vite5193; Playwright1.60 em WSL Ubuntu26 usa runtime Ubuntu24 via override documentado pelo pacote e bibliotecas oficiais. Isso não afirma suporte oficial ao Ubuntu26 nem valida backend/provider produção.
+- Falhas iniciais de fixture (IQuotaEnforcer ausente e glob interceptando módulos JS) corrigidas; os resultados finais acima foram reexecutados. Gate integrado PostgreSQL/CI ainda pendente.
+
 | Verificação | SHA/ambiente/comando | Resultado/evidência |
 |---|---|---|
 | Backend Release/regressões/suíte | pendente | não executado |

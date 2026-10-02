@@ -24,7 +24,7 @@ Fora do escopo: MAF 1.23, A2A/AGUI preview (#121), Gateway produção/reload (#1
 ### Subtarefas por contexto
 | Issue/contexto | Achados | Story | Estado |
 |---|---|---|---|
-| #140 auth | R02, R03, R20, R21 | BACK-REVIEW-139-01 | pendente |
+| #140 auth | R02, R03, R20, R21 | BACK-REVIEW-139-01 | implementado e validado por contexto; gate integrado pendente |
 | #141 fides | R01 | BACK-REVIEW-139-02 | pendente |
 | #142 onnx | R04 | BACK-REVIEW-139-03 | pendente |
 | #143 tenancy-rag | R06, R07, R19, R23 | BACK-REVIEW-139-04 | pendente |
@@ -42,8 +42,8 @@ IDs seguem a ordem do relatório final publicado nesta conversa. Um achado só m
 | ID | Problema | Local/fluxo | Issue | Estado/evidência |
 |---|---|---|---|---|
 | R01 | FIDES na execução direta | AgentFrameworkDirectExecutionService | [#141](https://github.com/JonathanBenicio/Agent-System/issues/141) | pendente |
-| R02 | Authorization cru sem membership | OpenAIChatCompletionController | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | pendente |
-| R03 | Stored XSS no preview de skills | SkillsPage | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | pendente |
+| R02 | Authorization cru sem membership | OpenAIChatCompletionController | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
+| R03 | Stored XSS no preview de skills | SkillsPage | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
 | R04 | Dimensões ONNX sem orçamento | OnnxModelController / DynamicOnnxProcessorTool | [#142](https://github.com/JonathanBenicio/Agent-System/issues/142) | pendente |
 | R05 | CI E2E sem servidor | ci.yml / Playwright | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
 | R06 | Ingestão aceita Reader | DocumentController | [#143](https://github.com/JonathanBenicio/Agent-System/issues/143) | pendente |
@@ -60,8 +60,8 @@ IDs seguem a ordem do relatório final publicado nesta conversa. Um achado só m
 | R17 | Analytics consulta contexto descartado | TenantAnalyticsTool | [#146](https://github.com/JonathanBenicio/Agent-System/issues/146) | pendente |
 | R18 | Cache de memória não inclui consulta | MemoryInjectionService | [#147](https://github.com/JonathanBenicio/Agent-System/issues/147) | pendente |
 | R19 | room_ids não traduzido nos fallbacks | vector stores / RAGContextProvider | [#143](https://github.com/JonathanBenicio/Agent-System/issues/143) | pendente |
-| R20 | Logout não limpa cookie backend | authStore | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | pendente |
-| R21 | API key persistida no localStorage | authStore | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | pendente |
+| R20 | Logout não limpa cookie backend | authStore | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
+| R21 | API key persistida no localStorage | authStore | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
 | R22 | Rotas de tools incompatíveis | AgentToolsController | [#148](https://github.com/JonathanBenicio/Agent-System/issues/148) | pendente |
 | R23 | Upload omite roomId | ChatPage / rag-api | [#143](https://github.com/JonathanBenicio/Agent-System/issues/143) | pendente |
 | R24 | YAML de UI/template incompatível | AgentFormModal / agent-manifest-template.yaml | [#148](https://github.com/JonathanBenicio/Agent-System/issues/148) | pendente |

@@ -33,7 +33,8 @@ ChatHub.SendMessage(message, targetAgent?, provider?, model?, apiKey?, sessionId
 | GET /version | sempre | sem RequireAuthorization; Version fixa e Build calculado no request |
 | /a2a | ProtocolHosting:A2A:Enabled | RequireAuthorization + rate policy; contrato da biblioteca hospedada |
 | /agui | ProtocolHosting:AgUI:Enabled | RequireAuthorization + rate policy |
-| /v1/chat/completions | controller OpenAICompatible | API key opaca em `Authorization: Bearer`; tenant membership validada antes da action; quota excedida retorna 429 `rate_limit_error/quota_exceeded`; `stream=true` retorna 400 |
+| /v1/chat/completions | controller OpenAICompatible | Pipeline MultiAuth + tenant/membership antes da action; API key opaca em Bearer ou formato cru legado sob /v1, sem bypass; owner é o principal autenticado; quota excedida retorna429; stream=true retorna400 |
+| GET /api/auth/session | navegador/API | Cookie HttpOnly ou Bearer autenticado; tenant ativo e membership; retorna userId/tenantId/roles sem credencial |
 | /responses, /conversations, DevUI | apenas Development, mapeados por biblioteca | não confundir com compat controller |
 | /mcp | não mapeado na baseline | MCP client/plugin não é servidor HTTP /mcp |
 | /api/test/rag/* | compilação DEBUG ou STAGING | sem AuthorizeAttribute; não expor como API de produção |
