@@ -1,11 +1,11 @@
 # ADR-041 — Correção dos contratos e limites após revisão do PR #132
 Data: 2026-10-02 · Issue: [#139](https://github.com/JonathanBenicio/Agent-System/issues/139) · Stories: [BACK-REVIEW-139](../../USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132) · [Plano](../../plan/pr132-review-remediation.md)
 Decisão: aceita para execução autorizada das correções; decisões de produto anteriores preservadas.
-Implementação: parcial — R30 em `169c3f8`; demais contextos pendentes.
-Validação: parcial/documental de R30; regressões e gate desta branch não executados.
+Implementação: R01–R32 têm correções na branch; commits por contexto e validação remota ainda estão em andamento.
+Validação: suite .NET passou com 924 aprovados, 23 ignorados e 0 falhas; lint/build, Playwright/Cypress e migrations em PostgreSQL isolado passaram. Probes SQL passaram na cadeia de 20 migrations; CI remoto ainda pendente.
 
 ## Contexto
-A revisão da integração encontrou32 defeitos em caminhos de produto e suporte, apesar de evidências anteriores de testes. É necessário tornar as mesmas invariantes eficazes em todos os callers, sem introduzir um runtime paralelo.
+A revisão da integração encontrou 32 defeitos em caminhos de produto e suporte, apesar de evidências anteriores de testes. É necessário tornar as mesmas invariantes eficazes em todos os callers, sem introduzir um runtime paralelo.
 
 ## Decisão
 - Auth OpenAI cru usa o mesmo policy/tenant/membership dos demais endpoints; revoked/inactive nega. Login/logout browser permanecem cookie HttpOnly, sem credencial persistida em JavaScript.

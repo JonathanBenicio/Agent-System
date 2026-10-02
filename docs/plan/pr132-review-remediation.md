@@ -1,96 +1,91 @@
-# Plano — Correção dos 32 achados do PR #132
-Status: em execução
-Prioridade: P1 — regressões verificadas em autorização, isolamento e contratos do núcleo impedem recomendar o merge; subtarefas opcionais/documentais têm prioridade própria.
-Issue: [epic #139](https://github.com/JonathanBenicio/Agent-System/issues/139) · ADR: [041](../architecture/adr/041-pr132-review-remediation.md) · Stories: [BACK-REVIEW-139](../USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132)
-Baseline: `e8e813b1887e6e23f4cdf61031392f27e2a32334`, checkout limpo antes da execução, 2026-10-02.
-Branch: `codex/pr132-review-remediation`; base/PR alvo: `integration/develop-pr-stack-2026-09-30` (#132), por autorização explícita do usuário. Mesma pasta; sem worktree.
+# Plano — corrigir os 32 achados do PR #132
 
-## Objetivo e escopo
-Corrigir e verificar R01–R32, com issue por contexto e commits com título/corpo em PT-BR, pontos específicos e `Refs #ID`. O acréscimo solicitado no chat “Revisar documentação do projeto” foi incorporado em `169c3f8` e resolve R30; não presumir que isso conclui #150.
+Status: em execução. Prioridade: P1 — os achados incluem falhas de autorização, isolamento e contratos do núcleo.
 
-Banco será criado do zero. Validar PostgreSQL 16 do Compose `tests/backend-validation/compose.yml` em 55432, DB temporário exclusivo. Nunca tocar 5432, outro projeto/volume ou migration history de outro banco. DurableTask permanece opcional.
+Issue principal: [épico #139](https://github.com/JonathanBenicio/Agent-System/issues/139). ADR: [041](../architecture/adr/041-pr132-review-remediation.md). Stories: [BACK-REVIEW-139](../USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132).
 
-Fora do escopo: MAF 1.23, A2A/AGUI preview (#121), Gateway produção/reload (#133), retomada supervisor multihost (#134), forecast (#135), PR31/73 e migração de bancos legados. Evidência anterior de e8e813b não prova esta correção.
+Branch de trabalho: `codex/pr132-review-remediation`, criada sobre `integration/develop-pr-stack-2026-09-30` (base do PR #132). O PR #152 aponta para essa mesma branch.
 
-## Etapas
-| Etapa | Dependência | Verificação | Estado |
+## Objetivo e decisões
+
+Corrigir e validar R01–R32 em 12 subtarefas, agrupadas por contexto. Cada commit tem título e corpo em PT-BR, descreve as alterações e referencia as issues relacionadas. Usar `Refs #ID` enquanto o escopo estiver parcial; usar `Closes #ID` apenas quando todos os critérios da issue estiverem comprovados e o fechamento for intencional.
+
+A atualização de governança solicitada no chat “Revisar documentação do projeto” está no commit `169c3f8` e contribui para R30. Isso, por si só, não conclui a subtarefa #150.
+
+O usuário autorizou validar PostgreSQL com o Compose do repositório ou porta isolada. Os testes desta entrega usam o Compose `tests/backend-validation/compose.yml`, publicado em `127.0.0.1:55432`, com bases exclusivas `review_pr152_*`. Não tocar a porta 5432, outros projetos, bancos ou volumes. O produto poderá iniciar com banco vazio; a cadeia de migrations precisa criar o schema atual.
+
+DurableTask permanece opcional. MAF 1.23, A2A/AG-UI em preview, Gateway e provider de produção, retomada de sessões do supervisor entre hosts, forecast e PRs #31/#73 permanecem fora desta entrega e têm planejamento próprio.
+
+## Subtarefas e estado
+
+| Issue | Achados | Story | Estado atual |
 |---|---|---|---|
-| 1. Epic/subissues, ADR/stories/plano e índices | baseline e autorização | 32 IDs únicos, 12 subtarefas nativas, links reais | em execução |
-| 2. Segurança e isolamento (#140–#143) | plano registrado | auth revogada, FIDES direto, XSS e limites ONNX; ACL/RAG/tenant A/B | pendente |
-| 3. Quotas, workflows e serviços (#144–#148) | segurança/contextos | cancelamento, teto uniforme, paralelismo, approvals e round-trip | pendente |
-| 4. CI, docs e SQL opcional (#149–#151) | contratos corrigidos | servidores E2E, mocks efetivos, IDs/regra, SQL lotes 0/1/2+ | pendente |
-| 5. Gate integrado e PR | commits por contexto | build/testes/lint/E2E, banco vazio/schema, links, diff e estado remoto | pendente |
+| [#140 — Autorização, cookie e preview](https://github.com/JonathanBenicio/Agent-System/issues/140) | R02, R03, R20, R21 | BACK-REVIEW-139-01 | Implementada; regressões backend e Chromium passaram; integração real com provider não é necessária para estes critérios. |
+| [#141 — Proteção FIDES nos despachos MAF](https://github.com/JonathanBenicio/Agent-System/issues/141) | R01 | BACK-REVIEW-139-02 | Implementada; chamadas diretas, streaming e tools passaram; OCR de imagem/PDF e persistência tenant-scoped passaram em testes dedicados com dados/DB isolados. |
+| [#142 — Limites seguros para ONNX](https://github.com/JonathanBenicio/Agent-System/issues/142) | R04 | BACK-REVIEW-139-03 | Implementada; regressões de dimensões, canais, overflow e orçamento passaram. |
+| [#143 — ACL, RAG e isolamento](https://github.com/JonathanBenicio/Agent-System/issues/143) | R06, R07, R19, R23 | BACK-REVIEW-139-04 | Implementada; testes API, armazenamento e jornada RAG passaram com os limites de integração descritos no relatório. |
+| [#144 — Quotas e sessões](https://github.com/JonathanBenicio/Agent-System/issues/144) | R08–R11 | BACK-REVIEW-139-05 | Implementada; suite backend, REST/SSE/SignalR, concorrência PostgreSQL isolada e retomada no teto passaram. |
+| [#145 — Workflows e aprovação](https://github.com/JonathanBenicio/Agent-System/issues/145) | R12–R16, R25 | BACK-REVIEW-139-06 | Implementada; backend, PostgreSQL, round-trip e decisões UI com erros passaram. |
+| [#146 — Escopo de analytics](https://github.com/JonathanBenicio/Agent-System/issues/146) | R17 | BACK-REVIEW-139-07 | Implementada; consultas aguardam a vida do escopo e mantêm isolamento de tenant. |
+| [#147 — Cache de memória](https://github.com/JonathanBenicio/Agent-System/issues/147) | R18 | BACK-REVIEW-139-08 | Implementada; consulta, filtros, usuário, tenant e invalidação são testados. |
+| [#148 — Rotas de tools e YAML](https://github.com/JonathanBenicio/Agent-System/issues/148) | R22, R24 | BACK-REVIEW-139-09 | Implementada; API, manifesto, persistência PostgreSQL e round-trip visual/YAML passaram. |
+| [#149 — CI, E2E e diagnósticos isolados](https://github.com/JonathanBenicio/Agent-System/issues/149) | R05, R26–R28, R31 | BACK-REVIEW-139-10 | Implementada localmente; lint/build, Playwright Chromium+Firefox e Cypress passaram. Falta o resultado do CI remoto após publicar os commits finais. |
+| [#150 — IDs e documentação](https://github.com/JonathanBenicio/Agent-System/issues/150) | R29, R30 | BACK-REVIEW-139-11 | Implementada; checker encontrou 169 documentos e 936 links, sem destinos quebrados. Sincronização final das issues/PR ainda pendente. |
+| [#151 — SQL opcional DurableTask](https://github.com/JonathanBenicio/Agent-System/issues/151) | R32 | BACK-REVIEW-139-12 | Probes de lote, rollback e concorrência passaram numa base nova após aplicar as 20 migrations; store EF comparado ao schema (70 tabelas). |
 
-### Subtarefas por contexto
-| Issue/contexto | Achados | Story | Estado |
+## Matriz dos achados
+
+| ID | Defeito | Contexto principal | Estado/evidência |
 |---|---|---|---|
-| #140 auth | R02, R03, R20, R21 | BACK-REVIEW-139-01 | implementado e validado por contexto; gate integrado pendente |
-| #141 fides | R01 | BACK-REVIEW-139-02 | implementado;29 regressões/3skips; gate integrado pendente |
-| #142 onnx | R04 | BACK-REVIEW-139-03 | implementado;49 regressões ONNX; gate integrado pendente |
-| #143 tenancy-rag | R06, R07, R19, R23 | BACK-REVIEW-139-04 | implementado;65 regressões/1skip + lint/build; PG/browser upload pendentes |
-| #144 quotas | R08, R09, R10, R11 | BACK-REVIEW-139-05 | em execução;28 regressões + reserva PG real passaram; gate HTTP/integrado pendente |
-| #145 workflows | R12, R13, R14, R15, R16, R25 | BACK-REVIEW-139-06 | implementado parcialmente;34regressões backend + lint/build; browser/PG/gate pendentes |
-| #146 analytics | R17 | BACK-REVIEW-139-07 | implementado; DI scoped real/EF InMemory; gate PG pendente |
-| #147 memory | R18 | BACK-REVIEW-139-08 | implementado;cache por consulta/filtros/geração; regressões passaram |
-| #148 agent-contracts | R22, R24 | BACK-REVIEW-139-09 | pendente |
-| #149 ci | R05, R26, R27, R28, R31 | BACK-REVIEW-139-10 | pendente |
-| #150 docs | R29, R30 | BACK-REVIEW-139-11 | implementados; IDs/refs e PT-BR/issue por commit; reconciliação final pendente |
-| #151 durabletask | R32 | BACK-REVIEW-139-12 | implementado;2PGreais/19migrations/69tabelascolunas/concurrency; gatefinal pendente |
+| R01 | FIDES não protegia a execução direta MAF | #141 | Factory e supervisor usam cliente protegido; chamadas diretas, streaming e tools exercitados com provider fake. |
+| R02 | Authorization cru podia ignorar membership | #140 | TestServer cobre chave sem `Bearer`, tenant ativo, membership, papel e rejeição antes da execução. |
+| R03 | Preview de skill permitia conteúdo Markdown ativo | #140 | Chromium confirma renderização e bloqueio de HTML, handlers e links `javascript:`. |
+| R04 | ONNX alocava antes de limitar dimensão e bytes | #142 | Valida canais, overflow, dimensão máxima e orçamento antes do preprocessing/alocação. |
+| R05 | CI E2E não iniciava nem aguardava o frontend | #149 | Workflow executa lint/build, Playwright e Cypress com servidores gerenciados; CI remoto pendente. |
+| R06 | Upload em sala não exigia papel de escrita | #143 | Editor/Admin permitido; Reader e papel insuficiente negados antes de persistir. |
+| R07 | Repositório dinâmico InMemory não particionava agentes por tenant | #143 | Mesmo nome em tenants A/B permanece isolado, inclusive leitura e desativação. |
+| R08 | Quota diária InMemory não fazia reset correto | #144 | Clock determinístico cobre virada UTC, isolamento e concorrência. |
+| R09 | Cancelamento/falha de stream perdia consumo recebido | #144 | Finalizadores contabilizam uso informado ou estimativa sem dupla contagem. |
+| R10 | Contagem de sessões era truncada pelo limite histórico | #144 | Consulta conta todas as sessões ativas; sessões encerradas não escondem sessões antigas ativas. |
+| R11 | Rotas de chat aplicavam limites de sessão diferentes | #144 | REST, SSE, SignalR e chamada direta bloqueiam nova sessão no teto e permitem retomar a própria sessão. |
+| R12 | Enum de workflow divergente entre API e cliente | #145 | JSON publica strings estáveis; snapshots numéricos antigos e todos os tipos fazem round-trip. |
+| R13 | Múltiplas aprovações eram ambíguas | #145 | Aprovar/rejeitar aceita `stepId`; cada aprovação paralela é individual. |
+| R14 | Saídas paralelas compartilhavam estado sem sincronização | #145 | Execução paralela aguarda branches e mescla resultados deterministamente; regression cobre concorrência real. |
+| R15 | Grafo inválido podia ser persistido | #145 | Dependências ausentes, ciclos e edges divergentes são rejeitados antes de salvar/executar. |
+| R16 | Worker fazia claim global sem capability tipada | #145 | Claim exige `SystemOperationContext`; execução de dados de negócio abre escopo de tenant real. |
+| R17 | Consulta de analytics sobrevivia ao escopo de DbContext | #146 | Provider DI com escopo real valida os comandos e isolamento A/B. |
+| R18 | Cache de memória não distinguia consulta/filtros | #147 | Chaves variam por consulta e filtros; contexto vazio e invalidação são cobertos. |
+| R19 | Filtro `room_ids` divergente ou permissivo em fallback | #143 | Lista permitida tem semântica consistente; lista vazia nega acesso. |
+| R20 | Logout não invalidava o cookie no servidor | #140 | Chromium confirma chamada de logout, expiração de cookie e estado de falha correto. |
+| R21 | Chave de API era persistida no localStorage | #140 | Login/restauração por cookie não grava nem envia a chave em armazenamento JS. |
+| R22 | Rotas de tools divergiam do contrato publicado | #148 | `list/get/execute/delete` seguem `/api/agent/tools`; autorização precede o manager. |
+| R23 | Upload/RAG confundia `roomId` com origem/chunks | #143 | Browser/API e regressões verificam associação à sala/tenant esperado. |
+| R24 | Template e serializer YAML divergiam do DTO | #148 | Manifesto oficial valida; UI alterna, salva e reabre descrição, instruções, ferramentas e configuração. |
+| R25 | UI confirmava approval após resposta HTTP de erro | #145 | 403/409/500 mantêm pendência, mostram erro e não exibem decisão confirmada. |
+| R26 | Teste XSS não verificava payload renderizado | #149 | Teste verifica conteúdo visível e que HTML/handler/link malicioso não executa. |
+| R27 | Teste de timeout dependia de duração não confiável | #149 | Timer controlável valida timeout, limpeza do indicador e recuperação. |
+| R28 | Diagnósticos Compose podiam atingir projeto/banco alheio | #149 | API, C# e consultas Node exigem projeto e DB `review_pr152_*` iguais; manifesto de runtime é comparado antes dos diagnósticos. Teste negativo rejeita divergência e DB genérico. |
+| R29 | Identificador de story duplicado | #150 | Story multi-key usa `BACK-KEYS-020`; US-42 de FinOps e referências existentes são preservadas. |
+| R30 | Instrução GEMINI sugeria `Closes` indevido | #150 | Regras PT-BR distinguem `Refs` de `Closes` e descrevem alterações no corpo do commit. |
+| R31 | Cypress apontava para servidor/API incorretos | #149 | Script inicia Vite isolado em 5193 e encerra-o; smoke test usa contrato REST atual. |
+| R32 | `dt.complete_tasks` usava `DISTINCT ... FOR UPDATE` e contagem agregada | #151 | Migration de reparo usa lock por instância; probes cobrem lotes, rollback, terminal e concorrência. |
 
-### Matriz integral dos achados
-IDs seguem a ordem do relatório final publicado nesta conversa. Um achado só muda para validado quando há evidência que cobre seu cenário.
-| ID | Problema | Local/fluxo | Issue | Estado/evidência |
-|---|---|---|---|---|
-| R01 | FIDES na execução direta | AgentFrameworkDirectExecutionService | [#141](https://github.com/JonathanBenicio/Agent-System/issues/141) | protegido na factory/IChatClient; provider fake direto/stream/tool; gate integrado pendente |
-| R02 | Authorization cru sem membership | OpenAIChatCompletionController | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
-| R03 | Stored XSS no preview de skills | SkillsPage | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
-| R04 | Dimensões ONNX sem orçamento | OnnxModelController / DynamicOnnxProcessorTool | [#142](https://github.com/JonathanBenicio/Agent-System/issues/142) | orçamento64MiB/dim4096 com overflow seguro e validação antes de alocar;49 regressões |
-| R05 | CI E2E sem servidor | ci.yml / Playwright | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
-$165 regressões + lint/build por contexto; PG/browser upload pendentes |
-$165 regressões + lint/build por contexto; PG/browser upload pendentes |
-| R08 | Quota diária InMemory sem reset | InMemoryTenantQuotaRepository | [#144](https://github.com/JonathanBenicio/Agent-System/issues/144) | pendente |
-| R09 | Consumo de stream interrompido perdido | TenantQuotaChatClient | [#144](https://github.com/JonathanBenicio/Agent-System/issues/144) | pendente |
-| R10 | Contagem de sessões truncada antes de filtrar | TenantIsolationService | [#144](https://github.com/JonathanBenicio/Agent-System/issues/144) | pendente |
-| R11 | Teto de sessões desigual por caminho | MetaAgentOrchestrator / SessionManager | [#144](https://github.com/JonathanBenicio/Agent-System/issues/144) | pendente |
-| R12 | Enum de workflow incompatível com cliente | WorkflowModels / useWorkflowStore | [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) | pendente |
-| R13 | Duas aprovações pendentes falham | DefaultWorkflowEngine / WorkflowController | [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) | pendente |
-| R14 | Dictionary de outputs paralelo sem sincronização | DefaultWorkflowEngine | [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) | pendente |
-| R15 | Grafo inválido é salvo | WorkflowController / WorkflowGraphValidator | [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) | pendente |
-| R16 | Claim global sem capability de sistema | WorkflowExecutionBackgroundService / PostgresWorkflowStore | [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) | pendente |
-| R17 | Analytics consulta contexto descartado | TenantAnalyticsTool | [#146](https://github.com/JonathanBenicio/Agent-System/issues/146) | scope vivo até consulta;4 comandos/A-B validados |
-| R18 | Cache de memória não inclui consulta | MemoryInjectionService | [#147](https://github.com/JonathanBenicio/Agent-System/issues/147) | pergunta/maxMemories/tenant/usuário particionados; vectorization invalida |
-$165 regressões + lint/build por contexto; PG/browser upload pendentes |
-| R20 | Logout não limpa cookie backend | authStore | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
-| R21 | API key persistida no localStorage | authStore | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
-| R22 | Rotas de tools incompatíveis | AgentToolsController | [#148](https://github.com/JonathanBenicio/Agent-System/issues/148) | pendente |
-$165 regressões + lint/build por contexto; PG/browser upload pendentes |
-| R24 | YAML de UI/template incompatível | AgentFormModal / agent-manifest-template.yaml | [#148](https://github.com/JonathanBenicio/Agent-System/issues/148) | pendente |
-| R25 | UI aprova apesar de falha HTTP | useWorkflowExecution | [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) | pendente |
-| R26 | Teste XSS não renderiza payload | chat-security.e2e.spec.ts | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
-| R27 | Timeout E2E divergente | chat-timeout.e2e.spec.ts | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
-| R28 | Diagnósticos usam Compose de outro projeto | core/session-diagnostics.mjs | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
-| R29 | Story US-42 duplicada | USER-STORIES / story dedicada | [#150](https://github.com/JonathanBenicio/Agent-System/issues/150) | multi-key BACK-KEYS-020;US-42 FinOps preservada; caminho histórico mantido |
-| R30 | GEMINI orienta Closes indevido | GEMINI / commit-rules | [#150](https://github.com/JonathanBenicio/Agent-System/issues/150) | documentação corrigida em 169c3f8; revisão final pendente |
-| R31 | Cypress não acessa servidor frontend | Cypress config / package scripts | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
-| R32 | dt.complete_tasks usa SQL inválido | migration DurableTask opcional | [#151](https://github.com/JonathanBenicio/Agent-System/issues/151) | RepairDurableTaskCompletion; lotes0/1/2/4/rollback/race PostgreSQL16 passaram |
+## Verificação atual
 
-## Critérios de aceite
-- [ ] R01–R32 corrigidos ou refutados por evidência concreta, sem substituição por solução que preserve o defeito.
-- [ ] Autorização/ACL/FIDES/tenant protegem caminhos reais; testes negativos observam ausência de execução/dados.
-- [ ] Limites são uniformes e persistência/estimativas de uso e cancelamento estão documentados.
-- [ ] UI/API concordam em tipos de workflow, YAML, tools, sala e sucesso/erro.
-- [ ] CI testa contratos atuais e inicia servidores; XSS test não passa por ausência de conteúdo.
-- [ ] Banco vazio aplica cadeia, modelo/schema comparados e `dt.complete_tasks` funciona em lotes; nenhum outro banco alterado.
-- [ ] Todos os commits em PT-BR têm corpo e issue; PR publicado contra branch do #132.
-- [ ] Docs/ADRs/stories/README/INDEX/CONSOLIDATED/tracks e descrições das issues têm estado/evidência coerentes.
+| Verificação | Resultado | Limites |
+|---|---|---|
+| Suíte completa .NET 10 (`dotnet test --no-restore`) | 924 aprovados, 23 ignorados, 0 falhas; 947 testes | Execução sem variáveis PostgreSQL/OCR; testes condicionais foram ignorados. |
+| Regressões por contexto | #140: 23 backend e 4 Chromium; #141: 28 FIDES/MAF, 2 OCR, 1 PostgreSQL; #142: 49; #143: 65/1 ignorado; #144: 28 + HTTP + PostgreSQL; #145: 34 backend + 8 browser + 5 PostgreSQL; #146/#147: 14; #148: rotas/manifesto/persistência; #149: verificações abaixo | Doubles, EF InMemory e HTTP fake estão identificados por contexto no relatório; não equivalem a provider externo real. |
+| Playwright configurado para CI | 48 aprovados: 24 Chromium e 24 Firefox; 0 falhas | API mockada nos fluxos UI. Os testes de login que exigem API real ficam excluídos sem `REAL_E2E=true`; a regressão específica de approval também passou 8/8 no harness. |
+| Cypress | 1 aprovado, 0 falhas; servidor Vite gerenciado pelo runner | Teste de UI com API mockada. |
+| Frontend | `npm run lint` e `npm run build` passaram | Executado no WSL sobre este checkout. |
+| PostgreSQL Compose isolado, banco novo | 20 migrations aplicadas; 70 tabelas public; teste de persistência dinâmica e 5 testes de workflow passaram | DB `review_pr152_dynamicagents_20261002`, Compose com porta 55432 e projeto exclusivos; DB removido e serviço parado, volume preservado. `has-pending-model-changes` passou. |
+| SQL `dt.complete_tasks` e schema | PostgreSQL 16 isolado: 20 migrations, 70 tabelas públicas, modelo EF comparado, lotes 0/1/2/4, rollback, término e concorrência passaram | Base exclusiva removida e serviço parado; volume preservado. |
+| Links/índices locais | 169 documentos, 936 links, 0 destinos quebrados | Passou após atualizar plano, ADR e relatório. |
+| CI GitHub / estado final do PR | Pendente | Executar depois de publicar os commits finais. |
 
-## Validação
-[Relatório canônico desta correção](../backend/validation/pr132-review-remediation-2026-10-02.md).
-Gate: .NET10 Release + regressões direcionadas e suíte completa; frontend lint/build/Playwright/Cypress; PostgreSQL Compose em porta isolada, schema/modelo e probes SQL; checker local de docs e `git diff --check`. Distinguir real, fake, ignorado e não executado; não afirmar integração de provider produção com fake.
+## Limites e condições de conclusão
 
-## Riscos e decisões
-Preservar cookies HttpOnly e raw-key compatível autenticada; Markdown sem HTML ativo; limites ONNX validados também no worker; nunca alterar arbitrariamente tenant/user. Workflow enum mantém valores históricos e contrato string estável; aprovações identificam step e preservam compatibilidade de uma única pendente. Defaults de orçamento/custo ficam explícitos nos contratos e testes.
-Mudanças pequenas de correção usam ADR041 para consolidar invariantes existentes, sem nova arquitetura concorrente. Migrations não devem depender de histórico antigo; validação fresca é requisito. Não fechar #97/#111/#113/#115 nem outras issues antigas por subconjunto de critérios.
+Fixtures TestServer, EF InMemory, provider fake, Pinecone HTTP fake, OCR ignorado e PostgreSQL real são evidências diferentes e continuam identificadas. Esta entrega não demonstra provider/Gateway de produção, OCR/Tesseract no ambiente real, A2A/AG-UI em preview ou retomada multi-host do supervisor.
 
-## Entrega
-Commits por contexto, usando caminhos explícitos e preservando alterações alheias. Um PR de correção inicialmente draft aponta à branch do #132; o #132 continua apontando a develop. Sem merge/deploy autorizado. Atualizar esta matriz e relatório a cada contexto concluído.
+Não fechar issues antigas por atender apenas parte do escopo. Só relacionar no PR as issues cujos critérios completos estejam demonstrados. Antes de concluir a epic: revisar todos os arquivos staged/unstaged/untracked, concluir os commits por contexto, publicar a branch, aguardar CI remoto e verificar base/estado do PR #152.

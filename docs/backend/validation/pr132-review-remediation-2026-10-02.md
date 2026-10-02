@@ -1,77 +1,61 @@
-# Validação — Correções da revisão do PR #132
-Data de abertura: 2026-10-02 · [Epic #139](https://github.com/JonathanBenicio/Agent-System/issues/139) · [Plano/matriz32](../../plan/pr132-review-remediation.md) · [ADR041](../../architecture/adr/041-pr132-review-remediation.md)
-Baseline: e8e813b1887e6e23f4cdf61031392f27e2a32334 · Branch:`codex/pr132-review-remediation`
-Status: em execução; gate integrado da correção ainda não executado.
+# Evidências — correções da revisão do PR #132
 
-## Evidência por contexto
-| Contexto | Issue | SHA | Verificação/ambiente | Resultado |
-|---|---|---|---|---|
-| Governança R30, contribuição solicitada no outro chat | #150 |169c3f8|diff de AGENTS/GEMINI/workflow/commit-rules e git diff --check|passou; não conclui R29|
-| auth | #140 | pendente | Authorization cru sem Bearer aplica tenant ativo, membership e papel; associação revogada/inativa é negada antes de executar. Login usa cookie HttpOnly sem credencial em localStorage/headers persistidos; logout chama o backend e invalida autenticação cookie. Preview de skill usa renderização Markdown segura; payload HTML/script/event handler não executa nem cria conteúdo ativo. Regressões de login/logout/raw-key revogada e stored XSS exercitam os caminhos reais. | não executado |
-| fides | #141 | pendente | Chamada direta e roteamento simples inspecionam conteúdo antes do provider com a política do tenant. Credenciais obrigatórias são redigidas; falha/timeout de proteção bloqueia despacho. Não adicionar caminho paralelo nem promover Lab; testes com provider fake capturam o conteúdo realmente enviado. | não executado |
-| onnx | #142 | pendente | Upload/update/test e worker validam dimensões, canais e cálculo de bytes com aritmética segura antes de alocar. Limites configuráveis possuem padrão seguro e erro de validação claro; configurações/modelos válidos seguem funcionais. Regressões rejeitam negativos, overflow e tamanhos acima do orçamento sem provocar OOM. | não executado |
-| tenancy-rag | #143 | pendente | Ingestão de sala exige Editor/Admin, incluindo suporte; Reader é negado antes de gravar. Repositório dinâmico InMemory particiona por tenant; nomes iguais não colidem nem vazam/desativam outros tenants. Filtro room_ids tem semântica compartilhada de lista permitida em InMemory/SQLite/Pinecone e PostgreSQL; vazio nega. Drop/upload envia roomId distinto de source e chunks aparecem apenas na sala/tenant autorizados. | não executado |
-| quotas | #144 | pendente | Quota InMemory faz reset diário determinístico, preservando isolamento; PostgreSQL mantém uso após restart. Stream cancelado/falho registra consumo recebido e estimativa explícita quando provider não reporta uso, sem duplicação. Contagem de sessões consulta todas as ativas; histórico encerrado recente não esconde ativas antigas. Criação aplica teto em REST/SSE/SignalR/direct; continuação da sessão autorizada funciona no teto; concorrência não permite ultrapassar limite. | não executado |
-| workflows | #145 | pendente | Tipos de step são estáveis e JSON/UI compartilham string enum; round-trip de todos os tipos preserva significado. Aprovação/rejeição identifica step; duas aprovações paralelas podem ser decididas independentemente, com compatibilidade para uma pendente. Outputs paralelos têm merge/sincronização segura; ciclos e dependências ausentes são rejeitados antes de salvar/executar. Claim global requer SystemOperationContext interno; execução tenant-owned usa tenant real. UI só confirma decisão após sucesso e preserva estado/mostra erro em 403/409/500/offline. | não executado |
-| analytics | #146 | pendente | Scope/DbContext permanecem vivos até finalizar consultas de custos/performance/sessões/workflows. Teste com provider DI real de escopo detecta descarte prematuro; tenant não pode consultar dados de outro. Cancelamento e erro encerram scope corretamente sem vazamentos. | não executado |
-| memory | #147 | pendente | Perguntas distintas do mesmo usuário/tenant não reutilizam resposta específica da primeira consulta. Cache inclui consulta normalizada/filtros pertinentes ou evita cache de contexto específico; isolamento usuário/tenant preservado. Regressões cobrem resultado vazio seguido de matches e perguntas não relacionadas. | não executado |
-| agent-contracts | #148 | pendente | UI/SDK/API concordam em /api/agent/tools list/get/delete/execute e auth/tenant permanecem obrigatórios. Template e serializer visual geram metadata/instructions válidos para o DTO, com rota save-yaml real. Alternar visual/YAML e salvar/reabrir preserva campos; testes validam manifesto oficial e rotas. | não executado |
-| ci | #149 | pendente | Workflow roda para develop e branch integration de #132; job Playwright inicia frontend e aguarda servidor. Mocks usam /api/chat/configuration e content/agentName; teste XSS confirma renderização antes da ausência de execução. Teste timeout usa política atual/controlável e verifica recuperação; Cypress inicia/usa servidor frontend correto. Scripts SQL recebem nome de projeto Compose da execução, nunca consultam stack/banco não relacionado. Lint/build/Playwright/Cypress e diagnóstico de isolamento passam; falhas não são convertidas em sucesso. | não executado |
-| docs | #150 | pendente | Cada story tem ID único e todas as referências ADR/plano/índices apontam ao significado correto. GEMINI/AGENTS/templates concordam Refs para parcial e Closes apenas critérios completos intencionais. Planos/ADRs/docs normativos refletem contratos corrigidos e evidência real; histórico não é apresentado como validação atual. Estado das issues antigas é confrontado com critérios completos; não fechar por subconjunto. | não executado |
-| durabletask | #151 | pendente | PostgreSQL 16 executa dt.complete_tasks para lote0/1/2+ sem DISTINCT+FOR UPDATE inválido e sem ROW_COUNT agregado incorreto. Probe transacional valida deleção/conclusão atômica e concorrência/retry conforme contrato; erro não publica resultado parcial. Instalação limpa aplica migrations e cria tabelas/modelo corretos; engine padrão permanece dinâmico e DurableTask opcional. Se correção exigir nova migration, manter cadeia explícita e has-pending-model-changes limpo. | não executado |
+Data de início: 2026-10-02. Épico: [#139](https://github.com/JonathanBenicio/Agent-System/issues/139). Plano/matriz: [pr132-review-remediation.md](../../plan/pr132-review-remediation.md). ADR: [041](../../architecture/adr/041-pr132-review-remediation.md).
 
-## Gate final
+Branch: `codex/pr132-review-remediation`. Base do PR #152: `integration/develop-pr-stack-2026-09-30`, a branch do PR #132.
 
-### Contexto #151 — função SQL opcional e schema novo
-2testes Release passaram em PostgreSQL16 Compose55432, DBtemporário review_pr152_durable_20261002_1723.19migrations aplicadas,69tabelasEF com TODAS as colunas comparadas ao modelo (xmin explicitamente em pg_attribute),70tabelaspublic incluindohistory; has-pending-model-changes limpo.
-ProbesSQL com BEGIN/ROLLBACK: lotes0/1/2/4, missingtask→40001 sem eventos/payloads/deletes parciais, terminalinstance semevento. Probe concorrente2conexões:1sucesso e1retry40001, exatamente1evento/1payload. Fixturelimpa seusdados, DBtemporário excluído e serviçoCompose parado; volume preservado. Isso comprova a função opcional, não workflows DurableTask de produto ou provider externo.
+## Resultado por contexto
 
-### Contexto #145 — workflows, implementação parcial
-34regressões backend direcionadas passaram,0falhas/skips: todos os step types em nomes/números snapshot, missing/self/cycle antes de persistir, duas approvals independentes,8branches realmente concorrentes com merge determinístico, claim sem/wrongcapability antesDB e worker system→tenant/restauração. API/engine reais com store InMemory/fakes de agentes; não prova SQL de claim real.
-Frontend lint/build passou após alinhar strings, preservar definição no store, selecionar approval porstep e não confirmar erroHTTP. Ainda faltam browser roundtrip/approval falha, fixturesPostgreSQL adaptadas ao claim tipado e gate integrado. Implementação usa estado isolado porbranch e persistência porbatch, preservando paralelismo; idempotência externa apóscrash permanece limitejá registrado em#120.
+| Contexto | Issue | Evidência atual | Resultado e limite |
+|---|---:|---|---|
+| Autorização/cookie/preview | #140 | TestServer com handlers/controllers/middleware reais; 23 regressões backend. Playwright Chromium executou login, restore, logout, falha no logout e preview XSS. | 23 backend e 4 Chromium passaram. DB/permission store usa EF InMemory; chamadas de orquestração são doubles. |
+| FIDES | #141 | 28 testes FIDES/MAF cobrem chamada direta, streaming, instruções, tools, política A/B e bloqueio antes do provider. Dois testes OCR usam PNG e PDF reais; teste PostgreSQL valida persistência/versionamento e isolamento da política. | 28 + 2 OCR + 1 PostgreSQL passaram. OCR usou o modelo inglês oficial baixado para uma pasta temporária; provider das regressões continuou fake. PostgreSQL usou DB exclusivo em 55432. |
+| ONNX | #142 | 49 regressões cobrem dimensão/canais, overflow, orçamento, configuração, upload/update, worker e preprocessing com imagem pequena real. | 49 passaram. Não força OOM nem valida pesos/modelos de produção. |
+| ACL/RAG/tenancy | #143 | 65 regressões de permissões, grants, isolamento A/B, filtros de salas e upload; a suite Playwright inclui o fluxo RAG. | 65 passaram, 1 teste PostgreSQL ignorado na execução sem DB. Store PostgreSQL/SQLite e Pinecone foram substituídos por InMemory/HTTP fake nos testes de contexto. |
+| Quota/sessões | #144 | 28 testes de quota/stream/reserva e regressões HTTP para REST, SSE, SignalR e chamadas diretas. Teste PostgreSQL concorrente usa 12 instâncias de store e sessões encerradas. | Regressões direcionadas passaram. Na suite completa as três falhas das antigas fixtures NSubstitute foram corrigidas usando o store InMemory real; a execução completa passou. |
+| Workflows | #145 | 34 regressões de backend; 8 testes Chromium de enum/round-trip, múltiplas aprovações e respostas 403/409/500. Cinco testes PostgreSQL cobrem store, lease, espera e snapshot. | Backend/browser/PostgreSQL passaram. Dados de negócio usam store InMemory/fakes quando indicado; os cinco testes SQL foram executados na base isolada. |
+| Analytics/memória | #146/#147 | 14 regressões com escopo DI real, EF InMemory, isolamento A/B, cache por consulta/filtros e invalidação. | 14 passaram. Não demonstra consultas analíticas em servidor PostgreSQL externo. |
+| Tools/YAML | #148 | TestServer cobre rotas, membership revogada, papel Viewer, salvamento/edição da especificação e manifesto versionado. Playwright cobre edição visual/YAML com strings, escapes e configuração. PostgreSQL cobre persistência e isolamento após migration. | Testes direcionados e E2E passaram; migration e persistência foram validadas numa base nova descrita abaixo. |
+| CI/E2E/diagnósticos | #149 | Workflow GitHub inicia frontend; Playwright tem `webServer`; Cypress inicia Vite em porta dedicada; fixtures/mocks usam contratos REST atuais. Helper SQL e launcher exigem o mesmo projeto/base e comparam o manifesto da API. | Lint/build passaram; Playwright configurado para CI passou 48/48 (24 Chromium e 24 Firefox); Cypress passou 1/1. Smoke local da API retornou 200 e a base `review_pr152_api_20261002` recebeu 20 migrations; CI remoto ainda precisa executar após o push final. |
+| IDs/documentação | #150 | Story multi-key usa `BACK-KEYS-020`; US-42 de FinOps e referências históricas permanecem. Regras em AGENTS/GEMINI/workflow/templates dizem PT-BR, issue relacionada, descrição e `Refs`/`Closes`. | R29/R30 implementados. Checker local encontrou 169 documentos, 936 links e 0 destinos quebrados. |
+| SQL DurableTask | #151 | Migration `RepairDurableTaskCompletion`; teste de schema compara todas as colunas EF e executa probes de lote 0/1/2/4, rollback e instância terminal; segundo teste disputa duas conexões concorrentes. | 2 testes DurableTask e 1 teste de concorrência de sessão passaram na base nova, depois de 20 migrations. 70 tabelas públicas; modelo EF sem divergência. |
 
-### Contexto #150 — IDs e regras de commits
-R29: story de multi-key agora BACK-KEYS-020, referências em ADR020/índice/specs/issue61 alinhadas; US-42 FinOps e caminhos preservados. R30: contribuição do usuário em169c3f8 alinha PT-BR/descrição/issues/Refs-Closes. Checker atual:169docs/928links,0quebrados. Reconciliar estados de issues/contratos no gate final antes de conclusão.
+## Suíte completa e navegador
 
-### Contexto #144 — quota/sessões em execução
-28 regressões direcionadas passaram,0falhas/skips: resetUTC com clock, configuração/concorrência, stream completo/cancelado/interrompido/break e reserva InMemory/retomada no teto. PostgreSQL real:1regressão passou criando DB exclusivo review_pr152_sessions_20261002_1708 na porta55432;12instâncias do store concorreram e criaram3sessões, com30registros encerrados sem esconder ativas.18migrations aplicadas,70tabelas public incluindo history; DB removido e serviço parado, volume preservado.
-Implementação ainda em execução: regressão HTTP REST/SSE/SignalR/direct, ausência de usage na interrupção e gate integrado devem ser concluídos antes de marcar R08–R11 totalmente validados. Suite geral/CI não executadas.
+- `dotnet test --no-restore`: **924 aprovados, 23 ignorados, 0 falhas; 947 testes**. PostgreSQL, OCR e Ollama condicionais foram ignorados quando as variáveis/serviços não foram configurados. A execução completa não recebeu `AGENTIC_TEST_POSTGRES`.
+- Playwright pelo comando padrão: **48 aprovadas, 0 falhas** — 24 em Chromium e 24 em Firefox. Os testes de login com API real são excluídos quando `REAL_E2E` está desligado; os fluxos UI incluídos usam API mockada e interface React real.
+- Regressões de aprovação/workflow: **8 aprovadas** com a UI, store e hook reais; a API foi mockada para controlar HTTP 403/409/500.
+- Cypress: **1 aprovado** em Vite iniciado pelo runner na porta 5193; a resposta REST usa API mockada.
+- Frontend: `npm run lint` e `npm run build` passaram no WSL sobre este checkout.
 
-### Contextos #146 e #147 — analytics e cache
-14 testes direcionados passaram,0falhas/skips (analytics e memória). Analytics usa DI scoped real e EF InMemory, sem fake que mantenha DbContext vivo após dispose, cobrindo os4 comandos e filtro A/B. Memória testa duas perguntas, resultado vazio, maxMemories, outro usuário/tenant e invalidação após vectorization. Isso não prova SQL de analytics em PostgreSQL real.
+## Banco novo e migrations
 
-### Contexto #143 — ACL/RAG e isolamento
-65 regressões direcionadas passaram,0falhas,1ignorado preexistente que exige PostgreSQL. API Release e frontend lint/build passaram. Positivos/negativos cobrem Reader/Editor/Admin, grant isolado/expirado, nomes de agentes iguais em A/B, allow-list vazia e filtro tenant/room, associação de chunks no upload.
-Limites: stores Postgres/SQLite em EF InMemory; Pinecone em HTTP fake. PostgreSQL/Pinecone reais e jornada browser de upload não executados neste contexto. Nenhum banco foi alterado.
+Compose: projeto exclusivo `agent-system-pr152-review-20261002x`, imagem PostgreSQL/pgvector 16, binding apenas `127.0.0.1:55432`. Bases temporárias `review_pr152_dynamicagents_20261002` e `review_pr152_gate_20261002` foram criadas dentro desse projeto e migradas do zero. A segunda execução aplicou **20 migrations**, comparou todas as colunas do modelo EF e encontrou **70 tabelas públicas**; os probes de `dt.complete_tasks` passaram para lotes, rollback, término e concorrência. A persistência dinâmica e cinco regressões de `PostgresWorkflowExecutionStoreTests` também passaram. O teste de concorrência de sessões PostgreSQL passou na base nova. `dotnet ef migrations has-pending-model-changes` informou que o snapshot está sincronizado.
 
-### Contexto #142 — orçamento ONNX
-49 regressões ONNX direcionadas Release passaram,0falhas/skips: overflow, negativos, canais, orçamento/configuração, upload/update/legado/worker e pixels/tensors ImageSharp reais pequenos. Nenhum teste provoca OOM. Build/implementação valida antes de imagens/tensores e usa options também no catálogo manual. Limite: EF InMemory e preprocessing real; pesos/outputs/runtime interno fora do orçamento. Confirmação conjunta FIDES/ONNX/RAG:111aprovados,3ignorados,0falhas; não é a suíte inteira.
+Depois dos testes, apenas os bancos temporários criados por esta validação foram removidos e o serviço do Compose foi parado; o volume da execução foi preservado. A porta 5432 e outros projetos/bancos não foram usados.
 
-### Contexto #141 — FIDES nos despachos reais
-Implementação em factory/host com proteção IChatClient, compartilhada com middleware. Regressões Release direcionadas:29 aprovados,3 ignorados,0 falhas no lote FIDES/factory/direct. Provider fake capturou instruções, mensagens, streaming, políticas A/B e rodada de tool; negativos comprovaram zero chamadas. PostgreSQL e duas OCR/Tesseract condicionais ignoradas; isso não valida provider externo/OCR neste gate. Confirmação integrada direcionada será registrada no gate final.
+O helper `compose-target.mjs` foi exercitado: a consulta `SELECT 1` passou na base `review_pr152_*`; apontar para `backend_validation` foi recusado antes de executar SQL.
 
-### Contexto #140 — autenticação e preview
-- Backend: `dotnet test ... --configuration Release --filter 'FullyQualifiedName~CookieAndOpenAiAuthorizationTests|FullyQualifiedName~ApiKeyAuthenticationTests|FullyQualifiedName~TenantMiddlewareTests'`: **23 aprovados,0 falhas/ignorados**. TestServer usa os controllers/handler/middleware reais e PostgresPermissionService com EF InMemory; orquestrador/quota são doubles. Revogação, inatividade, spoofing, vínculo em outro tenant, papel Viewer e cookie foram exercitados.
-- Frontend: `npm run lint` e `npm run build`: passaram após `npm ci` no lockfile, sem mudar dependências/versões.
-- `auth-cookie-skills.e2e.spec.ts`, Chromium: **4 aprovados**. UI React real, API mockada; asserts provam cookie HttpOnly/sem chave JS, restore/logout/erro e renderização Markdown antes da negação de XSS.
-- Ambiente local: Vite5193; Playwright1.60 em WSL Ubuntu26 usa runtime Ubuntu24 via override documentado pelo pacote e bibliotecas oficiais. Isso não afirma suporte oficial ao Ubuntu26 nem valida backend/provider produção.
-- Falhas iniciais de fixture (IQuotaEnforcer ausente e glob interceptando módulos JS) corrigidas; os resultados finais acima foram reexecutados. Gate integrado PostgreSQL/CI ainda pendente.
+O smoke do launcher verificou manifesto `api-target.json`, `/health` com HTTP 200 e 20 migrations na mesma base consultada pelo helper Compose. O banco temporário foi removido e o serviço parado; não houve API ou banco preexistente na porta 5188/55432.
 
-| Verificação | SHA/ambiente/comando | Resultado/evidência |
-|---|---|---|
-| Backend Release/regressões/suíte | pendente | não executado |
-| Frontend lint/build/E2E Playwright/Cypress | pendente | não executado |
-| Banco vazio migrations/schema/modelo | PostgreSQL 16 Compose55432; DB exclusivo a registrar | não executado nesta correção |
-| dt.complete_tasks0/1/2+ e atomicidade | DB exclusivo, probes com rollback | não executado nesta correção |
-| Links locais/índices | pendente | não executado |
-| Diff/staging/commits/PR/base/remote | pendente | não executado |
+## Migration e SQL opcional DurableTask
 
-## Limites da evidência
-A revisão anterior contabilizou732 paths, leu código/testes por diff/contexto e classificou históricos/gerados por origem/refs; isso não é evidência de todos os cenários em runtime. Os18 migrations/69 tabelas da baseline foram verificados antes destas correções; repetir no gate da entrega. Não reutilizar esses números como prova desta branch.
-Provider fake, skips, testes unitários, SQL real e UI/E2E serão separados. Sem prova de provider produção, protocolos preview ou multihost de supervisor nesta entrega. Cobertura medida será registrada, sem inferir cumprimento de 80%.
+`DurableTaskCompletionPostgresRegressionTests` foi executado numa base recém-criada depois das 20 migrations atuais. `FreshSchemaMatchesEfAndCompletesAtomicTaskBatches` comparou todas as colunas EF, validou o schema e executou os probes SQL: lotes 0/1/2/4, rollback sem efeitos parciais e instância terminal sem evento obsoleto. `CompetingCompletionPublishesExactlyOneResultAndRollsBackTheLoser` executou duas conexões concorrentes e observou um sucesso e um retry `40001`, com um evento e um payload. Ambos passaram. A sessão concorrente do PostgreSQL também passou nessa base.
 
-## Segurança operacional
-Nunca conectar 5432 ou outro banco. Registrar Compose/porta/db/container resolvidos antes de qualquer teste. Criar e excluir apenas DB temporário próprio; restaurar serviço parado se foi iniciado pela validação; preservar volume/bancos existentes. Não publicar chaves, dados sensíveis ou logs brutos.
+## Ambientes e evidências anteriores
 
-## Auditoria de conclusão
-Antes de concluir a epic: cada R01–R32 precisa de commit e verificação específica que cubra o defeito original. Critérios de issues antigas são avaliados inteiros, sem fechar por subconjunto. Descrições/PR devem diferenciar decisão, implementação e validação.
+As execuções direcionadas registraram: #140 23 backend/4 Chromium; #141 28 testes FIDES/MAF, 2 OCR e 1 PostgreSQL; #142 49; #143 65/1 PostgreSQL ignorado; #144 28 e concorrência PostgreSQL; #145 34 backend/8 browser/5 PostgreSQL; #146/#147 14. A suite completa atual passou com 924 aprovados, 23 ignorados e zero falhas.
+
+Testes com provider fake provam o conteúdo enviado ao contrato fake e a ordem de bloqueio. Eles não provam disponibilidade, registro em produção, streaming de provider real ou integração Gateway. OCR de imagem e PDF passou em execução separada com o modelo inglês oficial; a suite completa sem configurar OCR os mantém entre os 23 ignorados. A2A/AG-UI permanecem preview; retomada do supervisor em outro host segue na issue futura #134.
+
+## Gates ainda abertos
+
+| Gate | Estado |
+|---|---|
+| SQL `dt.complete_tasks` na base recém-migrada com 20 migrations | Concluído: schema/colunas EF, batches, rollback, concorrência e sessão passaram |
+| Checker atualizado de links e índices após esta edição | Passou: 169 documentos, 936 links, 0 quebrados |
+| Commit por contexto para alterações locais ainda sem commit | Pendente |
+| Push dos commits finais e CI remoto do PR #152 | Pendente |
+| Confirmar issues relacionadas no PR apenas quando critérios integrais estiverem comprovados | Pendente |
+
+Nenhuma issue original deve ser fechada por subconjunto de critérios. O relatório separa implementação, validação local, integrações condicionais e CI remoto; não trata doubles ou skips como prova de serviços externos.
