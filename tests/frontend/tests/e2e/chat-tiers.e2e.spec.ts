@@ -15,11 +15,11 @@ test.describe('Chat Agent Tiers - Nomenclatura e Visual (Gap 1)', () => {
   // Executa após a spec finalizar para limpar as sessões de chat criadas no banco real
   test.afterAll(async ({ playwright }) => {
     if (process.env.REAL_E2E === 'true') {
-      const baseURL = process.env.BASE_URL || 'http://localhost/';
+      const baseURL = process.env.BASE_URL || 'http://127.0.0.1:5194';
       const apiContext = await playwright.request.newContext({
         baseURL,
         extraHTTPHeaders: {
-          'X-Api-Key': 'minha-chave-secreta-admin-123',
+          'X-Api-Key': process.env.E2E_API_KEY!,
         },
       });
 
@@ -60,7 +60,7 @@ test.describe('Chat Agent Tiers - Nomenclatura e Visual (Gap 1)', () => {
       return;
     }
 
-    await page.route('**/api/llm/configuration', async (route) => {
+    await page.route('**/api/chat/configuration', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -80,8 +80,8 @@ test.describe('Chat Agent Tiers - Nomenclatura e Visual (Gap 1)', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: 'Eu sou um agente de nível intermediário superior.',
-          agentUsed: 'MasterAgent',
+          content: 'Eu sou um agente de nível intermediário superior.',
+          agentName: 'MasterAgent',
           agentTier: 1, // Tier 1 no backend = Master
           success: true,
         }),
@@ -94,7 +94,7 @@ test.describe('Chat Agent Tiers - Nomenclatura e Visual (Gap 1)', () => {
 
     const badges = await chatPage.getAgentBadges();
     expect(badges.length).toBeGreaterThan(0);
-    
+
     const matchedBadge = badges.find(b => b.agentName === 'MasterAgent');
     expect(matchedBadge).toBeDefined();
 
@@ -118,8 +118,8 @@ test.describe('Chat Agent Tiers - Nomenclatura e Visual (Gap 1)', () => {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            response: `Resposta do agente de Tier ${testTier.tier}`,
-            agentUsed: testTier.name,
+            content: `Resposta do agente de Tier ${testTier.tier}`,
+            agentName: testTier.name,
             agentTier: testTier.tier,
             success: true,
           }),
@@ -132,9 +132,9 @@ test.describe('Chat Agent Tiers - Nomenclatura e Visual (Gap 1)', () => {
 
       const badges = await chatPage.getAgentBadges();
       const currentBadge = badges.find(b => b.agentName === testTier.name);
-      
+
       expect(currentBadge).toBeDefined();
-      
+
       // Valida se o texto exibido coincide com os Tiers oficiais da especificação
       expect(currentBadge?.tierLabel).toBe(testTier.expected);
     }

@@ -20,7 +20,7 @@ async function mockApi(page: Page) {
   await page.addInitScript(() => {
     localStorage.removeItem('agentic_auth_token')
     localStorage.setItem('agentic_api_key', 'old-client-credential')
-    ;(window as Window & { __skillXss: boolean }).__skillXss = false
+    ;(window as unknown as Window & { __skillXss: boolean }).__skillXss = false
   })
   await page.route('**/hubs/**', route => route.abort())
   await page.route('**/api/**', async route => {
@@ -119,6 +119,6 @@ test('stored skill preview renders Markdown but never executes HTML or javascrip
   await expect(page.getByPlaceholder('Escreva as diretrizes Markdown de sistema que definem a habilidade...')).toHaveValue(payload)
   await expect(page.getByRole('heading', { name: 'Conteúdo seguro', exact: true })).toBeVisible()
   await expect(page.locator('img[src="x"]')).toHaveCount(0)
-  expect(await page.evaluate(() => (window as Window & { __skillXss: boolean }).__skillXss)).toBe(false)
+  expect(await page.evaluate(() => (window as unknown as Window & { __skillXss: boolean }).__skillXss)).toBe(false)
   expect(await page.getByRole('link', { name: 'Link perigoso' }).getAttribute('href')).not.toMatch(/^javascript:/i)
 })

@@ -53,4 +53,5 @@ coverage/
 **/playwright-report/
 **/test-results/
 **/playwright/.cache/
+tests/frontend/agent-contracts-results/
 

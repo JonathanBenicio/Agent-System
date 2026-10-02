@@ -2,17 +2,33 @@ $ErrorActionPreference = 'Stop'
 $taskRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $taskRuntime = if ($env:BACKEND_VALIDATION_OUTPUT_DIR) { $env:BACKEND_VALIDATION_OUTPUT_DIR } else { Join-Path $taskRoot 'tests/TestResults/backend-core-remediation/current' }
 $taskHistoricalOutput = [System.IO.Path]::GetFullPath((Join-Path $taskRoot 'tests/TestResults/backend-documentation/current')).TrimEnd('\', '/')
+$taskListener = Get-NetTCPConnection -LocalPort 5188 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($taskListener) { throw 'Port 5188 is already occupied; refusing to launch diagnostics against an existing API.' }
 if ([System.IO.Path]::GetFullPath($taskRuntime).TrimEnd('\', '/') -ieq $taskHistoricalOutput) {
   throw 'Refusing to write API logs into historical backend-documentation validation artifacts.'
 }
+$taskComposeProject = $env:BACKEND_VALIDATION_COMPOSE_PROJECT
+$taskDatabase = $env:BACKEND_VALIDATION_DATABASE
+if ([string]::IsNullOrWhiteSpace($taskComposeProject) -or $taskComposeProject -notmatch '^[a-z0-9][a-z0-9_-]*$') { throw 'Set BACKEND_VALIDATION_COMPOSE_PROJECT to the unique Compose project used for this run.' }
+if ([string]::IsNullOrWhiteSpace($taskDatabase) -or $taskDatabase -notmatch '^review_pr152_[a-z0-9_]+$') { throw 'Set BACKEND_VALIDATION_DATABASE to an exclusive review_pr152_* database.' }
 New-Item -ItemType Directory -Path $taskRuntime -Force | Out-Null
 $taskDll = Join-Path $taskRoot 'src/AgenticSystem.Api/bin/Release/net10.0/AgenticSystem.Api.dll'
 if (!(Test-Path -LiteralPath $taskDll)) { throw 'Build Release da API necessário.' }
+$taskTargetManifest = [ordered]@{
+  composeProject = $taskComposeProject
+  database = $taskDatabase
+  host = '127.0.0.1'
+  port = 55432
+}
+[System.IO.File]::WriteAllText(
+  (Join-Path $taskRuntime 'api-target.json'),
+  ($taskTargetManifest | ConvertTo-Json -Compress),
+  [System.Text.UTF8Encoding]::new($false))
 # Synthetic credentials exclusively for the loopback validation database.
 $taskConfig = @{
   ASPNETCORE_ENVIRONMENT = 'Validation'
   ASPNETCORE_URLS = 'http://127.0.0.1:5188'
-  ConnectionStrings__SessionStore = 'Host=127.0.0.1;Port=55432;Database=backend_validation;Username=validation;Password=validation_local_only'
+  ConnectionStrings__SessionStore = "Host=127.0.0.1;Port=55432;Database=$taskDatabase;Username=validation;Password=validation_local_only"
   AgenticSystem__AdminApiKey = 'documentation-validation-bootstrap-only'
   AgenticSystem__Jwt__SecretKey = 'documentation-validation-jwt-secret-local-only-2026'
   AgenticSystem__Encryption__Key = '0123456789abcdef0123456789abcdef'

@@ -7,11 +7,11 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
   // Executa após a spec finalizar para limpar as sessões de chat e agentes do banco real
   test.afterAll(async ({ playwright }) => {
     if (process.env.REAL_E2E === 'true') {
-      const baseURL = process.env.BASE_URL || 'http://localhost/';
+      const baseURL = process.env.BASE_URL || 'http://127.0.0.1:5194';
       const apiContext = await playwright.request.newContext({
         baseURL,
         extraHTTPHeaders: {
-          'X-Api-Key': 'minha-chave-secreta-admin-123',
+          'X-Api-Key': process.env.E2E_API_KEY!,
         },
       });
 
@@ -66,7 +66,7 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
     }
 
     // Mock do provedor e modelo LLM
-    await page.route('**/api/llm/configuration', async (route) => {
+    await page.route('**/api/chat/configuration', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -134,7 +134,7 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
         target.dispatchEvent(dragEvent);
       }
     });
-    
+
     // O overlay deve sumir da tela
     await expect(overlay).not.toBeVisible();
 
@@ -171,8 +171,8 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: 'De acordo com a política corporativa, o isolamento multi-tenant é garantido nativamente no MAF.',
-          agentUsed: 'ChiefAgent',
+          content: 'De acordo com a política corporativa, o isolamento multi-tenant é garantido nativamente no MAF.',
+          agentName: 'ChiefAgent',
           agentTier: 0,
           success: true,
           citations: [
@@ -225,12 +225,12 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: 'Executei as rotinas e consolidei os dados da pesquisa.',
-          agentUsed: 'MasterAgent',
+          content: 'Executei as rotinas e consolidei os dados da pesquisa.',
+          agentName: 'MasterAgent',
           agentTier: 1,
           success: true,
-          actions: ['Buscar Dados', 'Consolidar Relatório'],
-          tools: ['brave_web_search', 'postgresql_reader'],
+          actionsPerformed: ['Buscar Dados', 'Consolidar Relatório'],
+          toolsUsed: ['brave_web_search', 'postgresql_reader'],
         }),
       });
     });
@@ -257,7 +257,7 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
     // 3. Simula uma mensagem com Memória Recuperada no histórico
     const targetSessionId = 'session-com-memoria-123';
 
-    await page.route('**/api/session**', async (route) => {
+    await page.route(/\/api\/session(?:\?.*)?$/, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -271,11 +271,11 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
       });
     });
 
-    await page.route(`**/api/session/${targetSessionId}/messages`, async (route) => {
+    await page.route(`**/api/session/${targetSessionId}`, async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify([
+        body: JSON.stringify({ id: targetSessionId, messages: [
           {
             id: 'm1',
             role: 'user',
@@ -288,8 +288,13 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
             role: 'system',
             content: 'Aviso do Sistema: Erro ao persistir sessão.',
             timestamp: new Date().toISOString(),
+          },
+          {
+            id: 'm3', role: 'assistant', content: 'Resposta histórica com fonte', agentName: 'ChiefAgent',
+            timestamp: new Date().toISOString(),
+            citations: [{ id: 'history-source', sourceDocumentName: 'historico.pdf', relevantExcerpt: 'Fonte histórica', confidence: 0.9 }],
           }
-        ]),
+        ] }),
       });
     });
 
@@ -304,6 +309,7 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
     // Valida se o indicador visual de Memória Recuperada é renderizado na mensagem do usuário
     const memoryBadge = page.locator('text=Memória Recuperada');
     await expect(memoryBadge).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Ver citação' })).toContainText('historico.pdf');
 
     // Valida se o banner especial de sistema de erro com triângulo vermelho é renderizado
     const alertSystemMessage = page.locator('.flex.items-start.gap-3.py-3.px-4.rounded-lg.bg-red-950\\/30');
@@ -311,16 +317,16 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
     await expect(alertSystemMessage).toContainText('Aviso do Sistema: Erro ao persistir sessão.');
   });
 
-  test('deve bloquear o acesso ao RAG se o agente não possuir nenhuma sala de conhecimento associada (Zero Trust - Opção B)', async ({ chatPage, agentsPage, page }) => {
+  test('deve bloquear o acesso ao RAG se o agente não possuir nenhuma sala de conhecimento associada (Zero Trust - Opção B)', async ({ chatPage, agentsPage, page, playwright }) => {
     const isRealE2E = process.env.REAL_E2E === 'true';
     if (isRealE2E) {
       test.setTimeout(90000);
-      
-      const baseURL = process.env.BASE_URL || 'http://localhost/';
-      const apiContext = await page.request.newContext({
+
+      const baseURL = process.env.BASE_URL || 'http://127.0.0.1:5194';
+      const apiContext = await playwright.request.newContext({
         baseURL,
         extraHTTPHeaders: {
-          'X-Api-Key': 'minha-chave-secreta-admin-123',
+          'X-Api-Key': process.env.E2E_API_KEY!,
           'Content-Type': 'application/json',
         },
       });
@@ -338,7 +344,7 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
         instructions: 'Você é ZeroTrustAgent. Responda apenas com base no seu conhecimento geral.',
         configuration: {}
       };
-      
+
       const createRes = await apiContext.post('/api/agent/agents', {
         data: zeroTrustAgentPayload,
       });
@@ -381,8 +387,8 @@ test.describe('Chat Advanced Features - RAG, Citations & Workflows', () => {
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({
-            response: 'Olá, sou o ZeroTrustAgent. Meu acesso RAG foi bloqueado.',
-            agentUsed: 'ZeroTrustAgent',
+            content: 'Olá, sou o ZeroTrustAgent. Meu acesso RAG foi bloqueado.',
+            agentName: 'ZeroTrustAgent',
             agentTier: 2,
             success: true,
             citations: [], // Sem citações!

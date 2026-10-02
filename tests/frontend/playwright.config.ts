@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+if (process.env.RUN_API_TESTS === 'true' && !process.env.API_URL) throw new Error('RUN_API_TESTS requires API_URL for a prepared backend.');
 
 /**
  * Playwright configuration for Agentic System Frontend QA Suite
@@ -31,7 +32,7 @@ export default defineConfig({
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
-    baseURL: process.env.BASE_URL || 'http://localhost:5173',
+    baseURL: process.env.BASE_URL || 'http://127.0.0.1:5194',
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
@@ -41,16 +42,17 @@ export default defineConfig({
 
   /* Configure projects for major browsers and API testing */
   projects: [
-    {
+    ...(process.env.RUN_API_TESTS === 'true' ? [{
       name: 'API Tests',
       testMatch: /.*\.api\.spec\.ts/,
       use: {
-        baseURL: process.env.API_URL || 'https://localhost:5001',
+        baseURL: process.env.API_URL,
         ignoreHTTPSErrors: true,
       },
-    },
+    }] : []),
     {
       name: 'E2E Chromium',
+      testIgnore: process.env.REAL_E2E === 'true' ? [] : ['**/login-apikey.e2e.spec.ts'],
       testMatch: /.*\.e2e\.spec\.ts/,
       use: {
         ...devices['Desktop Chrome'],
@@ -59,6 +61,7 @@ export default defineConfig({
     },
     {
       name: 'E2E Firefox',
+      testIgnore: process.env.REAL_E2E === 'true' ? [] : ['**/login-apikey.e2e.spec.ts'],
       testMatch: /.*\.e2e\.spec\.ts/,
       use: {
         ...devices['Desktop Firefox'],
@@ -67,11 +70,11 @@ export default defineConfig({
     },
   ],
 
-  /* Run your local dev server before starting the tests (Optional, but great for standalone execution) */
-  // webServer: {
-  //   command: 'npm run dev',
-  //   url: 'http://localhost:5173',
-  //   reuseExistingServer: !process.env.CI,
-  //   cwd: '../../frontend',
-  // },
+  webServer: {
+    command: 'node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5194 --strictPort',
+    url: 'http://127.0.0.1:5194',
+    reuseExistingServer: false,
+    cwd: '../../frontend',
+    timeout: 60000,
+  },
 });

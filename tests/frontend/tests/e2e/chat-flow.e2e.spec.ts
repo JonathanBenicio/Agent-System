@@ -7,11 +7,11 @@ test.describe('Chat Flow - Geral', () => {
   // Executa uma única vez após a spec finalizar para limpar as sessões de chat criadas no banco real
   test.afterAll(async ({ playwright }) => {
     if (process.env.REAL_E2E === 'true') {
-      const baseURL = process.env.BASE_URL || 'http://localhost/';
+      const baseURL = process.env.BASE_URL || 'http://127.0.0.1:5194';
       const apiContext = await playwright.request.newContext({
         baseURL,
         extraHTTPHeaders: {
-          'X-Api-Key': 'minha-chave-secreta-admin-123',
+          'X-Api-Key': process.env.E2E_API_KEY!,
         },
       });
 
@@ -54,7 +54,7 @@ test.describe('Chat Flow - Geral', () => {
     }
 
     // Intercepta configuração de LLM para retornar dados consistentes
-    await page.route('**/api/llm/configuration', async (route) => {
+    await page.route('**/api/chat/configuration', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -79,8 +79,8 @@ test.describe('Chat Flow - Geral', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: 'Olá! Sou o Assistente Chief do Agentic System. Como posso ajudar você hoje?',
-          agentUsed: 'ChiefAgent',
+          content: 'Olá! Sou o Assistente Chief do Agentic System. Como posso ajudar você hoje?',
+          agentName: 'ChiefAgent',
           agentTier: 0,
           actionsPerformed: ['Análise de Contexto', 'Geração de Resposta'],
           success: true,
@@ -108,11 +108,11 @@ test.describe('Chat Flow - Geral', () => {
 
     // Obtém as mensagens exibidas na tela
     const messages = await chatPage.getMessages();
-    
+
     // Deve conter a mensagem do usuário e a resposta do assistente
     expect(messages.length).toBeGreaterThanOrEqual(2);
     expect(messages[0]).toContain('Olá, sistema de agentes!');
-    
+
     if (process.env.REAL_E2E === 'true') {
       // Asserção flexível tolerante para o backend/LLM real
       expect(messages[1]).not.toBeNull();
@@ -125,7 +125,7 @@ test.describe('Chat Flow - Geral', () => {
     // Valida se o badge do agente foi renderizado corretamente
     const badges = await chatPage.getAgentBadges();
     expect(badges.length).toBeGreaterThan(0);
-    
+
     if (process.env.REAL_E2E !== 'true') {
       expect(badges[0].agentName).toBe('ChiefAgent');
     }

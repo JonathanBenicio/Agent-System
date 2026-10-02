@@ -1,10 +1,12 @@
 import { defineConfig } from 'cypress'
 import { createHmac } from 'node:crypto'
 
+if (process.env.RUN_API_TESTS === 'true' && !process.env.API_URL) throw new Error('RUN_API_TESTS requires API_URL and a prepared backend/provider/database.')
+
 export default defineConfig({
   e2e: {
-    baseUrl: 'http://localhost:5000',
-    specPattern: 'cypress/e2e/**/*.cy.{js,ts}',
+    baseUrl: 'http://127.0.0.1:5193',
+    specPattern: process.env.RUN_API_TESTS === 'true' ? 'cypress/e2e/**/*.cy.{js,ts}' : 'cypress/e2e/*.mock.cy.js',
     supportFile: false,
     video: false,
     setupNodeEvents(on) {
@@ -23,6 +25,6 @@ export default defineConfig({
     },
   },
   env: {
-    API_BASE_URL: 'http://localhost:5000',
+    API_BASE_URL: process.env.API_URL || 'http://127.0.0.1:5188',
   },
 })
