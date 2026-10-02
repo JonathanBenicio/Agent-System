@@ -10,14 +10,27 @@ import type {
   SkillSummary
 } from '@/types/api'
 
+function toBackendSpecification(spec: AgentSpecification) {
+  return { ...spec, instructions: spec.systemPrompt ?? spec.instructions ?? '',
+    configuration: { ...spec.configuration, maxConcurrency: spec.maxConcurrency, timeoutSeconds: spec.timeoutSeconds } }
+}
+
+function fromBackendAgent(agent: AgentInfo): AgentInfo {
+  return { ...agent, systemPrompt: agent.instructions ?? agent.systemPrompt ?? '',
+    capabilities: agent.capabilities ?? [],
+    toolNames: agent.availableTools ?? agent.toolNames ?? [],
+    maxConcurrency: Number(agent.configuration?.maxConcurrency ?? agent.maxConcurrency ?? 5),
+    timeoutSeconds: Number(agent.configuration?.timeoutSeconds ?? agent.timeoutSeconds ?? 30) }
+}
+
 export const agentApi = {
-  list: () => get<AgentInfo[]>('/api/agent/agents'),
-  listAll: () => get<AgentInfo[]>('/api/agent/agents/all'),
+  list: async () => (await get<AgentInfo[]>('/api/agent/agents')).map(fromBackendAgent),
+  listAll: async () => (await get<AgentInfo[]>('/api/agent/agents/all')).map(fromBackendAgent),
   listByTier: (tier: number) => get<AgentInfo[]>(`/api/agent/agents/tier/${tier}`),
-  get: (name: string) => get<AgentInfo>(`/api/agent/agents/${encodeURIComponent(name)}`),
-  create: (spec: AgentSpecification) => post<AgentInfo>('/api/agent/agents', spec),
+  get: async (name: string) => fromBackendAgent(await get<AgentInfo>(`/api/agent/agents/${encodeURIComponent(name)}`)),
+  create: (spec: AgentSpecification) => post<AgentInfo>('/api/agent/agents', toBackendSpecification(spec)),
   update: (name: string, spec: AgentSpecification) =>
-    put<AgentInfo>(`/api/agent/agents/${encodeURIComponent(name)}`, spec),
+    put<AgentInfo>(`/api/agent/agents/${encodeURIComponent(name)}`, toBackendSpecification(spec)),
   delete: (name: string) => del(`/api/agent/agents/${encodeURIComponent(name)}`),
   validateYaml: (yaml: string) => post<YamlValidationResult>('/api/agent/agents/validate-yaml', { yaml }),
   saveYaml: (yaml: string) => post<{ agent: AgentInfo; version?: AgentVersion }>('/api/agent/agents/save-yaml', { yaml }),

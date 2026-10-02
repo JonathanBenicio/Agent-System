@@ -67,6 +67,7 @@ export const AutonomyColors: Record<number, string> = {
 // ══════════════════════════════════════
 
 export interface AgentInfo {
+  instructions?: string
   name: string
   description: string
   tier: AgentTier
