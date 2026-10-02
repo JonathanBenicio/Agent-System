@@ -215,7 +215,7 @@ export function WorkflowBuilderPage() {
       x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
       y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
     });
-    addNode({ id, type: 'agent', position, data: { label: 'New Agent Task', agentName: 'orchestrator', stepType: 0 } });
+    addNode({ id, type: 'agent', position, data: { label: 'New Agent Task', agentName: 'orchestrator', stepType: 'agent' } });
   };
 
   const loadWorkflow = async (id: string) => {
@@ -234,7 +234,7 @@ export function WorkflowBuilderPage() {
       x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
       y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
     });
-    addNode({ id, type: 'tool', position, data: { label: 'New Tool Task', toolName: 'http_tool', stepType: 0 } });
+    addNode({ id, type: 'tool', position, data: { label: 'New Tool Task', toolName: 'http_tool', stepType: 'action' } });
   };
 
   const onAddDecision = () => {
@@ -243,7 +243,7 @@ export function WorkflowBuilderPage() {
       x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
       y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
     });
-    addNode({ id, type: 'decision', position, data: { label: 'New Decision', condition: '{{previous.result}} == true', stepType: 1 } });
+    addNode({ id, type: 'decision', position, data: { label: 'New Decision', condition: '{{previous.result}} == true', stepType: 'decision' } });
   };
 
   const onAddWait = () => {
@@ -252,7 +252,7 @@ export function WorkflowBuilderPage() {
       x: window.innerWidth / 2 + (Math.random() - 0.5) * 100,
       y: window.innerHeight / 2 + (Math.random() - 0.5) * 100,
     });
-    addNode({ id, type: 'wait', position, data: { label: 'Wait Event', timeout: '00:05:00', stepType: 3 } });
+    addNode({ id, type: 'wait', position, data: { label: 'Wait Event', timeout: '00:05:00', stepType: 'wait' } });
   };
 
   return (

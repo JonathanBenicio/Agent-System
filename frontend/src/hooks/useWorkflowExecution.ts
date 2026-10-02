@@ -248,29 +248,31 @@ export function useWorkflowExecution(executionId: string, workflowName: string, 
     }
   }, [executionId, workflowName])
 
-  const handleApprove = useCallback(async () => {
+  const handleApprove = useCallback(async (stepId?: string) => {
     setApproving(true)
     try {
-      await workflowApi.approveStep(executionId).catch(() => null)
-      setApprovedState('approved')
+      const result = await workflowApi.approveStep(executionId, stepId)
+      setApprovedState(result.status === 3 ? 'pending' : 'approved')
       toast.success('Etapa aprovada com sucesso! Continuando execução do workflow.')
-      setExecState(prev => ({ ...prev, status: 1 }))
+      setExecState(prev => ({ ...prev, status: result.status, steps: result.stepExecutions }))
     } catch (err) {
       console.error(err)
+      toast.error('Não foi possível aprovar a etapa. A decisão não foi confirmada.')
     } finally {
       setApproving(false)
     }
   }, [executionId])
 
-  const handleReject = useCallback(async () => {
+  const handleReject = useCallback(async (stepId?: string) => {
     setApproving(true)
     try {
-      await workflowApi.rejectStep(executionId).catch(() => null)
+      const result = await workflowApi.rejectStep(executionId, stepId)
       setApprovedState('rejected')
       toast.error('Etapa rejeitada. Cancelando execução do workflow.')
-      setExecState(prev => ({ ...prev, status: 6, errorMessage: 'Rejeitado pelo revisor humano' }))
+      setExecState(prev => ({ ...prev, status: result.status, errorMessage: result.errorMessage, steps: result.stepExecutions }))
     } catch (err) {
       console.error(err)
+      toast.error('Não foi possível rejeitar a etapa. A decisão não foi confirmada.')
     } finally {
       setApproving(false)
     }

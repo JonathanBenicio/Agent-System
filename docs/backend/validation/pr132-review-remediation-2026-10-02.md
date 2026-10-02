@@ -22,6 +22,10 @@ Status: em execução; gate integrado da correção ainda não executado.
 
 ## Gate final
 
+### Contexto #145 — workflows, implementação parcial
+34regressões backend direcionadas passaram,0falhas/skips: todos os step types em nomes/números snapshot, missing/self/cycle antes de persistir, duas approvals independentes,8branches realmente concorrentes com merge determinístico, claim sem/wrongcapability antesDB e worker system→tenant/restauração. API/engine reais com store InMemory/fakes de agentes; não prova SQL de claim real.
+Frontend lint/build passou após alinhar strings, preservar definição no store, selecionar approval porstep e não confirmar erroHTTP. Ainda faltam browser roundtrip/approval falha, fixturesPostgreSQL adaptadas ao claim tipado e gate integrado. Implementação usa estado isolado porbranch e persistência porbatch, preservando paralelismo; idempotência externa apóscrash permanece limitejá registrado em#120.
+
 ### Contexto #150 — IDs e regras de commits
 R29: story de multi-key agora BACK-KEYS-020, referências em ADR020/índice/specs/issue61 alinhadas; US-42 FinOps e caminhos preservados. R30: contribuição do usuário em169c3f8 alinha PT-BR/descrição/issues/Refs-Closes. Checker atual:169docs/928links,0quebrados. Reconciliar estados de issues/contratos no gate final antes de conclusão.
 

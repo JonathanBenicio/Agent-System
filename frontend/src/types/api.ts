@@ -659,7 +659,7 @@ export interface WorkflowDefinition {
 export interface WorkflowStep {
   id: string;
   name: string;
-  stepType: number;
+  stepType: 'action' | 'agent' | 'decision' | 'parallel' | 'wait' | 'approval' | 'subworkflow';
   agentName?: string;
   toolName?: string;
   actionDescription?: string;

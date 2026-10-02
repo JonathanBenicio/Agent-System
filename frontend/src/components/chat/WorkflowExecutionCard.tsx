@@ -7,6 +7,7 @@ import {
   X 
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useState } from 'react'
 import { useWorkflowExecution } from '@/hooks/useWorkflowExecution'
 
 interface WorkflowExecutionCardProps {
@@ -27,6 +28,10 @@ export function WorkflowExecutionCard({
     handleApprove,
     handleReject
   } = useWorkflowExecution(executionId, workflowName, initialStatus)
+  const [selectedStepId, setSelectedStepId] = useState('')
+  const pendingSteps = execState.steps.filter(step => step.status === 3)
+  const decisionStepId = pendingSteps.some(step => step.stepId === selectedStepId)
+    ? selectedStepId : pendingSteps[0]?.stepId
 
   const getStatusBadge = (status: number) => {
     switch (status) {
@@ -129,9 +134,17 @@ export function WorkflowExecutionCard({
                 Este fluxo exige a validação e autorização de um operador humano para prosseguir.
               </p>
               
+              {pendingSteps.length > 1 && <label className="mt-3 block text-xs">
+                Etapa para decidir
+                <select aria-label="Etapa para decidir" value={decisionStepId}
+                  onChange={event => setSelectedStepId(event.target.value)}
+                  className="ml-2 rounded-xl bg-zinc-900 p-2">
+                  {pendingSteps.map(step => <option key={step.stepId} value={step.stepId}>{step.stepName || step.stepId}</option>)}
+                </select>
+              </label>}
               <div className="flex items-center gap-3 mt-4">
                 <button
-                  onClick={handleApprove}
+                  onClick={() => handleApprove(decisionStepId)}
                   disabled={approving}
                   aria-label="Aprovar etapa"
                   className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-700 bg-emerald-900/40 hover:bg-emerald-900/70 text-emerald-200 text-xs font-semibold tracking-wide font-mono transition-all duration-150 disabled:opacity-50 select-none scale-100 hover:scale-[1.03] active:scale-95"
@@ -145,7 +158,7 @@ export function WorkflowExecutionCard({
                 </button>
                 
                 <button
-                  onClick={handleReject}
+                  onClick={() => handleReject(decisionStepId)}
                   disabled={approving}
                   aria-label="Rejeitar etapa"
                   className="flex items-center gap-1.5 px-3 py-1.5 border border-rose-700 bg-rose-900/20 hover:bg-rose-900/50 text-rose-300 text-xs font-semibold tracking-wide font-mono transition-all duration-150 disabled:opacity-50 select-none scale-100 hover:scale-[1.03] active:scale-95"

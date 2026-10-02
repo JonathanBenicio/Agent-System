@@ -5,6 +5,10 @@ Alertas de quota seguem o tenant autenticado em `GET /api/v1/alerts` e `POST /ap
 
 ## Convenções
 
+Workflow review #145: `stepType` usa nomes camelCase (action/agent/decision/parallel/wait/approval/subworkflow) nos contratos HTTP e cliente; números explícitos da baseline e8e813b continuam aceitos nos snapshots. O builder conserva os campos da definição ao carregar/salvar, sem reatribuir Decision/Wait pela posição do enum.
+
+Aprovação/rejeição aceita `?stepId=<id>`. Sem stepId, uma única pendente mantém compatibilidade; várias pendentes retornam409 com `pendingStepIds`, e nenhuma decisão é aplicada. A UI permite escolher a etapa e só confirma sucesso após resposta persistida. Definições são validadas pelas dependências efetivas DependsOn antes de salvar/iniciar; ciclos/IDs ausentes falham sem criar execução. Os branches paralelos têm estado próprio e merge em ordem da definição (outputs namespaced por step, primeiro short-key conservado).
+
 Uploads de chat para uma sala enviam `roomId` separado de `source`; o backend verifica escrita antes da ingestão e grava a associação em cada chunk. `source` continua identificando a origem/sessão e nunca concede acesso por si só.
 Base URL configurada pelo host; exemplos usam http://localhost:5188. JSON dos controllers usa camelCase, enums camelCase e omite nulos. Não há envelope único: arrays, objetos, ProblemDetails, texto e respostas vazias coexistem. Exceções não tratadas retornam 500 com error/correlationId e X-Correlation-Id. 429 retorna error e Retry-After. Não assumir correlationId em todos os erros de validação.
 Credenciais: `X-Api-Key` para API key ou `Authorization: Bearer <JWT>` nas rotas autenticadas. O endpoint OpenAI-compatível `/v1/chat/completions` recebe a API key opaca no Bearer. Tenant/membership: [resolução e papéis](access-tenants.md). Auth/tenant/rate limiting ocorrem antes da action.

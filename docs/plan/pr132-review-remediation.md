@@ -29,7 +29,7 @@ Fora do escopo: MAF 1.23, A2A/AGUI preview (#121), Gateway produção/reload (#1
 | #142 onnx | R04 | BACK-REVIEW-139-03 | implementado;49 regressões ONNX; gate integrado pendente |
 | #143 tenancy-rag | R06, R07, R19, R23 | BACK-REVIEW-139-04 | implementado;65 regressões/1skip + lint/build; PG/browser upload pendentes |
 | #144 quotas | R08, R09, R10, R11 | BACK-REVIEW-139-05 | em execução;28 regressões + reserva PG real passaram; gate HTTP/integrado pendente |
-| #145 workflows | R12, R13, R14, R15, R16, R25 | BACK-REVIEW-139-06 | pendente |
+| #145 workflows | R12, R13, R14, R15, R16, R25 | BACK-REVIEW-139-06 | implementado parcialmente;34regressões backend + lint/build; browser/PG/gate pendentes |
 | #146 analytics | R17 | BACK-REVIEW-139-07 | implementado; DI scoped real/EF InMemory; gate PG pendente |
 | #147 memory | R18 | BACK-REVIEW-139-08 | implementado;cache por consulta/filtros/geração; regressões passaram |
 | #148 agent-contracts | R22, R24 | BACK-REVIEW-139-09 | pendente |
