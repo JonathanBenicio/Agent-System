@@ -55,7 +55,7 @@ Testes com provider fake provam o conteúdo enviado ao contrato fake e a ordem d
 |---|---|
 | SQL `dt.complete_tasks` na base recém-migrada com 20 migrations | Concluído: schema/colunas EF, batches, rollback, concorrência e sessão passaram |
 | Checker atualizado de links e índices após esta edição | Passou: 169 documentos, 936 links, 0 quebrados |
-| Commits por contexto | Concluído localmente; push final ainda pendente após a atualização de cobertura advisory |
+| Commits por contexto | Concluído e publicado; commit documental `f99fa66` sincroniza plano, evidências e rastreabilidade pública |
 | CI GitHub | Passou em 2026-10-02 no SHA `8ba0dd4`: build-and-test, security-scan e frontend-e2e-playwright verdes. Cobertura observada em 15,3%, informativa por decisão do usuário. |
 | Issues relacionadas no PR | Concluído: #140–#149 relacionadas ao #152. #139, #150 e #151 ficam para a promoção. As 13 issues permanecem abertas porque o PR tem base não padrão e só a integração à branch padrão fecha automaticamente. |
 
