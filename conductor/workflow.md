@@ -18,5 +18,5 @@ Comandos/revisão/ambiente/resultados no plano/relatório. Estados: passou, falh
 Cobertura inferior a 80% e bloqueios aparecem no PR; exigência não é rebaixada.
 
 ## Entrega
-[Commits](../templates/commit-rules.md): preservar staging alheio, sem git add .; Refs durante parcial, Closes com todos os critérios cumpridos. Sem commits vazios/notas obrigatórias. [PR](../templates/pr-template.md) com resultados reais/gaps; draft quando qualidade/isolamento não comprovados.
+[Commits](../templates/commit-rules.md): todo commit referencia issue(s), tem título e corpo em PT-BR e descreve os principais pontos alterados/adicionados; `Refs` para parcial, `Closes` só com todos os critérios cumpridos e fechamento intencional. Preservar staging alheio, usar caminhos explícitos e não usar `git add .`. Sem commits vazios/git notes obrigatórias. [PR](../templates/pr-template.md) com resultados reais/gaps; draft quando qualidade/isolamento não comprovados.
 Sincronizar README, docs/INDEX, CONSOLIDATED_DOCS, stories e tracks. Merge/deploy requerem autorização própria.
