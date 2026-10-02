@@ -54,18 +54,24 @@ export const knowledgeRoomApi = {
 
 export const ragApi = {
   stats: () => get<RagStats>('/api/document/stats'),
-  ingest: (file: File, source?: string) => {
+  ingest: (file: File, source?: string, roomId?: string) => {
     const formData = new FormData()
     formData.append('file', file)
-    const qs = source ? `?source=${encodeURIComponent(source)}` : ''
+    const params = new URLSearchParams()
+    if (source) params.set('source', source)
+    if (roomId) params.set('roomId', roomId)
+    const qs = params.size ? `?${params.toString()}` : ''
     return postForm<IngestDocumentResponse>(`/api/document/ingest${qs}`, formData)
   },
-  ingestBatch: (files: FileList | File[], source?: string) => {
+  ingestBatch: (files: FileList | File[], source?: string, roomId?: string) => {
     const formData = new FormData()
     for (let i = 0; i < files.length; i++) {
       formData.append('files', files[i])
     }
-    const qs = source ? `?source=${encodeURIComponent(source)}` : ''
+    const params = new URLSearchParams()
+    if (source) params.set('source', source)
+    if (roomId) params.set('roomId', roomId)
+    const qs = params.size ? `?${params.toString()}` : ''
     return postForm<{ total: number; succeeded: number; failed: number; results: unknown[] }>(`/api/document/ingest/batch${qs}`, formData)
   },
 }

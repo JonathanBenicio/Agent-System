@@ -4,6 +4,8 @@ Este documento descreve os contratos da branch `fix/backend-core-tenancy`. O est
 
 ## Identidade, membership e papéis
 
+Correção #143: ingestão simples/batch em sala exige ACL Editor/Admin no tenant real. Reader e grant de suporte sem ACL válida não autorizam escrita. Catálogo dinâmico InMemory e salas InMemory são particionados por tenant; a ausência de contexto não cria tenant implícito. `room_ids` é uma allow-list de `room_id`, acompanhada de `tenant_id`, também em InMemory/SQLite/Pinecone; lista vazia nega a busca.
+
 Correção #140/PR #152: o navegador autentica API keys por cookie HttpOnly, sem gravar ou reenviar a chave no localStorage, store JavaScript ou headers dos clientes/hubs. `GET /api/auth/session` valida a sessão pelo pipeline e retorna o subject/tenant/papéis; logout exige sucesso do backend antes de limpar a interface. JWT explícito continua sendo um modo separado.
 
 OpenAI compatível (`/v1/chat/completions` e `/v1/models`) usa o mesmo pipeline de autenticação e middleware tenant/membership. `Authorization: <raw-key>` é suportado por compatibilidade apenas sob `/v1`, com as mesmas negações de revogação, tenant inativo e spoofing do Bearer opaco. O campo `user` do request não vira identidade de autorização; o principal autenticado define o owner. O controller conserva o contexto e o plano resolvidos pelo middleware. [Evidência da correção](validation/pr132-review-remediation-2026-10-02.md).

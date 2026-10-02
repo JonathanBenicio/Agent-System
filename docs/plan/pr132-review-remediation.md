@@ -27,7 +27,7 @@ Fora do escopo: MAF 1.23, A2A/AGUI preview (#121), Gateway produção/reload (#1
 | #140 auth | R02, R03, R20, R21 | BACK-REVIEW-139-01 | implementado e validado por contexto; gate integrado pendente |
 | #141 fides | R01 | BACK-REVIEW-139-02 | implementado;29 regressões/3skips; gate integrado pendente |
 | #142 onnx | R04 | BACK-REVIEW-139-03 | implementado;49 regressões ONNX; gate integrado pendente |
-| #143 tenancy-rag | R06, R07, R19, R23 | BACK-REVIEW-139-04 | pendente |
+| #143 tenancy-rag | R06, R07, R19, R23 | BACK-REVIEW-139-04 | implementado;65 regressões/1skip + lint/build; PG/browser upload pendentes |
 | #144 quotas | R08, R09, R10, R11 | BACK-REVIEW-139-05 | pendente |
 | #145 workflows | R12, R13, R14, R15, R16, R25 | BACK-REVIEW-139-06 | pendente |
 | #146 analytics | R17 | BACK-REVIEW-139-07 | pendente |
@@ -46,8 +46,8 @@ IDs seguem a ordem do relatório final publicado nesta conversa. Um achado só m
 | R03 | Stored XSS no preview de skills | SkillsPage | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
 | R04 | Dimensões ONNX sem orçamento | OnnxModelController / DynamicOnnxProcessorTool | [#142](https://github.com/JonathanBenicio/Agent-System/issues/142) | orçamento64MiB/dim4096 com overflow seguro e validação antes de alocar;49 regressões |
 | R05 | CI E2E sem servidor | ci.yml / Playwright | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
-| R06 | Ingestão aceita Reader | DocumentController | [#143](https://github.com/JonathanBenicio/Agent-System/issues/143) | pendente |
-| R07 | Agentes InMemory sem partição tenant | InMemoryDynamicAgentRepository | [#143](https://github.com/JonathanBenicio/Agent-System/issues/143) | pendente |
+$165 regressões + lint/build por contexto; PG/browser upload pendentes |
+$165 regressões + lint/build por contexto; PG/browser upload pendentes |
 | R08 | Quota diária InMemory sem reset | InMemoryTenantQuotaRepository | [#144](https://github.com/JonathanBenicio/Agent-System/issues/144) | pendente |
 | R09 | Consumo de stream interrompido perdido | TenantQuotaChatClient | [#144](https://github.com/JonathanBenicio/Agent-System/issues/144) | pendente |
 | R10 | Contagem de sessões truncada antes de filtrar | TenantIsolationService | [#144](https://github.com/JonathanBenicio/Agent-System/issues/144) | pendente |
@@ -59,11 +59,11 @@ IDs seguem a ordem do relatório final publicado nesta conversa. Um achado só m
 | R16 | Claim global sem capability de sistema | WorkflowExecutionBackgroundService / PostgresWorkflowStore | [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) | pendente |
 | R17 | Analytics consulta contexto descartado | TenantAnalyticsTool | [#146](https://github.com/JonathanBenicio/Agent-System/issues/146) | pendente |
 | R18 | Cache de memória não inclui consulta | MemoryInjectionService | [#147](https://github.com/JonathanBenicio/Agent-System/issues/147) | pendente |
-| R19 | room_ids não traduzido nos fallbacks | vector stores / RAGContextProvider | [#143](https://github.com/JonathanBenicio/Agent-System/issues/143) | pendente |
+$165 regressões + lint/build por contexto; PG/browser upload pendentes |
 | R20 | Logout não limpa cookie backend | authStore | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
 | R21 | API key persistida no localStorage | authStore | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
 | R22 | Rotas de tools incompatíveis | AgentToolsController | [#148](https://github.com/JonathanBenicio/Agent-System/issues/148) | pendente |
-| R23 | Upload omite roomId | ChatPage / rag-api | [#143](https://github.com/JonathanBenicio/Agent-System/issues/143) | pendente |
+$165 regressões + lint/build por contexto; PG/browser upload pendentes |
 | R24 | YAML de UI/template incompatível | AgentFormModal / agent-manifest-template.yaml | [#148](https://github.com/JonathanBenicio/Agent-System/issues/148) | pendente |
 | R25 | UI aprova apesar de falha HTTP | useWorkflowExecution | [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) | pendente |
 | R26 | Teste XSS não renderiza payload | chat-security.e2e.spec.ts | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |

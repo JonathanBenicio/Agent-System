@@ -127,11 +127,15 @@ public sealed class SqliteVectorStore : IVectorStore
 
     public async Task<SearchResult> SearchWithFiltersAsync(string query, Dictionary<string, string> filters)
     {
+        if (filters.TryGetValue("room_ids", out var rooms) && VectorMetadataFilter.ParseRoomIds(rooms).Length == 0)
+            return new SearchResult { Query = query, Matches = new() };
         var sw = System.Diagnostics.Stopwatch.StartNew();
         await using var db = await _dbContextFactory.CreateDbContextAsync();
         
         var dataQuery = db.VectorDocuments.AsNoTracking().AsQueryable();
 
+        if (filters.TryGetValue("tenant_id", out var tenantFilter))
+            dataQuery = dataQuery.Where(item => item.TenantId == tenantFilter);
         if (filters.TryGetValue("type", out var typeFilter))
             dataQuery = dataQuery.Where(item => item.Type == typeFilter);
         if (filters.TryGetValue("collection", out var collectionFilter))
@@ -149,7 +153,7 @@ public sealed class SqliteVectorStore : IVectorStore
         }
 
         var remainingFilters = filters
-            .Where(item => item.Key is not ("type" or "collection" or "id"))
+            .Where(item => item.Key is not ("type" or "collection" or "id" or "tenant_id"))
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
 
         var filtered = candidates.Where(item => MetadataMatches(item.MetadataJson, remainingFilters));
@@ -232,6 +236,7 @@ public sealed class SqliteVectorStore : IVectorStore
         return new VectorDocumentEntity
         {
             Id = document.Id,
+            TenantId = document.TenantId,
             Content = document.Content,
             Type = document.Type,
             Collection = document.Collection,
@@ -292,7 +297,7 @@ public sealed class SqliteVectorStore : IVectorStore
     {
         if (filters.Count == 0) return true;
         var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(metadataJson, JsonOptions) ?? new();
-        return filters.All(f => metadata.TryGetValue(f.Key, out var v) && string.Equals(v, f.Value, StringComparison.OrdinalIgnoreCase));
+        return VectorMetadataFilter.Matches(metadata, filters);
     }
 
     private static string ScopeToCollection(SearchScope scope) => scope switch

@@ -130,7 +130,8 @@ export function ChatPage({
     if (!files || files.length === 0) return
 
     setUploadingFiles(true)
-    let source = associateToRoom && selectedRoomId ? selectedRoomId : sessionId
+    let source = sessionId
+    const roomId = associateToRoom && selectedRoomId ? selectedRoomId : undefined
     
     try {
       if (!source) {
@@ -139,7 +140,7 @@ export function ChatPage({
         setSessionId(created.id)
         setActiveSessionId(created.id)
       }
-      const res = await ragApi.ingestBatch(files, source)
+      const res = await ragApi.ingestBatch(files, source, roomId)
       toast.success("Documentos ingeridos com sucesso!", {
         description: `${res.succeeded} de ${res.total} arquivos foram indexados no Vector Store.`,
       })

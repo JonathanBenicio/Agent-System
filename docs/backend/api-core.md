@@ -4,6 +4,8 @@ Fonte atual: controladores, DTOs e stores na branch integrada para `develop`, co
 Alertas de quota seguem o tenant autenticado em `GET /api/v1/alerts` e `POST /api/v1/alerts/{id}/read`; o filtro de tenant limita listagem e atualização de leitura. Alertas de chaves globais de plataforma são acessíveis somente por Platform Admin em `GET /api/platform/alerts` e `POST /api/platform/alerts/{id}/read`.
 
 ## Convenções
+
+Uploads de chat para uma sala enviam `roomId` separado de `source`; o backend verifica escrita antes da ingestão e grava a associação em cada chunk. `source` continua identificando a origem/sessão e nunca concede acesso por si só.
 Base URL configurada pelo host; exemplos usam http://localhost:5188. JSON dos controllers usa camelCase, enums camelCase e omite nulos. Não há envelope único: arrays, objetos, ProblemDetails, texto e respostas vazias coexistem. Exceções não tratadas retornam 500 com error/correlationId e X-Correlation-Id. 429 retorna error e Retry-After. Não assumir correlationId em todos os erros de validação.
 Credenciais: `X-Api-Key` para API key ou `Authorization: Bearer <JWT>` nas rotas autenticadas. O endpoint OpenAI-compatível `/v1/chat/completions` recebe a API key opaca no Bearer. Tenant/membership: [resolução e papéis](access-tenants.md). Auth/tenant/rate limiting ocorrem antes da action.
 

@@ -53,6 +53,20 @@ public class PostgresKnowledgeRoomStore : IKnowledgeRoomService
         return entity != null ? MapToModel(entity) : null;
     }
 
+    public async Task<bool> CanWriteRoomAsync(string id, string tenantId, string userId, CancellationToken ct = default)
+    {
+        var now = DateTime.UtcNow;
+        var canWrite = await _dbContext.Set<KnowledgeRoomPermissionEntity>()
+            .AnyAsync(p => p.TenantId == tenantId && p.RoomId == id && p.UserId == userId &&
+                (p.Role == nameof(KnowledgeRoomRole.Editor) || p.Role == nameof(KnowledgeRoomRole.Admin)) &&
+                (!_dbContext.TenantSupportGrants.Any(g => g.Id == p.Id) ||
+                 _dbContext.TenantSupportGrants.Any(g => g.Id == p.Id && g.UserId == userId && g.Scope == $"room:{id}" && g.RevokedAt == null && g.ExpiresAt > now)), ct);
+        if (!canWrite || !await _dbContext.Set<KnowledgeRoomEntity>().AnyAsync(r => r.Id == id && r.TenantId == tenantId, ct))
+            return false;
+        await AuditSupportAccessAsync(tenantId, userId, [id], ct);
+        return true;
+    }
+
     private async Task AuditSupportAccessAsync(string tenantId, string userId, IReadOnlyCollection<string> roomIds, CancellationToken ct)
     {
         if (roomIds.Count == 0) return;

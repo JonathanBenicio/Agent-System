@@ -22,6 +22,10 @@ Status: em execução; gate integrado da correção ainda não executado.
 
 ## Gate final
 
+### Contexto #143 — ACL/RAG e isolamento
+65 regressões direcionadas passaram,0falhas,1ignorado preexistente que exige PostgreSQL. API Release e frontend lint/build passaram. Positivos/negativos cobrem Reader/Editor/Admin, grant isolado/expirado, nomes de agentes iguais em A/B, allow-list vazia e filtro tenant/room, associação de chunks no upload.
+Limites: stores Postgres/SQLite em EF InMemory; Pinecone em HTTP fake. PostgreSQL/Pinecone reais e jornada browser de upload não executados neste contexto. Nenhum banco foi alterado.
+
 ### Contexto #142 — orçamento ONNX
 49 regressões ONNX direcionadas Release passaram,0falhas/skips: overflow, negativos, canais, orçamento/configuração, upload/update/legado/worker e pixels/tensors ImageSharp reais pequenos. Nenhum teste provoca OOM. Build/implementação valida antes de imagens/tensores e usa options também no catálogo manual. Limite: EF InMemory e preprocessing real; pesos/outputs/runtime interno fora do orçamento. Confirmação conjunta FIDES/ONNX/RAG:111aprovados,3ignorados,0falhas; não é a suíte inteira.
 
