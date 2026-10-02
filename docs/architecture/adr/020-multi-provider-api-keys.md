@@ -77,6 +77,6 @@ O endpoint `/api/admin/llm/providers/{name}/keys/{id}/discover-models` fará a c
 ## Referências
 
 - [GitHub Issue #61](../../issue-61-multi-provider-api-keys.md)
-- [US-42: Gerenciamento e Roteamento de Múltiplas API Keys](../../user-stories/us-multi-provider-api-keys.md)
+- [BACK-KEYS-020: Gerenciamento e Roteamento de Múltiplas API Keys](../../user-stories/us-multi-provider-api-keys.md)
 - [ADR-012: Multi-Tenant Agent Memory Schema](012-multi-tenant-agent-memory-schema.md)
 - [ADR-014: Multi-LLM Provider Architecture](014-multi-llm-provider-architecture.md)

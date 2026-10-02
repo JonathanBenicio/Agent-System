@@ -39,6 +39,9 @@ public class DynamicAgentEntity : ITenantEntity
 
     public string? AllowedToolsJson { get; set; }
 
+    [Column(TypeName = "jsonb")]
+    public string? SpecificationJson { get; set; }
+
     [Required]
     public bool IsActive { get; set; } = true;
 

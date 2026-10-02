@@ -4,12 +4,20 @@ Este documento descreve os contratos da branch `fix/backend-core-tenancy`. O est
 
 ## Identidade, membership e papéis
 
+Scheduler de workflows (#145): claim global exige `SystemOperationKind.ClaimWorkflowExecutions`; o worker abre essa capability apenas durante claim e aplica contexto do tenant escolhido antes de engine/renovação. A capability não vem de header/claim. Regressões comprovam negação antes de abrir DB e restauração dos contextos; SQL real da fila fica no gate integrado.
+
+Correção #143: ingestão simples/batch em sala exige ACL Editor/Admin no tenant real. Reader e grant de suporte sem ACL válida não autorizam escrita. Catálogo dinâmico InMemory e salas InMemory são particionados por tenant; a ausência de contexto não cria tenant implícito. `room_ids` é uma allow-list de `room_id`, acompanhada de `tenant_id`, também em InMemory/SQLite/Pinecone; lista vazia nega a busca.
+
+Correção #140/PR #152: o navegador autentica API keys por cookie HttpOnly, sem gravar ou reenviar a chave no localStorage, store JavaScript ou headers dos clientes/hubs. `GET /api/auth/session` valida a sessão pelo pipeline e retorna o subject/tenant/papéis; logout exige sucesso do backend antes de limpar a interface. JWT explícito continua sendo um modo separado.
+
+OpenAI compatível (`/v1/chat/completions` e `/v1/models`) usa o mesmo pipeline de autenticação e middleware tenant/membership. `Authorization: <raw-key>` é suportado por compatibilidade apenas sob `/v1`, com as mesmas negações de revogação, tenant inativo e spoofing do Bearer opaco. O campo `user` do request não vira identidade de autorização; o principal autenticado define o owner. O controller conserva o contexto e o plano resolvidos pelo middleware. [Evidência da correção](validation/pr132-review-remediation-2026-10-02.md).
+
 | Camada | Fonte | Regra |
 |---|---|---|
 | Identidade | API key ou JWT/Supabase | API keys são localizadas por SHA-256; MVC normalmente recebe `X-Api-Key`, enquanto `/v1/chat/completions` recebe API key opaca no Bearer. JWT de tenant/Supabase usa o handler configurado. |
 | Tenant | `tenant_id`, `app_metadata.tenant_id`, `X-Tenant-Id` | Tenant precisa existir e estar ativo. Identidade autenticada não pode selecionar outro tenant pelo header. |
 | Membership | `tenant_memberships` | Liga principal, tenant, tipo de principal e papel. Papéis efetivos são carregados para o tenant selecionado. |
-| API key | `access_api_keys` + membership `ApiKey` | A role armazenada é usada; roles desconhecidas falham fechadas. |
+| API key | `access_api_keys` + membership `ApiKey` | A chave identifica o principal, não concede membership; papel efetivo vem do vínculo no tenant selecionado. Roles desconhecidas falham fechadas. |
 | Papel de plataforma | `platform_administrators` | Registro explícito e separado; Admin/Owner do tenant nunca são promovidos automaticamente. |
 | Sala | `knowledge_room_permissions` | ACL por usuário é obrigatória para ler uma sala, inclusive quando há suporte temporário. |
 
@@ -22,6 +30,8 @@ A migration `AddTenantMembershipAndSupportAccess` copia vínculos de `role_assig
 API keys aceitam `Owner`, `Admin`, `Operator`, `Viewer`, `Member` e `ServiceAccount`; `Member` efetivamente recebe leitura. `Owner` e `Admin` são papéis do tenant, nunca equivalem ao administrador da plataforma.
 
 ## Política FIDES por tenant
+
+Correção #141: a factory e o supervisor protegem o `IChatClient` em cada despacho ao provider, inclusive execução direta, streaming, instructions e rodadas de tools. O middleware de agente reutiliza o mesmo motor de proteção. Resultado/argumento estruturado de tool é serializado e redigido; CallId e opções são preservados. Ausência de política/tenant válido, política de outro tenant, payload não inspecionável, erro ou timeout bloqueiam antes da chamada externa. [Regressões e limites](validation/pr132-review-remediation-2026-10-02.md).
 
 `GET /api/security/fides/policy` lê os toggles do tenant autenticado; `PUT` altera apenas detectores built-in conhecidos e exige `Owner` ou `Admin`. Sem uma política persistida, todos os detectores ficam ativos. `CredentialToken` é obrigatório e não pode ser desligado. Cada alteração incrementa a versão da política e gera auditoria.
 

@@ -63,6 +63,7 @@ public class PostgresDynamicAgentRepository : IDynamicAgentRepository
         entity.Instructions = specification.Instructions;
         entity.AutonomyLevel = (int)specification.AutonomyLevel;
         entity.AllowedToolsJson = JsonSerializer.Serialize(specification.AllowedTools);
+        entity.SpecificationJson = JsonSerializer.Serialize(specification);
         entity.IsActive = true;
         entity.UpdatedAt = DateTime.UtcNow;
 
@@ -89,18 +90,21 @@ public class PostgresDynamicAgentRepository : IDynamicAgentRepository
 
     private static AgentSpecification MapToSpecification(DynamicAgentEntity entity)
     {
-        return new AgentSpecification
-        {
-            Name = entity.Name,
-            Description = entity.Description,
-            Domain = entity.Domain,
-            Tier = (AgentTier)entity.Tier,
-            Instructions = entity.Instructions,
-            AutonomyLevel = (AutonomyLevel)entity.AutonomyLevel,
-            AllowedTools = string.IsNullOrEmpty(entity.AllowedToolsJson) 
-                ? new List<string>() 
-                : (JsonSerializer.Deserialize<string[]>(entity.AllowedToolsJson) ?? Array.Empty<string>()).ToList()
-        };
+        var specification = string.IsNullOrWhiteSpace(entity.SpecificationJson)
+            ? new AgentSpecification()
+            : JsonSerializer.Deserialize<AgentSpecification>(entity.SpecificationJson)
+                ?? throw new InvalidOperationException("Stored agent specification is invalid.");
+        // Columns are the canonical identity; the envelope carries additional configuration.
+        specification.Name = entity.Name;
+        specification.Description = entity.Description;
+        specification.Domain = entity.Domain;
+        specification.Tier = (AgentTier)entity.Tier;
+        specification.Instructions = entity.Instructions;
+        specification.AutonomyLevel = (AutonomyLevel)entity.AutonomyLevel;
+        specification.AllowedTools = string.IsNullOrEmpty(entity.AllowedToolsJson)
+            ? [] : (JsonSerializer.Deserialize<string[]>(entity.AllowedToolsJson) ?? []).ToList();
+        return specification;
+
     }
 }
 

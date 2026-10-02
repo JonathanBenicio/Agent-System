@@ -5,11 +5,14 @@ namespace AgenticSystem.Core.Services;
 
 public class InMemoryKnowledgeRoomStore : IKnowledgeRoomService
 {
-    private readonly List<KnowledgeRoom> _rooms = new();
-    private readonly List<KnowledgeRoomPermission> _permissions = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<KnowledgeRoom>> _tenantRooms = new(StringComparer.Ordinal);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<KnowledgeRoomPermission>> _tenantPermissions = new(StringComparer.Ordinal);
 
     public Task<IEnumerable<KnowledgeRoom>> ListRoomsAsync(string tenantId, string userId, CancellationToken ct = default)
     {
+        ValidateTenant(tenantId);
+        var _rooms = _tenantRooms.GetOrAdd(tenantId, _ => new());
+        var _permissions = _tenantPermissions.GetOrAdd(tenantId, _ => new());
         var accessibleRoomIds = _permissions.Where(p => p.UserId == userId).Select(p => p.RoomId).ToHashSet();
         var accessibleRooms = _rooms.Where(r => accessibleRoomIds.Contains(r.Id)).OrderByDescending(r => r.UpdatedAt);
         return Task.FromResult<IEnumerable<KnowledgeRoom>>(accessibleRooms);
@@ -17,14 +20,35 @@ public class InMemoryKnowledgeRoomStore : IKnowledgeRoomService
 
     public Task<KnowledgeRoom?> GetRoomAsync(string id, string tenantId, string userId, CancellationToken ct = default)
     {
+        ValidateTenant(tenantId);
+        var _rooms = _tenantRooms.GetOrAdd(tenantId, _ => new());
+        var _permissions = _tenantPermissions.GetOrAdd(tenantId, _ => new());
         var hasAccess = _permissions.Any(p => p.RoomId == id && p.UserId == userId);
         if (!hasAccess) return Task.FromResult<KnowledgeRoom?>(null);
 
         return Task.FromResult(_rooms.FirstOrDefault(r => r.Id == id));
     }
 
+    public Task<bool> CanWriteRoomAsync(string id, string tenantId, string userId, CancellationToken ct = default)
+    {
+        ValidateTenant(tenantId);
+        var rooms = _tenantRooms.GetOrAdd(tenantId, _ => new());
+        var permissions = _tenantPermissions.GetOrAdd(tenantId, _ => new());
+        return Task.FromResult(rooms.Any(r => r.Id == id) && permissions.Any(p => p.RoomId == id && p.UserId == userId &&
+            p.Role is KnowledgeRoomRole.Editor or KnowledgeRoomRole.Admin));
+    }
+
+    private static void ValidateTenant(string tenantId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        if (TenantIdPolicy.IsReservedSystemId(tenantId)) throw new InvalidOperationException("A real tenant is required.");
+    }
+
     public Task<KnowledgeRoom> CreateRoomAsync(string tenantId, string userId, KnowledgeRoom room, CancellationToken ct = default)
     {
+        ValidateTenant(tenantId);
+        var _rooms = _tenantRooms.GetOrAdd(tenantId, _ => new());
+        var _permissions = _tenantPermissions.GetOrAdd(tenantId, _ => new());
         if (string.IsNullOrEmpty(room.Id))
         {
             var prop = room.GetType().GetProperty("Id");
@@ -47,6 +71,9 @@ public class InMemoryKnowledgeRoomStore : IKnowledgeRoomService
 
     public Task<KnowledgeRoom> UpdateRoomAsync(string tenantId, string userId, KnowledgeRoom room, CancellationToken ct = default)
     {
+        ValidateTenant(tenantId);
+        var _rooms = _tenantRooms.GetOrAdd(tenantId, _ => new());
+        var _permissions = _tenantPermissions.GetOrAdd(tenantId, _ => new());
         var permission = _permissions.FirstOrDefault(p => p.RoomId == room.Id && p.UserId == userId);
         if (permission == null || (permission.Role != KnowledgeRoomRole.Admin && permission.Role != KnowledgeRoomRole.Editor))
             throw new UnauthorizedAccessException("User does not have permission to update this room.");
@@ -62,6 +89,9 @@ public class InMemoryKnowledgeRoomStore : IKnowledgeRoomService
 
     public Task<bool> DeleteRoomAsync(string id, string tenantId, string userId, CancellationToken ct = default)
     {
+        ValidateTenant(tenantId);
+        var _rooms = _tenantRooms.GetOrAdd(tenantId, _ => new());
+        var _permissions = _tenantPermissions.GetOrAdd(tenantId, _ => new());
         var permission = _permissions.FirstOrDefault(p => p.RoomId == id && p.UserId == userId);
         if (permission == null || permission.Role != KnowledgeRoomRole.Admin)
             return Task.FromResult(false);
@@ -76,6 +106,9 @@ public class InMemoryKnowledgeRoomStore : IKnowledgeRoomService
 
     public Task<IEnumerable<KnowledgeRoomPermission>> GetRoomPermissionsAsync(string roomId, string tenantId, string userId, CancellationToken ct = default)
     {
+        ValidateTenant(tenantId);
+        var _rooms = _tenantRooms.GetOrAdd(tenantId, _ => new());
+        var _permissions = _tenantPermissions.GetOrAdd(tenantId, _ => new());
         var permission = _permissions.FirstOrDefault(p => p.RoomId == roomId && p.UserId == userId);
         if (permission == null || permission.Role != KnowledgeRoomRole.Admin)
             throw new UnauthorizedAccessException("Only admins can view permissions.");
@@ -85,6 +118,9 @@ public class InMemoryKnowledgeRoomStore : IKnowledgeRoomService
 
     public Task<KnowledgeRoomPermission> AddOrUpdatePermissionAsync(string roomId, string targetUserId, KnowledgeRoomRole role, string tenantId, string currentUserId, CancellationToken ct = default)
     {
+        ValidateTenant(tenantId);
+        var _rooms = _tenantRooms.GetOrAdd(tenantId, _ => new());
+        var _permissions = _tenantPermissions.GetOrAdd(tenantId, _ => new());
         var currentPerm = _permissions.FirstOrDefault(p => p.RoomId == roomId && p.UserId == currentUserId);
         if (currentPerm == null || currentPerm.Role != KnowledgeRoomRole.Admin)
             throw new UnauthorizedAccessException("Only admins can modify permissions.");
@@ -112,6 +148,9 @@ public class InMemoryKnowledgeRoomStore : IKnowledgeRoomService
 
     public Task<bool> RemovePermissionAsync(string roomId, string targetUserId, string tenantId, string currentUserId, CancellationToken ct = default)
     {
+        ValidateTenant(tenantId);
+        var _rooms = _tenantRooms.GetOrAdd(tenantId, _ => new());
+        var _permissions = _tenantPermissions.GetOrAdd(tenantId, _ => new());
         var currentPerm = _permissions.FirstOrDefault(p => p.RoomId == roomId && p.UserId == currentUserId);
         if (currentPerm == null || currentPerm.Role != KnowledgeRoomRole.Admin)
             throw new UnauthorizedAccessException("Only admins can modify permissions.");

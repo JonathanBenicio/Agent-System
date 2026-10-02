@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { 
   Sparkles, 
   Search, 
@@ -33,17 +34,11 @@ type BrainstormSuggestion = {
 function SimpleMarkdownPreview({ text }: { text: string }) {
   if (!text) return <em className="text-zinc-500 text-xs">Escreva algo no prompt para ver a pré-visualização...</em>
 
-  // Transforma quebras de linha e tópicos em HTML amigável para exibição limpa
-  const formatted = text
-    .replace(/^### (.*$)/gim, '<h5 class="text-sm font-semibold text-teal-400 mt-3 mb-1">$1</h5>')
-    .replace(/^## (.*$)/gim, '<h4 class="text-sm font-bold text-teal-400 mt-4 mb-2">$1</h4>')
-    .replace(/^# (.*$)/gim, '<h3 class="text-base font-bold text-zinc-100 mt-4 mb-2 border-b border-zinc-800 pb-1">$1</h3>')
-    .replace(/^[-]\s(.*$)/gim, '<li class="list-disc ml-4 text-xs text-zinc-300">$1</li>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`(.*?)`/g, '<code class="bg-zinc-800 px-1 py-0.5 rounded text-teal-300 font-mono text-[10px]">$1</code>')
-    .split('\n').join('<br />')
-
-  return <div className="text-xs text-zinc-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: formatted }} />
+  return (
+    <div className="text-xs text-zinc-300 leading-relaxed">
+      <ReactMarkdown skipHtml>{text}</ReactMarkdown>
+    </div>
+  )
 }
 
 export function SkillsPage() {

@@ -51,11 +51,14 @@ public sealed class WorkflowExecutionBackgroundService : BackgroundService
         _logger.LogInformation("Workflow execution worker {WorkerId} stopped.", _workerId);
     }
 
-    private async Task<bool> ProcessNextAsync(CancellationToken stoppingToken)
+    internal async Task<bool> ProcessNextAsync(CancellationToken stoppingToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var store = scope.ServiceProvider.GetRequiredService<IWorkflowStore>();
-        var claim = await store.ClaimNextExecutionAsync(_workerId, LeaseDuration, stoppingToken);
+        var systemOperations = scope.ServiceProvider.GetRequiredService<ISystemOperationContextAccessor>();
+        WorkflowExecutionClaim? claim;
+        using (systemOperations.BeginScope(SystemOperationKind.ClaimWorkflowExecutions))
+            claim = await store.ClaimNextExecutionAsync(_workerId, LeaseDuration, stoppingToken);
         if (claim is null)
             return false;
 

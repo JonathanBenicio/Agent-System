@@ -1,5 +1,6 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Services;
 using System.Security.Claims;
 
 namespace AgenticSystem.Api.Middleware;
@@ -29,6 +30,15 @@ public class TenantMiddleware
         IPermissionService? permissionService = null,
         IQuotaEnforcer? quotaEnforcer = null)
     {
+        // Login exchanges a credential; logout must clear even a revoked session cookie.
+        // These actions do not access tenant-owned product data.
+        if (context.Request.Path.Equals("/api/auth/login", StringComparison.OrdinalIgnoreCase) ||
+            context.Request.Path.Equals("/api/auth/logout", StringComparison.OrdinalIgnoreCase))
+        {
+            await _next(context);
+            return;
+        }
+
         // The platform administration API is authenticated and authorized by the explicit
         // platform_administrators registry. It has no tenant context.
         if (context.Request.Path.StartsWithSegments("/api/platform", StringComparison.OrdinalIgnoreCase))
@@ -137,14 +147,8 @@ public class TenantMiddleware
         if (string.IsNullOrWhiteSpace(userId) || permissionService is null)
             return false;
 
-        var roles = await permissionService.GetRolesAsync(userId);
-        var tenantRoles = roles
-            .Where(role => string.Equals(role.TenantId, tenantId, StringComparison.OrdinalIgnoreCase))
-            .Select(role => role.RoleName.Equals("Member", StringComparison.OrdinalIgnoreCase) ? "Viewer" : role.RoleName)
-            .Where(role => role.Equals("ServiceAccount", StringComparison.OrdinalIgnoreCase) ||
-                BuiltInRoles.All.Any(known => known.Name.Equals(role, StringComparison.OrdinalIgnoreCase)))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var tenantRoles = await TenantMembershipPolicy.GetRolesAsync(
+            permissionService, userId, tenantId, context.RequestAborted);
         if (tenantRoles.Length == 0)
             return false;
 

@@ -1,5 +1,7 @@
 # Documentação — AgenticSystem
 
+- [Correções dos 32 achados do PR #132 — epic #139 e subtarefas](plan/pr132-review-remediation.md), [ADR-041](architecture/adr/041-pr132-review-remediation.md), [stories](USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132) e [validação](backend/validation/pr132-review-remediation-2026-10-02.md). Implementação validada e CI verde no SHA `8ba0dd4`; PR #152 permanece draft.
+
 - [Especificações das 46 issues abertas (snapshot 2026-09-29)](plan/open-issues-specification-audit-2026-09-29.md)
 
 ## Backend: contratos e evidências
@@ -18,7 +20,7 @@
 - [Issue #105 — Hyperlight CodeAct em Lab, desligado por padrão](backend/operations.md)
 - [Orquestrador supervisor dinâmico: ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md), [story BACK-ORCH-122](USER-STORIES.md#back-orch-122--orquestrar-agentes-dinamicos-pelo-supervisor-maf) e [plano separado](plan/dynamic-orchestrator-implementation.md)
 - Follow-ups pós-PR #132: [Gateway de produção #133](plan/maf-gateway-production-validation.md), [retomada do supervisor #134](plan/dynamic-supervisor-session-recovery.md) e [forecast de quotas #135 / ML40](plan/proactive-llm-quota-forecast.md)
-- [Escopo de sistema sem tenant sintético (#97)](plan/tenant-system-scope-remediation.md) — implementação validada nesta branch; issue aguarda revisão/merge de #132
+- [Escopo de sistema sem tenant sintético (#97)](plan/tenant-system-scope-remediation.md) — evidência anterior preservada; revisão revelou pendências cobertas por #143/#145 na epic #139
 - Stories dos follow-ups: [BACK-MAF-133](USER-STORIES.md#back-maf-133--provider-global-na-composicao-gateway-de-producao), [BACK-ORCH-134](USER-STORIES.md#back-orch-134--retomar-supervisor-e-especialistas-apos-restart) e [ML40](USER-STORIES.md#ml40--forecast-proativo-de-quotas-llm)
 - [Issue #16 — auto-melhoria exige aprovação humana e permanece na trilha Lab](backend/api-core.md)
 - [Issue #106 — política FIDES e redaction por tenant](backend/access-tenants.md)
@@ -41,7 +43,7 @@ Documento canônico de arquitetura atual:
 | [PRD-Sistema-Agentic.md](PRD-Sistema-Agentic.md) | Visão de produto para stakeholders e áreas de negócio |
 | [USER-STORIES.md](USER-STORIES.md) | Catálogo funcional consolidado de MLs, épicos e user stories |
 | [user-stories/us-skills-crud-and-brainstorm.md](user-stories/us-skills-crud-and-brainstorm.md) | US-012: Gestão Dinâmica de Skills via Tela e Brainstorming assistido por IA |
-| [user-stories/us-multi-provider-api-keys.md](user-stories/us-multi-provider-api-keys.md) | US-42: Gerenciamento e Roteamento de Múltiplas API Keys |
+| [user-stories/us-multi-provider-api-keys.md](user-stories/us-multi-provider-api-keys.md) | BACK-KEYS-020: Gerenciamento e Roteamento de Múltiplas API Keys |
 | [user-stories/unified-chat-integration.md](user-stories/unified-chat-integration.md) | US-021: Integração Unificada de Pilares Tecnológicos no Chat Principal |
 | [user-stories/us-async-onnx-processing.md](user-stories/us-async-onnx-processing.md) | US-43: Processamento Assíncrono de Inferência ONNX |
 | [user-stories/us-advanced-chat-session-management.md](user-stories/us-advanced-chat-session-management.md) | US-44: Chat Avançado e Gerenciamento Unificado de Sessões |

@@ -111,6 +111,8 @@ public class InMemoryVectorStore : IVectorStore
 
     public async Task<SearchResult> SearchWithFiltersAsync(string query, Dictionary<string, string> filters)
     {
+        if (filters.TryGetValue("room_ids", out var rooms) && VectorMetadataFilter.ParseRoomIds(rooms).Length == 0)
+            return new SearchResult { Query = query, Matches = new() };
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var normalizedQuery = query.Trim();
         var hasQuery = !string.IsNullOrWhiteSpace(normalizedQuery) && normalizedQuery != "*";
@@ -285,6 +287,11 @@ public class InMemoryVectorStore : IVectorStore
     {
         foreach (var (key, value) in filters)
         {
+            if (key == "tenant_id")
+            {
+                if (!string.Equals(doc.TenantId, value, StringComparison.Ordinal)) return false;
+                continue;
+            }
             if (key == "type" && !doc.Type.Equals(value, StringComparison.OrdinalIgnoreCase))
                 return false;
             if (key == "collection" && !doc.Collection.Equals(value, StringComparison.OrdinalIgnoreCase))
@@ -293,6 +300,11 @@ public class InMemoryVectorStore : IVectorStore
                 return false;
             if (key is "type" or "collection" or "id")
                 continue;
+            if (key == "room_ids")
+            {
+                if (!VectorMetadataFilter.Matches(doc.Metadata, new Dictionary<string, string> { [key] = value })) return false;
+                continue;
+            }
             if (!doc.Metadata.TryGetValue(key, out var metaValue) ||
                 !metaValue.Equals(value, StringComparison.OrdinalIgnoreCase))
                 return false;

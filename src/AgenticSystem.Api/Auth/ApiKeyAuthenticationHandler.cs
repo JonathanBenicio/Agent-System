@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Services;
 using AgenticSystem.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
@@ -51,6 +52,13 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
             {
                 providedKey = authorization["Bearer ".Length..].Trim();
             }
+            else if (!string.IsNullOrWhiteSpace(authorization) &&
+                     Request.Path.StartsWithSegments("/v1"))
+            {
+                // Raw keys from legacy OpenAI clients still pass through the shared
+                // authentication scheme and tenant/membership middleware.
+                providedKey = authorization.Trim();
+            }
         }
 
         if (string.IsNullOrWhiteSpace(providedKey) && Request.Cookies.TryGetValue("agentic_api_key", out var cookieKey))
@@ -92,8 +100,8 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
             return AuthenticateResult.Fail("Invalid API key.");
         }
 
-        if (!new[] { "Owner", "Admin", "Operator", "Viewer", "Member", "ServiceAccount" }
-                .Contains(accessKey.Role, StringComparer.OrdinalIgnoreCase))
+        var role = TenantMembershipPolicy.NormalizeRole(accessKey.Role);
+        if (role is null)
         {
             return AuthenticateResult.Fail("API key has an unsupported role.");
         }
@@ -114,7 +122,7 @@ public class ApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationS
         {
             new Claim(ClaimTypes.Name, accessKey.Name),
             new Claim(ClaimTypes.NameIdentifier, accessKey.Id.ToString()),
-            new Claim(ClaimTypes.Role, accessKey.Role),
+            new Claim(ClaimTypes.Role, role),
             new Claim("tenant_id", accessKey.TenantId)
         };
         var identity = new ClaimsIdentity(claims, SchemeName);

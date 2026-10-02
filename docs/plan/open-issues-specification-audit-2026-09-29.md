@@ -457,7 +457,7 @@ As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo con
 
 **Aceite revisado:** CRUD tenant-scoped; segredo não retornado/logado; provider real/stub local validado; modelo e chave usados no chat; acesso por papel; casos de erro. Scanners são execução datada com versão/relatório. Percentual de cobertura aparece separado e não é aceite funcional.
 
-**Fontes:** US-42, ADR-020, #61–#65/#123 e testes BYOK. Reconciliar testes antigos `LLMProviderApiKeyTests` com nomes atuais, não exigir classe/path literal.
+**Fontes:** BACK-KEYS-020, ADR-020, #61–#65/#123 e testes BYOK. Reconciliar testes antigos `LLMProviderApiKeyTests` com nomes atuais, não exigir classe/path literal.
 
 ## issue-65
 
@@ -467,7 +467,7 @@ As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo con
 
 **Aceite:** lista com metadados mascarados; Owner/Admin muta; membro lê preferências; testar/discover/default/delete com estados de erro; segredo nunca exibido após salvar; chave default e modelo demonstrados no chat; foco keyboard/feedback e role gating.
 
-**Fontes:** [US-42](../user-stories/us-multi-provider-api-keys.md), ADR-020, PR #124/issue #123, docs de chat settings. Não reproduzir todo o editor de administração global no escopo tenant.
+**Fontes:** [BACK-KEYS-020](../user-stories/us-multi-provider-api-keys.md), ADR-020, PR #124/issue #123, docs de chat settings. Não reproduzir todo o editor de administração global no escopo tenant.
 
 ## issue-64
 
@@ -487,7 +487,7 @@ As decisões foram registradas em 2026-09-29. O snapshot de auditoria abaixo con
 
 **Aceite:** default habilitado é escolhido no provider/tenant; chave explícita request-only; secret ciphertext at-rest; DTO/log redact; modelo disponível; falha sem fallback silencioso; principal identifica API-key user opaco.
 
-**Fonte:** ADR-020, current `LLMManager`, US-42, #120/#123. Rever separação entre BYOK de tenant e config global de plataforma antes de preservar requisito de fallback legado.
+**Fonte:** ADR-020, current `LLMManager`, BACK-KEYS-020, #120/#123. Rever separação entre BYOK de tenant e config global de plataforma antes de preservar requisito de fallback legado.
 
 ## issue-62
 

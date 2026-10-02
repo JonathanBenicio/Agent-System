@@ -183,6 +183,7 @@ Please give a short, concise context of this chunk within the overall document (
                 totalTokens += chunk.TokenCount;
 
                 var embDoc = chunk.ToEmbeddingDocument();
+                embDoc.TenantId = config.TenantId ?? string.Empty;
                 await _vectorStore.UpsertAsync(embDoc);
             }
 

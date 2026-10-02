@@ -1,4 +1,6 @@
-# US-42: Gerenciamento e Roteamento de Múltiplas API Keys por Provedor
+# BACK-KEYS-020: Gerenciamento e Roteamento de Múltiplas API Keys por Provedor
+
+Identidade atual da story: `BACK-KEYS-020`. O ID `US-42` usado anteriormente neste arquivo era ambíguo com FinOps em USER-STORIES.md; ele permanece reservado à história FinOps. Caminho do documento mantido para preservar links históricos. Correção de rastreabilidade em #150/#139.
 
 **Épico:** Multi-Provider Credential & Model Management  
 **Prioridade:** Alta  

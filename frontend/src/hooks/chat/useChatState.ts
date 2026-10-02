@@ -55,6 +55,7 @@ export function useChatState() {
         timestamp: m.timestamp,
         isHistory: true,
         memoryInjected: m.memoryInjected,
+        citations: m.citations,
       }))
       setMessages(mapped)
       setSessionId(id)

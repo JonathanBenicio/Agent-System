@@ -291,6 +291,8 @@ public class PostgresVectorStore : IVectorStore
         }
 
         // SECURITY: room_ids filter MUST be enforced at SQL level before the semantic search runs.
+        if (filters.TryGetValue("tenant_id", out var tenantFilter))
+            dataQuery = dataQuery.Where(item => item.TenantId == tenantFilter);
         // Applying it in-memory after fetching top-K candidates creates a false-negative security gap:
         // if none of the top-50 semantic results belong to the authorized room, the result is empty
         // even when authorized documents exist — and cross-room documents may populate the top-50.
@@ -359,7 +361,7 @@ public class PostgresVectorStore : IVectorStore
         // Remaining in-memory filters: only non-security metadata fields that don't require
         // SQL-level enforcement (room_ids is now excluded as it was enforced at SQL level above).
         var remainingFilters = filters
-            .Where(item => item.Key is not ("type" or "collection" or "id" or "room_ids"))
+            .Where(item => item.Key is not ("type" or "collection" or "id" or "room_ids" or "tenant_id"))
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
 
         var filtered = candidates.Where(item => MetadataMatches(item.MetadataJson, remainingFilters));

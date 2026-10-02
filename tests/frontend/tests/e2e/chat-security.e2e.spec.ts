@@ -7,11 +7,11 @@ test.describe('Chat Security - Sanitização de Markdown e Proteção XSS', () =
   // Executa após a spec finalizar para limpar as sessões de chat criadas no banco real
   test.afterAll(async ({ playwright }) => {
     if (process.env.REAL_E2E === 'true') {
-      const baseURL = process.env.BASE_URL || 'http://localhost/';
+      const baseURL = process.env.BASE_URL || 'http://127.0.0.1:5194';
       const apiContext = await playwright.request.newContext({
         baseURL,
         extraHTTPHeaders: {
-          'X-Api-Key': 'minha-chave-secreta-admin-123',
+          'X-Api-Key': process.env.E2E_API_KEY!,
         },
       });
 
@@ -52,7 +52,7 @@ test.describe('Chat Security - Sanitização de Markdown e Proteção XSS', () =
       return;
     }
 
-    await page.route('**/api/llm/configuration', async (route) => {
+    await page.route('**/api/chat/configuration', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -74,8 +74,8 @@ test.describe('Chat Security - Sanitização de Markdown e Proteção XSS', () =
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
-          response: maliciousPayload,
-          agentUsed: 'SecurityAgent',
+          content: maliciousPayload,
+          agentName: 'SecurityAgent',
           agentTier: 0,
           success: true,
         }),
@@ -83,7 +83,7 @@ test.describe('Chat Security - Sanitização de Markdown e Proteção XSS', () =
     });
 
     await chatPage.goto();
-    
+
     // Inicializa a variável no escopo global da janela para testar se ela é alterada
     await page.evaluate(() => {
       (window as any).xssExploit = undefined;
@@ -91,6 +91,8 @@ test.describe('Chat Security - Sanitização de Markdown e Proteção XSS', () =
 
     await chatPage.sendMessage('Teste de segurança contra XSS');
     await chatPage.waitForResponse();
+
+    await expect(page.locator('.chat-markdown').filter({ hasText: 'Tentativa de injeção:' })).toBeVisible();
 
     // 1. O script não deve ter sido executado, logo window.xssExploit deve continuar undefined
     const isExploited = await page.evaluate(() => {

@@ -293,6 +293,6 @@ public class DocumentController : ControllerBase
         if (string.IsNullOrWhiteSpace(roomId)) return true;
         var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
             ?? User.FindFirst("sub")?.Value;
-        return userId is not null && await _roomService.GetRoomAsync(roomId, tenantId, userId, ct) is not null;
+        return userId is not null && await _roomService.CanWriteRoomAsync(roomId, tenantId, userId, ct);
     }
 }

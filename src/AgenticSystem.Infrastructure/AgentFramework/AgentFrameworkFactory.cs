@@ -49,7 +49,8 @@ public class AgentFrameworkFactory
         RAGContextProvider? ragContextProvider = null,
         AgentSkillsProvider? skillsProvider = null)
     {
-        _chatClient = chatClient;
+        _chatClient = new AgenticSystem.Infrastructure.Security.FidesProtectedChatClient(
+            chatClient, serviceProvider, loggerFactory);
         _loggerFactory = loggerFactory;
         _serviceProvider = serviceProvider;
         _skillManager = skillManager;

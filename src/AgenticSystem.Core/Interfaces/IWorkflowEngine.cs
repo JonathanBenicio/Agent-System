@@ -37,6 +37,8 @@ public interface IWorkflowEngine
         string approvedBy,
         CancellationToken ct = default);
 
+    Task<WorkflowExecution> ApproveStepAsync(string tenantId, string executionId, string stepId, string approvedBy, CancellationToken ct = default);
+
     /// <summary>Rejects the pending human-approval step and terminates the workflow.</summary>
     Task<WorkflowExecution> RejectAsync(
         string tenantId,
@@ -44,6 +46,8 @@ public interface IWorkflowEngine
         string rejectedBy,
         string? reason = null,
         CancellationToken ct = default);
+
+    Task<WorkflowExecution> RejectStepAsync(string tenantId, string executionId, string stepId, string rejectedBy, string? reason = null, CancellationToken ct = default);
 
     /// <summary>
     /// Cancels a running workflow. Triggers compensation for completed steps if configured.

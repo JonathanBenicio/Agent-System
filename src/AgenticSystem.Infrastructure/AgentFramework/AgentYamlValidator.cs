@@ -22,6 +22,7 @@ public class AgentYamlDto
     public AgentYamlAbilitiesDto? Abilities { get; set; }
     public string? Instructions { get; set; }
     public Dictionary<string, string>? Rules { get; set; }
+    public Dictionary<string, object>? Configuration { get; set; }
 }
 
 public class AgentYamlMetadataDto
@@ -37,6 +38,8 @@ public class AgentYamlExecutionDto
     public string? AutonomyLevel { get; set; }
     public string? Model { get; set; }
     public double? Temperature { get; set; }
+    public int? MaxConcurrency { get; set; }
+    public int? TimeoutSeconds { get; set; }
 }
 
 public class AgentYamlGovernanceDto
@@ -47,6 +50,7 @@ public class AgentYamlGovernanceDto
 public class AgentYamlAbilitiesDto
 {
     public List<string>? AllowedTools { get; set; }
+    public List<string>? Capabilities { get; set; }
     public string? WorkflowTemplate { get; set; }
 }
 
@@ -94,7 +98,8 @@ public class AgentYamlValidator : IAgentYamlValidator
                 .IgnoreUnmatchedProperties()
                 .Build();
 
-            dto = deserializer.Deserialize<AgentYamlDto>(yaml);
+            dto = deserializer.Deserialize<AgentYamlDto>(yaml)
+                ?? throw new InvalidOperationException("Agent YAML must contain a mapping.");
         }
         catch (YamlException ex)
         {
@@ -307,6 +312,10 @@ public class AgentYamlValidator : IAgentYamlValidator
             }
         }
 
+        if (dto.Execution?.MaxConcurrency is <= 0 || dto.Execution?.TimeoutSeconds is <= 0)
+            errors.Add(new YamlValidationError { ErrorCode = "INVALID_EXECUTION_LIMIT", Severity = "Error",
+                Message = "execution.maxConcurrency e execution.timeoutSeconds devem ser positivos." });
+
         if (errors.Any(e => e.Severity == "Error"))
         {
             return new YamlValidationResult
@@ -324,6 +333,8 @@ public class AgentYamlValidator : IAgentYamlValidator
             Domain = dto.Metadata?.Domain ?? string.Empty,
             Instructions = dto.Instructions ?? string.Empty,
             AllowedTools = dto.Abilities?.AllowedTools ?? new(),
+            Capabilities = dto.Abilities?.Capabilities ?? new(),
+            Configuration = dto.Configuration ?? new(),
             WorkflowTemplate = dto.Abilities?.WorkflowTemplate,
             PolicyIds = dto.Governance?.Policies ?? new(),
         };
@@ -340,6 +351,10 @@ public class AgentYamlValidator : IAgentYamlValidator
 
         if (dto.Execution is not null)
         {
+            if (dto.Execution.MaxConcurrency.HasValue)
+                specification.Configuration["maxConcurrency"] = dto.Execution.MaxConcurrency.Value;
+            if (dto.Execution.TimeoutSeconds.HasValue)
+                specification.Configuration["timeoutSeconds"] = dto.Execution.TimeoutSeconds.Value;
             if (Enum.TryParse<AutonomyLevel>(dto.Execution.AutonomyLevel, true, out var autonomyVal))
             {
                 specification.AutonomyLevel = autonomyVal;

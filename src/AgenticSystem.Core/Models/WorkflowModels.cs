@@ -106,16 +106,21 @@ public class WorkflowStepExecution
     public DateTime? WaitUntilUtc { get; set; }
 }
 
+[JsonConverter(typeof(WorkflowStepTypeJsonConverter))]
 public enum WorkflowStepType
 {
-    Action,      // Execute a tool
-    Agent,       // Execute a dynamic agent
-    Decision,    // Branch based on condition
-    Parallel,    // Execute sub-steps in parallel
-    Wait,        // Wait for external event or timer
-    Approval,    // Human approval gate
-    Subworkflow  // Execute another workflow
+    Action = 0,      // Execute a tool
+    Agent = 1,       // Execute a dynamic agent
+    Decision = 2,    // Branch based on condition
+    Parallel = 3,    // Execute sub-steps in parallel
+    Wait = 4,        // Wait for external event or timer
+    Approval = 5,    // Human approval gate
+    Subworkflow = 6  // Execute another workflow
 }
+
+/// <summary>Uses stable names in API JSON while accepting the explicit numeric snapshot values.</summary>
+public sealed class WorkflowStepTypeJsonConverter()
+    : JsonStringEnumConverter<WorkflowStepType>(System.Text.Json.JsonNamingPolicy.CamelCase);
 
 public enum WorkflowExecutionStatus
 {
@@ -153,4 +158,11 @@ public sealed class WorkflowExecutionLeaseLostException : InvalidOperationExcept
         : base($"The worker lease for workflow execution '{executionId}' is no longer owned by this worker.")
     {
     }
+}
+
+public sealed class WorkflowApprovalAmbiguousException : InvalidOperationException
+{
+    public IReadOnlyList<string> PendingStepIds { get; }
+    public WorkflowApprovalAmbiguousException(IReadOnlyList<string> pendingStepIds)
+        : base("Multiple approval steps are pending; specify stepId.") => PendingStepIds = pendingStepIds;
 }

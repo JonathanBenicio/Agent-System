@@ -11,19 +11,22 @@ public class SessionManager : ISessionManager
     private readonly IMemoryInjectionService? _memoryInjection;
     private readonly ILogger<SessionManager> _logger;
     private readonly ISemanticCompressor? _semanticCompressor;
+    private readonly ITenantStore? _tenantStore;
 
     public SessionManager(
         ISessionStore store,
         ISessionConsolidator consolidator,
         ILogger<SessionManager> logger,
         ISemanticCompressor? semanticCompressor = null,
-        IMemoryInjectionService? memoryInjection = null)
+        IMemoryInjectionService? memoryInjection = null,
+        ITenantStore? tenantStore = null)
     {
         _store = store;
         _consolidator = consolidator;
         _memoryInjection = memoryInjection;
         _logger = logger;
         _semanticCompressor = semanticCompressor;
+        _tenantStore = tenantStore;
     }
 
     public async Task<string> StartSessionAsync(UserContext userContext, string? sessionId = null)
@@ -54,7 +57,28 @@ public class SessionManager : ISessionManager
             Events = new List<AgentEvent>()
         };
 
-        await _store.SaveAsync(session);
+        if (_tenantStore is not null)
+        {
+            var tenant = await _tenantStore.GetByIdAsync(userContext.TenantId)
+                ?? throw new UnauthorizedAccessException("Tenant not found.");
+            if (!tenant.IsActive) throw new UnauthorizedAccessException("Tenant inactive.");
+            var planCeiling = tenant.Plan switch
+            {
+                TenantPlan.Pro => TenantLimits.ProTier().MaxConcurrentSessions,
+                TenantPlan.Enterprise => TenantLimits.EnterpriseTier().MaxConcurrentSessions,
+                _ => TenantLimits.FreeTier().MaxConcurrentSessions
+            };
+            var configured = tenant.Limits.MaxConcurrentSessions;
+            var limit = configured > 0 && planCeiling > 0 ? Math.Min(configured, planCeiling)
+                : configured > 0 ? configured : planCeiling;
+            if (!await _store.TryCreateAsync(session, limit))
+                throw new AgenticSystem.Core.Exceptions.QuotaExceededException("Concurrent session limit exceeded.");
+        }
+        else
+        {
+            // Legacy test fixtures without a tenant registry do not represent runtime enforcement.
+            await _store.SaveAsync(session);
+        }
         _logger.LogInformation("📂 Session started: {SessionId}", newSessionId);
         return newSessionId;
     }

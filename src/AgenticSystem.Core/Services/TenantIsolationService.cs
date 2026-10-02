@@ -37,8 +37,7 @@ public class TenantIsolationService : ITenantIsolationEnforcer
         var limit = tenant.Limits.MaxConcurrentSessions;
         if (limit <= 0) return true;
 
-        var sessions = await _sessionStore.GetByTenantAsync(tenantId, maxResults: limit + 1, ct: ct);
-        var activeCount = sessions.Count(s => !s.EndedAt.HasValue);
+        var activeCount = await _sessionStore.CountActiveAsync(tenantId, ct);
 
         if (activeCount >= limit)
         {
@@ -102,8 +101,7 @@ public class TenantIsolationService : ITenantIsolationEnforcer
     {
         var tenant = await _tenantStore.GetByIdAsync(tenantId, ct)
             ?? throw new KeyNotFoundException($"Tenant '{tenantId}' was not found.");
-        var sessions = await _sessionStore.GetByTenantAsync(tenantId, ct: ct);
-        var activeCount = sessions.Count(s => !s.EndedAt.HasValue);
+        var activeCount = await _sessionStore.CountActiveAsync(tenantId, ct);
         var agents = await _dynamicAgentRepository.GetAllAsync(ct);
         var stats = await _vectorStore.GetStatsAsync(tenantId, ct);
 

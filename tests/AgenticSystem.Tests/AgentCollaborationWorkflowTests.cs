@@ -1,5 +1,6 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Services;
 using AgenticSystem.Infrastructure.AI;
 using AgenticSystem.Infrastructure.Configuration;
 using AgenticSystem.Infrastructure.AgentFramework;
@@ -61,10 +62,13 @@ public class AgentCollaborationWorkflowTests
                     : stepAgent;
             });
 
+        var fidesTenantAccessor = new TenantContextAccessor();
+        using var fidesServices = CreateFidesServices(fidesTenantAccessor);
+        using var fidesTenantScope = fidesTenantAccessor.BeginScope(new TenantContext { TenantId = "test-tenant" });
         var frameworkFactory = new AgentFrameworkFactory(
             CreateStaticChatClient("unused"),
             LoggerFactory.Create(_ => { }),
-            new ServiceCollection().BuildServiceProvider());
+            fidesServices);
 
         var directExecService = CreateDirectExecutionService(
             ("WorkAgent", new AgentResponse { Content = "Step completed", AgentName = "WorkAgent", Success = true, ToolsUsed = [] }),
@@ -155,10 +159,13 @@ public class AgentCollaborationWorkflowTests
                     : stepAgent;
             });
 
+        var fidesTenantAccessor = new TenantContextAccessor();
+        using var fidesServices = CreateFidesServices(fidesTenantAccessor);
+        using var fidesTenantScope = fidesTenantAccessor.BeginScope(new TenantContext { TenantId = "test-tenant" });
         var frameworkFactory = new AgentFrameworkFactory(
             CreateStaticChatClient("unused"),
             LoggerFactory.Create(_ => { }),
-            new ServiceCollection().BuildServiceProvider());
+            fidesServices);
 
         var directExecService = CreateDirectExecutionService(
             ("WorkAgent", new AgentResponse { Content = "Step completed", AgentName = "WorkAgent", Success = true, ToolsUsed = [] }),
@@ -283,10 +290,13 @@ public class AgentCollaborationWorkflowTests
         mockChatClient.GetService(Arg.Any<Type>(), Arg.Any<object?>())
             .Returns(callInfo => callInfo.Arg<Type>() == typeof(IChatClient) ? mockChatClient : null);
 
+        var fidesTenantAccessor = new TenantContextAccessor();
+        using var fidesServices = CreateFidesServices(fidesTenantAccessor);
+        using var fidesTenantScope = fidesTenantAccessor.BeginScope(new TenantContext { TenantId = "test-tenant" });
         var frameworkFactory = new AgentFrameworkFactory(
             mockChatClient,
             LoggerFactory.Create(_ => { }),
-            new ServiceCollection().BuildServiceProvider());
+            fidesServices);
 
         var directExecService = CreateDirectExecutionService(
             ("WorkAgent", new AgentResponse { Content = "Step completed", AgentName = "WorkAgent", Success = true, ToolsUsed = [] }),
@@ -327,7 +337,7 @@ public class AgentCollaborationWorkflowTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var response = await sut.ExecuteAsync("session-handoff-1", "Implement migration", context, analysis, cts.Token);
 
-        response.Success.Should().BeTrue($"Response content: {response.Content}");
+        response.Success.Should().BeTrue($"Response content: {response.Content}; error: {response.ErrorMessage}");
         response.Metadata["nativeHandoffWorkflow"].Should().Be(true);
         response.Metadata["nativeReviewMode"].Should().Be("HandoffWorkflowBuilder");
         response.Metadata["handoffCheckpointingEnabled"].Should().Be(true);
@@ -382,10 +392,13 @@ public class AgentCollaborationWorkflowTests
                     : stepAgent;
             });
 
+        var fidesTenantAccessor = new TenantContextAccessor();
+        using var fidesServices = CreateFidesServices(fidesTenantAccessor);
+        using var fidesTenantScope = fidesTenantAccessor.BeginScope(new TenantContext { TenantId = "test-tenant" });
         var frameworkFactory = new AgentFrameworkFactory(
             CreateStaticChatClient("Review completed via group chat"),
             LoggerFactory.Create(_ => { }),
-            new ServiceCollection().BuildServiceProvider());
+            fidesServices);
 
         var directExecService = CreateDirectExecutionService(
             ("WorkAgent", new AgentResponse { Content = "Step completed", AgentName = "WorkAgent", Success = true, ToolsUsed = [] }),
@@ -427,7 +440,7 @@ public class AgentCollaborationWorkflowTests
 
         var response = await sut.ExecuteAsync("session-group-chat-1", "Implement migration", context, analysis, CancellationToken.None);
 
-        response.Success.Should().BeTrue();
+        response.Success.Should().BeTrue(response.ErrorMessage ?? "The group chat failed without an error message.");
         response.Metadata["nativeGroupChatTermination"].Should().Be(true);
         response.Metadata["nativeReviewMode"].Should().Be("GroupChatWorkflowBuilder");
         response.Metadata["groupChatTerminationReason"].Should().Be("phrase:review completed");
@@ -449,6 +462,17 @@ public class AgentCollaborationWorkflowTests
         agent.Instructions.Returns($"You are {name}.");
         agent.CanHandleAsync(Arg.Any<AnalysisResult>()).Returns(Task.FromResult(true));
         return agent;
+    }
+
+    private static ServiceProvider CreateFidesServices(ITenantContextAccessor tenantContext)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(tenantContext);
+        services.AddSingleton<IFidesTenantPolicyStore, InMemoryFidesTenantPolicyStore>();
+        services.AddSingleton(Substitute.For<IFidesMediaScanner>());
+        services.Configure<FidesSecuritySettings>(_ => { });
+        return services.BuildServiceProvider();
     }
 
     private static IDirectAgentExecutionService CreateDirectExecutionService(

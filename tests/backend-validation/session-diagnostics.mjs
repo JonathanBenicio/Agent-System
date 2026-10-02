@@ -1,3 +1,4 @@
+import { assertApiTargetMatches, validationSql } from './compose-target.mjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createHmac } from 'node:crypto';
@@ -7,8 +8,8 @@ const directory = process.env.BACKEND_VALIDATION_OUTPUT_DIR || resolve(import.me
 const protectedHistoricalOutput = resolve(import.meta.dirname, '../TestResults/backend-documentation/current');
 if (resolve(directory).toLowerCase() === protectedHistoricalOutput.toLowerCase())
   throw new Error('Refusing to overwrite historical backend-documentation validation artifacts.');
+assertApiTargetMatches(directory);
 const core = JSON.parse(readFileSync(resolve(directory, 'core-results.json'), 'utf8'));
-const compose = resolve(import.meta.dirname, 'compose.yml');
 const tenant = core.run + '-a', otherTenant = core.run + '-b', alice = core.run + '-alice';
 const phase = process.argv.includes('--after-restart') ? 'after-restart' : 'before-restart';
 const results = [];
@@ -29,11 +30,7 @@ async function test(id, criterion, fn) {
   console.log(id+': '+results.at(-1).result+' — '+results.at(-1).detail);
 }
 function check(value,detail){if(!value)throw new Error(detail);}
-function sql(statement) {
-  return execFileSync('docker', ['compose', '-f', compose, '-p', 'agent-system-backend-fix', 'exec', '-T', 'postgres',
-    'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'validation', '-d', 'backend_validation', '-At'],
-  { input: statement, encoding: 'utf8' }).trim();
-}
+function sql(statement) { return validationSql(statement); }
 const fixture = JSON.parse(readFileSync(resolve(directory, 'session-fixture.json'), 'utf8'));
 if (fixture.run !== core.run || fixture.baseline !== core.baseline) throw new Error('Fixture belongs to another run/revision');
 const previous=phase==='after-restart'?JSON.parse(readFileSync(resolve(directory,'session-before-restart.json'),'utf8')):null;

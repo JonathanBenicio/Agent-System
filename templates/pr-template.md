@@ -9,7 +9,7 @@ Componentes/exclusões/migração ou N/A justificado.
 | Verificação | Comando/ambiente/SHA | Resultado | Evidência |
 |---|---|---|---|
 | ... | ... | passou/falhou/ignorado/não executado | link |
-Cobertura medida/relatório versus 80%; nunca estimada.
+Cobertura medida/relatório e se é bloqueante nesta entrega; nunca estimada.
 ## Pendências e prontidão
 Gaps/links e condições para sair de draft.
 - [ ] Contratos/índices sincronizados.

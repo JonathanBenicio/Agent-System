@@ -1,5 +1,7 @@
 # Backend — contratos, acesso e recursos
 
+Revisão posterior do PR #132 identificou 32 achados que exigem correção antes de recomendar merge. [Epic #139/plano](../plan/pr132-review-remediation.md) distingue cada achado, issue, implementação e [validação da correção](validation/pr132-review-remediation-2026-10-02.md). Evidências anteriores abaixo continuam datadas pelo próprio SHA; não provam a nova entrega.
+
 Baseline histórica da auditoria documental: `f8de7a6` (2026-09-28). Este hub foi reconciliado com a branch de integração para `develop` em 2026-09-30. [Epic #110](https://github.com/JonathanBenicio/Agent-System/issues/110) · [plano documental](../plan/backend-documentation-validation.md).
 
 A correção ativa de #111–#117 está registrada em [ADR-035](../architecture/adr/035-backend-core-isolation-and-reliability.md) e [plano/status](../plan/backend-core-remediation.md). Resultados desta branch e gaps restantes: [relatório da correção](validation/backend-core-remediation.md). O isolamento de system/tenant de #97 tem evidência dedicada em [tenant-system-scope-2026-10-01](validation/tenant-system-scope-2026-10-01.md). A validação de documentação do baseline está preservada em [2026-09-28](validation/2026-09-28.md), sem misturar resultados de branches distintas.

@@ -1450,6 +1450,9 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(150)")
                         .HasColumnName("name");
 
+                    b.Property<string>("SpecificationJson")
+                        .HasColumnType("jsonb");
+
                     b.Property<string>("TenantId")
                         .IsRequired()
                         .HasMaxLength(128)

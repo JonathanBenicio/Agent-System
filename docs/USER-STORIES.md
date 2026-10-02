@@ -1,5 +1,116 @@
 # User Stories — Agentic System
 
+## BACK-REVIEW-139 — Corrigir os 32 achados do PR #132
+
+Como usuário e mantenedor do sistema multi-tenant, quero corrigir os defeitos confirmados na revisão integral, para operar autenticação, recursos e workflows com contratos coerentes e evidência verificável.
+
+[Epic #139](https://github.com/JonathanBenicio/Agent-System/issues/139) · [ADR-041](architecture/adr/041-pr132-review-remediation.md) · [Plano/matriz R01–R32](plan/pr132-review-remediation.md) · [Validação](backend/validation/pr132-review-remediation-2026-10-02.md).
+Status: em execução, implementação/validação pendentes salvo contribuição documental R30 em 169c3f8. Esta epic não fecha automaticamente escopos antigos nem promove Lab ao núcleo.
+
+### BACK-REVIEW-139-01 — Autorização OpenAI, sessão HttpOnly e preview seguro de skills
+Issue: [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) · Achados: R02, R03, R20, R21.
+Critérios de aceite:
+- [ ] Authorization cru sem Bearer aplica tenant ativo, membership e papel; associação revogada/inativa é negada antes de executar.
+- [ ] Login usa cookie HttpOnly sem credencial em localStorage/headers persistidos; logout chama o backend e invalida autenticação cookie.
+- [ ] Preview de skill usa renderização Markdown segura; payload HTML/script/event handler não executa nem cria conteúdo ativo.
+- [ ] Regressões de login/logout/raw-key revogada e stored XSS exercitam os caminhos reais.
+
+
+### BACK-REVIEW-139-02 — Aplicar FIDES aos despachos de execução direta
+Issue: [#141](https://github.com/JonathanBenicio/Agent-System/issues/141) · Achados: R01.
+Critérios de aceite:
+- [ ] Chamada direta e roteamento simples inspecionam conteúdo antes do provider com a política do tenant.
+- [ ] Credenciais obrigatórias são redigidas; falha/timeout de proteção bloqueia despacho.
+- [ ] Não adicionar caminho paralelo nem promover Lab; testes com provider fake capturam o conteúdo realmente enviado.
+
+
+### BACK-REVIEW-139-03 — Limitar dimensões e memória de processamento ONNX
+Issue: [#142](https://github.com/JonathanBenicio/Agent-System/issues/142) · Achados: R04.
+Critérios de aceite:
+- [ ] Upload/update/test e worker validam dimensões, canais e cálculo de bytes com aritmética segura antes de alocar.
+- [ ] Limites configuráveis possuem padrão seguro e erro de validação claro; configurações/modelos válidos seguem funcionais.
+- [ ] Regressões rejeitam negativos, overflow e tamanhos acima do orçamento sem provocar OOM.
+
+
+### BACK-REVIEW-139-04 — Preservar isolamento e escrita autorizada de salas e agentes
+Issue: [#143](https://github.com/JonathanBenicio/Agent-System/issues/143) · Achados: R06, R07, R19, R23.
+Critérios de aceite:
+- [ ] Ingestão de sala exige Editor/Admin, incluindo suporte; Reader é negado antes de gravar.
+- [ ] Repositório dinâmico InMemory particiona por tenant; nomes iguais não colidem nem vazam/desativam outros tenants.
+- [ ] Filtro room_ids tem semântica compartilhada de lista permitida em InMemory/SQLite/Pinecone e PostgreSQL; vazio nega.
+- [ ] Drop/upload envia roomId distinto de source e chunks aparecem apenas na sala/tenant autorizados.
+
+
+### BACK-REVIEW-139-05 — Corrigir reset, cancelamento e teto uniforme de sessões
+Issue: [#144](https://github.com/JonathanBenicio/Agent-System/issues/144) · Achados: R08, R09, R10, R11.
+Critérios de aceite:
+- [ ] Quota InMemory faz reset diário determinístico, preservando isolamento; PostgreSQL mantém uso após restart.
+- [ ] Stream cancelado/falho registra consumo recebido e estimativa explícita quando provider não reporta uso, sem duplicação.
+- [ ] Contagem de sessões consulta todas as ativas; histórico encerrado recente não esconde ativas antigas.
+- [ ] Criação aplica teto em REST/SSE/SignalR/direct; continuação da sessão autorizada funciona no teto; concorrência não permite ultrapassar limite.
+
+
+### BACK-REVIEW-139-06 — Alinhar contratos, aprovação, paralelismo e scheduler de workflows
+Issue: [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) · Achados: R12, R13, R14, R15, R16, R25.
+Critérios de aceite:
+- [ ] Tipos de step são estáveis e JSON/UI compartilham string enum; round-trip de todos os tipos preserva significado.
+- [ ] Aprovação/rejeição identifica step; duas aprovações paralelas podem ser decididas independentemente, com compatibilidade para uma pendente.
+- [ ] Outputs paralelos têm merge/sincronização segura; ciclos e dependências ausentes são rejeitados antes de salvar/executar.
+- [ ] Claim global requer SystemOperationContext interno; execução tenant-owned usa tenant real.
+- [ ] UI só confirma decisão após sucesso e preserva estado/mostra erro em 403/409/500/offline.
+
+
+### BACK-REVIEW-139-07 — Preservar lifetime do DbContext em ferramentas de analytics
+Issue: [#146](https://github.com/JonathanBenicio/Agent-System/issues/146) · Achados: R17.
+Critérios de aceite:
+- [ ] Scope/DbContext permanecem vivos até finalizar consultas de custos/performance/sessões/workflows.
+- [ ] Teste com provider DI real de escopo detecta descarte prematuro; tenant não pode consultar dados de outro.
+- [ ] Cancelamento e erro encerram scope corretamente sem vazamentos.
+
+
+### BACK-REVIEW-139-08 — Particionar cache de contexto pela consulta e filtros
+Issue: [#147](https://github.com/JonathanBenicio/Agent-System/issues/147) · Achados: R18.
+Critérios de aceite:
+- [ ] Perguntas distintas do mesmo usuário/tenant não reutilizam resposta específica da primeira consulta.
+- [ ] Cache inclui consulta normalizada/filtros pertinentes ou evita cache de contexto específico; isolamento usuário/tenant preservado.
+- [ ] Regressões cobrem resultado vazio seguido de matches e perguntas não relacionadas.
+
+
+### BACK-REVIEW-139-09 — Alinhar rotas de tools e round-trip de manifestos YAML
+Issue: [#148](https://github.com/JonathanBenicio/Agent-System/issues/148) · Achados: R22, R24.
+Critérios de aceite:
+- [ ] UI/SDK/API concordam em /api/agent/tools list/get/delete/execute e auth/tenant permanecem obrigatórios.
+- [ ] Template e serializer visual geram metadata/instructions válidos para o DTO, com rota save-yaml real.
+- [ ] Alternar visual/YAML e salvar/reabrir preserva campos; testes validam manifesto oficial e rotas.
+
+
+### BACK-REVIEW-139-10 — Executar CI/E2E nos contratos atuais e isolar diagnósticos Compose
+Issue: [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) · Achados: R05, R26, R27, R28, R31.
+Critérios de aceite:
+- [ ] Workflow roda para develop e branch integration de #132; job Playwright inicia frontend e aguarda servidor.
+- [ ] Mocks usam /api/chat/configuration e content/agentName; teste XSS confirma renderização antes da ausência de execução.
+- [ ] Teste timeout usa política atual/controlável e verifica recuperação; Cypress inicia/usa servidor frontend correto.
+- [ ] Scripts SQL recebem nome de projeto Compose da execução, nunca consultam stack/banco não relacionado.
+- [ ] Lint/build/Playwright/Cypress e diagnóstico de isolamento passam; falhas não são convertidas em sucesso.
+
+
+### BACK-REVIEW-139-11 — Unificar IDs de stories e regras de commits e conclusão
+Issue: [#150](https://github.com/JonathanBenicio/Agent-System/issues/150) · Achados: R29, R30.
+Critérios de aceite:
+- [ ] Cada story tem ID único e todas as referências ADR/plano/índices apontam ao significado correto.
+- [ ] GEMINI/AGENTS/templates concordam Refs para parcial e Closes apenas critérios completos intencionais.
+- [ ] Planos/ADRs/docs normativos refletem contratos corrigidos e evidência real; histórico não é apresentado como validação atual.
+- [ ] Estado das issues antigas é confrontado com critérios completos; não fechar por subconjunto.
+
+
+### BACK-REVIEW-139-12 — Corrigir conclusão de tasks do schema opcional DurableTask
+Issue: [#151](https://github.com/JonathanBenicio/Agent-System/issues/151) · Achados: R32.
+Critérios de aceite:
+- [ ] PostgreSQL16 executa dt.complete_tasks para lote0/1/2+ sem DISTINCT+FOR UPDATE inválido e sem ROW_COUNT agregado incorreto.
+- [ ] Probe transacional valida deleção/conclusão atômica e concorrência/retry conforme contrato; erro não publica resultado parcial.
+- [ ] Instalação limpa aplica migrations e cria tabelas/modelo corretos; engine padrão permanece dinâmico e DurableTask opcional.
+- [ ] Se correção exigir nova migration, manter cadeia explícita e has-pending-model-changes limpo.
+
 ## BACK-FIX-111–117 — Núcleo seguro e operacional
 Como usuário de um tenant, quero executar conversas e consumir recursos autorizados sem acesso cruzado ou falhas de persistência, para operar o núcleo com isolamento e contabilização confiáveis.
 

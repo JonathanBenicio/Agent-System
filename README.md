@@ -1,5 +1,7 @@
 # 🤖 Sistema Agentic Generalista
 
+> Correção dos 32 achados do PR #132: [epic #139](https://github.com/JonathanBenicio/Agent-System/issues/139), [plano e matriz](docs/plan/pr132-review-remediation.md), [ADR-041](docs/architecture/adr/041-pr132-review-remediation.md) e [evidências por contexto](docs/backend/validation/pr132-review-remediation-2026-10-02.md). Implementação validada e CI verde no SHA `8ba0dd4`; PR #152 permanece draft aguardando revisão/merge.
+
 > Backend: [contratos, acesso, recursos e validação](docs/backend/README.md). Processo: [templates](templates/README.md).
 > Especificações e estado das 46 issues abertas (snapshot 2026-09-29): [registro canônico](docs/plan/open-issues-specification-audit-2026-09-29.md).
 > Revisão do PR: [correções e evidências](docs/backend/validation/2026-09-28-review-fixes.md).

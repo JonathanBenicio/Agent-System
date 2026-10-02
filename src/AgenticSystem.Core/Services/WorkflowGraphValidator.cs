@@ -20,7 +20,20 @@ public static class WorkflowGraphValidator
             throw new ArgumentException("O workflow deve conter pelo menos uma etapa (Step).");
         }
 
+        if (workflow.Steps.Any(step => string.IsNullOrWhiteSpace(step.Id)) ||
+            workflow.Steps.Select(step => step.Id).Distinct(StringComparer.Ordinal).Count() != workflow.Steps.Count)
+            throw new ArgumentException("Etapas precisam de IDs únicos e não vazios.");
         var stepsMap = workflow.Steps.ToDictionary(s => s.Id);
+        foreach (var step in workflow.Steps)
+        {
+            if (!Enum.IsDefined(step.StepType))
+                throw new ArgumentException($"Tipo inválido na etapa '{step.Id}'.");
+            foreach (var dependency in step.DependsOn)
+                if (!stepsMap.ContainsKey(dependency) || dependency == step.Id)
+                    throw new ArgumentException($"Dependência inválida '{dependency}' na etapa '{step.Id}'.");
+            if (step.ParallelSteps.Count > 0)
+                Validate(new WorkflowDefinition { Steps = step.ParallelSteps });
+        }
 
         // 1. Validar se todas as arestas referenciam etapas válidas e existentes
         if (workflow.Edges != null)
@@ -46,6 +59,8 @@ public static class WorkflowGraphValidator
                 {
                     throw new ArgumentException($"Aresta circular inválida: Etapa '{edge.FromStepId}' não pode referenciar a si mesma.");
                 }
+                if (!stepsMap[edge.ToStepId].DependsOn.Contains(edge.FromStepId, StringComparer.Ordinal))
+                    throw new ArgumentException($"Aresta '{edge.FromStepId}->{edge.ToStepId}' não corresponde a DependsOn.");
             }
         }
 
@@ -58,6 +73,9 @@ public static class WorkflowGraphValidator
 
         // Construir lista de adjacência a partir das arestas
         var adjacencyList = workflow.Steps.ToDictionary(s => s.Id, _ => new List<string>());
+        foreach (var step in workflow.Steps)
+            foreach (var dependency in step.DependsOn)
+                adjacencyList[dependency].Add(step.Id);
         if (workflow.Edges != null)
         {
             foreach (var edge in workflow.Edges)

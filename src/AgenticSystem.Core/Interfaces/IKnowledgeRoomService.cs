@@ -6,6 +6,7 @@ public interface IKnowledgeRoomService
 {
     Task<IEnumerable<KnowledgeRoom>> ListRoomsAsync(string tenantId, string userId, CancellationToken ct = default);
     Task<KnowledgeRoom?> GetRoomAsync(string id, string tenantId, string userId, CancellationToken ct = default);
+    Task<bool> CanWriteRoomAsync(string id, string tenantId, string userId, CancellationToken ct = default);
     Task<KnowledgeRoom> CreateRoomAsync(string tenantId, string userId, KnowledgeRoom room, CancellationToken ct = default);
     Task<KnowledgeRoom> UpdateRoomAsync(string tenantId, string userId, KnowledgeRoom room, CancellationToken ct = default);
     Task<bool> DeleteRoomAsync(string id, string tenantId, string userId, CancellationToken ct = default);

@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "cy:run": "cypress run",
+    "cy:run": "node scripts/run-cypress.mjs",
     "cy:open": "cypress open"
   },
   "dependencies": {
