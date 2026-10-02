@@ -67,7 +67,7 @@ public sealed class HyperlightSandboxedExecutorTests
         result.Output.Should().Be("sandbox-output:4");
     }
 
-    [RequiresHyperlightHypervisorFact]
+    [RequiresHyperlightIntegrationFact]
     public async Task OfficialHyperlightRunnerExecutesJavaScript()
     {
         using var runner = new HyperlightCodeActRunner();
@@ -140,13 +140,11 @@ public sealed class HyperlightSandboxedExecutorTests
     }
 }
 
-public sealed class RequiresHyperlightHypervisorFactAttribute : FactAttribute
+public sealed class RequiresHyperlightIntegrationFactAttribute : FactAttribute
 {
-    public RequiresHyperlightHypervisorFactAttribute()
+    public RequiresHyperlightIntegrationFactAttribute()
     {
-        if (OperatingSystem.IsLinux() && !File.Exists("/dev/kvm"))
-            Skip = "The Hyperlight integration test requires a Linux runner with /dev/kvm; this host cannot create the sandbox hypervisor.";
-        else if (!OperatingSystem.IsLinux() && !OperatingSystem.IsWindows())
-            Skip = "The Hyperlight integration test requires a supported host with an available hypervisor.";
+        if (!string.Equals(Environment.GetEnvironmentVariable("AGENTIC_TEST_HYPERLIGHT"), "true", StringComparison.OrdinalIgnoreCase))
+            Skip = "Set AGENTIC_TEST_HYPERLIGHT=true on a runner with a configured Hyperlight hypervisor to run this integration test.";
     }
 }
