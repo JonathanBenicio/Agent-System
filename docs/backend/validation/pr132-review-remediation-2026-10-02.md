@@ -17,16 +17,17 @@ Branch: `codex/pr132-review-remediation`. Base do PR #152: `integration/develop-
 | Analytics/memória | #146/#147 | 14 regressões com escopo DI real, EF InMemory, isolamento A/B, cache por consulta/filtros e invalidação. | 14 passaram. Não demonstra consultas analíticas em servidor PostgreSQL externo. |
 | Tools/YAML | #148 | TestServer cobre rotas, membership revogada, papel Viewer, salvamento/edição da especificação e manifesto versionado. Playwright cobre edição visual/YAML com strings, escapes e configuração. PostgreSQL cobre persistência e isolamento após migration. | Testes direcionados e E2E passaram; migration e persistência foram validadas numa base nova descrita abaixo. |
 | CI/E2E/diagnósticos | #149 | Workflow GitHub inicia frontend; Playwright tem `webServer`; Cypress inicia Vite em porta dedicada; fixtures/mocks usam contratos REST atuais. Helper SQL e launcher exigem o mesmo projeto/base e comparam o manifesto da API. | Lint/build passaram; Playwright configurado para CI passou 48/48 (24 Chromium e 24 Firefox); Cypress passou 1/1. Smoke local da API retornou 200 e a base `review_pr152_api_20261002` recebeu 20 migrations; CI remoto ainda precisa executar após o push final. |
-| IDs/documentação | #150 | Story multi-key usa `BACK-KEYS-020`; US-42 de FinOps e referências históricas permanecem. Regras em AGENTS/GEMINI/workflow/templates dizem PT-BR, issue relacionada, descrição e `Refs`/`Closes`. | R29/R30 implementados. Checker local encontrou 169 documentos, 936 links e 0 destinos quebrados. |
+| IDs/documentação | #150 | Story multi-key usa `BACK-KEYS-020`; US-42 de FinOps e referências históricas permanecem. Regras em AGENTS/GEMINI/workflow/templates dizem PT-BR, issue relacionada, descrição e `Refs`/`Closes`. Issues originais continuam abertas; decisões adiadas e escopos futuros estão na matriz. | R29/R30 implementados. Checker local encontrou 169 documentos, 936 links e 0 destinos quebrados. Falta sincronizar descrições públicas e Development do PR depois do CI. |
 | SQL DurableTask | #151 | Migration `RepairDurableTaskCompletion`; teste de schema compara todas as colunas EF e executa probes de lote 0/1/2/4, rollback e instância terminal; segundo teste disputa duas conexões concorrentes. | 2 testes DurableTask e 1 teste de concorrência de sessão passaram na base nova, depois de 20 migrations. 70 tabelas públicas; modelo EF sem divergência. |
 
 ## Suíte completa e navegador
 
-- `dotnet test --no-restore`: **924 aprovados, 24 ignorados, 0 falhas; 948 testes**. PostgreSQL, OCR e Ollama condicionais foram ignorados quando as variáveis/serviços não foram configurados. A execução completa não recebeu `AGENTIC_TEST_POSTGRES`/`AGENTIC_REVIEW_POSTGRES`; os gates condicionais foram executados separadamente em bancos isolados.
+- `dotnet test --no-restore`: **923 aprovados, 25 ignorados, 0 falhas; 948 testes**. PostgreSQL, OCR, Ollama e Hyperlight condicionais foram ignorados quando as variáveis/serviços não foram configurados. A execução completa não recebeu `AGENTIC_TEST_POSTGRES`/`AGENTIC_REVIEW_POSTGRES`/`AGENTIC_TEST_HYPERLIGHT`; os gates condicionais foram executados separadamente.
 - Playwright pelo comando padrão: **48 aprovadas, 0 falhas** — 24 em Chromium e 24 em Firefox. Os testes de login com API real são excluídos quando `REAL_E2E` está desligado; os fluxos UI incluídos usam API mockada e interface React real.
 - Regressões de aprovação/workflow: **8 aprovadas** com a UI, store e hook reais; a API foi mockada para controlar HTTP 403/409/500.
 - Cypress: **1 aprovado** em Vite iniciado pelo runner na porta 5193; a resposta REST usa API mockada.
 - Frontend: `npm run lint` e `npm run build` passaram no WSL sobre este checkout.
+- Hyperlight: execução explícita com `AGENTIC_TEST_HYPERLIGHT=true` no host Windows com hypervisor passou **8/8**. Runner Linux sem hypervisor pula apenas o teste oficial do sandbox; gates do feature flag continuam ativos.
 
 ## Banco novo e migrations
 
@@ -44,9 +45,9 @@ O smoke do launcher verificou manifesto `api-target.json`, `/health` com HTTP 20
 
 ## Ambientes e evidências anteriores
 
-As execuções direcionadas registraram: #140 23 backend/4 Chromium; #141 28 testes FIDES/MAF, 2 OCR e 1 PostgreSQL; #142 49; #143 65 regressões e 1 filtro PostgreSQL real; #144 28, HTTP, concorrência e persistência PostgreSQL; #145 34 backend/8 browser/5 PostgreSQL; #146/#147 14. A suite completa atual passou com 924 aprovados, 24 ignorados e zero falhas.
+As execuções direcionadas registraram: #140 23 backend/4 Chromium; #141 28 testes FIDES/MAF, 2 OCR e 1 PostgreSQL; #142 49; #143 65 regressões e 1 filtro PostgreSQL real; #144 28, HTTP, concorrência e persistência PostgreSQL; #145 34 backend/8 browser/5 PostgreSQL; #146/#147 14. A suite completa default passou com 923 aprovados, 25 ignorados e zero falhas; Hyperlight passou 8/8 quando habilitado no host compatível.
 
-Testes com provider fake provam o conteúdo enviado ao contrato fake e a ordem de bloqueio. Eles não provam disponibilidade, registro em produção, streaming de provider real ou integração Gateway. OCR de imagem e PDF passou em execução separada com o modelo inglês oficial; a suite completa sem configurar OCR os mantém entre os 24 ignorados. A2A/AG-UI permanecem preview; retomada do supervisor em outro host segue na issue futura #134.
+Testes com provider fake provam o conteúdo enviado ao contrato fake e a ordem de bloqueio. Eles não provam disponibilidade, registro em produção, streaming de provider real ou integração Gateway. OCR de imagem e PDF passou em execução separada com o modelo inglês oficial; a suite completa sem configurar OCR e Hyperlight mantém os respectivos testes condicionais ignorados entre os 25. A2A/AG-UI permanecem preview; retomada do supervisor em outro host segue na issue futura #134.
 
 ## Gates ainda abertos
 

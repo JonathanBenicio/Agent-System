@@ -16,6 +16,20 @@ O usuário autorizou validar PostgreSQL com o Compose do repositório ou porta i
 
 DurableTask permanece opcional. MAF 1.23, A2A/AG-UI em preview, Gateway e provider de produção, retomada de sessões do supervisor entre hosts, forecast e PRs #31/#73 permanecem fora desta entrega e têm planejamento próprio.
 
+## Disposição das issues preexistentes
+
+Estado conferido no GitHub em 2026-10-02: as issues abaixo permanecem abertas. Nenhuma issue antiga será fechada apenas porque um trecho relacionado entrou neste PR.
+
+| Issue(s) | Disposição registrada |
+|---|---|
+| [#31](https://github.com/JonathanBenicio/Agent-System/issues/31) e [#73](https://github.com/JonathanBenicio/Agent-System/issues/73) | Avaliar o cleanup/documentação e a pilha legada depois do merge do #132, conforme decisão do usuário. |
+| [#97](https://github.com/JonathanBenicio/Agent-System/issues/97) | Adiado para depois do #132; manter aberto. O novo tipo de contexto de sistema não fecha os demais critérios da issue. |
+| [#120](https://github.com/JonathanBenicio/Agent-System/issues/120), [#122](https://github.com/JonathanBenicio/Agent-System/issues/122), [#133](https://github.com/JonathanBenicio/Agent-System/issues/133), [#134](https://github.com/JonathanBenicio/Agent-System/issues/134) | Provider/Gateway de produção e retomada de supervisor entre hosts ficam para planejamento/trabalho futuro. Correção SQL opcional não prova esses fluxos. |
+| [#121](https://github.com/JonathanBenicio/Agent-System/issues/121) e [#135](https://github.com/JonathanBenicio/Agent-System/issues/135) | Validação de protocolos preview e previsão FinOps continuam futuros. |
+| [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) | Quotas proativas, processamento em lote e `DotNetExpertAgent` devem permanecer em stories/issues separadas; esta epic não fecha o restante da visão. |
+| [#99](https://github.com/JonathanBenicio/Agent-System/issues/99), [#104](https://github.com/JonathanBenicio/Agent-System/issues/104), [#105](https://github.com/JonathanBenicio/Agent-System/issues/105), [#106](https://github.com/JonathanBenicio/Agent-System/issues/106), [#109](https://github.com/JonathanBenicio/Agent-System/issues/109) | Decisões de produto e código relacionados foram tratados em contexto; as issues completas permanecem abertas até seus critérios próprios serem confrontados com evidência. |
+| [#110](https://github.com/JonathanBenicio/Agent-System/issues/110), [#111](https://github.com/JonathanBenicio/Agent-System/issues/111), [#113](https://github.com/JonathanBenicio/Agent-System/issues/113), [#115](https://github.com/JonathanBenicio/Agent-System/issues/115), [#117](https://github.com/JonathanBenicio/Agent-System/issues/117), [#123](https://github.com/JonathanBenicio/Agent-System/issues/123) | Mantidas abertas. A contribuição dos achados #140–#150 não substitui a avaliação integral das issues originais. |
+
 ## Subtarefas e estado
 
 | Issue | Achados | Story | Estado atual |
@@ -30,7 +44,7 @@ DurableTask permanece opcional. MAF 1.23, A2A/AG-UI em preview, Gateway e provid
 | [#147 — Cache de memória](https://github.com/JonathanBenicio/Agent-System/issues/147) | R18 | BACK-REVIEW-139-08 | Implementada; consulta, filtros, usuário, tenant e invalidação são testados. |
 | [#148 — Rotas de tools e YAML](https://github.com/JonathanBenicio/Agent-System/issues/148) | R22, R24 | BACK-REVIEW-139-09 | Implementada; API, manifesto, persistência PostgreSQL e round-trip visual/YAML passaram. |
 | [#149 — CI, E2E e diagnósticos isolados](https://github.com/JonathanBenicio/Agent-System/issues/149) | R05, R26–R28, R31 | BACK-REVIEW-139-10 | Implementada localmente; lint/build, Playwright Chromium+Firefox e Cypress passaram. Falta o resultado do CI remoto após publicar os commits finais. |
-| [#150 — IDs e documentação](https://github.com/JonathanBenicio/Agent-System/issues/150) | R29, R30 | BACK-REVIEW-139-11 | Implementada; checker encontrou 169 documentos e 936 links, sem destinos quebrados. Sincronização final das issues/PR ainda pendente. |
+| [#150 — IDs e documentação](https://github.com/JonathanBenicio/Agent-System/issues/150) | R29, R30 | BACK-REVIEW-139-11 | IDs, regras e auditoria das issues originais concluídos; checker encontrou 169 documentos e 936 links sem destinos quebrados. Atualizar descrições públicas e relacionar apenas subtarefas completas no PR após CI. |
 | [#151 — SQL opcional DurableTask](https://github.com/JonathanBenicio/Agent-System/issues/151) | R32 | BACK-REVIEW-139-12 | Probes de lote, rollback e concorrência passaram numa base nova após aplicar as 20 migrations; store EF comparado ao schema (70 tabelas). |
 
 ## Matriz dos achados
@@ -74,7 +88,7 @@ DurableTask permanece opcional. MAF 1.23, A2A/AG-UI em preview, Gateway e provid
 
 | Verificação | Resultado | Limites |
 |---|---|---|
-| Suíte completa .NET 10 (`dotnet test --no-restore`) | 924 aprovados, 24 ignorados, 0 falhas; 948 testes | Execução sem variáveis PostgreSQL/OCR; testes condicionais foram ignorados. |
+| Suíte completa .NET 10 (`dotnet test --no-restore`) | 923 aprovados, 25 ignorados, 0 falhas; 948 testes | Default não define PostgreSQL/OCR/Hyperlight; os gates condicionais foram executados separadamente. Hyperlight: 8/8 com `AGENTIC_TEST_HYPERLIGHT=true` no host Windows com hypervisor. |
 | Regressões por contexto | #140: 23 backend e 4 Chromium; #141: 28 FIDES/MAF, 2 OCR, 1 PostgreSQL; #142: 49; #143: 65 regressões + 1 PostgreSQL real; #144: 28 + HTTP + 2 PostgreSQL; #145: 34 backend + 8 browser + 5 PostgreSQL; #146/#147: 14; #148: rotas/manifesto/persistência; #149: verificações abaixo | Doubles, EF InMemory e HTTP fake estão identificados por contexto no relatório; não equivalem a provider externo real. |
 | Playwright configurado para CI | 48 aprovados: 24 Chromium e 24 Firefox; 0 falhas | API mockada nos fluxos UI. Os testes de login que exigem API real ficam excluídos sem `REAL_E2E=true`; a regressão específica de approval também passou 8/8 no harness. |
 | Cypress | 1 aprovado, 0 falhas; servidor Vite gerenciado pelo runner | Teste de UI com API mockada. |
