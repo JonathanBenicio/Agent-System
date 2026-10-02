@@ -208,6 +208,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         agentTier: data.agentTier,
         actions: data.actionsPerformed,
         tools: data.toolsUsed,
+        citations: data.citations,
         success: data.success,
         sessionId: data.sessionId,
         timestamp: data.timestamp || new Date().toISOString(),

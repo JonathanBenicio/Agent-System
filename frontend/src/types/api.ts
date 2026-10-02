@@ -827,6 +827,7 @@ export interface ChatMessageDto {
   success?: boolean
   timestamp: string
   memoryInjected?: boolean
+  citations?: import('./chat').Citation[]
 }
 
 export interface SessionSummaryDto {
