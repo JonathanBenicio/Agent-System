@@ -35,7 +35,7 @@ Fora do escopo: MAF 1.23, A2A/AGUI preview (#121), Gateway produção/reload (#1
 | #148 agent-contracts | R22, R24 | BACK-REVIEW-139-09 | pendente |
 | #149 ci | R05, R26, R27, R28, R31 | BACK-REVIEW-139-10 | pendente |
 | #150 docs | R29, R30 | BACK-REVIEW-139-11 | implementados; IDs/refs e PT-BR/issue por commit; reconciliação final pendente |
-| #151 durabletask | R32 | BACK-REVIEW-139-12 | pendente |
+| #151 durabletask | R32 | BACK-REVIEW-139-12 | implementado;2PGreais/19migrations/69tabelascolunas/concurrency; gatefinal pendente |
 
 ### Matriz integral dos achados
 IDs seguem a ordem do relatório final publicado nesta conversa. Um achado só muda para validado quando há evidência que cobre seu cenário.
@@ -72,7 +72,7 @@ $165 regressões + lint/build por contexto; PG/browser upload pendentes |
 | R29 | Story US-42 duplicada | USER-STORIES / story dedicada | [#150](https://github.com/JonathanBenicio/Agent-System/issues/150) | multi-key BACK-KEYS-020;US-42 FinOps preservada; caminho histórico mantido |
 | R30 | GEMINI orienta Closes indevido | GEMINI / commit-rules | [#150](https://github.com/JonathanBenicio/Agent-System/issues/150) | documentação corrigida em 169c3f8; revisão final pendente |
 | R31 | Cypress não acessa servidor frontend | Cypress config / package scripts | [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) | pendente |
-| R32 | dt.complete_tasks usa SQL inválido | migration DurableTask opcional | [#151](https://github.com/JonathanBenicio/Agent-System/issues/151) | pendente |
+| R32 | dt.complete_tasks usa SQL inválido | migration DurableTask opcional | [#151](https://github.com/JonathanBenicio/Agent-System/issues/151) | RepairDurableTaskCompletion; lotes0/1/2/4/rollback/race PostgreSQL16 passaram |
 
 ## Critérios de aceite
 - [ ] R01–R32 corrigidos ou refutados por evidência concreta, sem substituição por solução que preserve o defeito.

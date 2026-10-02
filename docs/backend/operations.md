@@ -72,6 +72,11 @@ O [relatório histórico desta baseline](validation/2026-09-28.md) pode ser repr
 Verificar as regressões do harness com `node --test tests/backend-validation/evidence.test.mjs`. Esses testes controlados verificam as asserções e o parser; não certificam o produto. CHAT-02 exige HTTP 403/404. HUB-02/03 exigem HUB-01 aprovado e negação explícita HTTP 403 ou a mensagem de violação de tenant conhecida do filtro. Timeout, desconexão, erro de provider e erros genéricos falham; fechamento sem motivo de autorização nunca é apresentado como prova de isolamento.
 # Limites de preprocessing ONNX — correção #142
 
+## DurableTask opcional — conclusão de tasks (#151)
+`RepairDurableTaskCompletion` substitui a função SQL `dt.complete_tasks` sem mudar assinatura, tabelas ou engine padrão. Locks são feitos nas linhas de instância, em ordem consistente; resultados só entram na execução ativa correspondente. A contagem usa cardinalidade do array deletado, não ROW_COUNT de um SELECT agregado. Um lote incompleto falha com40001 e reverte eventos/payloads/deletes atomicamente.
+
+Downgrade desta migration conserva a correção backward-compatible, para não reintroduzir a função inválida; remover o schema continua responsabilidade da migration que o criou. Instalação nova aplica19migrations; nenhuma transição de banco de produto antigo faz parte desta entrega. [Probes reais e schema](validation/pr132-review-remediation-2026-10-02.md).
+
 `AgenticSystem:Onnx:InputLimits` define `MaxDimension=4096` e `MaxPreprocessingBytes=67108864` (64MiB). Valores devem ser positivos; configuração inválida falha na inicialização. Canais NCHW suportados:1 ou3. Upload/update/test e worker rejeitam dimensões inválidas antes de execução; o tool repete a validação para registros legados.
 
 Orçamento conservador por imagem:`width × height × (6 + channels × 4)` para resize/padding RGB24 e tensor float; identificação prévia acrescenta o RGB24 da imagem fonte. Multiplicações são checked/long e o limite de array também é verificado. Apenas um frame é decodificado. Pesos ONNX, outputs e alocações internas do runtime não estão nesse orçamento; ele não substitui limite operacional total do processo. [Evidência](validation/pr132-review-remediation-2026-10-02.md).

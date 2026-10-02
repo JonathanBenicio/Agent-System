@@ -22,6 +22,10 @@ Status: em execução; gate integrado da correção ainda não executado.
 
 ## Gate final
 
+### Contexto #151 — função SQL opcional e schema novo
+2testes Release passaram em PostgreSQL16 Compose55432, DBtemporário review_pr152_durable_20261002_1723.19migrations aplicadas,69tabelasEF com TODAS as colunas comparadas ao modelo (xmin explicitamente em pg_attribute),70tabelaspublic incluindohistory; has-pending-model-changes limpo.
+ProbesSQL com BEGIN/ROLLBACK: lotes0/1/2/4, missingtask→40001 sem eventos/payloads/deletes parciais, terminalinstance semevento. Probe concorrente2conexões:1sucesso e1retry40001, exatamente1evento/1payload. Fixturelimpa seusdados, DBtemporário excluído e serviçoCompose parado; volume preservado. Isso comprova a função opcional, não workflows DurableTask de produto ou provider externo.
+
 ### Contexto #145 — workflows, implementação parcial
 34regressões backend direcionadas passaram,0falhas/skips: todos os step types em nomes/números snapshot, missing/self/cycle antes de persistir, duas approvals independentes,8branches realmente concorrentes com merge determinístico, claim sem/wrongcapability antesDB e worker system→tenant/restauração. API/engine reais com store InMemory/fakes de agentes; não prova SQL de claim real.
 Frontend lint/build passou após alinhar strings, preservar definição no store, selecionar approval porstep e não confirmar erroHTTP. Ainda faltam browser roundtrip/approval falha, fixturesPostgreSQL adaptadas ao claim tipado e gate integrado. Implementação usa estado isolado porbranch e persistência porbatch, preservando paralelismo; idempotência externa apóscrash permanece limitejá registrado em#120.
