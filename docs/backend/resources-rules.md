@@ -57,3 +57,6 @@ Uma chamada de chat pode selecionar uma sala pelo contexto `rag.knowledgeRoomId`
 ## Validação associada
 
 Na branch `fix/backend-core-tenancy`, os testes PostgreSQL/Ollama cobriram teto de agentes, ingestão/bytes lógicos, RAG de ponta a ponta, serviço Gateway habilitado/desabilitado com broadcast tenant-scoped e quotas reais após restart. 32 atualizações concorrentes por dois repositórios/factories persistiram exatamente uma vez. Skills A/B e estado MAF permaneceram estáveis após restart. O limiter de RPM é local ao processo; armazenamento físico total e consumo de hosts múltiplos não foram medidos. Veja [evidências e limites](validation/backend-core-remediation.md).
+# Analytics e memória — correções #146/#147
+
+As consultas de `tenant_analytics` mantêm o scope DI vivo até terminar a enumeração; filtros globais continuam no tenant corrente. A cache de contexto é particionada por usuário, tenant, consulta exata, maxMemories e geração. Vectorizar novos insights troca a geração, evitando reutilizar contexto anterior; resultado vazio só é reutilizado para a mesma consulta. Não é prova de relevância semântica do provider real. [Regressões](validation/pr132-review-remediation-2026-10-02.md).

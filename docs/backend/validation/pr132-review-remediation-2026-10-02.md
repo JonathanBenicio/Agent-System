@@ -22,6 +22,9 @@ Status: em execução; gate integrado da correção ainda não executado.
 
 ## Gate final
 
+### Contextos #146 e #147 — analytics e cache
+14 testes direcionados passaram,0falhas/skips (analytics e memória). Analytics usa DI scoped real e EF InMemory, sem fake que mantenha DbContext vivo após dispose, cobrindo os4 comandos e filtro A/B. Memória testa duas perguntas, resultado vazio, maxMemories, outro usuário/tenant e invalidação após vectorization. Isso não prova SQL de analytics em PostgreSQL real.
+
 ### Contexto #143 — ACL/RAG e isolamento
 65 regressões direcionadas passaram,0falhas,1ignorado preexistente que exige PostgreSQL. API Release e frontend lint/build passaram. Positivos/negativos cobrem Reader/Editor/Admin, grant isolado/expirado, nomes de agentes iguais em A/B, allow-list vazia e filtro tenant/room, associação de chunks no upload.
 Limites: stores Postgres/SQLite em EF InMemory; Pinecone em HTTP fake. PostgreSQL/Pinecone reais e jornada browser de upload não executados neste contexto. Nenhum banco foi alterado.

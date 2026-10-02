@@ -51,7 +51,8 @@ public class TenantAnalyticsTool : ITool
     {
         try
         {
-            var dbContext = ResolveDbContext();
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = ResolveDbContext(scope.ServiceProvider);
             if (dbContext == null) return ToolResult.Fail("Database context not available.");
 
             var dbSet = GetDbSet(dbContext, "CostEntries");
@@ -95,7 +96,8 @@ public class TenantAnalyticsTool : ITool
     {
         try
         {
-            var dbContext = ResolveDbContext();
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = ResolveDbContext(scope.ServiceProvider);
             if (dbContext == null) return ToolResult.Fail("Database context not available.");
 
             var dbSet = GetDbSet(dbContext, "AgentPerformanceMetrics");
@@ -147,7 +149,8 @@ public class TenantAnalyticsTool : ITool
     {
         try
         {
-            var dbContext = ResolveDbContext();
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = ResolveDbContext(scope.ServiceProvider);
             if (dbContext == null) return ToolResult.Fail("Database context not available.");
 
             var dbSet = GetDbSet(dbContext, "SessionRecords");
@@ -179,7 +182,8 @@ public class TenantAnalyticsTool : ITool
     {
         try
         {
-            var dbContext = ResolveDbContext();
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = ResolveDbContext(scope.ServiceProvider);
             if (dbContext == null) return ToolResult.Fail("Database context not available.");
 
             var dbSet = GetDbSet(dbContext, "WorkflowExecutions");
@@ -208,16 +212,15 @@ public class TenantAnalyticsTool : ITool
         }
     }
 
-    private object? ResolveDbContext()
+    private static object? ResolveDbContext(IServiceProvider scopedProvider)
     {
-        using var scope = _serviceProvider.CreateScope();
         var dbContextType = AppDomain.CurrentDomain.GetAssemblies()
             .SelectMany(a => { try { return a.GetTypes(); } catch { return Array.Empty<Type>(); } })
             .FirstOrDefault(t => t.Name == "AgenticDbContext");
 
         if (dbContextType == null) return null;
 
-        return scope.ServiceProvider.GetService(dbContextType);
+        return scopedProvider.GetService(dbContextType);
     }
 
     private IEnumerable? GetDbSet(object dbContext, string propertyName)
