@@ -23,7 +23,7 @@ DurableTask permanece opcional. MAF 1.23, A2A/AG-UI em preview, Gateway e provid
 | [#140 — Autorização, cookie e preview](https://github.com/JonathanBenicio/Agent-System/issues/140) | R02, R03, R20, R21 | BACK-REVIEW-139-01 | Implementada; regressões backend e Chromium passaram; integração real com provider não é necessária para estes critérios. |
 | [#141 — Proteção FIDES nos despachos MAF](https://github.com/JonathanBenicio/Agent-System/issues/141) | R01 | BACK-REVIEW-139-02 | Implementada; chamadas diretas, streaming e tools passaram; OCR de imagem/PDF e persistência tenant-scoped passaram em testes dedicados com dados/DB isolados. |
 | [#142 — Limites seguros para ONNX](https://github.com/JonathanBenicio/Agent-System/issues/142) | R04 | BACK-REVIEW-139-03 | Implementada; regressões de dimensões, canais, overflow e orçamento passaram. |
-| [#143 — ACL, RAG e isolamento](https://github.com/JonathanBenicio/Agent-System/issues/143) | R06, R07, R19, R23 | BACK-REVIEW-139-04 | Implementada; testes API, armazenamento e jornada RAG passaram com os limites de integração descritos no relatório. |
+| [#143 — ACL, RAG e isolamento](https://github.com/JonathanBenicio/Agent-System/issues/143) | R06, R07, R19, R23 | BACK-REVIEW-139-04 | Implementada; regressões API, stores, jornada RAG e filtro `room_ids` em PostgreSQL real passaram. Pinecone permanece validado por HTTP fake. |
 | [#144 — Quotas e sessões](https://github.com/JonathanBenicio/Agent-System/issues/144) | R08–R11 | BACK-REVIEW-139-05 | Implementada; reset/cancelamento, REST/SSE/SignalR, retomada no teto, concorrência de sessões e persistência de uso PostgreSQL passaram. |
 | [#145 — Workflows e aprovação](https://github.com/JonathanBenicio/Agent-System/issues/145) | R12–R16, R25 | BACK-REVIEW-139-06 | Implementada; backend, PostgreSQL, round-trip e decisões UI com erros passaram. |
 | [#146 — Escopo de analytics](https://github.com/JonathanBenicio/Agent-System/issues/146) | R17 | BACK-REVIEW-139-07 | Implementada; consultas aguardam a vida do escopo e mantêm isolamento de tenant. |
@@ -55,7 +55,7 @@ DurableTask permanece opcional. MAF 1.23, A2A/AG-UI em preview, Gateway e provid
 | R16 | Worker fazia claim global sem capability tipada | #145 | Claim exige `SystemOperationContext`; execução de dados de negócio abre escopo de tenant real. |
 | R17 | Consulta de analytics sobrevivia ao escopo de DbContext | #146 | Provider DI com escopo real valida os comandos e isolamento A/B. |
 | R18 | Cache de memória não distinguia consulta/filtros | #147 | Chaves variam por consulta e filtros; contexto vazio e invalidação são cobertos. |
-| R19 | Filtro `room_ids` divergente ou permissivo em fallback | #143 | Lista permitida tem semântica consistente; lista vazia nega acesso. |
+| R19 | Filtro `room_ids` divergente ou permissivo em fallback | #143 | Lista vazia nega acesso; PostgreSQL real exclui 55 documentos recentes de outra sala antes do limite e retorna os cinco autorizados. |
 | R20 | Logout não invalidava o cookie no servidor | #140 | Chromium confirma chamada de logout, expiração de cookie e estado de falha correto. |
 | R21 | Chave de API era persistida no localStorage | #140 | Login/restauração por cookie não grava nem envia a chave em armazenamento JS. |
 | R22 | Rotas de tools divergiam do contrato publicado | #148 | `list/get/execute/delete` seguem `/api/agent/tools`; autorização precede o manager. |
@@ -75,7 +75,7 @@ DurableTask permanece opcional. MAF 1.23, A2A/AG-UI em preview, Gateway e provid
 | Verificação | Resultado | Limites |
 |---|---|---|
 | Suíte completa .NET 10 (`dotnet test --no-restore`) | 924 aprovados, 24 ignorados, 0 falhas; 948 testes | Execução sem variáveis PostgreSQL/OCR; testes condicionais foram ignorados. |
-| Regressões por contexto | #140: 23 backend e 4 Chromium; #141: 28 FIDES/MAF, 2 OCR, 1 PostgreSQL; #142: 49; #143: 65/1 ignorado; #144: 28 + HTTP + 2 PostgreSQL; #145: 34 backend + 8 browser + 5 PostgreSQL; #146/#147: 14; #148: rotas/manifesto/persistência; #149: verificações abaixo | Doubles, EF InMemory e HTTP fake estão identificados por contexto no relatório; não equivalem a provider externo real. |
+| Regressões por contexto | #140: 23 backend e 4 Chromium; #141: 28 FIDES/MAF, 2 OCR, 1 PostgreSQL; #142: 49; #143: 65 regressões + 1 PostgreSQL real; #144: 28 + HTTP + 2 PostgreSQL; #145: 34 backend + 8 browser + 5 PostgreSQL; #146/#147: 14; #148: rotas/manifesto/persistência; #149: verificações abaixo | Doubles, EF InMemory e HTTP fake estão identificados por contexto no relatório; não equivalem a provider externo real. |
 | Playwright configurado para CI | 48 aprovados: 24 Chromium e 24 Firefox; 0 falhas | API mockada nos fluxos UI. Os testes de login que exigem API real ficam excluídos sem `REAL_E2E=true`; a regressão específica de approval também passou 8/8 no harness. |
 | Cypress | 1 aprovado, 0 falhas; servidor Vite gerenciado pelo runner | Teste de UI com API mockada. |
 | Frontend | `npm run lint` e `npm run build` passaram | Executado no WSL sobre este checkout. |
