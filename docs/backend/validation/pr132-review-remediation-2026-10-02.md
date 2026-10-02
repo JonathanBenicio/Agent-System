@@ -55,8 +55,8 @@ Testes com provider fake provam o conteúdo enviado ao contrato fake e a ordem d
 |---|---|
 | SQL `dt.complete_tasks` na base recém-migrada com 20 migrations | Concluído: schema/colunas EF, batches, rollback, concorrência e sessão passaram |
 | Checker atualizado de links e índices após esta edição | Passou: 169 documentos, 936 links, 0 quebrados |
-| Commit por contexto para alterações locais ainda sem commit | Pendente |
-| Push dos commits finais e CI remoto do PR #152 | Pendente |
-| Confirmar issues relacionadas no PR apenas quando critérios integrais estiverem comprovados | Pendente |
+| Commits por contexto | Concluído localmente; push final ainda pendente após a atualização de cobertura advisory |
+| CI GitHub | Execução anterior: suite passou 923/25 skips/0 falhas; job falhou só no gate de cobertura 15,3%/80%. Gate alterado para aviso conforme prioridade do usuário; aguardando novo run. |
+| Issues relacionadas no PR | Pendente; só vincular subtarefas cujos critérios completos estejam comprovados e aguardar CI verde |
 
 Nenhuma issue original deve ser fechada por subconjunto de critérios. O relatório separa implementação, validação local, integrações condicionais e CI remoto; não trata doubles ou skips como prova de serviços externos.

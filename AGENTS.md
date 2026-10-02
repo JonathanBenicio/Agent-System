@@ -34,7 +34,7 @@ dotnet test --no-build --configuration Release \
   --logger "trx;LogFileName=test-results.trx" \
   --collect:"XPlat Code Coverage"
 
-# Coverage threshold enforcement (80% minimum)
+# Coverage reporting (80% advisory for this remediation; not a merge gate)
 dotnet tool install --global dotnet-reportgenerator-globaltool
 reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coverage-report"
 ```
@@ -127,7 +127,7 @@ cd frontend && npm run cy:run            # E2E tests
 cd frontend && npm run lint              # Code linting
 
 # Coverage
-# CI enforces 80% minimum coverage threshold
+# CI reports measured coverage; functional regressions and gates remain blocking.
 ```
 
 ### Test Project Structure

@@ -1,6 +1,6 @@
 # Roadmap: Configuração de Pipelines de CI (GitHub Actions)
 
-> **Status documental:** Draft
+> **Status documental:** Draft; meta de 80% substituída pela prioridade funcional atual
 > **Escopo:** Criação de workflows separados para Backend (.NET 10) e Frontend (React + Vite + Playwright) acionados em Pull Requests.
 > **Fonte de verdade operacional:** `AGENTS.md` e `GEMINI.md`
 > **Gerado em:** 2026-05-18
@@ -51,7 +51,7 @@ Para evitar que código quebrado ou sem testes seja mesclado na branch principal
 1. Criar `.github/workflows/backend.yml`.
 2. Configurar trigger em `pull_request` afetando arquivos do backend.
 3. Passos: Checkout, Setup .NET 10, Restore, Build, Test.
-4. Adicionar coleta de cobertura de código (limite de 80%).
+4. Coletar e publicar cobertura com percentual medido; o limite global de 80% é informativo, não bloqueante nesta prioridade de correções funcionais.
 
 #### Fase 3: Workflow do Frontend (React + Playwright)
 1. Criar `.github/workflows/frontend.yml`.
@@ -63,7 +63,7 @@ Para evitar que código quebrado ou sem testes seja mesclado na branch principal
 * [ ] Frontend passa em `npm run build` sem erros de TypeScript.
 * [ ] Workflow do Backend executa com sucesso em PRs.
 * [ ] Workflow do Frontend executa com sucesso em PRs, incluindo testes Playwright.
-* [ ] Cobertura de testes do backend atinge o mínimo de 80% (conforme regra do projeto).
+* [ ] Relatório de cobertura é publicado com valor medido e não é apresentado como prova de comportamento funcional.
 
 ### Riscos e Mitigações
 | Risco | Mitigação |

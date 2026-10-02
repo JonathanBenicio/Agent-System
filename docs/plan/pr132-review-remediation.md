@@ -96,7 +96,7 @@ Estado conferido no GitHub em 2026-10-02: as issues abaixo permanecem abertas. N
 | PostgreSQL Compose isolado, banco novo | 20 migrations aplicadas; 70 tabelas public; teste de persistência dinâmica e 5 testes de workflow passaram | DB `review_pr152_dynamicagents_20261002`, Compose com porta 55432 e projeto exclusivos; DB removido e serviço parado, volume preservado. `has-pending-model-changes` passou. |
 | SQL `dt.complete_tasks` e schema | PostgreSQL 16 isolado: 20 migrations, 70 tabelas públicas, modelo EF comparado, lotes 0/1/2/4, rollback, término e concorrência passaram | Base exclusiva removida e serviço parado; volume preservado. |
 | Links/índices locais | 169 documentos, 936 links, 0 destinos quebrados | Passou após atualizar plano, ADR e relatório. |
-| CI GitHub / estado final do PR | Pendente | Executar depois de publicar os commits finais. |
+| CI GitHub / estado final do PR | Pendente | Execução anterior: 923 aprovados, 25 ignorados, 0 falhas; build ficou vermelho apenas pela cobertura medida de 15,3% contra o threshold de 80%. Por decisão do usuário, cobertura virou aviso; aguardar nova execução remota. |
 
 ## Limites e condições de conclusão
 
