@@ -31,7 +31,7 @@ Fora do escopo: MAF 1.23, A2A/AGUI preview (#121), Gateway produção/reload (#1
 | #144 quotas | R08, R09, R10, R11 | BACK-REVIEW-139-05 | pendente |
 | #145 workflows | R12, R13, R14, R15, R16, R25 | BACK-REVIEW-139-06 | pendente |
 | #146 analytics | R17 | BACK-REVIEW-139-07 | implementado; DI scoped real/EF InMemory; gate PG pendente |
-| #147 memory | R18 | BACK-REVIEW-139-08 | pendente |
+| #147 memory | R18 | BACK-REVIEW-139-08 | implementado;cache por consulta/filtros/geração; regressões passaram |
 | #148 agent-contracts | R22, R24 | BACK-REVIEW-139-09 | pendente |
 | #149 ci | R05, R26, R27, R28, R31 | BACK-REVIEW-139-10 | pendente |
 | #150 docs | R29, R30 | BACK-REVIEW-139-11 | pendente |
@@ -58,7 +58,7 @@ $165 regressões + lint/build por contexto; PG/browser upload pendentes |
 | R15 | Grafo inválido é salvo | WorkflowController / WorkflowGraphValidator | [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) | pendente |
 | R16 | Claim global sem capability de sistema | WorkflowExecutionBackgroundService / PostgresWorkflowStore | [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) | pendente |
 | R17 | Analytics consulta contexto descartado | TenantAnalyticsTool | [#146](https://github.com/JonathanBenicio/Agent-System/issues/146) | scope vivo até consulta;4 comandos/A-B validados |
-| R18 | Cache de memória não inclui consulta | MemoryInjectionService | [#147](https://github.com/JonathanBenicio/Agent-System/issues/147) | pendente |
+| R18 | Cache de memória não inclui consulta | MemoryInjectionService | [#147](https://github.com/JonathanBenicio/Agent-System/issues/147) | pergunta/maxMemories/tenant/usuário particionados; vectorization invalida |
 $165 regressões + lint/build por contexto; PG/browser upload pendentes |
 | R20 | Logout não limpa cookie backend | authStore | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
 | R21 | API key persistida no localStorage | authStore | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
