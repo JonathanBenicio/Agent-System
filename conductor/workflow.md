@@ -6,6 +6,7 @@ Capturar branch/SHA/alterações preexistentes. Issue antes dos artefatos estrat
 
 ### Destino de branches e PRs
 - PRs de feature, correção e documentação têm como base `develop`.
+- Quando o usuário autorizar uma stack, o PR filho pode apontar para a branch do PR precedente; registrar essa exceção no plano. O destino final da stack continua `develop`, e promoção para `master` continua exclusiva de `develop`.
 - `master` recebe somente um PR de promoção com source branch `develop`; não abrir PR de feature diretamente para `master`.
 - PRs antigos diretamente para `master` devem ser retargetados ou encerrados quando forem substituídos por uma consolidação em `develop`.
 
