@@ -83,20 +83,30 @@ internal sealed class TenantQuotaChatClient : IChatClient
 
         UsageDetails? usage = null;
         var outputText = new StringBuilder();
-        await foreach (var update in _inner.GetStreamingResponseAsync(messageList, options, cancellationToken))
+        var receivedUpdate = false;
+        var completed = false;
+        try
         {
-            foreach (var usageContent in update.Contents.OfType<UsageContent>())
-                usage = usageContent.Details;
-            outputText.Append(update.Text);
-            yield return update;
+            await foreach (var update in _inner.GetStreamingResponseAsync(messageList, options, cancellationToken))
+            {
+                receivedUpdate = true;
+                foreach (var usageContent in update.Contents.OfType<UsageContent>())
+                    usage = usageContent.Details;
+                outputText.Append(update.Text);
+                yield return update;
+            }
+            completed = true;
         }
-
-        await RecordUsageAsync(
-            tenantId,
-            estimatedInputTokens,
-            EstimateTokens([outputText.ToString()]),
-            usage,
-            cancellationToken);
+        finally
+        {
+            if (receivedUpdate || completed)
+            {
+                // Client abort must not cancel persistence of usage already delivered.
+                using var persistence = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                await RecordUsageAsync(tenantId, estimatedInputTokens,
+                    EstimateTokens([outputText.ToString()]), usage, persistence.Token);
+            }
+        }
     }
 
     public object? GetService(Type serviceType, object? serviceKey = null)

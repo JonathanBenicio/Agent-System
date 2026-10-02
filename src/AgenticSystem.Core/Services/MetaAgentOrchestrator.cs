@@ -109,11 +109,6 @@ public class MetaAgentOrchestrator : IMetaAgent
 
     public async Task<AgentResponse> ProcessRequestAsync(string input, UserContext context, string? sessionId = null)
     {
-        if (!string.IsNullOrEmpty(context.TenantId) && !await _sessionCoordinator.CanStartSessionAsync(context.TenantId))
-        {
-            return AgentResponse.Error("🚫 Limite de sessões simultâneas atingido para o seu tenant.");
-        }
-
         var resolvedSessionId = await _sessionCoordinator.StartSessionAsync(context, sessionId);
         using var scope = _sessionCoordinator.BeginExecutionScope(resolvedSessionId, context);
         try

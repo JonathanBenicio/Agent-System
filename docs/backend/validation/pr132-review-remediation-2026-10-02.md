@@ -22,6 +22,10 @@ Status: em execução; gate integrado da correção ainda não executado.
 
 ## Gate final
 
+### Contexto #144 — quota/sessões em execução
+28 regressões direcionadas passaram,0falhas/skips: resetUTC com clock, configuração/concorrência, stream completo/cancelado/interrompido/break e reserva InMemory/retomada no teto. PostgreSQL real:1regressão passou criando DB exclusivo review_pr152_sessions_20261002_1708 na porta55432;12instâncias do store concorreram e criaram3sessões, com30registros encerrados sem esconder ativas.18migrations aplicadas,70tabelas public incluindo history; DB removido e serviço parado, volume preservado.
+Implementação ainda em execução: regressão HTTP REST/SSE/SignalR/direct, ausência de usage na interrupção e gate integrado devem ser concluídos antes de marcar R08–R11 totalmente validados. Suite geral/CI não executadas.
+
 ### Contextos #146 e #147 — analytics e cache
 14 testes direcionados passaram,0falhas/skips (analytics e memória). Analytics usa DI scoped real e EF InMemory, sem fake que mantenha DbContext vivo após dispose, cobrindo os4 comandos e filtro A/B. Memória testa duas perguntas, resultado vazio, maxMemories, outro usuário/tenant e invalidação após vectorization. Isso não prova SQL de analytics em PostgreSQL real.
 

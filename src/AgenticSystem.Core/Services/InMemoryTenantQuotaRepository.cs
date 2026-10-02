@@ -12,19 +12,31 @@ public sealed class InMemoryTenantQuotaRepository : ITenantQuotaRepository
 {
     private readonly Dictionary<string, TenantQuotaSnapshot> _store = [];
     private readonly Lock _lock = new();
+    private readonly Dictionary<string, DateOnly> _usageDates = [];
+    private readonly TimeProvider _clock;
+
+    public InMemoryTenantQuotaRepository(TimeProvider? clock = null) => _clock = clock ?? TimeProvider.System;
+
+    private TenantQuotaSnapshot GetCurrentSnapshot(string tenantId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantId);
+        var today = DateOnly.FromDateTime(_clock.GetUtcNow().UtcDateTime);
+        var snapshot = _store.TryGetValue(tenantId, out var existing)
+            ? existing : new TenantQuotaSnapshot(tenantId, 30, 1_000_000, 50.0, 0, 0, 0);
+        if (!_usageDates.TryGetValue(tenantId, out var date) || date < today)
+        {
+            snapshot = snapshot with { CurrentDailyTokens = 0, CurrentDailyCostUsd = 0, CurrentDailyRequests = 0 };
+            _usageDates[tenantId] = today;
+        }
+        _store[tenantId] = snapshot;
+        return snapshot;
+    }
 
     public Task<TenantQuotaSnapshot> GetOrCreateAsync(string tenantId, CancellationToken ct = default)
     {
         lock (_lock)
         {
-            if (!_store.TryGetValue(tenantId, out var snapshot))
-            {
-                snapshot = new TenantQuotaSnapshot(tenantId, 30, 1_000_000, 50.0, 0, 0, 0);
-                _store[tenantId] = snapshot;
-            }
-
-            // Reset daily counters if stale
-            return Task.FromResult(snapshot);
+            return Task.FromResult(GetCurrentSnapshot(tenantId));
         }
     }
 
@@ -32,9 +44,7 @@ public sealed class InMemoryTenantQuotaRepository : ITenantQuotaRepository
     {
         lock (_lock)
         {
-            var existing = _store.TryGetValue(tenantId, out var s)
-                ? s
-                : new TenantQuotaSnapshot(tenantId, 30, 1_000_000, 50.0, 0, 0, 0);
+            var existing = GetCurrentSnapshot(tenantId);
 
             _store[tenantId] = existing with
             {
@@ -51,9 +61,7 @@ public sealed class InMemoryTenantQuotaRepository : ITenantQuotaRepository
     {
         lock (_lock)
         {
-            var existing = _store.TryGetValue(tenantId, out var s)
-                ? s
-                : new TenantQuotaSnapshot(tenantId, config.RequestsPerMinute, config.MaxTokensPerDay, config.MaxDailyBudgetUsd, 0, 0, 0);
+            var existing = GetCurrentSnapshot(tenantId);
 
             _store[tenantId] = existing with
             {
@@ -70,10 +78,7 @@ public sealed class InMemoryTenantQuotaRepository : ITenantQuotaRepository
     {
         lock (_lock)
         {
-            if (_store.TryGetValue(tenantId, out var snapshot))
-            {
-                _store[tenantId] = snapshot with { CurrentDailyTokens = 0, CurrentDailyCostUsd = 0, CurrentDailyRequests = 0 };
-            }
+            GetCurrentSnapshot(tenantId);
         }
 
         return Task.CompletedTask;

@@ -14,6 +14,21 @@ public class InMemorySessionStore : ISessionStore
     private readonly TimeSpan _ttl = TimeSpan.FromHours(24);
     private readonly int _maxEntries = 10_000;
     private DateTime _lastCleanup = DateTime.UtcNow;
+    private readonly Lock _creationLock = new();
+
+    public Task<int> CountActiveAsync(string tenantId, CancellationToken ct = default)
+        => Task.FromResult(_store.Values.Count(session => session.TenantId == tenantId && session.EndedAt is null));
+
+    public Task<bool> TryCreateAsync(SessionData session, int maxActive, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_creationLock)
+        {
+            if (maxActive > 0 && _store.Values.Count(item => item.TenantId == session.TenantId && item.EndedAt is null) >= maxActive)
+                return Task.FromResult(false);
+            return Task.FromResult(_store.TryAdd(session.Id, session));
+        }
+    }
 
     public Task SaveAsync(SessionData session, CancellationToken ct = default)
     {
