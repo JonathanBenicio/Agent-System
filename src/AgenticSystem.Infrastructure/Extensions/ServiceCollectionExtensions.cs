@@ -377,6 +377,10 @@ public static class ServiceCollectionExtensions
     {
         services.AddHostedService<SelfImprovementBackgroundJob>();
         services.AddHostedService<ExternalQuotaSyncHostedService>();
+        services.AddOptions<AgenticSystem.Core.Services.Ml.OnnxInputLimits>()
+            .Bind(configuration.GetSection(AgenticSystem.Core.Services.Ml.OnnxInputLimits.SectionName))
+            .Validate(limits => limits.IsValid, "ONNX input limits must be positive.")
+            .ValidateOnStart();
         services.AddHostedService<OnnxInferenceBackgroundWorker>();
         services.AddHostedService<Persistence.WorkflowExecutionBackgroundService>();
         

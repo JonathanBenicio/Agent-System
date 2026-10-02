@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Services.Ml;
 using AgenticSystem.Infrastructure.Persistence;
@@ -22,17 +23,20 @@ public class OnnxInferenceBackgroundWorker : BackgroundService
     private readonly IOnnxInferenceQueue _queue;
     private readonly IOnnxEventBroadcaster _broadcaster;
     private readonly ILogger<OnnxInferenceBackgroundWorker> _logger;
+    private readonly OnnxInputLimits _inputLimits;
 
     public OnnxInferenceBackgroundWorker(
         IServiceProvider serviceProvider,
         IOnnxInferenceQueue queue,
         IOnnxEventBroadcaster broadcaster,
-        ILogger<OnnxInferenceBackgroundWorker> logger)
+        ILogger<OnnxInferenceBackgroundWorker> logger,
+        IOptions<OnnxInputLimits>? inputLimits = null)
     {
         _serviceProvider = serviceProvider;
         _queue = queue;
         _broadcaster = broadcaster;
         _logger = logger;
+        _inputLimits = inputLimits?.Value ?? new OnnxInputLimits();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -133,7 +137,7 @@ public class OnnxInferenceBackgroundWorker : BackgroundService
         _logger.LogInformation("✅ Interrupted ONNX inference jobs successfully re-enqueued by tenant.");
     }
 
-    private async Task ProcessJobAsync(OnnxInferenceJobRequest request, CancellationToken ct)
+    internal async Task ProcessJobAsync(OnnxInferenceJobRequest request, CancellationToken ct)
     {
         _logger.LogInformation("Processing ONNX inference job {JobId} for Tenant {TenantId} using Model {ModelId}", request.JobId, request.TenantId, request.ModelId);
 
@@ -165,6 +169,11 @@ public class OnnxInferenceBackgroundWorker : BackgroundService
 
         try
         {
+            var model = await dbContext.CustomOnnxModels
+                .FirstOrDefaultAsync(m => m.Id == request.ModelId && m.TenantId == request.TenantId, ct)
+                ?? throw new InvalidOperationException("ONNX model not found.");
+            _inputLimits.Validate(model.InputWidth, model.InputHeight, model.Channels);
+
             // Atualiza status para Processing
             jobEntity.Status = "Processing";
             await dbContext.SaveChangesAsync(ct);

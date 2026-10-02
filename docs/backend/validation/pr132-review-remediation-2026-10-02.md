@@ -22,6 +22,9 @@ Status: em execução; gate integrado da correção ainda não executado.
 
 ## Gate final
 
+### Contexto #142 — orçamento ONNX
+49 regressões ONNX direcionadas Release passaram,0falhas/skips: overflow, negativos, canais, orçamento/configuração, upload/update/legado/worker e pixels/tensors ImageSharp reais pequenos. Nenhum teste provoca OOM. Build/implementação valida antes de imagens/tensores e usa options também no catálogo manual. Limite: EF InMemory e preprocessing real; pesos/outputs/runtime interno fora do orçamento. Confirmação conjunta FIDES/ONNX/RAG:111aprovados,3ignorados,0falhas; não é a suíte inteira.
+
 ### Contexto #141 — FIDES nos despachos reais
 Implementação em factory/host com proteção IChatClient, compartilhada com middleware. Regressões Release direcionadas:29 aprovados,3 ignorados,0 falhas no lote FIDES/factory/direct. Provider fake capturou instruções, mensagens, streaming, políticas A/B e rodada de tool; negativos comprovaram zero chamadas. PostgreSQL e duas OCR/Tesseract condicionais ignoradas; isso não valida provider externo/OCR neste gate. Confirmação integrada direcionada será registrada no gate final.
 
