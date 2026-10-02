@@ -27,6 +27,8 @@ API keys aceitam `Owner`, `Admin`, `Operator`, `Viewer`, `Member` e `ServiceAcco
 
 ## Política FIDES por tenant
 
+Correção #141: a factory e o supervisor protegem o `IChatClient` em cada despacho ao provider, inclusive execução direta, streaming, instructions e rodadas de tools. O middleware de agente reutiliza o mesmo motor de proteção. Resultado/argumento estruturado de tool é serializado e redigido; CallId e opções são preservados. Ausência de política/tenant válido, política de outro tenant, payload não inspecionável, erro ou timeout bloqueiam antes da chamada externa. [Regressões e limites](validation/pr132-review-remediation-2026-10-02.md).
+
 `GET /api/security/fides/policy` lê os toggles do tenant autenticado; `PUT` altera apenas detectores built-in conhecidos e exige `Owner` ou `Admin`. Sem uma política persistida, todos os detectores ficam ativos. `CredentialToken` é obrigatório e não pode ser desligado. Cada alteração incrementa a versão da política e gera auditoria.
 
 | Método/rota | Entrada/resultado | Regra |

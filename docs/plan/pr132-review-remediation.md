@@ -25,7 +25,7 @@ Fora do escopo: MAF 1.23, A2A/AGUI preview (#121), Gateway produção/reload (#1
 | Issue/contexto | Achados | Story | Estado |
 |---|---|---|---|
 | #140 auth | R02, R03, R20, R21 | BACK-REVIEW-139-01 | implementado e validado por contexto; gate integrado pendente |
-| #141 fides | R01 | BACK-REVIEW-139-02 | pendente |
+| #141 fides | R01 | BACK-REVIEW-139-02 | implementado;29 regressões/3skips; gate integrado pendente |
 | #142 onnx | R04 | BACK-REVIEW-139-03 | pendente |
 | #143 tenancy-rag | R06, R07, R19, R23 | BACK-REVIEW-139-04 | pendente |
 | #144 quotas | R08, R09, R10, R11 | BACK-REVIEW-139-05 | pendente |
@@ -41,7 +41,7 @@ Fora do escopo: MAF 1.23, A2A/AGUI preview (#121), Gateway produção/reload (#1
 IDs seguem a ordem do relatório final publicado nesta conversa. Um achado só muda para validado quando há evidência que cobre seu cenário.
 | ID | Problema | Local/fluxo | Issue | Estado/evidência |
 |---|---|---|---|---|
-| R01 | FIDES na execução direta | AgentFrameworkDirectExecutionService | [#141](https://github.com/JonathanBenicio/Agent-System/issues/141) | pendente |
+| R01 | FIDES na execução direta | AgentFrameworkDirectExecutionService | [#141](https://github.com/JonathanBenicio/Agent-System/issues/141) | protegido na factory/IChatClient; provider fake direto/stream/tool; gate integrado pendente |
 | R02 | Authorization cru sem membership | OpenAIChatCompletionController | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
 | R03 | Stored XSS no preview de skills | SkillsPage | [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) | 23 regressões backend + 4 Chromium/lint/build; gate integrado pendente |
 | R04 | Dimensões ONNX sem orçamento | OnnxModelController / DynamicOnnxProcessorTool | [#142](https://github.com/JonathanBenicio/Agent-System/issues/142) | pendente |

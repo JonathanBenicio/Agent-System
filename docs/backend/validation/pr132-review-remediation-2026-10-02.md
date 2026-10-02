@@ -22,6 +22,9 @@ Status: em execução; gate integrado da correção ainda não executado.
 
 ## Gate final
 
+### Contexto #141 — FIDES nos despachos reais
+Implementação em factory/host com proteção IChatClient, compartilhada com middleware. Regressões Release direcionadas:29 aprovados,3 ignorados,0 falhas no lote FIDES/factory/direct. Provider fake capturou instruções, mensagens, streaming, políticas A/B e rodada de tool; negativos comprovaram zero chamadas. PostgreSQL e duas OCR/Tesseract condicionais ignoradas; isso não valida provider externo/OCR neste gate. Confirmação integrada direcionada será registrada no gate final.
+
 ### Contexto #140 — autenticação e preview
 - Backend: `dotnet test ... --configuration Release --filter 'FullyQualifiedName~CookieAndOpenAiAuthorizationTests|FullyQualifiedName~ApiKeyAuthenticationTests|FullyQualifiedName~TenantMiddlewareTests'`: **23 aprovados,0 falhas/ignorados**. TestServer usa os controllers/handler/middleware reais e PostgresPermissionService com EF InMemory; orquestrador/quota são doubles. Revogação, inatividade, spoofing, vínculo em outro tenant, papel Viewer e cookie foram exercitados.
 - Frontend: `npm run lint` e `npm run build`: passaram após `npm ci` no lockfile, sem mudar dependências/versões.
