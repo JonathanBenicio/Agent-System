@@ -1,6 +1,6 @@
 # Documentação — AgenticSystem
 
-- [Correções dos 32 achados do PR #132 — epic #139 e subtarefas](plan/pr132-review-remediation.md), [ADR-041](architecture/adr/041-pr132-review-remediation.md), [stories](USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132) e [validação](backend/validation/pr132-review-remediation-2026-10-02.md). Status: em execução.
+- [Correções dos 32 achados do PR #132 — epic #139 e subtarefas](plan/pr132-review-remediation.md), [ADR-041](architecture/adr/041-pr132-review-remediation.md), [stories](USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132) e [validação](backend/validation/pr132-review-remediation-2026-10-02.md). Implementação validada e CI verde no SHA `8ba0dd4`; PR #152 permanece draft.
 
 - [Especificações das 46 issues abertas (snapshot 2026-09-29)](plan/open-issues-specification-audit-2026-09-29.md)
 

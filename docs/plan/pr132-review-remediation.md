@@ -1,6 +1,6 @@
 # Plano — corrigir os 32 achados do PR #132
 
-Status: em execução. Prioridade: P1 — os achados incluem falhas de autorização, isolamento e contratos do núcleo.
+Status: implementação validada; PR #152 permanece draft aguardando revisão/merge. CI remoto verde em 2026-10-02 no SHA `8ba0dd4`. Prioridade: P1 — os achados incluem falhas de autorização, isolamento e contratos do núcleo.
 
 Issue principal: [épico #139](https://github.com/JonathanBenicio/Agent-System/issues/139). ADR: [041](../architecture/adr/041-pr132-review-remediation.md). Stories: [BACK-REVIEW-139](../USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132).
 
@@ -43,8 +43,8 @@ Estado conferido no GitHub em 2026-10-02: as issues abaixo permanecem abertas. N
 | [#146 — Escopo de analytics](https://github.com/JonathanBenicio/Agent-System/issues/146) | R17 | BACK-REVIEW-139-07 | Implementada; consultas aguardam a vida do escopo e mantêm isolamento de tenant. |
 | [#147 — Cache de memória](https://github.com/JonathanBenicio/Agent-System/issues/147) | R18 | BACK-REVIEW-139-08 | Implementada; consulta, filtros, usuário, tenant e invalidação são testados. |
 | [#148 — Rotas de tools e YAML](https://github.com/JonathanBenicio/Agent-System/issues/148) | R22, R24 | BACK-REVIEW-139-09 | Implementada; API, manifesto, persistência PostgreSQL e round-trip visual/YAML passaram. |
-| [#149 — CI, E2E e diagnósticos isolados](https://github.com/JonathanBenicio/Agent-System/issues/149) | R05, R26–R28, R31 | BACK-REVIEW-139-10 | Implementada localmente; lint/build, Playwright Chromium+Firefox e Cypress passaram. Falta o resultado do CI remoto após publicar os commits finais. |
-| [#150 — IDs e documentação](https://github.com/JonathanBenicio/Agent-System/issues/150) | R29, R30 | BACK-REVIEW-139-11 | IDs, regras e auditoria das issues originais concluídos; checker encontrou 169 documentos e 936 links sem destinos quebrados. Atualizar descrições públicas e relacionar apenas subtarefas completas no PR após CI. |
+| [#149 — CI, E2E e diagnósticos isolados](https://github.com/JonathanBenicio/Agent-System/issues/149) | R05, R26–R28, R31 | BACK-REVIEW-139-10 | Implementada; lint/build, Playwright Chromium+Firefox e Cypress passaram. CI remoto build/security/Playwright verde no SHA `8ba0dd4`. |
+| [#150 — IDs e documentação](https://github.com/JonathanBenicio/Agent-System/issues/150) | R29, R30 | BACK-REVIEW-139-11 | IDs, regras e auditoria concluídos; checker encontrou 169 documentos e 936 links sem destinos quebrados. Descrição pública sincronizada; #150 fica para a promoção `develop → master`. |
 | [#151 — SQL opcional DurableTask](https://github.com/JonathanBenicio/Agent-System/issues/151) | R32 | BACK-REVIEW-139-12 | Probes de lote, rollback e concorrência passaram numa base nova após aplicar as 20 migrations; store EF comparado ao schema (70 tabelas). |
 
 ## Matriz dos achados
@@ -55,7 +55,7 @@ Estado conferido no GitHub em 2026-10-02: as issues abaixo permanecem abertas. N
 | R02 | Authorization cru podia ignorar membership | #140 | TestServer cobre chave sem `Bearer`, tenant ativo, membership, papel e rejeição antes da execução. |
 | R03 | Preview de skill permitia conteúdo Markdown ativo | #140 | Chromium confirma renderização e bloqueio de HTML, handlers e links `javascript:`. |
 | R04 | ONNX alocava antes de limitar dimensão e bytes | #142 | Valida canais, overflow, dimensão máxima e orçamento antes do preprocessing/alocação. |
-| R05 | CI E2E não iniciava nem aguardava o frontend | #149 | Workflow executa lint/build, Playwright e Cypress com servidores gerenciados; CI remoto pendente. |
+| R05 | CI E2E não iniciava nem aguardava o frontend | #149 | Workflow executa lint/build, Playwright e Cypress com servidores gerenciados; CI remoto verde no SHA `8ba0dd4`. |
 | R06 | Upload em sala não exigia papel de escrita | #143 | Editor/Admin permitido; Reader e papel insuficiente negados antes de persistir. |
 | R07 | Repositório dinâmico InMemory não particionava agentes por tenant | #143 | Mesmo nome em tenants A/B permanece isolado, inclusive leitura e desativação. |
 | R08 | Quota diária InMemory não fazia reset correto | #144 | Clock determinístico cobre virada UTC, isolamento e concorrência. |
@@ -96,10 +96,11 @@ Estado conferido no GitHub em 2026-10-02: as issues abaixo permanecem abertas. N
 | PostgreSQL Compose isolado, banco novo | 20 migrations aplicadas; 70 tabelas public; teste de persistência dinâmica e 5 testes de workflow passaram | DB `review_pr152_dynamicagents_20261002`, Compose com porta 55432 e projeto exclusivos; DB removido e serviço parado, volume preservado. `has-pending-model-changes` passou. |
 | SQL `dt.complete_tasks` e schema | PostgreSQL 16 isolado: 20 migrations, 70 tabelas públicas, modelo EF comparado, lotes 0/1/2/4, rollback, término e concorrência passaram | Base exclusiva removida e serviço parado; volume preservado. |
 | Links/índices locais | 169 documentos, 936 links, 0 destinos quebrados | Passou após atualizar plano, ADR e relatório. |
-| CI GitHub / estado final do PR | Pendente | Execução anterior: 923 aprovados, 25 ignorados, 0 falhas; build ficou vermelho apenas pela cobertura medida de 15,3% contra o threshold de 80%. Por decisão do usuário, cobertura virou aviso; aguardar nova execução remota. |
+| CI GitHub / estado do PR | Passou em 2026-10-02 no SHA `8ba0dd4` | `build-and-test`, `security-scan` e `frontend-e2e-playwright` verdes. Cobertura 15,3% é informativa por decisão do usuário; não afirmar que o limiar de 80% foi atingido. PR #152 permanece draft e aponta para `integration/develop-pr-stack-2026-09-30`. |
+| Descrições públicas e relações Development | Concluído | Issues #139–#151 atualizadas e permanecem abertas. PR #152 relaciona #140–#149; epic #139 e #150/#151 ficam para a promoção `develop → master`. Por ter base não padrão, o merge do #152 não fecha automaticamente essas issues. |
 
 ## Limites e condições de conclusão
 
 Fixtures TestServer, EF InMemory, provider fake, Pinecone HTTP fake, OCR ignorado e PostgreSQL real são evidências diferentes e continuam identificadas. Esta entrega não demonstra provider/Gateway de produção, OCR/Tesseract no ambiente real, A2A/AG-UI em preview ou retomada multi-host do supervisor.
 
-Não fechar issues antigas por atender apenas parte do escopo. Só relacionar no PR as issues cujos critérios completos estejam demonstrados. Antes de concluir a epic: revisar todos os arquivos staged/unstaged/untracked, concluir os commits por contexto, publicar a branch, aguardar CI remoto e verificar base/estado do PR #152.
+Não fechar issues antigas por atender apenas parte do escopo. As dez subtarefas ligadas ao #152 têm critérios completos demonstrados; permanecem abertas até a promoção alcançar `master`. A validação, publicação, CI e relações atuais estão concluídas. Após o merge do #152 na branch de integração, a promoção `develop → master` deve relacionar as dez subtarefas, o épico #139 e as subtarefas restantes #150/#151 para fechar somente o conjunto completo.
