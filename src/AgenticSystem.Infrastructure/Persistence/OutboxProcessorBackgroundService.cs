@@ -63,9 +63,9 @@ public class OutboxProcessorBackgroundService : BackgroundService
         using (_systemOperations.BeginScope(Core.Models.SystemOperationKind.ProcessOutbox))
         {
             _systemOperations.Require(Core.Models.SystemOperationKind.ProcessOutbox);
-            messages = await dbContext.OutboxMessages
+            messages = await FilterDispatchableTenantMessages(dbContext.OutboxMessages
                 .IgnoreQueryFilters()
-                .Where(m => m.ProcessedAt == null && m.Error == null)
+                .Where(m => m.ProcessedAt == null && m.Error == null))
                 .OrderBy(m => m.CreatedAt)
                 .Take(50)
                 .ToListAsync(stoppingToken);
@@ -73,12 +73,6 @@ public class OutboxProcessorBackgroundService : BackgroundService
 
         foreach (var message in messages)
         {
-            if (Core.Models.TenantIdPolicy.IsReservedSystemId(message.TenantId))
-            {
-                _logger.LogError("Outbox message {MessageId} has a reserved synthetic TenantId; reconcile it before dispatch.", message.Id);
-                continue;
-            }
-
             using var tenantScope = _tenantContextAccessor.BeginScope(new Core.Models.TenantContext { TenantId = message.TenantId });
             try
             {
@@ -121,6 +115,13 @@ public class OutboxProcessorBackgroundService : BackgroundService
             }
         }
     }
+
+    internal static IQueryable<OutboxMessageEntity> FilterDispatchableTenantMessages(
+        IQueryable<OutboxMessageEntity> messages) =>
+        messages.Where(m => m.TenantId.Trim().ToLower() != "default" &&
+                            m.TenantId.Trim().ToLower() != "platform" &&
+                            m.TenantId.Trim().ToLower() != "system-background" &&
+                            m.TenantId.Trim().ToLower() != "system-devui");
 
     private static async Task DispatchAsync(string eventTypeName, string payloadJson, IPublisher publisher, CancellationToken ct)
     {

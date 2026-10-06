@@ -22,6 +22,34 @@ public sealed class TenantScopedOutboxNotification(string TenantId) : INotificat
 public sealed class OutboxProcessorTenantIsolationTests
 {
     [Fact]
+    public void FilterDispatchableTenantMessages_RemovesReservedRowsBeforeApplyingBatchLimit()
+    {
+        var pending = Enumerable.Range(0, 50)
+            .Select(index => new OutboxMessageEntity
+            {
+                Id = Guid.NewGuid(),
+                TenantId = index % 2 == 0 ? "system-background" : "default",
+                CreatedAt = DateTime.UtcNow.AddSeconds(index)
+            })
+            .Append(new OutboxMessageEntity
+            {
+                Id = Guid.NewGuid(),
+                TenantId = "real-tenant",
+                CreatedAt = DateTime.UtcNow.AddMinutes(1)
+            })
+            .AsQueryable();
+
+        var selected = OutboxProcessorBackgroundService
+            .FilterDispatchableTenantMessages(pending)
+            .OrderBy(message => message.CreatedAt)
+            .Take(50)
+            .ToArray();
+
+        selected.Should().ContainSingle();
+        selected[0].TenantId.Should().Be("real-tenant");
+    }
+
+    [Fact]
     public async Task ProcessOutboxMessages_DispatchesAndUpdatesEachMessageUnderItsRealTenant()
     {
         var tenantA = $"outbox-a-{Guid.NewGuid():N}";
