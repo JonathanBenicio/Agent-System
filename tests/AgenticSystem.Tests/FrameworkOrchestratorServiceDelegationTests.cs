@@ -5,6 +5,7 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Services;
 using AgenticSystem.Infrastructure.AgentFramework;
+using AgenticSystem.Infrastructure.Configuration;
 using FluentAssertions;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
@@ -58,7 +59,12 @@ public class FrameworkOrchestratorServiceDelegationTests
             .Returns(call => call.Arg<AgentExecutionPostProcessingContext>().Response);
 
         var services = new ServiceCollection();
+        var tenantContext = new TenantContextAccessor();
         services.AddLogging();
+        services.AddSingleton<ITenantContextAccessor>(tenantContext);
+        services.AddSingleton<IFidesTenantPolicyStore, InMemoryFidesTenantPolicyStore>();
+        services.AddSingleton(Substitute.For<IFidesMediaScanner>());
+        services.Configure<FidesSecuritySettings>(_ => { });
         services.AddSingleton<IChatClient>(chatClient);
         services.AddSingleton<IAgentFactory>(agentFactory);
         services.AddSingleton<ISessionStore>(sessionStore);
@@ -95,12 +101,13 @@ public class FrameworkOrchestratorServiceDelegationTests
             postprocessing,
             Substitute.For<ILogger<FrameworkOrchestratorService>>());
 
+        using var tenantScope = tenantContext.BeginScope(new TenantContext { TenantId = "tenant-a" });
         var result = await sut.ExecuteAsync(
             conversation.Id,
             "Explain the platform",
             new UserContext { UserId = "user-a", TenantId = "tenant-a" });
 
-        result.Success.Should().BeTrue();
+        result.Success.Should().BeTrue(result.ErrorMessage ?? "The supervisor request failed without an error message.");
         result.Content.Should().Be("Direct supervisor answer");
         result.AgentName.Should().Be(OrchestratorMetadata.Default.Name);
         result.Metadata.Should().NotContainKey("delegatedTo");
@@ -255,7 +262,12 @@ public class FrameworkOrchestratorServiceDelegationTests
             .Returns(call => Task.FromResult(call.ArgAt<string>(2)));
 
         var services = new ServiceCollection();
+        var tenantContext = new TenantContextAccessor();
         services.AddLogging();
+        services.AddSingleton<ITenantContextAccessor>(tenantContext);
+        services.AddSingleton<IFidesTenantPolicyStore, InMemoryFidesTenantPolicyStore>();
+        services.AddSingleton(Substitute.For<IFidesMediaScanner>());
+        services.Configure<FidesSecuritySettings>(_ => { });
         services.AddSingleton<IChatClient>(chatClient);
         services.AddSingleton<IAgentFactory>(agentFactory);
         services.AddSingleton<ISessionStore>(sessionStore);
@@ -299,12 +311,13 @@ public class FrameworkOrchestratorServiceDelegationTests
             postProcessing,
             Substitute.For<ILogger<FrameworkOrchestratorService>>());
 
+        using var tenantScope = tenantContext.BeginScope(new TenantContext { TenantId = "tenant-a" });
         var result = await sut.ExecuteAsync(
             conversation.Id,
             "What happened to revenue?",
             new UserContext { UserId = "user-a", TenantId = "tenant-a" });
 
-        result.Success.Should().BeTrue();
+        result.Success.Should().BeTrue(result.ErrorMessage ?? "The supervisor delegation failed without an error message.");
         result.Content.Should().Be("Consolidated finance answer");
         result.AgentName.Should().Be("FinanceAgent");
         result.Metadata["delegatedTo"].Should().Be("FinanceAgent");

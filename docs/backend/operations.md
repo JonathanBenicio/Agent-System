@@ -29,10 +29,16 @@ API 8080, PostgreSQL host 5433, Ollama 11434. Compose ativa alguns providers ext
 
 ## Diagnóstico isolado
 ```powershell
-docker compose -f tests/backend-validation/compose.yml up -d
-docker compose -f tests/backend-validation/compose.yml exec -T postgres psql -U validation -d backend_validation -c "CREATE EXTENSION IF NOT EXISTS vector;"
-docker compose -f tests/backend-validation/compose.yml exec -T ollama ollama pull qwen2.5:0.5b
-docker compose -f tests/backend-validation/compose.yml exec -T ollama ollama pull nomic-embed-text
+$validationRunId = [guid]::NewGuid().ToString('N')
+$env:BACKEND_VALIDATION_COMPOSE_PROJECT = "agent-system-pr152-$validationRunId"
+$env:BACKEND_VALIDATION_DATABASE = "review_pr152_$validationRunId"
+$env:BACKEND_VALIDATION_OUTPUT_DIR = Join-Path $env:TEMP "Agent-System-Validation-$validationRunId"
+$validationCompose = @('-f', 'tests/backend-validation/compose.yml', '-p', $env:BACKEND_VALIDATION_COMPOSE_PROJECT)
+docker compose @validationCompose up -d postgres ollama
+docker compose @validationCompose exec -T postgres createdb -U validation $env:BACKEND_VALIDATION_DATABASE
+docker compose @validationCompose exec -T postgres psql -U validation -d $env:BACKEND_VALIDATION_DATABASE -c "CREATE EXTENSION IF NOT EXISTS vector;"
+docker compose @validationCompose exec -T ollama ollama pull qwen2.5:0.5b
+docker compose @validationCompose exec -T ollama ollama pull nomic-embed-text
 dotnet build tests/backend-validation/BackendDiagnostics.csproj --configuration Release
 powershell -File tests/backend-validation/start-api.ps1
 # Em outro terminal:
@@ -45,9 +51,12 @@ powershell -File tests/backend-validation/stop-api.ps1
 # Reiniciar start-api.ps1 em terminal próprio, depois:
 node tests/backend-validation/session-diagnostics.mjs --after-restart
 powershell -File tests/backend-validation/stop-api.ps1
-docker compose -f tests/backend-validation/compose.yml stop
+docker compose @validationCompose exec -T postgres dropdb -U validation $env:BACKEND_VALIDATION_DATABASE
+docker compose @validationCompose stop
 ```
-Portas exclusivas 55432/11435/5188, DB backend_validation e volumes do projeto Compose. Para execução isolada por tarefa, use um nome de projeto único, por exemplo `docker compose -p agent-system-backend-validation-<run-id> -f tests/backend-validation/compose.yml up -d postgres`; isso cria volumes próprios. Confira `docker compose ... ps` e o bind em `127.0.0.1` antes de migrations/testes. Scripts recusam alvo HTTP externo; dados e credenciais sintéticos. Parada conserva volumes/evidências; remoção exige selecionar somente o projeto desta execução. Se API falhar startup, registrar causa antes de afirmar que cenários passaram.
+Use o mesmo `BACKEND_VALIDATION_COMPOSE_PROJECT`, `BACKEND_VALIDATION_DATABASE` e `BACKEND_VALIDATION_OUTPUT_DIR` na janela que inicia a API e na que executa os diagnósticos. `start-api.ps1` recusa a porta 5188 ocupada e grava um manifesto local `api-target.json`; os diagnósticos Node e o harness C# comparam esse manifesto com o alvo SQL antes de prosseguir. As consultas SQL usam `docker compose -p <projeto> exec`, e a API conecta somente à base `review_pr152_*` na porta 55432. Isso evita que o HTTP use `backend_validation` enquanto os probes consultam outra base.
+
+O projeto Compose precisa ser único para a execução; isso também cria volume separado. Confira a configuração/bind em `127.0.0.1:55432` antes de iniciar. Dados e credenciais são sintéticos. Ao finalizar, pare a API, remova apenas a base temporária criada por esta execução e pare o projeto Compose; `stop` conserva o volume. Se a API falhar no startup, registre a causa antes de afirmar que cenários passaram.
 
 Testes de integração PostgreSQL podem ser executados no Compose isolado abaixo; nunca apontar esses testes para o banco principal do produto. Antes de `dotnet ef database update` ou dos testes, configurar **ambas** as variáveis para o mesmo alvo do Compose; a factory EF usa `AGENTIC_EF_CONNECTION` e não `ConnectionStrings__SessionStore`. O teste falha fechado se host/porta/database/usuário não forem `127.0.0.1:55432/backend_validation/validation`.
 ```powershell
@@ -65,8 +74,18 @@ node scripts/backend-contract-inventory.mjs
 node scripts/check-documentation-links.mjs
 dotnet test tests/AgenticSystem.Tests --configuration Release --no-restore --collect:"XPlat Code Coverage"
 ```
-Cobertura mínima 80%; registrar medida real e impedimento no PR. Os [templates](../../templates/README.md) exigem rastreabilidade e resultados reais.
+Registrar a cobertura medida e o contexto real no PR; não estimar percentuais. Para esta correção, a cobertura é informativa e não bloqueia o fluxo funcional. Build, testes de regressão, segurança e E2E permanecem gates. Os [templates](../../templates/README.md) exigem rastreabilidade e resultados reais.
 
 O [relatório histórico desta baseline](validation/2026-09-28.md) pode ser reproduzido com `node scripts/build-backend-validation-report.mjs` somente com os artefatos originais. O [manifesto](validation/2026-09-28-manifest.json) fixa seus hashes, caminho exato da cobertura, baseline e ambiente. O script lê Counters do TRX e métricas do Cobertura; recusa artefatos substituídos antes de escrever. Outra execução exige manifesto e relatório próprios; não atualizar o histórico com dados de current.
 
 Verificar as regressões do harness com `node --test tests/backend-validation/evidence.test.mjs`. Esses testes controlados verificam as asserções e o parser; não certificam o produto. CHAT-02 exige HTTP 403/404. HUB-02/03 exigem HUB-01 aprovado e negação explícita HTTP 403 ou a mensagem de violação de tenant conhecida do filtro. Timeout, desconexão, erro de provider e erros genéricos falham; fechamento sem motivo de autorização nunca é apresentado como prova de isolamento.
+# Limites de preprocessing ONNX — correção #142
+
+## DurableTask opcional — conclusão de tasks (#151)
+`RepairDurableTaskCompletion` substitui a função SQL `dt.complete_tasks` sem mudar assinatura, tabelas ou engine padrão. Locks são feitos nas linhas de instância, em ordem consistente; resultados só entram na execução ativa correspondente. A contagem usa cardinalidade do array deletado, não ROW_COUNT de um SELECT agregado. Um lote incompleto falha com40001 e reverte eventos/payloads/deletes atomicamente.
+
+Downgrade desta migration conserva a correção backward-compatible, para não reintroduzir a função inválida; remover o schema continua responsabilidade da migration que o criou. Instalação nova aplica19migrations; nenhuma transição de banco de produto antigo faz parte desta entrega. [Probes reais e schema](validation/pr132-review-remediation-2026-10-02.md).
+
+`AgenticSystem:Onnx:InputLimits` define `MaxDimension=4096` e `MaxPreprocessingBytes=67108864` (64MiB). Valores devem ser positivos; configuração inválida falha na inicialização. Canais NCHW suportados:1 ou3. Upload/update/test e worker rejeitam dimensões inválidas antes de execução; o tool repete a validação para registros legados.
+
+Orçamento conservador por imagem:`width × height × (6 + channels × 4)` para resize/padding RGB24 e tensor float; identificação prévia acrescenta o RGB24 da imagem fonte. Multiplicações são checked/long e o limite de array também é verificado. Apenas um frame é decodificado. Pesos ONNX, outputs e alocações internas do runtime não estão nesse orçamento; ele não substitui limite operacional total do processo. [Evidência](validation/pr132-review-remediation-2026-10-02.md).

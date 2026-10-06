@@ -1,6 +1,6 @@
 # Plano — Escopos explícitos de sistema sem tenant sintético
 
-Status: desenho e implementação concluídos nesta branch; gate de #132 validado em 2026-10-01. #97 permanece aberta até a revisão/merge da consolidação.
+Status: implementação parcial após revisão completa de #132 em 2026-10-02. Evidência histórica de 2026-10-01 preservada abaixo; isolamento do repositório dinâmico InMemory e claim de workflow com capability ainda exigem [correções #143/#145 na epic #139](pr132-review-remediation.md). #97 não está pronta para fechamento.
 Issue: #97 · ADR: [ADR-026](../architecture/adr/026-auto-bootstrap-remove-default-tenant.md) · Story: ML19.1 em [USER-STORIES.md](../USER-STORIES.md).
 Baseline: PR #132, branch `integration/develop-pr-stack-2026-09-30` contra `develop`; inspeção dos fluxos atualizada em 2026-10-01.
 

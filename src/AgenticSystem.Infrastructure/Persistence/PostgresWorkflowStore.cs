@@ -14,15 +14,18 @@ public class PostgresWorkflowStore : IWorkflowStore
     private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
     private readonly ILogger<PostgresWorkflowStore> _logger;
     private readonly ITenantContextAccessor _tenantAccessor;
+    private readonly ISystemOperationContextAccessor? _systemOperations;
 
     public PostgresWorkflowStore(
         IDbContextFactory<AgenticDbContext> dbContextFactory,
         ILogger<PostgresWorkflowStore> logger,
-        ITenantContextAccessor tenantAccessor)
+        ITenantContextAccessor tenantAccessor,
+        ISystemOperationContextAccessor? systemOperations = null)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;
         _tenantAccessor = tenantAccessor;
+        _systemOperations = systemOperations;
     }
 
     public async Task SaveDefinitionAsync(string tenantId, WorkflowDefinition definition, CancellationToken ct = default)
@@ -224,6 +227,10 @@ public class PostgresWorkflowStore : IWorkflowStore
         TimeSpan leaseDuration,
         CancellationToken ct = default)
     {
+        if (_systemOperations is null)
+            throw new UnauthorizedAccessException("Workflow claiming requires a system operation context.");
+        _systemOperations.Require(SystemOperationKind.ClaimWorkflowExecutions);
+
         ArgumentException.ThrowIfNullOrWhiteSpace(workerId);
         if (leaseDuration <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(leaseDuration));
 

@@ -5,6 +5,7 @@ using AgenticSystem.Infrastructure.Persistence.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.ML.OnnxRuntime;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
@@ -23,6 +24,7 @@ public class OnnxModelController : ControllerBase
     private readonly ILogger<OnnxModelController> _logger;
     private readonly IWebHostEnvironment _env;
     private readonly ITenantContextAccessor _tenantContextAccessor;
+    private readonly OnnxInputLimits _inputLimits;
     private const long MaxDbSize = 50 * 1024 * 1024; // 50 MB
 
     public OnnxModelController(
@@ -30,13 +32,15 @@ public class OnnxModelController : ControllerBase
         IOnnxInferenceQueue queue,
         ILogger<OnnxModelController> logger,
         IWebHostEnvironment env,
-        ITenantContextAccessor tenantContextAccessor)
+        ITenantContextAccessor tenantContextAccessor,
+        IOptions<OnnxInputLimits>? inputLimits = null)
     {
         _db = db;
         _queue = queue;
         _logger = logger;
         _env = env;
         _tenantContextAccessor = tenantContextAccessor;
+        _inputLimits = inputLimits?.Value ?? new OnnxInputLimits();
     }
 
     private string GetTenantId() => _tenantContextAccessor.CurrentTenantId;
@@ -104,6 +108,9 @@ public class OnnxModelController : ControllerBase
         [FromForm] string outputFormat = "image",
         CancellationToken ct = default)
     {
+        if (!_inputLimits.TryValidate(inputWidth, inputHeight, channels, out var inputError))
+            return BadRequest(new { error = inputError });
+
         if (file == null || file.Length == 0)
             return BadRequest(new { error = "A .onnx model file is required." });
 
@@ -192,6 +199,10 @@ public class OnnxModelController : ControllerBase
         var entity = await _db.CustomOnnxModels
             .FirstOrDefaultAsync(m => m.Id == id && m.TenantId == GetTenantId(), ct);
         if (entity == null) return NotFound();
+
+        if (!_inputLimits.TryValidate(req.InputWidth ?? entity.InputWidth, req.InputHeight ?? entity.InputHeight,
+            req.Channels ?? entity.Channels, out var inputError))
+            return BadRequest(new { error = inputError });
 
         if (req.Name != null) entity.Name = req.Name;
         if (req.Description != null) entity.Description = req.Description;
@@ -298,6 +309,9 @@ public class OnnxModelController : ControllerBase
         var entity = await _db.CustomOnnxModels
             .FirstOrDefaultAsync(m => m.Id == id && m.TenantId == GetTenantId(), ct);
         if (entity == null) return NotFound();
+
+        if (!_inputLimits.TryValidate(entity.InputWidth, entity.InputHeight, entity.Channels, out var inputError))
+            return BadRequest(new { error = inputError });
 
         byte[]? imageBytes = null;
         if (image != null)
@@ -464,11 +478,12 @@ public class OnnxModelController : ControllerBase
         return null;
     }
 
-    private static Microsoft.ML.OnnxRuntime.Tensors.DenseTensor<float> ImageToTensor(
+    private Microsoft.ML.OnnxRuntime.Tensors.DenseTensor<float> ImageToTensor(
         SixLabors.ImageSharp.Image<SixLabors.ImageSharp.PixelFormats.Rgb24> image,
         CustomOnnxModelEntity model)
     {
         int w = model.InputWidth, h = model.InputHeight, c = model.Channels;
+        _inputLimits.Validate(w, h, c);
         var tensor = new Microsoft.ML.OnnxRuntime.Tensors.DenseTensor<float>(new[] { 1, c, h, w });
 
         image.ProcessPixelRows(accessor =>

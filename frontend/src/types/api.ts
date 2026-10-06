@@ -67,6 +67,7 @@ export const AutonomyColors: Record<number, string> = {
 // ══════════════════════════════════════
 
 export interface AgentInfo {
+  instructions?: string
   name: string
   description: string
   tier: AgentTier
@@ -659,7 +660,7 @@ export interface WorkflowDefinition {
 export interface WorkflowStep {
   id: string;
   name: string;
-  stepType: number;
+  stepType: 'action' | 'agent' | 'decision' | 'parallel' | 'wait' | 'approval' | 'subworkflow';
   agentName?: string;
   toolName?: string;
   actionDescription?: string;
@@ -827,6 +828,7 @@ export interface ChatMessageDto {
   success?: boolean
   timestamp: string
   memoryInjected?: boolean
+  citations?: import('./chat').Citation[]
 }
 
 export interface SessionSummaryDto {

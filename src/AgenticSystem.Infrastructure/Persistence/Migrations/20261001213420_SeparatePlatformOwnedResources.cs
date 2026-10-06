@@ -11,6 +11,45 @@ namespace AgenticSystem.Infrastructure.Persistence.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql("""
+                DO $migration$
+                DECLARE
+                    tenant_column RECORD;
+                    affected_rows BIGINT;
+                    unresolved_data TEXT := '';
+                BEGIN
+                    FOR tenant_column IN
+                        SELECT table_schema, table_name, column_name
+                        FROM information_schema.columns
+                        WHERE table_schema = current_schema()
+                          AND (column_name IN ('TenantId', 'tenant_id')
+                               OR (table_name = 'tenants' AND column_name = 'id'))
+                    LOOP
+                        EXECUTE format(
+                            'SELECT count(*) FROM %I.%I WHERE lower(trim(%I::text)) IN (''default'', ''system-devui'')',
+                            tenant_column.table_schema,
+                            tenant_column.table_name,
+                            tenant_column.column_name)
+                        INTO affected_rows;
+
+                        IF affected_rows > 0 THEN
+                            unresolved_data := concat_ws(
+                                ', ',
+                                NULLIF(unresolved_data, ''),
+                                format('%I.%I.%I: %s row(s)', tenant_column.table_schema,
+                                    tenant_column.table_name, tenant_column.column_name, affected_rows));
+                        END IF;
+                    END LOOP;
+
+                    IF unresolved_data <> '' THEN
+                        RAISE EXCEPTION USING
+                            MESSAGE = 'Cannot migrate reserved tenant IDs default/system-devui because tenant-owned data still references them.',
+                            DETAIL = unresolved_data,
+                            HINT = 'Map each row to its approved real tenant or archive it, then retry the migration. Do not promote tenant data to platform scope automatically.';
+                    END IF;
+                END $migration$;
+                """);
+
             migrationBuilder.CreateTable(
                 name: "platform_agent_skills",
                 columns: table => new

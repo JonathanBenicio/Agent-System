@@ -12,7 +12,7 @@ Esta funcionalidade estende o runtime do Microsoft Agent Framework (MAF) para pe
 
 ## 🔗 Rastreabilidade & Documentação (Obrigatório)
 - **ADR (Architectural Decision Record)**: [ADR-020: Multi-Provider API Key Architecture](architecture/adr/020-multi-provider-api-keys.md)
-- **User Story**: [US-42: Gerenciamento e Roteamento de Múltiplas API Keys](user-stories/us-multi-provider-api-keys.md)
+- **User Story**: [BACK-KEYS-020: Gerenciamento e Roteamento de Múltiplas API Keys](user-stories/us-multi-provider-api-keys.md)
 - **Implementation Plan**: [Roadmap: Multi-Provider API Keys](plan/completed/multi-provider-api-keys.md)
 - **BDD Feature**: [BDD: Multi-Provider API Keys Feature](bdd/multi-provider-api-keys.feature)
 

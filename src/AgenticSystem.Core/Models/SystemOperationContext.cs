@@ -39,5 +39,6 @@ public enum SystemOperationKind
     PublishPlatformEvent,
     EnumerateTenantsForSecretRotation,
     ProcessOnnxJobs,
-    PlatformGatewayOperation
+    PlatformGatewayOperation,
+    ClaimWorkflowExecutions
 }

@@ -25,7 +25,6 @@ public class OrchestratorHostBuilder
     private readonly RAGContextProvider? _ragContextProvider;
     private readonly IQualityGateService? _qualityGateService;
     private readonly AgentSkillsProvider? _skillsProvider;
-    private readonly ITenantContextAccessor? _tenantContextAccessor;
     private readonly ILogger<OrchestratorHostBuilder> _logger;
 
     public OrchestratorHostBuilder(
@@ -43,7 +42,8 @@ public class OrchestratorHostBuilder
         AgentSkillsProvider? skillsProvider = null,
         ITenantContextAccessor? tenantContextAccessor = null)
     {
-        _chatClient = chatClient ?? throw new ArgumentNullException(nameof(chatClient));
+        _chatClient = new AgenticSystem.Infrastructure.Security.FidesProtectedChatClient(
+            chatClient ?? throw new ArgumentNullException(nameof(chatClient)), serviceProvider, loggerFactory);
         _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _metadata = metadata ?? throw new ArgumentNullException(nameof(metadata));
@@ -55,7 +55,6 @@ public class OrchestratorHostBuilder
         _ragContextProvider = ragContextProvider;
         _qualityGateService = qualityGateService;
         _skillsProvider = skillsProvider;
-        _tenantContextAccessor = tenantContextAccessor;
     }
 
     /// <summary>
@@ -138,17 +137,6 @@ public class OrchestratorHostBuilder
         {
             var qualityGateLogger = _loggerFactory.CreateLogger<QualityGateDelegatingAgent>();
             builder = builder.UseQualityGates(_qualityGateService, qualityGateLogger);
-        }
-
-        if (_tenantContextAccessor is not null)
-        {
-            var fidesLogger = _loggerFactory.CreateLogger<AgenticSystem.Infrastructure.Security.FidesDataProtectionMiddleware>();
-            builder = builder.UseFidesDataProtection(
-                _tenantContextAccessor,
-                _serviceProvider.GetRequiredService<IFidesTenantPolicyStore>(),
-                _serviceProvider.GetRequiredService<IFidesMediaScanner>(),
-                _serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<AgenticSystem.Infrastructure.Configuration.FidesSecuritySettings>>(),
-                fidesLogger);
         }
 
         // Adicionar logging e telemetry nativo

@@ -1,3 +1,4 @@
+import { assertApiTargetMatches, validationSql } from './compose-target.mjs';
 import { createHmac, createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -5,21 +6,19 @@ import { resolve } from 'node:path';
 import { assertSessionDenied, assertHubDenied, HubAuthorizationError } from './evidence.mjs';
 const root = resolve(import.meta.dirname, '../..');
 const base = 'http://127.0.0.1:5188'; // Fixed loopback target: never production.
-const compose = resolve(import.meta.dirname, 'compose.yml');
 const sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
 const outputDirectory = process.env.BACKEND_VALIDATION_OUTPUT_DIR || resolve(root, 'tests/TestResults/backend-core-remediation/current');
 const protectedHistoricalOutput = resolve(root, 'tests/TestResults/backend-documentation/current');
 if (resolve(outputDirectory).toLowerCase() === protectedHistoricalOutput.toLowerCase())
   throw new Error('Refusing to overwrite historical backend-documentation validation artifacts.');
+assertApiTargetMatches(outputDirectory);
 mkdirSync(outputDirectory, { recursive: true });
 const run = 'doc-' + randomUUID().slice(0, 8), tenantA = run + '-a', tenantB = run + '-b', tenantInactive = run + '-inactive';
 const key = randomUUID(), keyId = randomUUID(), apiKeyForCompatibility = randomUUID(), compatibilityKeyId = randomUUID();
 const alice = run + '-alice', bob = run + '-bob';
 writeFileSync(resolve(outputDirectory, 'validation-api-key.txt'), apiKeyForCompatibility + '\n', { mode: 0o600 });
 const results = [];
-function sql(statement) {
-  return execFileSync('docker', ['compose', '-f', compose, '-p', 'agent-system-backend-fix', 'exec', '-T', 'postgres', 'psql', '-v', 'ON_ERROR_STOP=1', '-U', 'validation', '-d', 'backend_validation', '-At'], { input: statement, encoding: 'utf8' }).trim();
-}
+function sql(statement) { return validationSql(statement); }
 function jwt(user, tenant, role = 'Viewer') {
   const b64 = value => Buffer.from(JSON.stringify(value)).toString('base64url');
   const text = b64({ alg: 'HS256', typ: 'JWT' }) + '.' + b64({ iss: 'AgenticSystem', aud: 'AgenticSystem', sub: user, tenant_id: tenant, role, exp: Math.floor(Date.now()/1000) + 3600 });

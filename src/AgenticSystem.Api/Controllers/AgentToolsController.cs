@@ -1,4 +1,6 @@
 using System;
+using System.Security.Claims;
+using AgenticSystem.Core.Models;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,24 +12,31 @@ namespace AgenticSystem.Api.Controllers;
 
 [ApiController]
 [Authorize]
-[Route("api/agent")]
+[Route("api/agent/tools")]
 public class AgentToolsController : ControllerBase
 {
     private readonly IToolManager _toolManager;
+    private readonly IPermissionService _permissions;
     private readonly IMCPPluginManager? _pluginManager;
 
     public AgentToolsController(
         IToolManager toolManager,
+        IPermissionService permissions,
         IMCPPluginManager? pluginManager = null)
     {
         _toolManager = toolManager;
+        _permissions = permissions;
         _pluginManager = pluginManager;
     }
 
     [HttpPost("{toolId}/execute")]
     public async Task<IActionResult> ExecuteTool(string toolId, [FromBody] ToolInput input, CancellationToken ct)
     {
-        var result = await _toolManager.ExecuteToolAsync(toolId, input, ct);
+        var subject = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(subject) ||
+            !await _permissions.HasPermissionAsync(subject, $"tools/{toolId}", Permission.Execute, ct))
+            return Forbid();
+        var result = await _toolManager.ExecuteToolAsync(toolId, input with { UserId = subject }, ct);
         return result.Success ? Ok(result) : BadRequest(result);
     }
 
@@ -80,8 +89,12 @@ public class AgentToolsController : ControllerBase
     }
 
     [HttpDelete("{toolId}")]
-    public IActionResult DeleteTool(string toolId)
+    public async Task<IActionResult> DeleteTool(string toolId, CancellationToken ct)
     {
+        var subject = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(subject) ||
+            !await _permissions.HasPermissionAsync(subject, $"tools/{toolId}", Permission.ManageTools, ct))
+            return Forbid();
         var removed = _toolManager.UnregisterTool(toolId);
         if (!removed)
             return NotFound(new { error = $"Tool '{toolId}' not found." });

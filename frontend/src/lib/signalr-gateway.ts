@@ -1,5 +1,5 @@
 import * as signalR from '@microsoft/signalr'
-import { getAuthToken, getApiKey } from '@/lib/auth'
+import { getAuthToken } from '@/lib/auth'
 import { useKnowledgeStore } from '@/store/useKnowledgeStore'
 
 const GATEWAY_HUB_URL = '/hubs/gateway'
@@ -21,9 +21,9 @@ export function getGatewayConnection(): signalR.HubConnection {
     const url = currentTenantId ? `${GATEWAY_HUB_URL}?X-Tenant-Id=${encodeURIComponent(currentTenantId)}` : GATEWAY_HUB_URL
     connection = new signalR.HubConnectionBuilder()
       .withUrl(url, {
+        withCredentials: true,
         accessTokenFactory: () => getAuthToken() ?? '',
         headers: {
-          ...(getApiKey() && !getAuthToken() ? { 'X-Api-Key': getApiKey()! } : {}),
           ...(currentTenantId ? { 'X-Tenant-Id': currentTenantId } : {}),
         },
       })

@@ -20,7 +20,7 @@ public class TenantIsolationTests
     public TenantIsolationTests()
     {
         _tenantStore = Substitute.For<ITenantStore>();
-        _sessionStore = Substitute.For<ISessionStore>();
+        _sessionStore = new InMemorySessionStore();
         _vectorStore = Substitute.For<IVectorStore>();
         _costTracker = Substitute.For<ICostTracker>();
         _dynamicAgentRepository = Substitute.For<IDynamicAgentRepository>();
@@ -40,9 +40,9 @@ public class TenantIsolationTests
         var tenantId = "limited-tenant";
         _tenantStore.GetByIdAsync(tenantId).Returns(new Tenant { Id = tenantId });
         
-        // Mock 10 active sessions
-        var sessions = Enumerable.Range(1, 100).Select(i => new SessionData { Id = $"s-{i}" }).ToList();
-        _sessionStore.GetByTenantAsync(tenantId, null, Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(sessions);
+        var sessions = Enumerable.Range(1, 100).Select(i => new SessionData { Id = $"s-{i}", TenantId = tenantId }).ToList();
+        foreach (var session in sessions)
+            await _sessionStore.SaveAsync(session);
 
         // Act
         var result = await _enforcer.CanStartSessionAsync(tenantId);
@@ -57,8 +57,6 @@ public class TenantIsolationTests
         // Arrange
         var tenantId = "good-tenant";
         _tenantStore.GetByIdAsync(tenantId).Returns(new Tenant { Id = tenantId });
-        _sessionStore.GetByTenantAsync(tenantId, null, Arg.Any<int>(), Arg.Any<CancellationToken>()).Returns(new List<SessionData>());
-
         // Act
         var result = await _enforcer.CanStartSessionAsync(tenantId);
 
@@ -71,9 +69,8 @@ public class TenantIsolationTests
     {
         const string tenantId = "free-tenant";
         _tenantStore.GetByIdAsync(tenantId).Returns(new Tenant { Id = tenantId, Limits = TenantLimits.FreeTier() });
-        _sessionStore.GetByTenantAsync(tenantId, null, Arg.Any<int>(), Arg.Any<CancellationToken>())
-            .Returns(Enumerable.Range(0, TenantLimits.FreeTier().MaxConcurrentSessions)
-                .Select(index => new SessionData { Id = $"session-{index}" }).ToList());
+        foreach (var index in Enumerable.Range(0, TenantLimits.FreeTier().MaxConcurrentSessions))
+            await _sessionStore.SaveAsync(new SessionData { Id = $"session-{index}", TenantId = tenantId });
 
         var result = await _enforcer.CanStartSessionAsync(tenantId);
 

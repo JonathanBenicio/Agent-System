@@ -39,6 +39,7 @@ public class RAGContextProviderTests
         _logger = Substitute.For<ILogger<RAGContextProvider>>();
         _serviceProvider = Substitute.For<IServiceProvider>();
         _tenantContextAccessor = Substitute.For<ITenantContextAccessor>();
+        _tenantContextAccessor.CurrentTenantId.Returns("tenant-1");
         _llmRuntimeContextAccessor = Substitute.For<ILLMRuntimeContextAccessor>();
 
         _serviceScopeFactory = Substitute.For<IServiceScopeFactory>();
@@ -205,7 +206,7 @@ public class RAGContextProviderTests
             q.Query == "semantic query" &&
             q.Filters != null &&
             q.Filters.ContainsKey("room_ids") &&
-            q.Filters["room_ids"] == "room-123"
+            q.Filters["room_ids"] == "room-123" && q.Filters["tenant_id"] == "tenant-1"
         ), Arg.Any<CancellationToken>());
     }
 
@@ -249,7 +250,7 @@ public class RAGContextProviderTests
             q.Query == "session search" &&
             q.Filters != null &&
             q.Filters.ContainsKey("collection") &&
-            q.Filters["collection"] == "session-999"
+            q.Filters["collection"] == "session-999" && q.Filters["tenant_id"] == "tenant-1"
         ), Arg.Any<CancellationToken>());
     }
 
@@ -321,7 +322,7 @@ public class RAGContextProviderTests
             q.Query == "default query" &&
             q.Filters != null &&
             q.Filters.ContainsKey("room_ids") &&
-            q.Filters["room_ids"] == "room-a,room-b"
+            q.Filters["room_ids"] == "room-a,room-b" && q.Filters["tenant_id"] == "tenant-1"
         ), Arg.Any<CancellationToken>());
     }
 }

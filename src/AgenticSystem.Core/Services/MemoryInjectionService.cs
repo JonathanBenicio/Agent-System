@@ -138,7 +138,7 @@ public class MemoryInjectionService : IMemoryInjectionService
             upserted++;
         }
 
-        _memoryCache.Remove($"memory:{userId}:{tenantId}");
+        _memoryCache.Set(("memory-generation", userId, tenantId), Guid.NewGuid(), _cacheOptions);
 
         _logger.LogInformation("🧠 Vectorized {Count} insights for session {SessionId}", upserted, sessionId);
 
@@ -147,15 +147,17 @@ public class MemoryInjectionService : IMemoryInjectionService
 
     public async Task<string> BuildMemoryContextAsync(string userQuery, string userId, string tenantId, int maxMemories = 10, CancellationToken ct = default)
     {
-        var cacheKey = $"memory:{userId}:{tenantId}";
+        var generation = _memoryCache.GetOrCreate(("memory-generation", userId, tenantId), entry =>
+        {
+            entry.SetOptions(_cacheOptions);
+            return Guid.NewGuid();
+        });
+        var cacheKey = ("memory-context", userId, tenantId, userQuery, maxMemories, generation);
 
         if (_memoryCache.TryGetValue(cacheKey, out var cached) && cached is CachedMemoryContext cachedResult)
         {
-            if (!string.IsNullOrEmpty(cachedResult.Context))
-            {
-                _logger.LogDebug("🧠 Memory context cache hit for user {UserId}", userId);
-                return cachedResult.Context;
-            }
+            _logger.LogDebug("🧠 Memory context cache hit for user {UserId}", userId);
+            return cachedResult.Context;
         }
 
         try

@@ -2,9 +2,11 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Services.Ml;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 using System.Text.Json;
@@ -27,15 +29,20 @@ public class DynamicOnnxProcessorTool : ITool
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DynamicOnnxProcessorTool> _logger;
     private readonly IOnnxSessionCache _sessionCache;
+    private readonly OnnxInputLimits _inputLimits;
 
     public DynamicOnnxProcessorTool(
         IServiceProvider serviceProvider,
         ILogger<DynamicOnnxProcessorTool> logger,
-        IOnnxSessionCache sessionCache)
+        IOnnxSessionCache sessionCache,
+        IOptions<OnnxInputLimits>? inputLimits = null)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;
         _sessionCache = sessionCache;
+        _inputLimits = inputLimits?.Value
+            ?? serviceProvider.GetService<IOptions<OnnxInputLimits>>()?.Value
+            ?? new OnnxInputLimits();
     }
 
     public Task<bool> IsAvailableAsync(CancellationToken ct = default) => Task.FromResult(true);
@@ -62,6 +69,8 @@ public class DynamicOnnxProcessorTool : ITool
             var model = await LoadModelEntityAsync(modelId, ct);
             if (model == null)
                 return ToolResult.Fail($"Model '{modelId}' not found.");
+
+            _inputLimits.Validate((int)model.InputWidth, (int)model.InputHeight, (int)model.Channels);
 
             string resolvedModelPath = model.ModelFileName ?? string.Empty;
             byte[]? modelBytes = null;
@@ -157,7 +166,9 @@ public class DynamicOnnxProcessorTool : ITool
             int inputW = (int)model.InputWidth;
             int inputH = (int)model.InputHeight;
 
-            using var image = Image.Load<Rgb24>(imageBytes);
+            var imageInfo = Image.Identify(imageBytes);
+            _inputLimits.ValidateSourceAndTarget(imageInfo.Width, imageInfo.Height, inputW, inputH, (int)model.Channels);
+            using var image = Image.Load<Rgb24>(new DecoderOptions { MaxFrames = 1 }, imageBytes);
             int originalW = image.Width;
             int originalH = image.Height;
 
@@ -361,8 +372,9 @@ public class DynamicOnnxProcessorTool : ITool
         }
     }
 
-    private static DenseTensor<float> ImageToTensor(Image<Rgb24> image, int w, int h, int c, float scale, float meanR, float meanG, float meanB)
+    private DenseTensor<float> ImageToTensor(Image<Rgb24> image, int w, int h, int c, float scale, float meanR, float meanG, float meanB)
     {
+        _inputLimits.Validate(w, h, c);
         var tensor = new DenseTensor<float>(new[] { 1, c, h, w });
 
         image.ProcessPixelRows(accessor =>
@@ -424,8 +436,9 @@ public class DynamicOnnxProcessorTool : ITool
         return image;
     }
 
-    private static DenseTensor<byte> ImageToByteTensor(Image<Rgb24> image, int w, int h, int c, float scale, float meanR, float meanG, float meanB)
+    private DenseTensor<byte> ImageToByteTensor(Image<Rgb24> image, int w, int h, int c, float scale, float meanR, float meanG, float meanB)
     {
+        _inputLimits.Validate(w, h, c);
         var tensor = new DenseTensor<byte>(new[] { 1, c, h, w });
 
         image.ProcessPixelRows(accessor =>

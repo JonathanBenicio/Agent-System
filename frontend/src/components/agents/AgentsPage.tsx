@@ -118,8 +118,9 @@ export function AgentsPage() {
               }
               await refresh()
               setFormOpen(false)
-            } catch {
+            } catch (error) {
               addToast('Erro ao salvar agent', 'error')
+              throw error
             }
           }}
           onClose={() => setFormOpen(false)}

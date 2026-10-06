@@ -1,5 +1,5 @@
 import * as signalR from '@microsoft/signalr'
-import { getAuthToken, getApiKey } from '@/lib/auth'
+import { getAuthToken } from '@/lib/auth'
 import { useKnowledgeStore } from '@/store/useKnowledgeStore'
 
 const CHAT_HUB_URL = '/hubs/chat'
@@ -22,9 +22,9 @@ export function getConnection(): signalR.HubConnection {
     const url = currentTenantId ? `${CHAT_HUB_URL}?X-Tenant-Id=${encodeURIComponent(currentTenantId)}` : CHAT_HUB_URL
     connection = new signalR.HubConnectionBuilder()
       .withUrl(url, {
+        withCredentials: true,
         accessTokenFactory: () => getAuthToken() ?? '',
         headers: {
-          ...(getApiKey() && !getAuthToken() ? { 'X-Api-Key': getApiKey()! } : {}),
           ...(currentTenantId ? { 'X-Tenant-Id': currentTenantId } : {}),
         },
       })
@@ -79,9 +79,9 @@ export function getOnnxConnection(): signalR.HubConnection {
     const url = currentTenantId ? `${ONNX_HUB_URL}?X-Tenant-Id=${encodeURIComponent(currentTenantId)}` : ONNX_HUB_URL
     onnxConnection = new signalR.HubConnectionBuilder()
       .withUrl(url, {
+        withCredentials: true,
         accessTokenFactory: () => getAuthToken() ?? '',
         headers: {
-          ...(getApiKey() && !getAuthToken() ? { 'X-Api-Key': getApiKey()! } : {}),
           ...(currentTenantId ? { 'X-Tenant-Id': currentTenantId } : {}),
         },
       })
@@ -141,9 +141,9 @@ export function getWorkflowConnection(): signalR.HubConnection {
     const url = currentTenantId ? `${WORKFLOW_HUB_URL}?X-Tenant-Id=${encodeURIComponent(currentTenantId)}` : WORKFLOW_HUB_URL
     workflowConnection = new signalR.HubConnectionBuilder()
       .withUrl(url, {
+        withCredentials: true,
         accessTokenFactory: () => getAuthToken() ?? '',
         headers: {
-          ...(getApiKey() && !getAuthToken() ? { 'X-Api-Key': getApiKey()! } : {}),
           ...(currentTenantId ? { 'X-Tenant-Id': currentTenantId } : {}),
         },
       })

@@ -7,11 +7,11 @@ test.describe('Chat Timeout - Indicador de Digitando (Gap 2)', () => {
   // Executa após a spec finalizar para limpar as sessões de chat criadas no banco real se houver
   test.afterAll(async ({ playwright }) => {
     if (process.env.REAL_E2E === 'true') {
-      const baseURL = process.env.BASE_URL || 'http://localhost/';
+      const baseURL = process.env.BASE_URL || 'http://127.0.0.1:5194';
       const apiContext = await playwright.request.newContext({
         baseURL,
         extraHTTPHeaders: {
-          'X-Api-Key': 'minha-chave-secreta-admin-123',
+          'X-Api-Key': process.env.E2E_API_KEY!,
         },
       });
 
@@ -52,7 +52,7 @@ test.describe('Chat Timeout - Indicador de Digitando (Gap 2)', () => {
       return;
     }
 
-    await page.route('**/api/llm/configuration', async (route) => {
+    await page.route('**/api/chat/configuration', async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
@@ -78,8 +78,9 @@ test.describe('Chat Timeout - Indicador de Digitando (Gap 2)', () => {
       await new Promise(() => {});
     });
 
+    await page.clock.install();
     await chatPage.goto();
-    
+
     // Envia mensagem
     await chatPage.sendMessage('Esta mensagem irá simular um travamento');
 
@@ -87,16 +88,18 @@ test.describe('Chat Timeout - Indicador de Digitando (Gap 2)', () => {
     await expect(chatPage.typingIndicator).toBeVisible();
     await expect(chatPage.messageInput).toBeDisabled();
 
-    // Se o frontend tiver o mecanismo de timeout de digitação de 10 segundos,
+    // Se o frontend tiver o mecanismo de timeout de digitação de 120 segundos,
     // o typing indicator deve sumir automaticamente e o input deve ser reativado
     // após esse período, mesmo sem resposta do backend.
-    
-    // Aguardamos 12 segundos (timeout limite de segurança planejado para digitação)
-    await page.waitForTimeout(12000);
+
+    // Avançamos o relógio virtual por 120 segundos (timeout limite de segurança planejado para digitação)
+    await page.clock.fastForward(119000);
+    await expect(chatPage.typingIndicator).toBeVisible();
+    await page.clock.fastForward(1001);
 
     // O indicador de processamento deve ser limpo automaticamente
     await expect(chatPage.typingIndicator).toBeHidden();
-    
+
     // O input do chat e botão devem voltar a estar habilitados para permitir nova interação do usuário
     await expect(chatPage.messageInput).toBeEnabled();
   });

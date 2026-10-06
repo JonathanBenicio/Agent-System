@@ -115,6 +115,7 @@ public class RAGContextProvider : MessageAIContextProvider
             filters["room_ids"] = string.Join(",", allowedRoomIds);
         }
 
+        filters["tenant_id"] = TenantContextPolicy.RequireCurrentTenant(_tenantContextAccessor, tenantId);
         try
         {
             var ragContext = await _ragService.RetrieveContextAsync(new RAGQuery

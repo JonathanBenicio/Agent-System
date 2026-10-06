@@ -21,25 +21,39 @@ import type {
   MCPResponse
 } from '@/types/api'
 
+const executionStatuses = ['pending', 'running', 'paused', 'waitingforapproval', 'completed', 'failed', 'cancelled', 'compensating']
+function normalizeExecution(data: WorkflowExecution): WorkflowExecution {
+  const status = (value: number | string): number => {
+    if (typeof value === 'number') return value
+    const index = executionStatuses.indexOf(value.toLowerCase())
+    if (index < 0) throw new Error('Status de execução desconhecido.')
+    return index
+  }
+  return { ...data, status: status(data.status), stepExecutions: data.stepExecutions.map(step =>
+    ({ ...step, status: status(step.status) })) }
+}
+
 export const workflowApi = {
   listDefinitions: (limit?: number) => get<WorkflowDefinitionSummary[]>(`/api/workflow/definitions${limit ? `?limit=${limit}` : ''}`),
   getDefinition: (id: string) => get<WorkflowDefinition>(`/api/workflow/definitions/${encodeURIComponent(id)}`),
   saveDefinition: (def: WorkflowDefinition) => post<WorkflowDefinition>('/api/workflow/definitions', def),
   deleteDefinition: (id: string) => del(`/api/workflow/definitions/${encodeURIComponent(id)}`),
   startWorkflow: (definitionId: string, variables?: Record<string, unknown>) => 
-    post<WorkflowExecution>(`/api/workflow/executions/start/${encodeURIComponent(definitionId)}`, variables),
-  getExecution: (id: string) => get<WorkflowExecution>(`/api/workflow/executions/${encodeURIComponent(id)}`),
+    post<WorkflowExecution>(`/api/workflow/executions/start/${encodeURIComponent(definitionId)}`, variables).then(normalizeExecution),
+  getExecution: (id: string) => get<WorkflowExecution>(`/api/workflow/executions/${encodeURIComponent(id)}`).then(normalizeExecution),
   listExecutions: (status?: number, limit?: number) => {
     const params = new URLSearchParams()
     if (status !== undefined) params.set('status', status.toString())
     if (limit) params.set('limit', limit.toString())
     const qs = params.toString()
-    return get<WorkflowExecution[]>(`/api/workflow/executions${qs ? `?${qs}` : ''}`)
+    return get<WorkflowExecution[]>(`/api/workflow/executions${qs ? `?${qs}` : ''}`).then(items => items.map(normalizeExecution))
   },
   cancelExecution: (id: string, reason?: string) => 
-    post<WorkflowExecution>(`/api/workflow/executions/${encodeURIComponent(id)}/cancel${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`),
-  approveStep: (executionId: string) => post<void>(`/api/workflow/executions/${encodeURIComponent(executionId)}/approve`),
-  rejectStep: (executionId: string) => post<void>(`/api/workflow/executions/${encodeURIComponent(executionId)}/reject`),
+    post<WorkflowExecution>(`/api/workflow/executions/${encodeURIComponent(id)}/cancel${reason ? `?reason=${encodeURIComponent(reason)}` : ''}`).then(normalizeExecution),
+  approveStep: (executionId: string, stepId?: string) => post<WorkflowExecution>(
+    `/api/workflow/executions/${encodeURIComponent(executionId)}/approve${stepId ? `?stepId=${encodeURIComponent(stepId)}` : ''}`).then(normalizeExecution),
+  rejectStep: (executionId: string, stepId?: string) => post<WorkflowExecution>(
+    `/api/workflow/executions/${encodeURIComponent(executionId)}/reject${stepId ? `?stepId=${encodeURIComponent(stepId)}` : ''}`).then(normalizeExecution),
 }
 
 export const knowledgeRoomApi = {
@@ -54,18 +68,24 @@ export const knowledgeRoomApi = {
 
 export const ragApi = {
   stats: () => get<RagStats>('/api/document/stats'),
-  ingest: (file: File, source?: string) => {
+  ingest: (file: File, source?: string, roomId?: string) => {
     const formData = new FormData()
     formData.append('file', file)
-    const qs = source ? `?source=${encodeURIComponent(source)}` : ''
+    const params = new URLSearchParams()
+    if (source) params.set('source', source)
+    if (roomId) params.set('roomId', roomId)
+    const qs = params.size ? `?${params.toString()}` : ''
     return postForm<IngestDocumentResponse>(`/api/document/ingest${qs}`, formData)
   },
-  ingestBatch: (files: FileList | File[], source?: string) => {
+  ingestBatch: (files: FileList | File[], source?: string, roomId?: string) => {
     const formData = new FormData()
     for (let i = 0; i < files.length; i++) {
       formData.append('files', files[i])
     }
-    const qs = source ? `?source=${encodeURIComponent(source)}` : ''
+    const params = new URLSearchParams()
+    if (source) params.set('source', source)
+    if (roomId) params.set('roomId', roomId)
+    const qs = params.size ? `?${params.toString()}` : ''
     return postForm<{ total: number; succeeded: number; failed: number; results: unknown[] }>(`/api/document/ingest/batch${qs}`, formData)
   },
 }

@@ -63,6 +63,7 @@ export interface AgentResponse {
   sessionId?: string
   timestamp: string
   metadata?: Record<string, unknown>
+  citations?: Citation[]
 }
 
 export interface SignalRMessage {

@@ -27,6 +27,7 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
     timeoutSeconds: agent?.timeoutSeconds ?? 30,
     allowedTools: agent?.toolNames ?? [],
     autonomyLevel: agent?.autonomyLevel ?? AutonomyLevel.Supervised,
+    configuration: agent?.configuration ?? {},
   })
 
   const [capInput, setCapInput] = useState('')
@@ -55,13 +56,16 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
   const [actionState, formAction, isSaving] = useActionState(
     async () => {
       try {
+        let agentName = form.name || agent?.name
         if (activeTab === 'yaml') {
+          const result = await agentApi.validateYaml(yamlText)
+          if (!result.isValid || !result.specification) throw new Error('YAML inválido')
+          agentName = result.specification.name
           await onSave(form, yamlText)
         } else {
           await onSave(form)
         }
 
-        const agentName = form.name || agent?.name
         if (agentName) {
           await agentApi.setRooms(agentName, selectedRooms)
         }
@@ -129,45 +133,24 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
 
   // Helper para converter o estado do formulário para uma string YAML elegante
   const serializeFormToYaml = (spec: AgentSpecification): string => {
-    const lines: string[] = []
-    lines.push(`# Microsoft Agent Framework (MAF) - Agent Specification`)
-    lines.push(`name: "${spec.name || ''}"`)
-    lines.push(`description: "${spec.description || ''}"`)
-    lines.push(`tier: ${spec.tier ?? 1}`)
-    lines.push(`domain: "${spec.domain || ''}"`)
-    lines.push(`autonomyLevel: ${spec.autonomyLevel ?? AutonomyLevel.Supervised}`)
-    lines.push(`maxConcurrency: ${spec.maxConcurrency ?? 5}`)
-    lines.push(`timeoutSeconds: ${spec.timeoutSeconds ?? 30}`)
-    
-    if (spec.capabilities && spec.capabilities.length > 0) {
-      lines.push('capabilities:')
-      spec.capabilities.forEach(cap => {
-        lines.push(`  - "${cap}"`)
-      })
-    } else {
-      lines.push('capabilities: []')
-    }
-
-    if (spec.allowedTools && spec.allowedTools.length > 0) {
-      lines.push('allowedTools:')
-      spec.allowedTools.forEach(tool => {
-        lines.push(`  - "${tool}"`)
-      })
-    } else {
-      lines.push('allowedTools: []')
-    }
-
-    if (spec.systemPrompt) {
-      lines.push('systemPrompt: |')
-      const promptLines = spec.systemPrompt.split('\n')
-      promptLines.forEach(line => {
-        lines.push(`  ${line}`)
-      })
-    } else {
-      lines.push('systemPrompt: ""')
-    }
-
-    return lines.join('\n')
+    // JSON strings/arrays are valid YAML scalars and preserve quotes, slashes and newlines.
+    const quote = (value: unknown) => JSON.stringify(value)
+    return [
+      'metadata:',
+      `  name: ${quote(spec.name)}`,
+      `  description: ${quote(spec.description)}`,
+      `  tier: ${quote(TierLabels[spec.tier])}`,
+      `  domain: ${quote(spec.domain)}`,
+      'execution:',
+      `  autonomyLevel: ${spec.autonomyLevel ?? AutonomyLevel.Supervised}`,
+      `  maxConcurrency: ${spec.maxConcurrency ?? 5}`,
+      `  timeoutSeconds: ${spec.timeoutSeconds ?? 30}`,
+      'abilities:',
+      `  capabilities: ${quote(spec.capabilities ?? [])}`,
+      `  allowedTools: ${quote(spec.allowedTools ?? [])}`,
+      `instructions: ${quote(spec.systemPrompt ?? spec.instructions ?? '')}`,
+      `configuration: ${quote(spec.configuration ?? {})}`,
+    ].join('\n')
   }
 
   // Sincronizar abas com conversão bidirecional inteligente
@@ -188,14 +171,15 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
           if (result.isValid && result.specification) {
             const spec = result.specification
             setForm({
-              name: spec.name || form.name,
-              description: spec.description || form.description,
-              domain: spec.domain || form.domain,
+              name: spec.name ?? '',
+              description: spec.description ?? '',
+              domain: spec.domain ?? '',
               tier: spec.tier ?? form.tier,
-              systemPrompt: spec.instructions || spec.systemPrompt || form.systemPrompt,
+              systemPrompt: spec.instructions ?? spec.systemPrompt ?? '',
               capabilities: spec.capabilities || form.capabilities,
-              maxConcurrency: spec.maxConcurrency || form.maxConcurrency,
-              timeoutSeconds: spec.timeoutSeconds || form.timeoutSeconds,
+              maxConcurrency: Number(spec.configuration?.maxConcurrency ?? spec.maxConcurrency ?? 5),
+              timeoutSeconds: Number(spec.configuration?.timeoutSeconds ?? spec.timeoutSeconds ?? 30),
+              configuration: spec.configuration ?? {},
               allowedTools: spec.allowedTools || form.allowedTools,
               autonomyLevel: spec.autonomyLevel ?? form.autonomyLevel,
             })

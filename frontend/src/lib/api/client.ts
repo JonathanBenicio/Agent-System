@@ -19,9 +19,6 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
   const token = useAuthStore.getState().token
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
-  } else {
-    const apiKey = useAuthStore.getState().apiKey ?? localStorage.getItem('agentic_api_key')
-    if (apiKey) headers.set('X-Api-Key', apiKey)
   }
 
   // Enforce Tenant ID context from the Knowledge Store for Multi-tenancy isolation
@@ -47,8 +44,8 @@ export async function request<T>(path: string, options?: RequestInit): Promise<T
 
   if (!res.ok) {
     if (res.status === 401) {
-      import('@/store/authStore').then(({ useAuthStore }) => {
-        useAuthStore.getState().logout()
+      void useAuthStore.getState().logout().catch(() => {
+        console.warn('Não foi possível encerrar a sessão após erro de autenticação.')
       })
     }
     const body = await res.text()

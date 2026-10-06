@@ -15,6 +15,8 @@ using AgenticSystem.Core.Services;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
 using Xunit;
+using AgenticSystem.Infrastructure.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace AgenticSystem.Tests;
 
@@ -75,6 +77,7 @@ public class AgentFrameworkDirectExecutionServiceTests
             services.AddSingleton(permissions);
             services.AddSingleton(host);
             services.AddSingleton<BannerProductionSkills>();
+            AddFidesServices(services);
             using var provider = services.BuildServiceProvider();
             var sessions = new InMemorySessionStore();
             await sessions.SaveAsync(new SessionData { Id = "banner-session", UserId = "user-a", TenantId = "tenant-a" });
@@ -125,7 +128,9 @@ public class AgentFrameworkDirectExecutionServiceTests
         chatClient ??= Substitute.For<IChatClient>();
         var loggerFactory = Substitute.For<ILoggerFactory>();
         loggerFactory.CreateLogger(Arg.Any<string>()).Returns(Substitute.For<ILogger>());
-        var serviceProvider = Substitute.For<IServiceProvider>();
+        var services = new ServiceCollection();
+        AddFidesServices(services);
+        var serviceProvider = services.BuildServiceProvider();
         return new AgentFrameworkFactory(chatClient, loggerFactory, serviceProvider);
     }
 
@@ -242,6 +247,20 @@ public class AgentFrameworkDirectExecutionServiceTests
         result.Success.Should().BeFalse();
         result.Content.Should().Contain("Framework error: boom");
         result.AgentName.Should().Be("TestAgent");
+    }
+
+    private static void AddFidesServices(ServiceCollection services)
+    {
+        var tenant = Substitute.For<ITenantContextAccessor>();
+        tenant.CurrentTenantId.Returns("tenant-a");
+        services.AddSingleton(tenant);
+        services.AddSingleton<IFidesTenantPolicyStore>(new InMemoryFidesTenantPolicyStore(tenant));
+        var scanner = Substitute.For<IFidesMediaScanner>();
+        scanner.ScanAndRedactAsync(Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<string>(),
+            Arg.Any<FidesTenantPolicy>(), Arg.Any<CancellationToken>())
+            .Returns(new FidesMediaScanResult { Status = FidesMediaScanStatus.NoSensitiveContent });
+        services.AddSingleton(scanner);
+        services.AddSingleton(Options.Create(new FidesSecuritySettings()));
     }
 
     private static IAgent CreateAgent(string name)

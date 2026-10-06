@@ -66,8 +66,9 @@ public sealed class FidesTenantPolicyPostgresTests
         ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
         var target = new NpgsqlConnectionStringBuilder(connectionString);
         if (target.Host != "127.0.0.1" || target.Port != 55432 ||
-            target.Database != "backend_validation" || target.Username != "validation")
-            throw new InvalidOperationException("FIDES PostgreSQL test only accepts the isolated backend-validation Compose database.");
+            string.IsNullOrWhiteSpace(target.Database) ||
+            !target.Database.StartsWith("review_pr152_", StringComparison.Ordinal) || target.Username != "validation")
+            throw new InvalidOperationException("FIDES PostgreSQL test only accepts an isolated review_pr152_* database on backend-validation Compose port 55432.");
 
         var efConnectionString = Environment.GetEnvironmentVariable("AGENTIC_EF_CONNECTION");
         ArgumentException.ThrowIfNullOrWhiteSpace(efConnectionString);

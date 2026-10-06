@@ -107,7 +107,10 @@ public class HierarchicalAgentFactory : IAgentFactory
                 LastUsedAt = a.LastUsedAt,
                 IsActive = a.IsActive,
                 AutonomyLevel = a.AutonomyLevel,
-                AvailableTools = a.AvailableTools.ToList()
+                AvailableTools = a.AvailableTools.ToList(),
+                Instructions = a.Instructions,
+                Capabilities = a is CustomAgent custom ? custom.Specification.Capabilities.ToList() : [],
+                Configuration = a is CustomAgent configured ? new(configured.Specification.Configuration) : new()
             });
 
         return agents;
@@ -129,7 +132,10 @@ public class HierarchicalAgentFactory : IAgentFactory
                 LastUsedAt = a.LastUsedAt,
                 IsActive = a.IsActive,
                 AutonomyLevel = a.AutonomyLevel,
-                AvailableTools = a.AvailableTools.ToList()
+                AvailableTools = a.AvailableTools.ToList(),
+                Instructions = a.Instructions,
+                Capabilities = a is CustomAgent custom ? custom.Specification.Capabilities.ToList() : [],
+                Configuration = a is CustomAgent configured ? new(configured.Specification.Configuration) : new()
             });
 
         return agents;
@@ -275,6 +281,7 @@ internal class CustomAgent : BaseAgent
         _spec = specification;
     }
 
+    internal AgentSpecification Specification => _spec;
     public override string Name => _spec.Name;
     public override string Description => _spec.Description;
     public override AgentTier Tier => _spec.Tier;

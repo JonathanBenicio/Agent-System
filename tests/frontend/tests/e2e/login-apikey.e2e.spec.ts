@@ -33,7 +33,8 @@ test.describe('Login E2E - Chave de API', () => {
     await expect(apiKeyInput).toBeVisible();
 
     // Insere a chave de API de admin real configurada no Docker Compose
-    const realAdminKey = 'minha-chave-secreta-admin-123';
+    const realAdminKey = process.env.E2E_API_KEY;
+    if (!realAdminKey) throw new Error('E2E_API_KEY is required for real login tests.');
     await apiKeyInput.fill(realAdminKey);
 
     // Clica no botão para acessar o sistema

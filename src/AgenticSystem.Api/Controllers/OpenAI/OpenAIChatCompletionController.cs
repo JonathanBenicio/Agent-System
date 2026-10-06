@@ -1,12 +1,10 @@
-using System.Security.Cryptography;
-using System.Text;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Core.Exceptions;
-using AgenticSystem.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 
 namespace AgenticSystem.Api.Controllers.OpenAI;
 
@@ -19,27 +17,22 @@ namespace AgenticSystem.Api.Controllers.OpenAI;
 /// Autenticação via Bearer token (padrão OpenAI) — valida contra banco de dados.
 /// </summary>
 [ApiController]
+[Authorize]
 [Route("v1")]
 [EnableRateLimiting("ProtocolEndpoints")]
 public class OpenAIChatCompletionController : ControllerBase
 {
     private readonly IFrameworkOrchestratorService _orchestrator;
-    private readonly AgenticDbContext _dbContext;
     private readonly ITenantContextAccessor _tenantContextAccessor;
-    private readonly ISystemOperationContextAccessor _systemOperations;
     private readonly ILogger<OpenAIChatCompletionController> _logger;
 
     public OpenAIChatCompletionController(
         IFrameworkOrchestratorService orchestrator,
-        AgenticDbContext dbContext,
         ITenantContextAccessor tenantContextAccessor,
-        ISystemOperationContextAccessor systemOperations,
         ILogger<OpenAIChatCompletionController> logger)
     {
         _orchestrator = orchestrator;
-        _dbContext = dbContext;
         _tenantContextAccessor = tenantContextAccessor;
-        _systemOperations = systemOperations;
         _logger = logger;
     }
 
@@ -58,7 +51,7 @@ public class OpenAIChatCompletionController : ControllerBase
         CancellationToken ct)
     {
         // 1. Autenticação via Bearer token (padrão OpenAI)
-        var authenticatedTenantId = await ValidateBearerTokenAsync();
+        var authenticatedTenantId = GetAuthenticatedTenantId();
         if (authenticatedTenantId is null)
         {
             return Unauthorized(new ChatCompletionError
@@ -71,12 +64,6 @@ public class OpenAIChatCompletionController : ControllerBase
                 }
             });
         }
-
-        using var tenantScope = _tenantContextAccessor.BeginScope(new TenantContext
-        {
-            TenantId = authenticatedTenantId,
-            IsAuthenticated = true
-        });
 
         // 2. Validação do request
         if (request.Messages is not { Count: > 0 })
@@ -136,7 +123,7 @@ public class OpenAIChatCompletionController : ControllerBase
             agentResponse = await _orchestrator.ExecuteAsync(
                 sessionId,
                 lastUserMessage.Content,
-                new UserContext { UserId = sessionId, TenantId = _tenantContextAccessor.CurrentTenantId },
+                new UserContext { UserId = User.FindFirstValue(ClaimTypes.NameIdentifier)!, TenantId = authenticatedTenantId },
                 ct);
         }
         catch (OperationCanceledException)
@@ -227,9 +214,9 @@ public class OpenAIChatCompletionController : ControllerBase
     [HttpGet("models")]
     [Produces("application/json")]
     [ProducesResponseType(200)]
-    public async Task<IActionResult> ListModels()
+    public IActionResult ListModels()
     {
-        if (await ValidateBearerTokenAsync() is null)
+        if (GetAuthenticatedTenantId() is null)
         {
             return Unauthorized(new ChatCompletionError
             {
@@ -260,39 +247,12 @@ public class OpenAIChatCompletionController : ControllerBase
         return Ok(models);
     }
 
-    private async Task<string?> ValidateBearerTokenAsync()
+    private string? GetAuthenticatedTenantId()
     {
-        var authHeader = Request.Headers.Authorization.FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(authHeader))
+        if (User.Identity?.IsAuthenticated != true ||
+            string.IsNullOrWhiteSpace(User.FindFirstValue(ClaimTypes.NameIdentifier)))
             return null;
-
-        // Suporta "Bearer <token>" (padrão OpenAI) e token direto
-        var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
-            ? authHeader["Bearer ".Length..].Trim()
-            : authHeader.Trim();
-
-        if (string.IsNullOrWhiteSpace(token))
-            return null;
-
-        // Calcula o Hash SHA-256 da chave fornecida
-        var keyBytes = Encoding.UTF8.GetBytes(token);
-        var hashBytes = SHA256.HashData(keyBytes);
-        var keyHash = Convert.ToHexString(hashBytes).ToLowerInvariant();
-
-        // Consulta no banco de dados se o hash corresponde a uma chave ativa
-        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.ApiKeyAuthentication);
-        _systemOperations.Require(SystemOperationKind.ApiKeyAuthentication);
-        var accessKey = await _dbContext.AccessApiKeys
-            .IgnoreQueryFilters() // Ignora o filtro de tenant
-            .FirstOrDefaultAsync(k => k.KeyHash == keyHash && k.IsEnabled);
-
-        if (accessKey is null)
-            return null;
-
-        if (TenantIdPolicy.IsReservedSystemId(accessKey.TenantId))
-            return null;
-
-        return accessKey.TenantId;
+        return _tenantContextAccessor.CurrentContext?.TenantId;
     }
 }
 

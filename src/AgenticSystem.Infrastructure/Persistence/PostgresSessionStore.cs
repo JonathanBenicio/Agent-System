@@ -63,6 +63,37 @@ public class PostgresSessionStore : ISessionStore
         _logger.LogDebug("Session saved to PostgreSQL via EF Core: {SessionId}", session.Id);
     }
 
+    public async Task<int> CountActiveAsync(string tenantId, CancellationToken ct = default)
+    {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, tenantId);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        return await db.SessionRecords.CountAsync(item => item.TenantId == tenantId && item.EndedAt == null, ct);
+    }
+
+    public async Task<bool> TryCreateAsync(SessionData session, int maxActive, CancellationToken ct = default)
+    {
+        TenantContextPolicy.RequireCurrentTenant(_tenantAccessor, session.TenantId);
+        await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
+        // Every API instance contends on this existing tenant row before counting/inserting.
+        await using var transaction = await db.Database.BeginTransactionAsync(ct);
+        await db.Database.ExecuteSqlInterpolatedAsync(
+            $"SELECT 1 FROM tenants WHERE id = {session.TenantId} FOR UPDATE", ct);
+        var tenantExists = await db.Tenants.AnyAsync(item => item.Id == session.TenantId && item.IsActive, ct);
+        if (!tenantExists) throw new UnauthorizedAccessException("Tenant not found or inactive.");
+        if (maxActive > 0 && await db.SessionRecords.CountAsync(
+                item => item.TenantId == session.TenantId && item.EndedAt == null, ct) >= maxActive)
+            return false;
+        db.SessionRecords.Add(new SessionRecordEntity
+        {
+            Id = session.Id, UserId = session.UserId, TenantId = session.TenantId,
+            DataJson = JsonSerializer.Serialize(session, JsonOptions), StartedAt = session.StartedAt,
+            EndedAt = session.EndedAt, IsConsolidated = session.IsConsolidated
+        });
+        await db.SaveChangesAsync(ct);
+        await transaction.CommitAsync(ct);
+        return true;
+    }
+
     public async Task<SessionData?> GetAsync(string sessionId, CancellationToken ct = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);

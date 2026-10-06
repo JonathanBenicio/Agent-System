@@ -34,7 +34,7 @@ dotnet test --no-build --configuration Release \
   --logger "trx;LogFileName=test-results.trx" \
   --collect:"XPlat Code Coverage"
 
-# Coverage threshold enforcement (80% minimum)
+# Coverage reporting (80% advisory for this remediation; not a merge gate)
 dotnet tool install --global dotnet-reportgenerator-globaltool
 reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:"coverage-report"
 ```
@@ -61,7 +61,7 @@ Toda nova funcionalidade estratégica deve seguir rigorosamente esta ordem:
 2. **ADR (Architectural Decision Record)**: Definição de padrões em `docs/architecture/adr/`.
 3. **User Story**: Critérios de aceite em `docs/USER-STORIES.md`.
 4. **Implementation Plan**: Roteiro técnico em `docs/plan/`.
-5. **Rastreabilidade**: usar `Refs #ID` para trabalho parcial/diagnóstico; usar `Closes #ID` somente quando todos os critérios foram atendidos e a issue deve ser fechada no merge.
+5. **Rastreabilidade e idioma dos commits**: todo commit deve referenciar uma ou mais issues relacionadas (`Refs #ID` para progresso parcial; `Closes #ID` somente quando todos os critérios foram atendidos e a issue deve fechar). Título e corpo em PT-BR; o corpo descreve os principais pontos alterados/adicionados. Seguir [regras de commits](templates/commit-rules.md).
 6. **Sincronização de Índices**: Atualizar `README.md`, `INDEX.md` e `CONSOLIDATED_DOCS.md`.
 
 Consulte o [Master Roadmap Q2 2026](docs/plan/master-roadmap-2026.md) para prioridades.
@@ -127,7 +127,7 @@ cd frontend && npm run cy:run            # E2E tests
 cd frontend && npm run lint              # Code linting
 
 # Coverage
-# CI enforces 80% minimum coverage threshold
+# CI reports measured coverage; functional regressions and gates remain blocking.
 ```
 
 ### Test Project Structure

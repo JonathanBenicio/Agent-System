@@ -54,18 +54,40 @@ if (args.Contains("--openapi"))
     return;
 }
 
-// Deliberately fixed isolated database. No production connection string accepted.
-const string connection = "Host=127.0.0.1;Port=55432;Database=backend_validation;Username=validation;Password=validation_local_only";
+// Diagnostics accept only the explicit review database and verify the API launcher manifest.
+var composeProject = Environment.GetEnvironmentVariable("BACKEND_VALIDATION_COMPOSE_PROJECT");
+var databaseName = Environment.GetEnvironmentVariable("BACKEND_VALIDATION_DATABASE");
+if (string.IsNullOrWhiteSpace(composeProject) || !System.Text.RegularExpressions.Regex.IsMatch(composeProject, "^[a-z0-9][a-z0-9_-]*$"))
+    throw new InvalidOperationException("BACKEND_VALIDATION_COMPOSE_PROJECT must identify the unique Compose project for this run.");
+if (string.IsNullOrWhiteSpace(databaseName) || !System.Text.RegularExpressions.Regex.IsMatch(databaseName, "^review_pr152_[a-z0-9_]+$"))
+    throw new InvalidOperationException("BACKEND_VALIDATION_DATABASE must be an exclusive review_pr152_* database.");
+var connection = new Npgsql.NpgsqlConnectionStringBuilder
+{
+    Host = "127.0.0.1",
+    Port = 55432,
+    Database = databaseName,
+    Username = "validation",
+    Password = "validation_local_only"
+}.ConnectionString;
+var apiTargetPath = Path.Combine(validationOutputDirectory, "api-target.json");
+using (var apiTarget = JsonDocument.Parse(await File.ReadAllTextAsync(apiTargetPath)))
+{
+    var target = apiTarget.RootElement;
+    if (target.GetProperty("composeProject").GetString() != composeProject ||
+        target.GetProperty("database").GetString() != databaseName ||
+        target.GetProperty("host").GetString() != "127.0.0.1" || target.GetProperty("port").GetInt32() != 55432)
+        throw new InvalidOperationException("API and diagnostic harness must use the same isolated Compose database.");
+}
 if (args.Contains("--legacy-backfill"))
 {
-    var databaseName = "backfill_" + Guid.NewGuid().ToString("N")[..12];
+    var backfillDatabase = "review_pr152_backfill_" + Guid.NewGuid().ToString("N")[..12];
     var adminConnection = new Npgsql.NpgsqlConnectionStringBuilder(connection) { Database = "postgres" };
-    var fixtureConnection = new Npgsql.NpgsqlConnectionStringBuilder(connection) { Database = databaseName };
+    var fixtureConnection = new Npgsql.NpgsqlConnectionStringBuilder(connection) { Database = backfillDatabase };
     await using (var admin = new Npgsql.NpgsqlConnection(adminConnection.ConnectionString))
     {
         await admin.OpenAsync();
         await using var create = admin.CreateCommand();
-        create.CommandText = $"CREATE DATABASE \"{databaseName}\"";
+        create.CommandText = $"CREATE DATABASE \"{backfillDatabase}\"";
         await create.ExecuteNonQueryAsync();
     }
 
@@ -132,7 +154,7 @@ if (args.Contains("--legacy-backfill"))
         await using var admin = new Npgsql.NpgsqlConnection(adminConnection.ConnectionString);
         await admin.OpenAsync();
         await using var drop = admin.CreateCommand();
-        drop.CommandText = $"DROP DATABASE IF EXISTS \"{databaseName}\" WITH (FORCE)";
+        drop.CommandText = $"DROP DATABASE IF EXISTS \"{backfillDatabase}\" WITH (FORCE)";
         await drop.ExecuteNonQueryAsync();
     }
 

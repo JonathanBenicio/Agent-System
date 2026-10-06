@@ -4,10 +4,16 @@ Fonte atual: controladores, DTOs e stores na branch integrada para `develop`, co
 Alertas de quota seguem o tenant autenticado em `GET /api/v1/alerts` e `POST /api/v1/alerts/{id}/read`; o filtro de tenant limita listagem e atualização de leitura. Alertas de chaves globais de plataforma são acessíveis somente por Platform Admin em `GET /api/platform/alerts` e `POST /api/platform/alerts/{id}/read`.
 
 ## Convenções
+
+Workflow review #145: `stepType` usa nomes camelCase (action/agent/decision/parallel/wait/approval/subworkflow) nos contratos HTTP e cliente; números explícitos da baseline e8e813b continuam aceitos nos snapshots. O builder conserva os campos da definição ao carregar/salvar, sem reatribuir Decision/Wait pela posição do enum.
+
+Aprovação/rejeição aceita `?stepId=<id>`. Sem stepId, uma única pendente mantém compatibilidade; várias pendentes retornam409 com `pendingStepIds`, e nenhuma decisão é aplicada. A UI permite escolher a etapa e só confirma sucesso após resposta persistida. Definições são validadas pelas dependências efetivas DependsOn antes de salvar/iniciar; ciclos/IDs ausentes falham sem criar execução. Os branches paralelos têm estado próprio e merge em ordem da definição (outputs namespaced por step, primeiro short-key conservado).
+
+Uploads de chat para uma sala enviam `roomId` separado de `source`; o backend verifica escrita antes da ingestão e grava a associação em cada chunk. `source` continua identificando a origem/sessão e nunca concede acesso por si só.
 Base URL configurada pelo host; exemplos usam http://localhost:5188. JSON dos controllers usa camelCase, enums camelCase e omite nulos. Não há envelope único: arrays, objetos, ProblemDetails, texto e respostas vazias coexistem. Exceções não tratadas retornam 500 com error/correlationId e X-Correlation-Id. 429 retorna error e Retry-After. Não assumir correlationId em todos os erros de validação.
 Credenciais: `X-Api-Key` para API key ou `Authorization: Bearer <JWT>` nas rotas autenticadas. O endpoint OpenAI-compatível `/v1/chat/completions` recebe a API key opaca no Bearer. Tenant/membership: [resolução e papéis](access-tenants.md). Auth/tenant/rate limiting ocorrem antes da action.
 
-`POST /api/auth/login` valida a API key, define cookie httpOnly e retorna `role`, `tenantId` e `userId` opaco da chave; o frontend usa esse subject para isolar as preferências/cache de chat. Login não atualiza nem descobre a configuração global de providers.
+`POST /api/auth/login` valida a chave, o tenant ativo e a membership, define cookie HttpOnly/Secure/SameSite=Strict e retorna `role`, `roles`, `tenantId` e `userId` opaco da chave. `GET /api/auth/session` exige autenticação e membership e devolve apenas identidade/papéis, nunca a credencial; permite retomar o navegador sem API key no localStorage. `POST /api/auth/logout` remove o cookie inclusive quando o vínculo foi revogado; a UI só confirma logout após sucesso. Login/logout são exchanges sem dados tenant-owned. Login não atualiza nem descobre providers globais.
 
 ## Chat — POST /api/chat e POST /api/chat/stream
 [ChatController](../../src/AgenticSystem.Api/Controllers/ChatController.cs), [ChatRequest](../../src/AgenticSystem.Api/Models/ChatRequest.cs).

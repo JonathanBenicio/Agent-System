@@ -84,6 +84,12 @@ public class AgentConfigurationService : IAgentConfigurationService
             Name = agent.Name,
             Description = agent.Description,
             Tier = agent.Tier,
+            Domain = agent.Domain,
+            Instructions = agent.Instructions,
+            Capabilities = spec.Capabilities.ToList(),
+            Configuration = new(spec.Configuration),
+            AvailableTools = agent.AvailableTools.ToList(),
+            AutonomyLevel = agent.AutonomyLevel,
             IsActive = agent.IsActive,
             CreatedAt = agent.CreatedAt
         };

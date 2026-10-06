@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using AgenticSystem.Core.Interfaces;
@@ -22,11 +22,12 @@ public class PostgresWorkflowExecutionStoreTests
     {
         var connectionString = GetIsolatedConnectionString();
         var tenantContext = new TenantContextAccessor();
+        var systemOperations = new SystemOperationContextAccessor();
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
             .UseNpgsql(connectionString, postgres => postgres.UseVector())
             .Options;
         var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
-        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext, systemOperations);
         var definition = new WorkflowDefinition
         {
             Id = $"tenant-definition-{Guid.NewGuid():N}",
@@ -64,11 +65,12 @@ public class PostgresWorkflowExecutionStoreTests
     {
         var connectionString = GetIsolatedConnectionString();
         var tenantContext = new TenantContextAccessor();
+        var systemOperations = new SystemOperationContextAccessor();
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
             .UseNpgsql(connectionString, postgres => postgres.UseVector())
             .Options;
         var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
-        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext, systemOperations);
         var engine = new DefaultWorkflowEngine(
             store,
             Substitute.For<IDirectAgentRequestExecutor>(),
@@ -122,11 +124,12 @@ public class PostgresWorkflowExecutionStoreTests
     {
         var connectionString = GetIsolatedConnectionString();
         var tenantContext = new TenantContextAccessor();
+        var systemOperations = new SystemOperationContextAccessor();
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
             .UseNpgsql(connectionString, postgres => postgres.UseVector())
             .Options;
         var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
-        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext, systemOperations);
         var definition = new WorkflowDefinition
         {
             Id = $"scheduled-wait-{Guid.NewGuid():N}",
@@ -145,7 +148,7 @@ public class PostgresWorkflowExecutionStoreTests
         {
             var started = await engine.StartAsync("tenant-wait", definition, initiatedBy: "user-wait");
             executionId = started.Id;
-            var firstClaim = await store.ClaimNextExecutionAsync("first-process-worker", TimeSpan.FromMinutes(1));
+            var firstClaim = await ClaimAsync(store, systemOperations, "first-process-worker", TimeSpan.FromMinutes(1));
             firstClaim.Should().NotBeNull();
             await engine.ProcessClaimedExecutionAsync(firstClaim!);
             await store.ReleaseExecutionLeaseAsync(firstClaim!);
@@ -155,20 +158,20 @@ public class PostgresWorkflowExecutionStoreTests
             var waitUntilUtc = restored.StepExecutions.Should().ContainSingle().Which.WaitUntilUtc;
             waitUntilUtc.Should().NotBeNull();
             waitUntilUtc!.Value.Should().BeAfter(DateTime.UtcNow);
-            (await store.ClaimNextExecutionAsync("early-worker", TimeSpan.FromMinutes(1))).Should().BeNull();
+            (await ClaimAsync(store, systemOperations, "early-worker", TimeSpan.FromMinutes(1))).Should().BeNull();
 
             var remainingWait = waitUntilUtc.Value - DateTime.UtcNow;
             if (remainingWait > TimeSpan.Zero)
                 await Task.Delay(remainingWait + TimeSpan.FromMilliseconds(50));
 
             // Recreate the store/engine objects to exercise persisted wait recovery.
-            var restartedStore = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
+            var restartedStore = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext, systemOperations);
             var restartedEngine = new DefaultWorkflowEngine(
                 restartedStore,
                 Substitute.For<IDirectAgentRequestExecutor>(),
                 Substitute.For<IToolManager>(),
                 NullLogger<DefaultWorkflowEngine>.Instance);
-            var dueClaim = await restartedStore.ClaimNextExecutionAsync("restarted-worker", TimeSpan.FromMinutes(1));
+            var dueClaim = await ClaimAsync(restartedStore, systemOperations, "restarted-worker", TimeSpan.FromMinutes(1));
             dueClaim.Should().NotBeNull();
             dueClaim!.ExecutionId.Should().Be(started.Id);
             await restartedEngine.ProcessClaimedExecutionAsync(dueClaim);
@@ -188,11 +191,12 @@ public class PostgresWorkflowExecutionStoreTests
     {
         var connectionString = GetIsolatedConnectionString();
         var tenantContext = new TenantContextAccessor();
+        var systemOperations = new SystemOperationContextAccessor();
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
             .UseNpgsql(connectionString, postgres => postgres.UseVector())
             .Options;
         var factory = new FakeDbContextFactory { ContextCreator = () => new AgenticDbContext(options, tenantContext) };
-        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext, systemOperations);
         var execution = new WorkflowExecution
         {
             Id = $"lease-{Guid.NewGuid():N}",
@@ -208,8 +212,8 @@ public class PostgresWorkflowExecutionStoreTests
         {
             await store.SaveExecutionAsync(execution.TenantId, execution);
             var competingClaims = await Task.WhenAll(
-                store.ClaimNextExecutionAsync("worker-a", TimeSpan.FromMinutes(1)),
-                store.ClaimNextExecutionAsync("worker-b", TimeSpan.FromMinutes(1)));
+                ClaimAsync(store, systemOperations, "worker-a", TimeSpan.FromMinutes(1)),
+                ClaimAsync(store, systemOperations, "worker-b", TimeSpan.FromMinutes(1)));
             var first = competingClaims.Should().ContainSingle(claim => claim != null).Which;
             first!.ExecutionId.Should().Be(execution.Id);
             var staleState = await store.GetExecutionAsync(execution.TenantId, execution.Id);
@@ -227,7 +231,7 @@ public class PostgresWorkflowExecutionStoreTests
             }
 
             var newWorkerId = first.WorkerId == "worker-a" ? "worker-b" : "worker-a";
-            var recovered = await store.ClaimNextExecutionAsync(newWorkerId, TimeSpan.FromMinutes(1));
+            var recovered = await ClaimAsync(store, systemOperations, newWorkerId, TimeSpan.FromMinutes(1));
             recovered.Should().NotBeNull();
             recovered!.WorkerId.Should().NotBe(first.WorkerId);
             (await store.RenewExecutionLeaseAsync(first, TimeSpan.FromMinutes(1))).Should().BeFalse();
@@ -246,6 +250,7 @@ public class PostgresWorkflowExecutionStoreTests
     {
         var connectionString = GetIsolatedConnectionString();
         var tenantContext = new TenantContextAccessor();
+        var systemOperations = new SystemOperationContextAccessor();
         var options = new DbContextOptionsBuilder<AgenticDbContext>()
             .UseNpgsql(connectionString, postgres => postgres.UseVector())
             .Options;
@@ -253,7 +258,7 @@ public class PostgresWorkflowExecutionStoreTests
         {
             ContextCreator = () => new AgenticDbContext(options, tenantContext)
         };
-        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext);
+        var store = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext, systemOperations);
         var definition = new WorkflowDefinition
         {
             Id = "snapshot-definition",
@@ -290,7 +295,7 @@ public class PostgresWorkflowExecutionStoreTests
                 await store.SaveDefinitionAsync("tenant-a", definition);
                 var started = await engine.StartAsync("tenant-a", definition, initiatedBy: "user-a");
                 executionId = started.Id;
-                await ProcessClaimedExecutionAsync(store, engine, started.Id);
+                await ProcessClaimedExecutionAsync(store, engine, started.Id, systemOperations);
                 var waiting = await WaitForExecutionAsync(store, "tenant-a", started.Id, WorkflowExecutionStatus.WaitingForApproval);
 
                 waiting.WorkflowDefinitionVersion.Should().Be(7);
@@ -319,7 +324,7 @@ public class PostgresWorkflowExecutionStoreTests
                 await store.SaveDefinitionAsync("tenant-a", editedDefinition);
 
                 await engine.ApproveAsync("tenant-a", started.Id, "approver-a");
-                await ProcessClaimedExecutionAsync(store, engine, started.Id);
+                await ProcessClaimedExecutionAsync(store, engine, started.Id, systemOperations);
                 var completed = await WaitForExecutionAsync(store, "tenant-a", started.Id, WorkflowExecutionStatus.Completed);
                 completed.WorkflowDefinitionVersion.Should().Be(7);
                 await agentExecutor.Received(1).ExecuteAsync(
@@ -352,9 +357,16 @@ public class PostgresWorkflowExecutionStoreTests
         }
     }
 
-    private static async Task ProcessClaimedExecutionAsync(IWorkflowStore store, IWorkflowEngine engine, string executionId)
+    private static async Task<WorkflowExecutionClaim?> ClaimAsync(
+        IWorkflowStore store, SystemOperationContextAccessor systemOperations, string workerId, TimeSpan duration)
     {
-        var claim = await store.ClaimNextExecutionAsync("postgres-workflow-test", TimeSpan.FromMinutes(1));
+        using var scope = systemOperations.BeginScope(SystemOperationKind.ClaimWorkflowExecutions);
+        return await store.ClaimNextExecutionAsync(workerId, duration);
+    }
+
+    private static async Task ProcessClaimedExecutionAsync(IWorkflowStore store, IWorkflowEngine engine, string executionId, SystemOperationContextAccessor systemOperations)
+    {
+        var claim = await ClaimAsync(store, systemOperations, "postgres-workflow-test", TimeSpan.FromMinutes(1));
         claim.Should().NotBeNull();
         claim!.ExecutionId.Should().Be(executionId);
         try
@@ -393,7 +405,8 @@ public class PostgresWorkflowExecutionStoreTests
         var efTarget = new NpgsqlConnectionStringBuilder(efConnectionString);
         if (target.Host != "127.0.0.1"
             || target.Port != 55432
-            || target.Database != "backend_validation"
+            || string.IsNullOrWhiteSpace(target.Database)
+            || !target.Database.StartsWith("review_pr152_", StringComparison.Ordinal)
             || target.Username != "validation"
             || efTarget.Host != target.Host
             || efTarget.Port != target.Port
@@ -402,7 +415,7 @@ public class PostgresWorkflowExecutionStoreTests
             || efTarget.Password != target.Password)
         {
             throw new InvalidOperationException(
-                "PostgreSQL integration tests are restricted to tests/backend-validation/compose.yml (127.0.0.1:55432/backend_validation). Set both connection variables to that isolated database.");
+                "PostgreSQL integration tests are restricted to an isolated review_pr152_* database from tests/backend-validation/compose.yml (127.0.0.1:55432). Set both connection variables to that database.");
         }
 
         return connectionString;

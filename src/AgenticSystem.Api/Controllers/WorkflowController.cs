@@ -1,5 +1,6 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -49,6 +50,11 @@ public class WorkflowController : ControllerBase
     public async Task<IActionResult> SaveDefinition([FromBody] WorkflowDefinition definition, CancellationToken ct = default)
     {
         var tenantId = GetTenantId();
+        try { WorkflowGraphValidator.Validate(definition); }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException)
+        {
+            return BadRequest(new { error = error.Message });
+        }
         await _store.SaveDefinitionAsync(tenantId, definition, ct);
         return Ok(definition);
     }
@@ -127,7 +133,7 @@ public class WorkflowController : ControllerBase
     }
 
     [HttpPost("executions/{id}/approve")]
-    public async Task<IActionResult> ApproveExecution(string id, CancellationToken ct = default)
+    public async Task<IActionResult> ApproveExecution(string id, CancellationToken ct = default, [FromQuery] string? stepId = null)
     {
         var tenantId = GetTenantId();
         if (!CanApproveWorkflow()) return Forbid();
@@ -137,7 +143,13 @@ public class WorkflowController : ControllerBase
 
         try
         {
-            return Ok(await _engine.ApproveAsync(tenantId, id, approver, ct));
+            return Ok(string.IsNullOrWhiteSpace(stepId)
+                ? await _engine.ApproveAsync(tenantId, id, approver, ct)
+                : await _engine.ApproveStepAsync(tenantId, id, stepId, approver, ct));
+        }
+        catch (WorkflowApprovalAmbiguousException ex)
+        {
+            return Conflict(new { error = ex.Message, pendingStepIds = ex.PendingStepIds });
         }
         catch (ArgumentException ex)
         {
@@ -151,7 +163,7 @@ public class WorkflowController : ControllerBase
     }
 
     [HttpPost("executions/{id}/reject")]
-    public async Task<IActionResult> RejectExecution(string id, [FromQuery] string? reason, CancellationToken ct = default)
+    public async Task<IActionResult> RejectExecution(string id, [FromQuery] string? reason, CancellationToken ct = default, [FromQuery] string? stepId = null)
     {
         var tenantId = GetTenantId();
         if (!CanApproveWorkflow()) return Forbid();
@@ -161,7 +173,13 @@ public class WorkflowController : ControllerBase
 
         try
         {
-            return Ok(await _engine.RejectAsync(tenantId, id, rejector, reason, ct));
+            return Ok(string.IsNullOrWhiteSpace(stepId)
+                ? await _engine.RejectAsync(tenantId, id, rejector, reason, ct)
+                : await _engine.RejectStepAsync(tenantId, id, stepId, rejector, reason, ct));
+        }
+        catch (WorkflowApprovalAmbiguousException ex)
+        {
+            return Conflict(new { error = ex.Message, pendingStepIds = ex.PendingStepIds });
         }
         catch (ArgumentException ex)
         {

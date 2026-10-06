@@ -67,7 +67,7 @@ public sealed class HyperlightSandboxedExecutorTests
         result.Output.Should().Be("sandbox-output:4");
     }
 
-    [Fact]
+    [RequiresHyperlightIntegrationFact]
     public async Task OfficialHyperlightRunnerExecutesJavaScript()
     {
         using var runner = new HyperlightCodeActRunner();
@@ -137,5 +137,14 @@ public sealed class HyperlightSandboxedExecutorTests
             environment,
             runner,
             Substitute.For<ILogger<HyperlightSandboxedExecutor>>());
+    }
+}
+
+public sealed class RequiresHyperlightIntegrationFactAttribute : FactAttribute
+{
+    public RequiresHyperlightIntegrationFactAttribute()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable("AGENTIC_TEST_HYPERLIGHT"), "true", StringComparison.OrdinalIgnoreCase))
+            Skip = "Set AGENTIC_TEST_HYPERLIGHT=true on a runner with a configured Hyperlight hypervisor to run this integration test.";
     }
 }
