@@ -134,7 +134,7 @@ public class PostgresWorkflowExecutionStoreTests
         {
             Id = $"scheduled-wait-{Guid.NewGuid():N}",
             Name = "Scheduled wait",
-            Steps = [new WorkflowStep { Id = "wait", Name = "Wait", StepType = WorkflowStepType.Wait, Timeout = TimeSpan.FromMilliseconds(350) }]
+            Steps = [new WorkflowStep { Id = "wait", Name = "Wait", StepType = WorkflowStepType.Wait, Timeout = TimeSpan.FromSeconds(5) }]
         };
         var engine = new DefaultWorkflowEngine(
             store,
@@ -155,10 +155,14 @@ public class PostgresWorkflowExecutionStoreTests
 
             var restored = await store.GetExecutionAsync("tenant-wait", started.Id);
             restored!.Status.Should().Be(WorkflowExecutionStatus.Pending);
-            restored.StepExecutions.Should().ContainSingle().Which.WaitUntilUtc.Should().BeAfter(DateTime.UtcNow);
+            var waitUntilUtc = restored.StepExecutions.Should().ContainSingle().Which.WaitUntilUtc;
+            waitUntilUtc.Should().NotBeNull();
+            waitUntilUtc!.Value.Should().BeAfter(DateTime.UtcNow);
             (await ClaimAsync(store, systemOperations, "early-worker", TimeSpan.FromMinutes(1))).Should().BeNull();
 
-            await Task.Delay(400);
+            var remainingWait = waitUntilUtc.Value - DateTime.UtcNow;
+            if (remainingWait > TimeSpan.Zero)
+                await Task.Delay(remainingWait + TimeSpan.FromMilliseconds(50));
 
             // Recreate the store/engine objects to exercise persisted wait recovery.
             var restartedStore = new PostgresWorkflowStore(factory, NullLogger<PostgresWorkflowStore>.Instance, tenantContext, systemOperations);
