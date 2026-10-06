@@ -1,6 +1,6 @@
 # Plano — corrigir os 32 achados do PR #132
 
-Status: os 32 achados originais foram implementados; PR #152 permanece draft. A CI passou em `23c6421` (923 aprovados, 25 ignorados, zero falhas; lint/build/E2E e security-scan verdes). A revisão do stack encontrou dois riscos adicionais em outbox e migração tenant; as correções locais aguardam nova CI antes de concluir o roteiro. Prioridade: P1.
+Status: os 32 achados originais e os riscos residuais R33/R34 foram implementados e validados; PR #152 permanece draft. A CI passou em `0749b36` (924 aprovados, 26 ignorados, zero falhas; build/security/lint/frontend E2E verdes). Resta reconciliar o corpo público de #97 e decidir a integração da stack. Prioridade: P1.
 
 Issue principal: [épico #139](https://github.com/JonathanBenicio/Agent-System/issues/139). ADR: [041](../architecture/adr/041-pr132-review-remediation.md). Stories: [BACK-REVIEW-139](../USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132).
 
@@ -88,14 +88,14 @@ Estado conferido no GitHub em 2026-10-02: as issues abaixo permanecem abertas. N
 
 | ID | Risco | Correção em andamento | Evidência necessária |
 |---|---|---|---|
-| R33 | Linhas antigas com tenant reservado ocupavam os 50 primeiros lugares da outbox; o worker apenas as registrava e selecionava novamente, podendo impedir o avanço de mensagens válidas. | Excluir IDs reservados da consulta antes do limite do lote, sem alterar nem apagar as linhas legadas. | Regressão com 50 linhas reservadas e uma real passou; classe PostgreSQL de isolamento passou 2/2. CI do novo SHA pendente. |
-| R34 | A migração promovia `platform`/`system-background`, mas deixava dados sob `default`/`system-devui` invisíveis após a política de tenant reservada. | Fazer a migration abortar antes de alterar tabelas se encontrar essas referências, informando como mapear para tenant real ou arquivar; nunca promovê-las automaticamente a escopo global. | Teste em database temporário Compose confirmou falha com detalhe/hint e preservação da linha; database descartado. CI do novo SHA pendente. |
+| R33 | Linhas antigas com tenant reservado ocupavam os 50 primeiros lugares da outbox; o worker apenas as registrava e selecionava novamente, podendo impedir o avanço de mensagens válidas. | Excluir IDs reservados da consulta antes do limite do lote, sem alterar nem apagar as linhas legadas. | Regressão com 50 linhas reservadas e uma real passou; classe PostgreSQL de isolamento passou 2/2; CI `0749b36` verde. |
+| R34 | A migração promovia `platform`/`system-background`, mas deixava dados sob `default`/`system-devui` invisíveis após a política de tenant reservada. | Fazer a migration abortar antes de alterar tabelas se encontrar essas referências, informando como mapear para tenant real ou arquivar; nunca promovê-las automaticamente a escopo global. | Teste em database temporário Compose confirmou falha com detalhe/hint e preservação da linha; database descartado; CI `0749b36` verde. |
 
 ## Verificação atual
 
 | Verificação | Resultado | Limites |
 |---|---|---|
-| Suíte completa .NET 10 (`dotnet test --no-restore`) | 923 aprovados, 25 ignorados, 0 falhas; 948 testes | Default não define PostgreSQL/OCR/Hyperlight; os gates condicionais foram executados separadamente. Hyperlight: 8/8 com `AGENTIC_TEST_HYPERLIGHT=true` no host Windows com hypervisor. |
+| Suíte completa .NET 10 (CI `dotnet test --no-restore`) | 924 aprovados, 26 ignorados, 0 falhas; 950 testes | Default CI não define PostgreSQL/OCR/Hyperlight; gates PostgreSQL de R33/R34 passaram separadamente no Compose. Hyperlight: 8/8 com `AGENTIC_TEST_HYPERLIGHT=true` no host Windows com hypervisor. |
 | Regressões por contexto | #140: 23 backend e 4 Chromium; #141: 28 FIDES/MAF, 2 OCR, 1 PostgreSQL; #142: 49; #143: 65 regressões + 1 PostgreSQL real; #144: 28 + HTTP + 2 PostgreSQL; #145: 34 backend + 8 browser + 5 PostgreSQL; #146/#147: 14; #148: rotas/manifesto/persistência; #149: verificações abaixo | Doubles, EF InMemory e HTTP fake estão identificados por contexto no relatório; não equivalem a provider externo real. |
 | Playwright configurado para CI | 48 aprovados: 24 Chromium e 24 Firefox; 0 falhas | API mockada nos fluxos UI. Os testes de login que exigem API real ficam excluídos sem `REAL_E2E=true`; a regressão específica de approval também passou 8/8 no harness. |
 | Cypress | 1 aprovado, 0 falhas; servidor Vite gerenciado pelo runner | Teste de UI com API mockada. |
@@ -103,11 +103,11 @@ Estado conferido no GitHub em 2026-10-02: as issues abaixo permanecem abertas. N
 | PostgreSQL Compose isolado, banco novo | 20 migrations aplicadas; 70 tabelas public; teste de persistência dinâmica e 5 testes de workflow passaram | DB `review_pr152_dynamicagents_20261002`, Compose com porta 55432 e projeto exclusivos; DB removido e serviço parado, volume preservado. `has-pending-model-changes` passou. |
 | SQL `dt.complete_tasks` e schema | PostgreSQL 16 isolado: 20 migrations, 70 tabelas públicas, modelo EF comparado, lotes 0/1/2/4, rollback, término e concorrência passaram | Base exclusiva removida e serviço parado; volume preservado. |
 | Links/índices locais | 169 documentos, 936 links, 0 destinos quebrados | Passou após atualizar plano, ADR e relatório. |
-| CI GitHub / estado do PR | Passou no SHA `23c6421` em `2026-10-06 UTC`: 923 aprovados, 25 ignorados e 0 falhas; build, security-scan, lint, frontend build, Playwright e Cypress verdes. | Esta CI precede R33/R34. As alterações locais atuais ainda não foram publicadas nem executadas na CI. Cobertura de 15,3% é informativa por decisão do usuário; não afirmar que o limiar de 80% foi atingido. PR #152 permanece draft e aponta para `integration/develop-pr-stack-2026-09-30`. |
-| Descrições públicas e relações Development | Concluído | Issues #139–#151 atualizadas e permanecem abertas. PR #152 relaciona #140–#149; epic #139 e #150/#151 ficam para a promoção `develop → master`. Por ter base não padrão, o merge do #152 não fecha automaticamente essas issues. |
+| CI GitHub / estado do PR | Passou no SHA `0749b36` em `2026-10-06 UTC`: 924 aprovados, 26 ignorados e 0 falhas; build, security-scan, lint, frontend build, Playwright (48/48) e Cypress (1/1) verdes. | Cobertura de 15,3% é informativa por decisão do usuário; não afirmar que o limiar de 80% foi atingido. PR #152 permanece draft e aponta para `integration/develop-pr-stack-2026-09-30`. |
+| Descrições públicas e relações Development | Parcial; revisar antes da promoção | PR #132 lista #97, #99, #110–#116 e #123 como candidatas ao fechamento na promoção para `master`. PR #152 relaciona #140–#149; #139, #150 e #151 ficam para a promoção. Nenhuma issue foi fechada manualmente; o corpo público de #97 ainda está desatualizado. |
 
 ## Limites e condições de conclusão
 
 Fixtures TestServer, EF InMemory, provider fake, Pinecone HTTP fake, OCR ignorado e PostgreSQL real são evidências diferentes e continuam identificadas. Esta entrega não demonstra provider/Gateway de produção, OCR/Tesseract no ambiente real, A2A/AG-UI em preview ou retomada multi-host do supervisor.
 
-Não fechar issues antigas por atender apenas parte do escopo. As dez subtarefas ligadas ao #152 têm critérios demonstrados; permanecem abertas até a promoção alcançar `master`. O roteiro só termina depois de validar R33/R34, publicar as correções, obter CI verde no novo SHA, reconciliar a descrição pública de #97 com o código e revisar novamente as issues da promoção `develop → master`.
+Não fechar issues antigas por atender apenas parte do escopo. As dez subtarefas ligadas ao #152 têm critérios demonstrados; permanecem abertas até a promoção alcançar `master`. R33/R34 estão validados e publicados. Antes de concluir, reconciliar a descrição pública de #97 com o código e decidir como integrar PR #152 no stack #132; issues só fecham na promoção intencional a `master`.

@@ -1,8 +1,8 @@
 # ADR-041 — Correção dos contratos e limites após revisão do PR #132
 Data: 2026-10-02 · Issue: [#139](https://github.com/JonathanBenicio/Agent-System/issues/139) · Stories: [BACK-REVIEW-139](../../USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132) · [Plano](../../plan/pr132-review-remediation.md)
 Decisão: aceita para execução autorizada das correções; decisões de produto anteriores preservadas.
-Implementação: R01–R32 passaram na CI de `23c6421`; PR #152 continua draft. A revisão suplementar encontrou R33 (starvation da outbox) e R34 (dados com IDs reservados na migration), cujas correções locais ainda aguardam CI.
-Validação: CI em `23c6421` passou com 923 aprovados, 25 ignorados, zero falhas e jobs de frontend/security verdes. Hyperlight passou 8/8 em host compatível; as novas regressões de outbox passaram localmente e a guarda R34 falhou como esperado em schema temporário PostgreSQL, preservando os dados. Não considerar R33/R34 concluídos até CI nova.
+Implementação: R01–R34 passaram na CI de `0749b36`; PR #152 continua draft.
+Validação: CI em `0749b36` passou com 924 aprovados, 26 ignorados, zero falhas; security scan, lint/build, Playwright 48/48 e Cypress 1/1 verdes. Hyperlight passou 8/8 em host compatível; as regressões de outbox passaram no PostgreSQL Compose e a guarda R34 falhou como esperado em database temporário, preservando os dados. A descrição pública de #97 ainda precisa ser reconciliada antes da promoção.
 
 ## Contexto
 A revisão da integração encontrou 32 defeitos em caminhos de produto e suporte, apesar de evidências anteriores de testes. É necessário tornar as mesmas invariantes eficazes em todos os callers, sem introduzir um runtime paralelo.

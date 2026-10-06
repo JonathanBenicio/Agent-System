@@ -56,13 +56,14 @@ Testes com provider fake provam o conteúdo enviado ao contrato fake e a ordem d
 | SQL `dt.complete_tasks` na base recém-migrada com 20 migrations | Concluído: schema/colunas EF, batches, rollback, concorrência e sessão passaram |
 | Checker atualizado de links e índices após esta edição | Passou: 169 documentos, 936 links, 0 quebrados |
 | Commits por contexto | Concluído e publicado; commit documental `f99fa66` sincroniza plano, evidências e rastreabilidade pública |
-| CI GitHub | Passou em `23c6421` em `2026-10-06 UTC`: 923 aprovados, 25 ignorados, 0 falhas; build-and-test, security-scan e frontend-e2e-playwright verdes. Cobertura observada em 15,3%, informativa por decisão do usuário. Esta execução precede os follow-ups R33/R34. |
+| CI GitHub | Passou em `0749b36` em `2026-10-06 UTC`: 924 aprovados, 26 ignorados, 0 falhas; build-and-test, security-scan, lint/build, Playwright (48/48) e Cypress (1/1) verdes. Cobertura observada em 15,3%, informativa por decisão do usuário. |
 | Issues relacionadas no PR | Concluído: #140–#149 relacionadas ao #152. #139, #150 e #151 ficam para a promoção. As 13 issues permanecem abertas porque o PR tem base não padrão e só a integração à branch padrão fecha automaticamente. |
 
-Nenhuma issue foi fechada manualmente. O relatório separa implementação, validação local, integrações condicionais e CI remoto; não trata doubles ou skips como prova de serviços externos. PR #152 permanece draft. A CI de `23c6421` é anterior aos follow-ups registrados abaixo.
+Nenhuma issue foi fechada manualmente. O relatório separa implementação, validação local, integrações condicionais e CI remoto; não trata doubles ou skips como prova de serviços externos. PR #152 permanece draft.
 
 ## Revisão suplementar do stack — 2026-10-05
 
 - R33: mensagens pendentes com `default`, `platform`, `system-background` ou `system-devui` eram selecionadas antes do limite de 50 e descartadas apenas no loop, podendo ocupar todos os lotes. A consulta agora exclui esses IDs antes de `Take(50)`. A regressão de lote passou; a classe PostgreSQL de isolamento passou 2/2, incluindo a tradução e execução da consulta no Compose.
 - R34: `SeparatePlatformOwnedResources` não tratava referências `default`/`system-devui`. A migration agora verifica todas as colunas tenant-ID e `tenants.id`, falhando antes das alterações e informando para mapear para tenant real ou arquivar. O teste aplicou as migrations até a anterior, inseriu `default`, observou a migration falhar com detalhe/hint e confirmou a linha intacta. O banco temporário `review_pr152_tenant_guard_*` foi descartado ao final; nenhum banco/volume preexistente foi removido.
+- CI após os follow-ups: SHA `0749b36` passou com 924/950 testes (26 skips), security scan, Playwright 48/48 e Cypress 1/1.
 - #97: o corpo público da issue continua descrevendo serviços que não usam mais IDs sintéticos no código da branch. Não fechar; reconciliar descrição e critérios após a nova CI e revisão da migration/outbox.
