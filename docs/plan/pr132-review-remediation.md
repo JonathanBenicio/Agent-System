@@ -1,6 +1,6 @@
 # Plano — corrigir os 32 achados do PR #132
 
-Status: implementação validada; PR #152 permanece draft aguardando revisão/merge. CI remoto verde em 2026-10-02 no SHA `8ba0dd4`. Prioridade: P1 — os achados incluem falhas de autorização, isolamento e contratos do núcleo.
+Status: os 32 achados originais foram implementados; PR #152 permanece draft. A CI passou em `23c6421` (923 aprovados, 25 ignorados, zero falhas; lint/build/E2E e security-scan verdes). A revisão do stack encontrou dois riscos adicionais em outbox e migração tenant; as correções locais aguardam nova CI antes de concluir o roteiro. Prioridade: P1.
 
 Issue principal: [épico #139](https://github.com/JonathanBenicio/Agent-System/issues/139). ADR: [041](../architecture/adr/041-pr132-review-remediation.md). Stories: [BACK-REVIEW-139](../USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132).
 
@@ -23,7 +23,7 @@ Estado conferido no GitHub em 2026-10-02: as issues abaixo permanecem abertas. N
 | Issue(s) | Disposição registrada |
 |---|---|
 | [#31](https://github.com/JonathanBenicio/Agent-System/issues/31) e [#73](https://github.com/JonathanBenicio/Agent-System/issues/73) | Avaliar o cleanup/documentação e a pilha legada depois do merge do #132, conforme decisão do usuário. |
-| [#97](https://github.com/JonathanBenicio/Agent-System/issues/97) | Adiado para depois do #132; manter aberto. O novo tipo de contexto de sistema não fecha os demais critérios da issue. |
+| [#97](https://github.com/JonathanBenicio/Agent-System/issues/97) | O corpo público está desatualizado: os cinco serviços citados já não atribuem IDs sintéticos no runtime da branch. O PR #132 declara os critérios completos; manter aberta até validar as novas proteções de legado e reconciliar a descrição/evidência da issue. |
 | [#120](https://github.com/JonathanBenicio/Agent-System/issues/120), [#122](https://github.com/JonathanBenicio/Agent-System/issues/122), [#133](https://github.com/JonathanBenicio/Agent-System/issues/133), [#134](https://github.com/JonathanBenicio/Agent-System/issues/134) | Provider/Gateway de produção e retomada de supervisor entre hosts ficam para planejamento/trabalho futuro. Correção SQL opcional não prova esses fluxos. |
 | [#121](https://github.com/JonathanBenicio/Agent-System/issues/121) e [#135](https://github.com/JonathanBenicio/Agent-System/issues/135) | Validação de protocolos preview e previsão FinOps continuam futuros. |
 | [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) | Quotas proativas, processamento em lote e `DotNetExpertAgent` devem permanecer em stories/issues separadas; esta epic não fecha o restante da visão. |
@@ -84,6 +84,13 @@ Estado conferido no GitHub em 2026-10-02: as issues abaixo permanecem abertas. N
 | R31 | Cypress apontava para servidor/API incorretos | #149 | Script inicia Vite isolado em 5193 e encerra-o; smoke test usa contrato REST atual. |
 | R32 | `dt.complete_tasks` usava `DISTINCT ... FOR UPDATE` e contagem agregada | #151 | Migration de reparo usa lock por instância; probes cobrem lotes, rollback, terminal e concorrência. |
 
+## Achados adicionais encontrados na revisão do stack
+
+| ID | Risco | Correção em andamento | Evidência necessária |
+|---|---|---|---|
+| R33 | Linhas antigas com tenant reservado ocupavam os 50 primeiros lugares da outbox; o worker apenas as registrava e selecionava novamente, podendo impedir o avanço de mensagens válidas. | Excluir IDs reservados da consulta antes do limite do lote, sem alterar nem apagar as linhas legadas. | Regressão com 50 linhas reservadas e uma real passou; classe PostgreSQL de isolamento passou 2/2. CI do novo SHA pendente. |
+| R34 | A migração promovia `platform`/`system-background`, mas deixava dados sob `default`/`system-devui` invisíveis após a política de tenant reservada. | Fazer a migration abortar antes de alterar tabelas se encontrar essas referências, informando como mapear para tenant real ou arquivar; nunca promovê-las automaticamente a escopo global. | Teste em database temporário Compose confirmou falha com detalhe/hint e preservação da linha; database descartado. CI do novo SHA pendente. |
+
 ## Verificação atual
 
 | Verificação | Resultado | Limites |
@@ -96,11 +103,11 @@ Estado conferido no GitHub em 2026-10-02: as issues abaixo permanecem abertas. N
 | PostgreSQL Compose isolado, banco novo | 20 migrations aplicadas; 70 tabelas public; teste de persistência dinâmica e 5 testes de workflow passaram | DB `review_pr152_dynamicagents_20261002`, Compose com porta 55432 e projeto exclusivos; DB removido e serviço parado, volume preservado. `has-pending-model-changes` passou. |
 | SQL `dt.complete_tasks` e schema | PostgreSQL 16 isolado: 20 migrations, 70 tabelas públicas, modelo EF comparado, lotes 0/1/2/4, rollback, término e concorrência passaram | Base exclusiva removida e serviço parado; volume preservado. |
 | Links/índices locais | 169 documentos, 936 links, 0 destinos quebrados | Passou após atualizar plano, ADR e relatório. |
-| CI GitHub / estado do PR | Passou em 2026-10-02 no SHA `8ba0dd4` | `build-and-test`, `security-scan` e `frontend-e2e-playwright` verdes. Cobertura 15,3% é informativa por decisão do usuário; não afirmar que o limiar de 80% foi atingido. PR #152 permanece draft e aponta para `integration/develop-pr-stack-2026-09-30`. |
+| CI GitHub / estado do PR | Passou no SHA `23c6421` em `2026-10-06 UTC`: 923 aprovados, 25 ignorados e 0 falhas; build, security-scan, lint, frontend build, Playwright e Cypress verdes. | Esta CI precede R33/R34. As alterações locais atuais ainda não foram publicadas nem executadas na CI. Cobertura de 15,3% é informativa por decisão do usuário; não afirmar que o limiar de 80% foi atingido. PR #152 permanece draft e aponta para `integration/develop-pr-stack-2026-09-30`. |
 | Descrições públicas e relações Development | Concluído | Issues #139–#151 atualizadas e permanecem abertas. PR #152 relaciona #140–#149; epic #139 e #150/#151 ficam para a promoção `develop → master`. Por ter base não padrão, o merge do #152 não fecha automaticamente essas issues. |
 
 ## Limites e condições de conclusão
 
 Fixtures TestServer, EF InMemory, provider fake, Pinecone HTTP fake, OCR ignorado e PostgreSQL real são evidências diferentes e continuam identificadas. Esta entrega não demonstra provider/Gateway de produção, OCR/Tesseract no ambiente real, A2A/AG-UI em preview ou retomada multi-host do supervisor.
 
-Não fechar issues antigas por atender apenas parte do escopo. As dez subtarefas ligadas ao #152 têm critérios completos demonstrados; permanecem abertas até a promoção alcançar `master`. A validação, publicação, CI e relações atuais estão concluídas. Após o merge do #152 na branch de integração, a promoção `develop → master` deve relacionar as dez subtarefas, o épico #139 e as subtarefas restantes #150/#151 para fechar somente o conjunto completo.
+Não fechar issues antigas por atender apenas parte do escopo. As dez subtarefas ligadas ao #152 têm critérios demonstrados; permanecem abertas até a promoção alcançar `master`. O roteiro só termina depois de validar R33/R34, publicar as correções, obter CI verde no novo SHA, reconciliar a descrição pública de #97 com o código e revisar novamente as issues da promoção `develop → master`.
