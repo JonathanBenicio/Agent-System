@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 using AgenticSystem.Core.Interfaces;
+using AgenticSystem.Core.Models;
 using Microsoft.Extensions.Logging;
 
 namespace AgenticSystem.Infrastructure.LLM.Handlers;
@@ -87,7 +88,7 @@ public class LLMQuotaInterceptorHandler : DelegatingHandler
             // For this implementation, we'll use "default_key" or similar if we can't find it.
             string apiKeyId = ExtractApiKeyHash(headers) ?? "default_key";
 
-            await _quotaService.UpdateFromHeadersAsync(_providerName, null, apiKeyId, limitRequests, remainingRequests, limitTokens, remainingTokens, resetAt);
+            await _quotaService.UpdateFromHeadersAsync(_providerName, ExternalQuotaOwner.Platform, apiKeyId, limitRequests, remainingRequests, limitTokens, remainingTokens, resetAt);
         }
     }
 

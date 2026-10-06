@@ -1,8 +1,10 @@
 # Backend & Frontend AgenticSystem — Arquitetura de Referência Consolidada
 
+> Contratos atuais e diferenças verificadas na baseline f8de7a6: [hub](../backend/README.md), [acesso](../backend/access-tenants.md), [recursos](../backend/resources-rules.md) e [validação](../backend/validation/2026-09-28.md). Diagramas de intenção não equivalem a prova integrada.
+
 > **Documento canônico de arquitetura de software (SST - Single Source of Truth)**. Este arquivo consolida todas as decisões arquiteturais, topologias, fluxos de execução do backend e frontend, substituindo e unificando o antigo `TECHNICAL_ARCHITECTURE_GUIDE.md`.
 >
-> O sistema opera em modo **framework-first** no fluxo principal, usando o **Microsoft Agent Framework (MAF) 1.5.0** como runtime nativo consolidado (transição 100% concluída), com suporte a fluxos colaborativos e múltiplos canais de interface.
+> O checkout está migrando o runtime para **Microsoft Agent Framework 1.22.0**. Restore/build Release passaram após adaptar `AgentSessionStore`, chave de sessão particionada e nomes AG-UI; testes de protocolo e workflows DurableTask PostgreSQL ainda não provaram operação integrada. A2A/AG-UI continuam preview. A rastreabilidade e limites atuais ficam no [plano #120](../plan/maf-122-protocols-gateway.md), na [análise de compatibilidade](../plan/maf-122-compatibility-review.md) e no [follow-up de protocolos #121](../plan/a2a-agui-preview-validation.md).
 
 ---
 
@@ -40,7 +42,7 @@
 
 ## 1. Visão Geral da Arquitetura
 
-O AgenticSystem é uma plataforma corporativa multi-agent construída sobre o **.NET 10** e o **Microsoft Agent Framework (MAF) 1.5.0**. O sistema expõe agentes de inteligência artificial especializados por domínio (Personal, Work, Learning, Creative, Finance, Health, etc.) que são coordenados por um orquestrador central usando o padrão **Supervisor-with-Tools**.
+O AgenticSystem é uma plataforma multi-agent .NET 10 que usa o **Microsoft Agent Framework (MAF) 1.22.0** como runtime e mantém catálogo, configuração e acesso de agentes/workflows no domínio da aplicação. O sistema expõe especialistas por domínio coordenados pelo orquestrador. Os metadados dinâmicos e a autorização são do produto; `ChatClientAgent`, `AIFunction` e `WorkflowBuilder` do MAF executam a definição materializada.
 
 O LLM do orquestrador decide dinamicamente para qual especialista delegar a tarefa com base no input do usuário, eliminando as antigas regras imperativas de roteamento do fluxo principal. Cada especialista é encapsulado e exposto como uma `AIFunction` do orquestrador por meio do método nativo `.AsAIFunction()`.
 
@@ -82,7 +84,7 @@ O LLM do orquestrador decide dinamicamente para qual especialista delegar a tare
 │                                                                  │
 │  Protocol Hosting:                                               │
 │       ├─ AddA2AServer() / MapA2AHttpJson()                       │
-│       ├─ AddAGUI() / MapAGUI()                                   │
+│       ├─ AddAGUIServer() / MapAGUIServer()                       │
 │       └─ OpenAI-compatible via controller custom                 │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -115,7 +117,8 @@ Capacidades em fase experimental ou protótipos de pesquisa não devem alterar o
 | **Camada** | **Tecnologia** | **Escopo / Papel** |
 |---|---|---|
 | **Runtime** | .NET 10 | ASP.NET Core Runtime para o Backend |
-| **Framework de Agentes** | Microsoft Agent Framework 1.5.0 | `Microsoft.Agents.AI`, `Microsoft.Agents.AI.Hosting`, `Microsoft.Agents.AI.Workflows` |
+| **Framework de Agentes** | Microsoft Agent Framework 1.22.0 | Core/Workflows 1.22.0; hosting A2A/AG-UI/DevUI preview 1.22.0 |
+| **DurableTask MAF** | 1.16.0-preview.260922.1 | Não há pacote DurableTask 1.22 publicado; workflow PostgreSQL ainda requer validação integrada |
 | **Abstração LLM** | `IChatClient` (M.E.AI) | Abstração comum de chat (Microsoft.Extensions.AI) |
 | **Geração de Embeddings**| `IEmbeddingGenerator<string, Embedding<float>>` | Abstração comum de vetores (Microsoft.Extensions.AI) |
 | **Vector Store** | In-Memory / PostgreSQL (pgvector) | Armazenamento de embeddings semânticos |
@@ -133,12 +136,12 @@ Capacidades em fase experimental ou protótipos de pesquisa não devem alterar o
 ### 4.1 `AgenticSystem.Api` — Apresentação
 Camada externa que gerencia a entrada de requests, canais de comunicação e infraestrutura HTTP/WebSocket:
 *   **Controllers**: REST endpoints para CRUD de agentes, controle de sessões, upload de documentos e gateway administrativo.
-*   **Hubs SignalR**: `ChatHub` (streaming de tokens, eventos de execução) e `GatewayHub` (status de microsserviços em tempo real).
+*   **Hubs SignalR**: `ChatHub`, `GatewayHub`, `ExternalAgentHub`, `WorkflowHub` e `OnnxHub`; ver contratos no hub operacional.
 *   **Middlewares**: `TenantMiddleware` (resolução dinâmica de tenant por JWT ou Header) e `ApiKeyAuthHandler`.
 *   **Protocol Hosting**: Mapeamentos HTTP para interoperabilidade via A2A, AG-UI e controllers OpenAI-compatible (`/v1/chat/completions`).
 
 ### 4.2 `AgenticSystem.Core` — Domínio e Regras de Negócio
-Independente de frameworks externos de orquestração. **Não referencia o MAF diretamente**, trabalhando sobre interfaces:
+Contém regras de negócio e contratos usados pela integração. O projeto referencia `Microsoft.Agents.AI` para skills e avaliação; o hosting e a composição do runtime permanecem em Infrastructure:
 *   **Domain Agents**: Agentes base (`BaseAgent`) e as especializações (Work, Personal, Learning, etc.).
 *   **Business Workflows**: `MetaAgentOrchestrator` (fachada central), `SmartRouter` (roteamento semântico), `TriageService` (classificação de urgência e intenção) e `AgentExecutionWorkflow`. Detalhes em [Smart Routing & Triage](smart-routing-triage.md).
 *   **Services**: `ConfidenceScoreCalculator`, `SessionManager`, `SessionConsolidator` (compactação e sumarização de histórico), `DirectAgentRequestExecutor` (fast-path de execução direta), `ScheduledTaskManager` (Scheduler), e `ReflectionEngine`.
@@ -172,7 +175,7 @@ builder.Services.AddKeyedSingleton<AIAgent>("AgenticSystem", (sp, key) =>
 ```
 
 > **Nota de Infraestrutura**: Containers Linux que utilizam clientes Npgsql requerem a biblioteca `libgssapi-krb5-2` instalada no `Dockerfile` para evitar erros de biblioteca compartilhada em tempo de execução.
-> **Nota de Compatibilidade**: O MCP server via `ModelContextProtocol.AspNetCore` está comentado no `Program.cs` (`app.MapMcp("/mcp").RequireAuthorization()`) aguardando alinhamento de versões com `Microsoft.Extensions.AI` 10.6.0.
+> **MCP**: /mcp não está mapeado em Program.cs na baseline. Plugins MCP cliente são um recurso diferente; ver transportes no hub operacional.
 
 ### 5.2 Registro no Program.cs
 
@@ -194,7 +197,7 @@ if (a2aEnabled || agUiEnabled)
 {
     builder.Services.AddKeyedSingleton<AIAgent>("AgenticSystem", /* ScopedAgentProxy */);
     if (a2aEnabled) builder.Services.AddA2AServer("AgenticSystem");
-    if (agUiEnabled) builder.Services.AddAGUI();
+    if (agUiEnabled) builder.Services.AddAGUIServer();
 }
 
 // 3. Autenticação, SignalR, Rate Limiting, CORS
@@ -206,10 +209,12 @@ No pipeline de execução (`app`):
 ```csharp
 // Protocol endpoints — mapeados condicionalmente
 if (a2aEnabled) app.MapA2AHttpJson("AgenticSystem", "/a2a").RequireAuthorization();
-if (agUiEnabled) app.MapAGUI("AgenticSystem", "/agui").RequireAuthorization();
+if (agUiEnabled) app.MapAGUIServer("AgenticSystem", "/agui").RequireAuthorization();
 ```
 
 ### 5.3 IChatClient Pipeline (Microsoft.Extensions.AI)
+**Pipeline revalidado na migração MAF 1.22.0:** após `ContextAwareChatClient`, cada chamada é envolvida por `TenantQuotaChatClient`; somente clients com credencial de provider global também passam por `GatewayChatClient`. A configuração e métricas de circuit/rate do Gateway são globais por provider; BYOK mantém controle isolado por tenant. O custo mostrado no Gateway é estimativa fixa por request. O `RoutePersistingRoutingChatClient` do MAF pode persistir troca de client por `AgentSession`, mas não substitui a seleção de credencial, fallback, quota e auditoria tenant-scoped do `LLMManager`. Análise: [compatibilidade MAF 1.22](../plan/maf-122-compatibility-review.md).
+
 Para garantir governança, custos previsíveis e flexibilidade de provedores, o `IChatClient` é registrado como um pipeline decorator de múltiplas camadas:
 
 ```
@@ -240,6 +245,8 @@ Para garantir governança, custos previsíveis e flexibilidade de provedores, o 
 ## 6. Padrão de Orquestração — Supervisor-with-Tools
 
 O AgenticSystem utiliza o padrão **Supervisor-with-Tools**. O Orquestrador Central é um `ChatClientAgent` do MAF enriquecido com instruções que descrevem as competências de cada especialista registrado.
+
+Na baseline f8de7a6, esses bindings coexistem com o fluxo principal de handoff: FrameworkOrchestratorService.ExecuteAsync monta BuildHandoffWorkflowAsync e executa InProcessExecution.RunAsync. O diagrama abaixo descreve bindings de ferramentas; não representa sozinho o fluxo completo. A validação identificou falha de SessionIsolationKeyProvider antes do handoff ([relatório](../backend/validation/2026-09-28.md)).
 
 ```
                   ┌───────────────────────────────┐
@@ -288,7 +295,7 @@ Frontend (React) ──[SendMessage]──> ChatHub
   │       ├─ 2. Injeta RAGContextProvider (MAF MessageAIContextProvider)
   │       ├─ 3. Carrega histórico de chat via ISessionStore (SimpleSessionStoreAdapter)
   │       │
-  │       ├─ 4. Executa OrchestratorAgent.RunAsync(input, session)
+  │       ├─ 4. Executa FrameworkOrchestratorService.ExecuteAsync → handoff workflow
   │       │      ├─ RAGContextProvider executa busca semântica em lote
   │       │      ├─ LLM avalia e invoca os Specialists agentes via tool calling
   │       │      └─ Middleware local: UseReflection() & UseQualityGates()
@@ -355,6 +362,9 @@ Para maximizar a precisão contextual sem estourar a janela de contexto dos mode
                              ▼
                       Contexto RAG Final
 ```
+
+### 8.3 Filtragem SQL-Nativa por Salas (Knowledge Rooms)
+Para garantir isolamento e performance na recuperação de documentos, a filtragem de documentos baseada em salas de conhecimento (`room_ids`) é feita de forma nativa no banco de dados. O `PostgresVectorStore` executa a busca de vetores (`pgvector`) combinada com uma filtragem SQL direta sobre o campo de metadados em formato JSONB, em vez de realizar uma filtragem in-memory após a recuperação. Isso reduz drasticamente a latência e o consumo de memória sob carga.
 
 ---
 
@@ -494,7 +504,7 @@ Os agentes no AgenticSystem são categorizados pelo seu ciclo de vida e escopo d
 | Tipo de Agente | Criação / Registro | Ciclo de Vida e Escopo | Exemplo de Uso |
 |---|---|---|---|
 | **Built-in (Nativo)** | Inicializado no startup via `HierarchicalAgentFactory` | Singleton (está ativo durante toda a execução da aplicação) | PersonalAgent, WorkAgent, GeneralAgent |
-| **Custom (Dinâmico)** | Criado por prompt do usuário via `DynamicAgentService` | Scoped ou In-Memory Pool (persiste as configurações em banco relacional) | "Agente de Direito Trabalhista" |
+| **Custom (Dinâmico)** | Persistido via `DynamicAgentEntity` (PostgreSQL) e Lazy-loaded via `HierarchicalAgentFactory` | In-Memory Pool após o carregamento; persistente via banco relacional entre reinícios | "Agente de Direito Trabalhista" |
 | **Framework-hosted** | Registrado via `AddAIAgent()` no arquivo `Program.cs` | Scoped por requisição de chat (gerenciado pelo container de DI) | OrchestratorAgent |
 
 *   **Cleanup de Inativos**: Para evitar vazamentos de memória e sobrecarga do banco de dados, o `AgentCleanupHostedService`  executa rotinas em background limpando agentes customizados e dados temporários inativos há mais de 24 horas.
@@ -510,8 +520,8 @@ O AgenticSystem foi desenhado para ser multi-inquilino (multi-tenant) desde as c
                                 │
                                 ▼
                        [ TenantMiddleware ]
-                                ├─ Resolve JWT claim: "tenantId"
-                                └─ Fallback: Header "X-Tenant-Id"
+                                ├─ Resolve Header: "X-Tenant-Id"
+                                └─ Fallback: JWT "tenant_id" / app_metadata.tenant_id
                                 │
                                 ▼
                    Registra scoped TenantContext
@@ -579,7 +589,7 @@ Para conexões com APIs externas (OpenAI, Anthropic, Claude, Jina, etc.), o sist
 
 ## 17. SignalR — Comunicação Real-Time
 
-O backend expõe dois Hubs SignalR para garantir dinamismo e monitoramento em tempo real de longo prazo.
+O backend expõe cinco hubs SignalR; veja [contratos e limites de isolamento](../backend/transports.md).
 
 ### 17.1 ChatHub (`/hubs/chat`)
 Gerencia o canal principal de interações do chat.
@@ -592,8 +602,8 @@ Gerencia o canal principal de interações do chat.
 | Evento | Payload | Descrição |
 |---|---|---|
 | `ProcessingStarted` | `{ DateTime timestamp }` | Indica ao frontend para ligar o spinner de "IA pensando" |
-| `AgentSelected` | `{ string name, string tier }` | Informa qual agente foi escolhido pelo supervisor |
-| `StreamEvent` | `{ string token }` | Envia tokens de texto parciais em streaming |
+| StreamEvent com Type AgentSelected | AgentStreamEvent | Seleção do agente dentro do fluxo tipado |
+| `StreamEvent` | `AgentStreamEvent` completo | Eventos tipados de execução, incluindo tokens |
 | `ReceiveMessage` | `{ string content, string agentName, string sessionId, bool success }` | Envia a mensagem consolidada final e fecha o ciclo de resposta |
 | `ReceiveError` | `{ string error }` | Notifica o frontend sobre falhas de execução |
 

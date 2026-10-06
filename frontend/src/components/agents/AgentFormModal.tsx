@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
-import { X, Bot, Shield, Wrench, FileCode, CheckCircle2, AlertTriangle, Search } from 'lucide-react'
-import type { AgentInfo, AgentSpecification, ToolSummary, YamlValidationError } from '@/types/api'
+import { useState, useEffect, useRef, useActionState } from 'react'
+import { X, Bot, Shield, Wrench, FileCode, CheckCircle2, AlertTriangle, Search, Info } from 'lucide-react'
+import type { AgentInfo, AgentSpecification, ToolSummary, YamlValidationError, KnowledgeRoom } from '@/types/api'
 import { TierLabels, AutonomyLevel, AutonomyLabels, AutonomyColors } from '@/types/api'
-import { toolApi, agentApi } from '@/lib/api'
+import { toolApi, agentApi, knowledgeRoomApi } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { CAPABILITY_CATALOG } from '@/lib/constants'
 
 interface Props {
   agent: AgentInfo | null
@@ -26,10 +27,24 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
     timeoutSeconds: agent?.timeoutSeconds ?? 30,
     allowedTools: agent?.toolNames ?? [],
     autonomyLevel: agent?.autonomyLevel ?? AutonomyLevel.Supervised,
+    configuration: agent?.configuration ?? {},
   })
 
   const [capInput, setCapInput] = useState('')
-  const [saving, setSaving] = useState(false)
+
+  // --- Estado do Editor YAML ---
+  const [yamlText, setYamlText] = useState('')
+  const [yamlValid, setYamlValid] = useState(true)
+  const [yamlErrors, setYamlErrors] = useState<YamlValidationError[]>([])
+  const [validatingYaml, setValidatingYaml] = useState(false)
+
+  // --- Estado das Salas de Conhecimento (Knowledge Rooms) ---
+  const [availableRooms, setAvailableRooms] = useState<KnowledgeRoom[]>([])
+  const [selectedRooms, setSelectedRooms] = useState<string[]>([])
+  const [roomsLoading, setRoomsLoading] = useState(false)
+  const [roomsSearch, setRoomsSearch] = useState('')
+  const [roomsDropdownOpen, setRoomsDropdownOpen] = useState(false)
+  const roomsDropdownRef = useRef<HTMLDivElement>(null)
 
   // --- Estado das Ferramentas (Tools) ---
   const [availableTools, setAvailableTools] = useState<ToolSummary[]>([])
@@ -37,12 +52,32 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
   const [toolDropdownOpen, setToolDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  // --- Estado do Editor YAML ---
-  const [yamlText, setYamlText] = useState('')
-  const [yamlValid, setYamlValid] = useState(true)
-  const [yamlErrors, setYamlErrors] = useState<YamlValidationError[]>([])
-  const [validatingYaml, setValidatingYaml] = useState(false)
-  
+  // --- React 19 Action State ---
+  const [actionState, formAction, isSaving] = useActionState(
+    async () => {
+      try {
+        let agentName = form.name || agent?.name
+        if (activeTab === 'yaml') {
+          const result = await agentApi.validateYaml(yamlText)
+          if (!result.isValid || !result.specification) throw new Error('YAML inválido')
+          agentName = result.specification.name
+          await onSave(form, yamlText)
+        } else {
+          await onSave(form)
+        }
+
+        if (agentName) {
+          await agentApi.setRooms(agentName, selectedRooms)
+        }
+        return { success: true }
+      } catch (err) {
+        console.error('Erro ao salvar agente:', err)
+        return { success: false, error: err instanceof Error ? err.message : 'Falha ao salvar' }
+      }
+    },
+    null
+  )
+
   // Ref para controlar chamadas de validação concorrentes
   const validationTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -52,6 +87,27 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
       .then(setAvailableTools)
       .catch(err => console.error('Erro ao carregar ferramentas:', err))
   }, [])
+
+  // Carregar salas de conhecimento disponíveis do backend
+  useEffect(() => {
+    knowledgeRoomApi.list()
+      .then(setAvailableRooms)
+      .catch(err => console.error('Erro ao carregar salas de conhecimento:', err))
+  }, [])
+
+  // Carregar salas associadas ao agente em modo de edição
+  useEffect(() => {
+    if (agent?.name) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRoomsLoading(true)
+      agentApi.getRooms(agent.name)
+        .then(setSelectedRooms)
+        .catch(err => console.error('Erro ao carregar salas associadas ao agente:', err))
+        .finally(() => setRoomsLoading(false))
+    } else {
+      setSelectedRooms([])
+    }
+  }, [agent])
 
   // Fechar dropdown de ferramentas ao clicar fora
   useEffect(() => {
@@ -64,47 +120,37 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Fechar dropdown de salas de conhecimento ao clicar fora
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (roomsDropdownRef.current && !roomsDropdownRef.current.contains(event.target as Node)) {
+        setRoomsDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   // Helper para converter o estado do formulário para uma string YAML elegante
   const serializeFormToYaml = (spec: AgentSpecification): string => {
-    const lines: string[] = []
-    lines.push(`# Microsoft Agent Framework (MAF) - Agent Specification`)
-    lines.push(`name: "${spec.name || ''}"`)
-    lines.push(`description: "${spec.description || ''}"`)
-    lines.push(`tier: ${spec.tier ?? 1}`)
-    lines.push(`domain: "${spec.domain || ''}"`)
-    lines.push(`autonomyLevel: ${spec.autonomyLevel ?? AutonomyLevel.Supervised}`)
-    lines.push(`maxConcurrency: ${spec.maxConcurrency ?? 5}`)
-    lines.push(`timeoutSeconds: ${spec.timeoutSeconds ?? 30}`)
-    
-    if (spec.capabilities && spec.capabilities.length > 0) {
-      lines.push('capabilities:')
-      spec.capabilities.forEach(cap => {
-        lines.push(`  - "${cap}"`)
-      })
-    } else {
-      lines.push('capabilities: []')
-    }
-
-    if (spec.allowedTools && spec.allowedTools.length > 0) {
-      lines.push('allowedTools:')
-      spec.allowedTools.forEach(tool => {
-        lines.push(`  - "${tool}"`)
-      })
-    } else {
-      lines.push('allowedTools: []')
-    }
-
-    if (spec.systemPrompt) {
-      lines.push('systemPrompt: |')
-      const promptLines = spec.systemPrompt.split('\n')
-      promptLines.forEach(line => {
-        lines.push(`  ${line}`)
-      })
-    } else {
-      lines.push('systemPrompt: ""')
-    }
-
-    return lines.join('\n')
+    // JSON strings/arrays are valid YAML scalars and preserve quotes, slashes and newlines.
+    const quote = (value: unknown) => JSON.stringify(value)
+    return [
+      'metadata:',
+      `  name: ${quote(spec.name)}`,
+      `  description: ${quote(spec.description)}`,
+      `  tier: ${quote(TierLabels[spec.tier])}`,
+      `  domain: ${quote(spec.domain)}`,
+      'execution:',
+      `  autonomyLevel: ${spec.autonomyLevel ?? AutonomyLevel.Supervised}`,
+      `  maxConcurrency: ${spec.maxConcurrency ?? 5}`,
+      `  timeoutSeconds: ${spec.timeoutSeconds ?? 30}`,
+      'abilities:',
+      `  capabilities: ${quote(spec.capabilities ?? [])}`,
+      `  allowedTools: ${quote(spec.allowedTools ?? [])}`,
+      `instructions: ${quote(spec.systemPrompt ?? spec.instructions ?? '')}`,
+      `configuration: ${quote(spec.configuration ?? {})}`,
+    ].join('\n')
   }
 
   // Sincronizar abas com conversão bidirecional inteligente
@@ -125,14 +171,15 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
           if (result.isValid && result.specification) {
             const spec = result.specification
             setForm({
-              name: spec.name || form.name,
-              description: spec.description || form.description,
-              domain: spec.domain || form.domain,
+              name: spec.name ?? '',
+              description: spec.description ?? '',
+              domain: spec.domain ?? '',
               tier: spec.tier ?? form.tier,
-              systemPrompt: spec.instructions || spec.systemPrompt || form.systemPrompt,
+              systemPrompt: spec.instructions ?? spec.systemPrompt ?? '',
               capabilities: spec.capabilities || form.capabilities,
-              maxConcurrency: spec.maxConcurrency || form.maxConcurrency,
-              timeoutSeconds: spec.timeoutSeconds || form.timeoutSeconds,
+              maxConcurrency: Number(spec.configuration?.maxConcurrency ?? spec.maxConcurrency ?? 5),
+              timeoutSeconds: Number(spec.configuration?.timeoutSeconds ?? spec.timeoutSeconds ?? 30),
+              configuration: spec.configuration ?? {},
               allowedTools: spec.allowedTools || form.allowedTools,
               autonomyLevel: spec.autonomyLevel ?? form.autonomyLevel,
             })
@@ -183,22 +230,6 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
     }, 500)
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
-    try {
-      if (activeTab === 'yaml') {
-        // Salva diretamente usando a string YAML para gerar versão histórica no banco
-        await onSave(form, yamlText)
-      } else {
-        // Salva passando a especificação visual tradicional
-        await onSave(form)
-      }
-    } finally {
-      setSaving(false)
-    }
-  }
-
   // Adicionar/Remover capabilities
   const addCapability = () => {
     const cap = capInput.trim()
@@ -210,6 +241,14 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
 
   const removeCapability = (cap: string) => {
     setForm(prev => ({ ...prev, capabilities: prev.capabilities.filter(c => c !== cap) }))
+  }
+
+  const toggleCapability = (cap: string) => {
+    if (form.capabilities.includes(cap)) {
+      removeCapability(cap)
+    } else {
+      setForm(prev => ({ ...prev, capabilities: [...prev.capabilities, cap] }))
+    }
   }
 
   // Adicionar/Remover ferramentas permitidas (AllowedTools)
@@ -297,8 +336,15 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
         </div>
 
         {/* Corpo do Modal */}
-        <form onSubmit={handleSubmit} className="p-6 flex-1 overflow-y-auto space-y-6">
+        <form action={formAction} className="p-6 flex-1 overflow-y-auto space-y-6">
           
+          {actionState?.error && (
+            <div className="p-3 text-xs text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              {actionState.error}
+            </div>
+          )}
+
           {activeTab === 'visual' ? (
             /* =========================================================================
                ABA FORMULÁRIO VISUAL
@@ -512,7 +558,7 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
 
               {/* CAPABILITIES */}
               <Field label="Capacidades Operacionais (Capabilities)">
-                <div className="flex gap-2 mb-2">
+                <div className="flex gap-2 mb-3">
                   <input
                     type="text"
                     value={capInput}
@@ -529,6 +575,43 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
                     Adicionar
                   </button>
                 </div>
+
+                {/* Catálogo de Sugestões Categorizadas */}
+                <div className="mb-4 space-y-3 p-3 bg-zinc-900/30 border border-zinc-850 rounded-xl">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Info className="w-3 h-3 text-teal-500" />
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Sugestões de DNA (PT-BR)</span>
+                  </div>
+                  
+                  {Object.entries(CAPABILITY_CATALOG).map(([category, tags]) => (
+                    <div key={category} className="space-y-1.5">
+                      <h4 className="text-[9px] font-semibold text-zinc-600 uppercase ml-0.5">{category}</h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {Object.entries(tags).map(([tag, description]) => {
+                          const isSelected = form.capabilities.includes(tag)
+                          return (
+                            <button
+                              key={tag}
+                              type="button"
+                              title={description}
+                              onClick={() => toggleCapability(tag)}
+                              className={cn(
+                                "group relative px-2 py-0.5 text-[10px] font-medium rounded-md border transition-all duration-200",
+                                isSelected
+                                  ? "bg-teal-500/10 border-teal-500/40 text-teal-300"
+                                  : "bg-zinc-900 border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                              )}
+                            >
+                              {tag}
+                              {/* Tooltip Customizado Simples via title ou mini-popover se necessário */}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="flex flex-wrap gap-1.5">
                   {form.capabilities.map(c => (
                     <span key={c} className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-0.5 text-xs bg-zinc-900 border border-zinc-800 rounded-md text-zinc-300">
@@ -538,6 +621,111 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
                   ))}
                   {form.capabilities.length === 0 && (
                     <p className="text-xs text-zinc-500 italic pl-1">Sem capabilities cadastradas.</p>
+                  )}
+                </div>
+              </Field>
+
+              {/* KNOWLEDGE ROOMS ASSOCIATION (US-41) */}
+              <Field label="Salas de Conhecimento Autorizadas (RAG Scope)">
+                <div className="relative" ref={roomsDropdownRef}>
+                  {/* Selector Bar */}
+                  <div
+                    onClick={() => setRoomsDropdownOpen(prev => !prev)}
+                    className="min-h-[42px] p-2 bg-zinc-900/50 border border-zinc-800 rounded-lg flex flex-wrap gap-1.5 items-center cursor-pointer hover:border-zinc-700 transition-colors"
+                  >
+                    {selectedRooms.length > 0 ? (
+                      selectedRooms.map(roomId => {
+                        const room = availableRooms.find(r => r.id === roomId)
+                        return (
+                          <span
+                            key={roomId}
+                            className="inline-flex items-center gap-1.5 pl-2 pr-1.5 py-0.5 text-xs bg-zinc-800/80 border border-zinc-700/50 rounded text-zinc-300 hover:bg-zinc-750 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedRooms(prev => prev.filter(id => id !== roomId))
+                            }}
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: room?.color || '#0d9488' }} />
+                            {room?.name || roomId}
+                            <button type="button" className="text-zinc-500 hover:text-red-400 font-bold">×</button>
+                          </span>
+                        )
+                      })
+                    ) : (
+                      <span className="text-xs text-amber-400/90 font-medium px-1 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                        Nenhuma Sala (Acesso RAG Bloqueado - Segurança Máxima)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Dropdown Menu */}
+                  {roomsDropdownOpen && (
+                    <div className="absolute top-[105%] left-0 right-0 mt-1 bg-zinc-950 border border-zinc-800 rounded-lg shadow-2xl z-20 max-h-60 overflow-y-auto p-3 space-y-3">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                        <input
+                          type="text"
+                          placeholder="Filtrar salas de conhecimento..."
+                          value={roomsSearch}
+                          onChange={e => setRoomsSearch(e.target.value)}
+                          onClick={e => e.stopPropagation()}
+                          className="w-full pl-8 pr-3 py-1.5 text-xs bg-zinc-900 border border-zinc-800 rounded text-zinc-200 focus:outline-none focus:border-teal-500"
+                        />
+                      </div>
+
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {roomsLoading ? (
+                          <p className="text-[11px] text-zinc-500 text-center py-2">Carregando salas...</p>
+                        ) : availableRooms.length > 0 ? (
+                          (() => {
+                            const filteredRooms = availableRooms.filter(room =>
+                              room.name.toLowerCase().includes(roomsSearch.toLowerCase()) ||
+                              (room.description && room.description.toLowerCase().includes(roomsSearch.toLowerCase()))
+                            )
+                            if (filteredRooms.length === 0) {
+                              return <p className="text-[11px] text-zinc-500 text-center py-2">Nenhuma sala encontrada.</p>
+                            }
+                            return filteredRooms.map(room => {
+                              const isSelected = selectedRooms.includes(room.id)
+                              return (
+                                <button
+                                  type="button"
+                                  key={room.id}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setSelectedRooms(prev =>
+                                      isSelected
+                                        ? prev.filter(id => id !== room.id)
+                                        : [...prev, room.id]
+                                    )
+                                  }}
+                                  className={cn(
+                                    'w-full flex items-center justify-between p-2 rounded text-left border text-xs transition-colors',
+                                    isSelected
+                                      ? 'bg-teal-500/10 border-teal-500/40 text-teal-300 font-medium'
+                                      : 'bg-zinc-900/30 border-transparent text-zinc-400 hover:bg-zinc-900/60'
+                                  )}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full border border-black/30 shadow-sm" style={{ backgroundColor: room.color || '#0d9488' }} />
+                                    <div className="flex flex-col">
+                                      <span className="text-zinc-200">{room.name}</span>
+                                      {room.description && (
+                                        <span className="text-[10px] text-zinc-500 line-clamp-1">{room.description}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-teal-400" />}
+                                </button>
+                              )
+                            })
+                          })()
+                        ) : (
+                          <p className="text-[11px] text-zinc-500 text-center py-2">Sem salas de conhecimento ativas no tenant.</p>
+                        )}
+                      </div>
+                    </div>
                   )}
                 </div>
               </Field>
@@ -633,7 +821,7 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
             </button>
             <button 
               type="submit" 
-              disabled={saving || (activeTab === 'yaml' && !yamlValid) || validatingYaml} 
+              disabled={isSaving || (activeTab === 'yaml' && !yamlValid) || validatingYaml} 
               className={cn(
                 'px-4 py-2 text-xs font-semibold rounded-lg text-white transition-all duration-200 flex items-center gap-1.5 shadow-md shadow-teal-500/10',
                 (activeTab === 'yaml' && !yamlValid) || validatingYaml
@@ -641,7 +829,7 @@ export function AgentFormModal({ agent, onSave, onClose }: Props) {
                   : 'bg-teal-600 hover:bg-teal-500 active:scale-[0.98]'
               )}
             >
-              {saving ? 'Gravando Alterações...' : agent ? 'Gravar Alterações' : 'Criar Novo Agente'}
+              {isSaving ? 'Gravando Alterações...' : agent ? 'Gravar Alterações' : 'Criar Novo Agente'}
             </button>
           </div>
         </form>

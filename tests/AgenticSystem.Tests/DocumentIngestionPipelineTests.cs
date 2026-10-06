@@ -58,6 +58,18 @@ public class DocumentIngestionPipelineTests
     }
 
     [Fact]
+    public async Task IngestAsync_RoomUpload_PreservesTenantAndRoomOnEveryIndexedChunk()
+    {
+        SetupMocks(2);
+        var result = await _pipeline.IngestAsync(CreateRawDocument("# Room\nContent.", "room.md", DocumentType.Markdown),
+            new ChunkingConfig { TenantId = "tenant-a", RoomId = "room-a", Collection = "session-a" });
+
+        result.Success.Should().BeTrue();
+        await _vectorStore.Received(2).UpsertAsync(Arg.Is<EmbeddingDocument>(d =>
+            d.TenantId == "tenant-a" && d.Metadata["room_id"] == "room-a"));
+    }
+
+    [Fact]
     public async Task IngestAsync_ZeroChunks_ShouldFail()
     {
         var doc = CreateRawDocument("# Title\nContent.", "test.md", DocumentType.Markdown);

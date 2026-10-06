@@ -1,5 +1,32 @@
 # Documentação — AgenticSystem
 
+- [Correções dos 32 achados do PR #132 — epic #139 e subtarefas](plan/pr132-review-remediation.md), [ADR-041](architecture/adr/041-pr132-review-remediation.md), [stories](USER-STORIES.md#back-review-139--corrigir-os-32-achados-do-pr-132) e [validação](backend/validation/pr132-review-remediation-2026-10-02.md). Implementação validada e CI verde no SHA `8ba0dd4`; PR #152 permanece draft.
+
+- [Especificações das 46 issues abertas (snapshot 2026-09-29)](plan/open-issues-specification-audit-2026-09-29.md)
+
+## Backend: contratos e evidências
+
+- [Hub](backend/README.md)
+- [API do núcleo](backend/api-core.md) e [inventário](backend/endpoint-inventory.md)
+- [Schemas dos DTOs](backend/request-schemas.md) e [OpenAPI Release](backend/openapi-release.json)
+- [Tenants/acesso](backend/access-tenants.md), [recursos](backend/resources-rules.md), [transportes](backend/transports.md)
+- [Operação](backend/operations.md), [validação documental histórica](backend/validation/2026-09-28.md), [validação de correção #111–#117](backend/validation/backend-core-remediation.md), [backlog](backend/backlog.md)
+- [Correções e validação da revisão do PR #118](backend/validation/2026-09-28-review-fixes.md)
+- [ADR-034](architecture/adr/034-backend-contracts-and-access-target.md), [plano](plan/backend-documentation-validation.md), [templates](../templates/README.md)
+- [Correção dos bugs #111–#117: ADR-035](architecture/adr/035-backend-core-isolation-and-reliability.md), [plano](plan/backend-core-remediation.md) e [relatório/evidências](backend/validation/backend-core-remediation.md)
+- [Tenant scopes #97: ADR-026](architecture/adr/026-auto-bootstrap-remove-default-tenant.md), [plano](plan/tenant-system-scope-remediation.md) e [validação PostgreSQL](backend/validation/tenant-system-scope-2026-10-01.md)
+- [MAF 1.22 e Gateway: ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md), [story BACK-MAF-120](USER-STORIES.md#back-maf-120--maf-atualizado-e-providers-integrados-ao-gateway), [análise de compatibilidade](plan/maf-122-compatibility-review.md), [plano](plan/maf-122-protocols-gateway.md) e [evidência de runtime](backend/validation/maf-122-workflow-runtime-2026-09-29.md)
+- [A2A/AG-UI preview: ADR-037](architecture/adr/037-a2a-agui-preview-validation.md), [story BACK-PROTO-121](USER-STORIES.md#back-proto-121--validar-a2a-e-ag-ui-sob-hosting-preview) e [plano](plan/a2a-agui-preview-validation.md)
+- [Issue #105 — Hyperlight CodeAct em Lab, desligado por padrão](backend/operations.md)
+- [Orquestrador supervisor dinâmico: ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md), [story BACK-ORCH-122](USER-STORIES.md#back-orch-122--orquestrar-agentes-dinamicos-pelo-supervisor-maf) e [plano separado](plan/dynamic-orchestrator-implementation.md)
+- Follow-ups pós-PR #132: [Gateway de produção #133](plan/maf-gateway-production-validation.md), [retomada do supervisor #134](plan/dynamic-supervisor-session-recovery.md) e [forecast de quotas #135 / ML40](plan/proactive-llm-quota-forecast.md)
+- [Escopo de sistema sem tenant sintético (#97)](plan/tenant-system-scope-remediation.md) — evidência anterior preservada; revisão revelou pendências cobertas por #143/#145 na epic #139
+- Stories dos follow-ups: [BACK-MAF-133](USER-STORIES.md#back-maf-133--provider-global-na-composicao-gateway-de-producao), [BACK-ORCH-134](USER-STORIES.md#back-orch-134--retomar-supervisor-e-especialistas-apos-restart) e [ML40](USER-STORIES.md#ml40--forecast-proativo-de-quotas-llm)
+- [Issue #16 — auto-melhoria exige aprovação humana e permanece na trilha Lab](backend/api-core.md)
+- [Issue #106 — política FIDES e redaction por tenant](backend/access-tenants.md)
+- [Chat, sessões e configurações usadas: ADR-039](architecture/adr/039-chat-session-user-tenant-settings.md), [story BACK-CHAT-123](USER-STORIES.md#back-chat-123--chat-sessoes-e-configuracoes-efetivamente-usadas), [plano](plan/chat-session-user-settings.md) e [contratos/endpoints](backend/chat-sessions-settings.md)
+- [Decisão de aprovação humana para auto-melhoria: ADR-040](architecture/adr/040-self-improvement-human-approval.md) · Issue #16 / ML39 · [especificações das issues abertas](plan/open-issues-specification-audit-2026-09-29.md)
+
 Índice de navegação da documentação do projeto, organizado por papel documental.
 
 Documento canônico de arquitetura atual:
@@ -15,6 +42,14 @@ Documento canônico de arquitetura atual:
 |-----------|-----------|
 | [PRD-Sistema-Agentic.md](PRD-Sistema-Agentic.md) | Visão de produto para stakeholders e áreas de negócio |
 | [USER-STORIES.md](USER-STORIES.md) | Catálogo funcional consolidado de MLs, épicos e user stories |
+| [user-stories/us-skills-crud-and-brainstorm.md](user-stories/us-skills-crud-and-brainstorm.md) | US-012: Gestão Dinâmica de Skills via Tela e Brainstorming assistido por IA |
+| [user-stories/us-multi-provider-api-keys.md](user-stories/us-multi-provider-api-keys.md) | BACK-KEYS-020: Gerenciamento e Roteamento de Múltiplas API Keys |
+| [user-stories/unified-chat-integration.md](user-stories/unified-chat-integration.md) | US-021: Integração Unificada de Pilares Tecnológicos no Chat Principal |
+| [user-stories/us-async-onnx-processing.md](user-stories/us-async-onnx-processing.md) | US-43: Processamento Assíncrono de Inferência ONNX |
+| [user-stories/us-advanced-chat-session-management.md](user-stories/us-advanced-chat-session-management.md) | US-44: Chat Avançado e Gerenciamento Unificado de Sessões |
+| [user-stories/us-032-dynamic-maf-workflows-engine.md](user-stories/us-032-dynamic-maf-workflows-engine.md) | US-032: Orquestração Dinâmica de Grafos de Agentes e Compilador MAF Declarativo |
+| [issue-61-multi-provider-api-keys.md](issue-61-multi-provider-api-keys.md) | GitHub Issue #61: Multi-Provider API Keys Epic |
+| [issue-chat-enhancements.md](issue-chat-enhancements.md) | GitHub Issue #93: Chat Avançado Epic |
 | [agentic-design-manifesto.md](agentic-design-manifesto.md) | Princípios de design e filosofia do sistema |
 
 ### Arquitetura Corrente
@@ -55,6 +90,25 @@ Documento canônico de arquitetura atual:
 | [architecture/adr/016-unified-agent-structure.md](architecture/adr/016-unified-agent-structure.md) | ADR 016: Estrutura Unificada de Agentes |
 | [architecture/adr/017-design-system-teal-palette.md](architecture/adr/017-design-system-teal-palette.md) | ADR 017: Design System com Paleta Teal |
 | [architecture/adr/018-hot-swapping-architecture.md](architecture/adr/018-hot-swapping-architecture.md) | ADR 018: Arquitetura de Hot-Swapping para Provedores de IA e Vector Stores |
+| [architecture/adr/019-agent-room-association.md](architecture/adr/019-agent-room-association.md) | ADR 019: Associação Granular Agente-Sala (Contexto Restrito) |
+| [architecture/adr/020-multi-provider-api-keys.md](architecture/adr/020-multi-provider-api-keys.md) | ADR 020: Arquitetura de Múltiplas API Keys por Provedor LLM |
+| [architecture/adr/021-automatic-llm-discovery.md](architecture/adr/021-automatic-llm-discovery.md) | ADR 021: Inspeção Automática de Modelos LLM no Login (Issue #94) |
+| [architecture/adr/022-unified-chat-integration-architecture.md](architecture/adr/022-unified-chat-integration-architecture.md) | ADR 022: Arquitetura de Integração Unificada do Chat (12 Pilares) |
+| [architecture/adr/023-async-onnx-processing.md](architecture/adr/023-async-onnx-processing.md) | ADR 023: Processamento Assíncrono de Inferência ONNX e Galeria |
+| [architecture/adr/024-backend-architectural-refactoring.md](architecture/adr/024-backend-architectural-refactoring.md) | ADR 024: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
+| [architecture/adr/025-advanced-chat-session-management.md](architecture/adr/025-advanced-chat-session-management.md) | ADR 025: Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) |
+| [architecture/adr/027-maf-1-6-1-migration-architecture.md](architecture/adr/027-maf-1-6-1-migration-architecture.md) | ADR 027: Migração Completa para o Microsoft Agent Framework (MAF) 1.6.1 |
+| [architecture/adr/028-db-skills-dynamic-system.md](architecture/adr/028-db-skills-dynamic-system.md) | ADR 028: Implementação do DbAgentSkillsSource e CRUD de Skills via Tela |
+| [architecture/adr/029-dynamic-maf-workflows-engine.md](architecture/adr/029-dynamic-maf-workflows-engine.md) | ADR 029: Orquestração Dinâmica de Grafos de Agentes baseada no MAF |
+| [architecture/adr/030-maf-durable-task-migration.md](architecture/adr/030-maf-durable-task-migration.md) | ADR 030: Workflows, sessões PostgreSQL e resposta HTTP assíncrona |
+| [architecture/adr/031-pgvector-sql-filter-tenant-quota-persistence.md](architecture/adr/031-pgvector-sql-filter-tenant-quota-persistence.md) | ADR 031: Filtro SQL-Nativo no PGVector e Persistência de Quotas de Tenant |
+| [architecture/adr/032-evaluation-golden-sets-rest-api.md](architecture/adr/032-evaluation-golden-sets-rest-api.md) | ADR 032: Contratos REST para CRUD de Golden Sets da Evaluation Suite |
+| [architecture/adr/033-maf-190-upgrade-di-cleanup.md](architecture/adr/033-maf-190-upgrade-di-cleanup.md) | ADR 033: Migração do Microsoft Agent Framework para 1.9.0 e Saneamento de DI |
+| [architecture/adr/036-maf-122-protocols-and-gateway.md](architecture/adr/036-maf-122-protocols-and-gateway.md) | ADR 036: Atualização do MAF e integração de protocolos e Gateway |
+| [architecture/adr/037-a2a-agui-preview-validation.md](architecture/adr/037-a2a-agui-preview-validation.md) | ADR 037: Despriorizar validação E2E A2A/AG-UI enquanto hosting for preview |
+| [architecture/adr/ADR-004-MAF-Native-LLM-Clients.md](architecture/adr/ADR-004-MAF-Native-LLM-Clients.md) | ADR 004: Migração para Clientes Nativos do Microsoft Agent Framework (MAF 1.6+) |
+| [architecture/adr/ADR-005-MAF-Native-Workflows.md](architecture/adr/ADR-005-MAF-Native-Workflows.md) | ADR 005: Migração para Workflows Nativos do Microsoft Agent Framework (MAF 1.6+) |
+| [architecture/adr/ADR-006-MAF-Native-Skills.md](architecture/adr/ADR-006-MAF-Native-Skills.md) | ADR 006: Padronização do Skills Framework com MAF Nativo |
 
 ### Glossários
 
@@ -84,6 +138,9 @@ Ver [bdd/README.md](bdd/README.md) para o inventário completo e instruções de
 | [bdd/backend-apis.feature](bdd/backend-apis.feature) | APIs de documentos, planner, voz, setup e memória |
 | [bdd/embedding-migration.feature](bdd/embedding-migration.feature) | Módulo administrativo ativo de migração de embeddings |
 | [bdd/api-key-masking-embedding.feature](bdd/api-key-masking-embedding.feature) | Mascaramento de segredos no módulo de embeddings |
+| [bdd/multi-provider-api-keys.feature](bdd/multi-provider-api-keys.feature) | BDD: Cenários executáveis para múltiplas API Keys |
+| [bdd/async-onnx-processing.feature](bdd/async-onnx-processing.feature) | Processamento Assíncrono de Inferência ONNX |
+| [bdd/advanced-chat-session-management.feature](bdd/advanced-chat-session-management.feature) | Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) |
 
 ---
 
@@ -95,15 +152,53 @@ Guia da categoria: [planejamento/README.md](planejamento/README.md).
 
 | Documento | Descrição |
 |-----------|-----------|
+| [plan/pending-changes-review-2026-09-28.md](plan/pending-changes-review-2026-09-28.md) | Revisão de alterações pendentes e validações de 28/09/2026 |
+| [plan/di-upgrade-1-9-0.md](plan/di-upgrade-1-9-0.md) | Implementação e verificação da atualização MAF 1.9.0 e DI |
+| [plan/golden-set-api.md](plan/golden-set-api.md) | Plano de CRUD e avaliação de Golden Sets |
+| [plan/phase-3-backend-gaps.md](plan/phase-3-backend-gaps.md) | Complementos de Golden Sets e execução assíncrona |
+| [plan/backend-architecture-audit.md](plan/backend-architecture-audit.md) | Roadmap/Plan: Backend Architectural Audit & Technical Diagnosis Report |
+| [plan/phase-1-critical-fixes.md](plan/phase-1-critical-fixes.md) | Roadmap/Plan: Fase 1 — Correções Críticas de Segurança e Corretude |
+| [plan/phase-2-maf-migration.md](plan/phase-2-maf-migration.md) | Roadmap/Plan: Fase 2 — Saneamento de DI e Migração MAF 1.9.0 |
+| [plan/phase-3-roadmap-completion.md](plan/phase-3-roadmap-completion.md) | Roadmap/Plan: Fase 3 — Completar Tracks do Roadmap Q2 2026 |
+| [plan/completed/onnx-in-process.md](plan/completed/onnx-in-process.md) | Roadmap/Plan: Dynamic ONNX In-Process Inference Engine (Issue #74) |
+| [plan/completed/automatic-llm-inspection-plan.md](plan/completed/automatic-llm-inspection-plan.md) | Roadmap/Plan: Inspeção Automática de Modelos LLM no Login (Issue #94) |
+| [plan/gap-mitigation-plan.md](plan/gap-mitigation-plan.md) | Roadmap/Plan: Mitigação de Gaps Técnicos de Segurança e Performance (Issues #76, #77, #78, #79) |
+| [plan/bug-chat-workflow.md](plan/completed/bug-chat-workflow.md) | Bug Fix Plan: Resposta do chat não aparece no frontend |
+| [plan/multi-provider-api-keys.md](plan/completed/multi-provider-api-keys.md) | Roadmap/Plan: Multi-Provider API Keys |
+| [plan/completed/unified-chat-integration.md](plan/completed/unified-chat-integration.md) | Roadmap/Plan: Integração Unificada do Chat (12 Pilares) |
+| [plan/completed/async-onnx-processing-plan.md](plan/completed/async-onnx-processing-plan.md) | Roadmap/Plan: Processamento Assíncrono de Inferência ONNX e Galeria |
+| [plan/backend-testing-roadmap.md](plan/backend-testing-roadmap.md) | Roadmap/Plan: Plano e Roteiro de Testes do Backend (.NET 10) |
+| [plan/completed/architectural-refactoring-plan.md](plan/completed/architectural-refactoring-plan.md) | Roadmap/Plan: Refatoração Arquitetural e Limpeza Técnica do Backend (.NET 10) |
+| [plan/completed/chat-enhancements.md](plan/completed/chat-enhancements.md) | Roadmap/Plan: Chat Avançado e Gerenciamento Unificado de Sessões (NotebookLM Style) (Issue #93) |
+| [plan/completed/db-skills-dynamic-system.md](plan/completed/db-skills-dynamic-system.md) | Roadmap/Plan: Implementação do DbAgentSkillsSource e Dynamic Skills System |
+| [plan/dynamic-maf-workflows-engine.md](plan/dynamic-maf-workflows-engine.md) | Proposta histórica supersedida; engine atual usa IWorkflowEngine + MAF 1.22 |
+| [plan/ci-pipelines.md](plan/ci-pipelines.md) | Roadmap/Plan: Configuração de Pipelines de CI (GitHub Actions) |
+| [plan/frontend-refactoring-plan.md](plan/frontend-refactoring-plan.md) | Roadmap/Plan: Refatoração do Frontend (React Query, useChat decomposition) |
+| [plan/master-roadmap-2026.md](plan/master-roadmap-2026.md) | Master Roadmap Q2 2026: Entregáveis e prioridades estratégicas |
+| [plan/maintenance-frontend.md](plan/maintenance-frontend.md) | Guia/Plan: Diretrizes de Manutenção Visual e UX do Frontend |
+| [plan/completed/backend-dependency-injection-refactoring.md](plan/completed/backend-dependency-injection-refactoring.md) | Roadmap/Plan: Refatoração de Injeção de Dependência no Backend (Issue #101) |
+| [plan/completed/ARCHITECTURE_REFACTORING_PLAN.md](plan/completed/ARCHITECTURE_REFACTORING_PLAN.md) | Roadmap/Plan: Refatoração Arquitetural do Sistema e Gaps de I/O |
+| [plan/completed/maf-migration-phase1.md](plan/completed/maf-migration-phase1.md) | Roadmap/Plan: Transição de Habilidades Estáticas para Microsoft Agent Framework |
+| [plan/completed/remediation-backend.md](plan/completed/remediation-backend.md) | Roadmap/Plan: Remediação de DI e Segurança do Backend |
+| [plan/completed/strategic-alignment.md](plan/completed/strategic-alignment.md) | Guia/Plan: Alinhamento Estratégico do Core vs Lab |
+| [plan/completed/controle-acesso-rooms.md](plan/completed/controle-acesso-rooms.md) | Roadmap/Plan: Controle de Acesso e Permissões em Knowledge Rooms |
+| [plan/completed/documentation-update-plan.md](plan/completed/documentation-update-plan.md) | Roadmap/Plan: Atualização Completa e Faxina da Documentação |
+| [plan/completed/gaps-telas.md](plan/completed/gaps-telas.md) | Roadmap/Plan: Diagnóstico e Resolução de Gaps nas Telas de UI |
+| [plan/completed/claude-provider-test-fix.md](plan/completed/claude-provider-test-fix.md) | Bug Fix Plan: Teste de Conectividade de Provedores LLM (Claude) |
+| [plan/completed/cap-suggestions-ptbr.md](plan/completed/cap-suggestions-ptbr.md) | Roadmap/Plan: Sugestões de Capacidades em PT-BR com Dicas Visuais |
+| [plan/completed/architectural-refactoring-phase-2.md](plan/completed/architectural-refactoring-phase-2.md) | Roadmap/Plan: Refatoração Arquitetural e Limpeza do Backend - Fase 2 |
+| [plan/completed/refactoring-session-list.md](plan/completed/refactoring-session-list.md) | Roadmap/Plan: Refinamento de Listagem de Sessões de Usuário |
+| [plan/completed/p2-gateway-observability-finops.md](plan/completed/p2-gateway-observability-finops.md) | Implementação parcial; projeção mensal fica para issue futura após #132 |
+| [plan/completed/p4-selfhost-ollama-stabilization.md](plan/completed/p4-selfhost-ollama-stabilization.md) | Roadmap/Plan: Estabilização e Self-Hosting com Ollama (Fase P4) |
+| [plan/completed/agent-yaml-orchestration.md](plan/completed/agent-yaml-orchestration.md) | Plano arquivado com implementação visível no código e critérios/checklists a reconciliar |
+| [plan/completed/MAF_NATIVE_REFACTORING.md](plan/completed/MAF_NATIVE_REFACTORING.md) | Roadmap/Plan: Trilha de Refatoração e Aproximação ao MAF Nativo |
+| [plan/completed/framework-first-migration-plan.md](plan/completed/framework-first-migration-plan.md) | Roadmap/Plan: Resumo Histórico da Migração Framework-First |
+| [plan/completed/REFACTORING_PROGRESS.md](plan/completed/REFACTORING_PROGRESS.md) | Roadmap/Plan: Consolidação e Progresso de Refatoração do MAF Native Runtime |
 | [planejamento/AI_Capabilities_Gaps.md](planejamento/AI_Capabilities_Gaps.md) | Diagnóstico vivo de gaps e oportunidades arquiteturais |
 | [planejamento/AI_Advanced_Capabilities_Roadmap.md](planejamento/AI_Advanced_Capabilities_Roadmap.md) | Roadmap futuro para capacidades avançadas |
-| [planejamento/framework-first-migration-plan.md](planejamento/framework-first-migration-plan.md) | Resumo histórico da migração framework-first (concluída) |
-| [planejamento/MAF_NATIVE_REFACTORING.md](planejamento/MAF_NATIVE_REFACTORING.md) | Trilha de redução de código MAF nativo (concluída) |
 | [planejamento/master-fullstack-roadmap.md](planejamento/master-fullstack-roadmap.md) | Roadmap fullstack consolidado |
-| [planejamento/p2-gateway-observability-finops.md](planejamento/p2-gateway-observability-finops.md) | Gateway observability e FinOps |
-| [planejamento/p4-selfhost-ollama-stabilization.md](planejamento/p4-selfhost-ollama-stabilization.md) | Stabilização do Ollama self-hosted |
-| [planejamento/agent-yaml-orchestration.md](planejamento/agent-yaml-orchestration.md) | Orquestração via agent.yaml |
 | [planejamento/overengineering-assessment.md](planejamento/overengineering-assessment.md) | Assessment de simplificação e hotspots de complexidade |
+| [planejamento/Agent_Runtime_State_Machine.md](planejamento/Agent_Runtime_State_Machine.md) | Diagnóstico: Análise de Estado de Execução e Práticas Enterprise-Grade |
 
 ---
 

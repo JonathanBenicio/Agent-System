@@ -217,11 +217,7 @@ public sealed class RerankingSettingsAccessor : IRerankingSettingsAccessor
         }
     }
 
-    private string ResolveTenantId()
-    {
-        var tenantId = _tenantContextAccessor.Current.TenantId;
-        return string.IsNullOrWhiteSpace(tenantId) ? Tenant.DefaultTenantId : tenantId;
-    }
+    private string ResolveTenantId() => _tenantContextAccessor.CurrentTenantId;
 
     private static string BuildTenantConfigKey(string tenantId, string suffix)
         => $"tenants.{tenantId}.{suffix}";

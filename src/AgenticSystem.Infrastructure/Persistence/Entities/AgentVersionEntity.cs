@@ -1,11 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 
 namespace AgenticSystem.Infrastructure.Persistence.Entities;
 
 [Table("agent_versions")]
-public class AgentVersionEntity
+public class AgentVersionEntity : ITenantEntity
 {
     [Key]
     [MaxLength(64)]
@@ -14,6 +15,9 @@ public class AgentVersionEntity
     [Required]
     [MaxLength(256)]
     public string AgentName { get; set; } = string.Empty;
+
+    [MaxLength(50)]
+    public string TenantId { get; set; } = string.Empty;
 
     public int VersionNumber { get; set; }
 
@@ -67,6 +71,7 @@ public class AgentVersionEntity
         {
             Id = Id,
             AgentName = AgentName,
+            TenantId = TenantId,
             VersionNumber = VersionNumber,
             Label = Label,
             Status = Status,
@@ -96,6 +101,7 @@ public class AgentVersionEntity
         {
             Id = model.Id,
             AgentName = model.AgentName,
+            TenantId = model.TenantId,
             VersionNumber = model.VersionNumber,
             Label = model.Label,
             Status = model.Status,

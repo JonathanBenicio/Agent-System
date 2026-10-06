@@ -23,6 +23,7 @@ import {
   ArrowLeftRight,
   LogOut,
   User,
+  Brain,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
@@ -47,6 +48,7 @@ const navItems: NavItem[] = [
   { icon: DollarSign, label: 'Custos', path: '/costs' },
   { icon: Bell, label: 'Alertas', path: '/alerts' },
   { icon: Cpu, label: 'IAs', path: '/ai' },
+  { icon: Brain, label: 'Modelos IA', path: '/onnx-models' },
   { icon: Plug, label: 'Plugins', path: '/plugins' },
   { icon: Clock, label: 'Scheduled Tasks', path: '/scheduled-tasks' },
   { icon: Settings, label: 'Config', path: '/config' },
@@ -61,7 +63,17 @@ interface SidebarProps {
 export function Sidebar({ onNewChat }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false)
   const location = useLocation()
-  const { token, apiKey, logout } = useAuthStore()
+  const { token, cookieAuthenticated, logout } = useAuthStore()
+  const [logoutError, setLogoutError] = useState<string | null>(null)
+
+  const handleLogout = async () => {
+    setLogoutError(null)
+    try {
+      await logout()
+    } catch {
+      setLogoutError('Não foi possível sair. Tente novamente.')
+    }
+  }
 
   return (
     <aside
@@ -132,15 +144,15 @@ export function Sidebar({ onNewChat }: SidebarProps) {
               </div>
               <div className="flex flex-col min-w-0">
                 <span className="text-xs font-semibold text-zinc-200 truncate">
-                  Administrador
+                  Usuário autenticado
                 </span>
                 <span className="text-[10px] text-teal-500 truncate font-mono">
-                  {token ? 'JWT Bearer' : apiKey ? 'API Key Ativa' : 'Desconectado'}
+                  {token ? 'JWT Bearer' : cookieAuthenticated ? 'API Key Ativa' : 'Desconectado'}
                 </span>
               </div>
             </div>
             <button
-              onClick={logout}
+              onClick={handleLogout}
               className="text-zinc-500 hover:text-red-400 p-1.5 rounded-lg hover:bg-zinc-850 transition-colors"
               title="Sair do sistema"
             >
@@ -149,7 +161,7 @@ export function Sidebar({ onNewChat }: SidebarProps) {
           </div>
         ) : (
           <button
-            onClick={logout}
+            onClick={handleLogout}
             className="flex items-center justify-center w-full py-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-zinc-850 transition-colors"
             title="Sair do sistema"
           >
@@ -157,6 +169,8 @@ export function Sidebar({ onNewChat }: SidebarProps) {
           </button>
         )}
       </div>
+
+      {logoutError && <p role="alert" className="px-3 text-xs text-red-400">{logoutError}</p>}
 
       {/* Collapse toggle */}
       <div className="p-2 border-t border-zinc-800">

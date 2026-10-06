@@ -21,6 +21,8 @@ public class AgentYamlDto
     public AgentYamlGovernanceDto? Governance { get; set; }
     public AgentYamlAbilitiesDto? Abilities { get; set; }
     public string? Instructions { get; set; }
+    public Dictionary<string, string>? Rules { get; set; }
+    public Dictionary<string, object>? Configuration { get; set; }
 }
 
 public class AgentYamlMetadataDto
@@ -36,6 +38,8 @@ public class AgentYamlExecutionDto
     public string? AutonomyLevel { get; set; }
     public string? Model { get; set; }
     public double? Temperature { get; set; }
+    public int? MaxConcurrency { get; set; }
+    public int? TimeoutSeconds { get; set; }
 }
 
 public class AgentYamlGovernanceDto
@@ -46,35 +50,14 @@ public class AgentYamlGovernanceDto
 public class AgentYamlAbilitiesDto
 {
     public List<string>? AllowedTools { get; set; }
+    public List<string>? Capabilities { get; set; }
     public string? WorkflowTemplate { get; set; }
-}
-
-/// <summary>
-/// Modelo contendo detalhes sobre eventuais erros de validação sintática ou semântica do YAML.
-/// </summary>
-public class YamlValidationError
-{
-    public int Line { get; set; }
-    public int Column { get; set; }
-    public string ErrorCode { get; set; } = string.Empty;
-    public string Message { get; set; } = string.Empty;
-    public string Severity { get; set; } = "Error"; // "Error" ou "Warning"
-}
-
-/// <summary>
-/// Resultado da operação de validação de YAML.
-/// </summary>
-public class YamlValidationResult
-{
-    public bool IsValid { get; set; }
-    public List<YamlValidationError> Errors { get; set; } = new();
-    public AgentSpecification? Specification { get; set; }
 }
 
 /// <summary>
 /// Validador declarativo de agentes para carregar e inspecionar YAMLs de configuração.
 /// </summary>
-public class AgentYamlValidator
+public class AgentYamlValidator : IAgentYamlValidator
 {
     private readonly IToolManager? _toolManager;
 
@@ -115,7 +98,8 @@ public class AgentYamlValidator
                 .IgnoreUnmatchedProperties()
                 .Build();
 
-            dto = deserializer.Deserialize<AgentYamlDto>(yaml);
+            dto = deserializer.Deserialize<AgentYamlDto>(yaml)
+                ?? throw new InvalidOperationException("Agent YAML must contain a mapping.");
         }
         catch (YamlException ex)
         {
@@ -287,6 +271,51 @@ public class AgentYamlValidator
             }
         }
 
+        // ─── Validação Semântica de Fórmulas PowerFx (Fase 4) ───
+        if (dto.Rules is not null && dto.Rules.Count > 0)
+        {
+            var engine = new Microsoft.PowerFx.RecalcEngine();
+
+            foreach (var rule in dto.Rules)
+            {
+                var formula = rule.Value;
+                if (string.IsNullOrWhiteSpace(formula)) continue;
+
+                try
+                {
+                    // Usa o parser real do PowerFx para validar a fórmula sintaticamente
+                    var checkResult = engine.Check(formula);
+                    if (!checkResult.IsSuccess)
+                    {
+                        var powerFxErrors = string.Join("; ", checkResult.Errors.Select(e => e.Message));
+                        errors.Add(new YamlValidationError
+                        {
+                            Line = 1,
+                            Column = 1,
+                            ErrorCode = "INVALID_POWERFX_SYNTAX",
+                            Message = $"A regra '{rule.Key}' contém expressão PowerFx inválida: {powerFxErrors}",
+                            Severity = "Error"
+                        });
+                    }
+                }
+                catch (Exception pfxEx)
+                {
+                    errors.Add(new YamlValidationError
+                    {
+                        Line = 1,
+                        Column = 1,
+                        ErrorCode = "POWERFX_ENGINE_ERROR",
+                        Message = $"Erro no compilador PowerFx ao validar a regra '{rule.Key}': {pfxEx.Message}",
+                        Severity = "Error"
+                    });
+                }
+            }
+        }
+
+        if (dto.Execution?.MaxConcurrency is <= 0 || dto.Execution?.TimeoutSeconds is <= 0)
+            errors.Add(new YamlValidationError { ErrorCode = "INVALID_EXECUTION_LIMIT", Severity = "Error",
+                Message = "execution.maxConcurrency e execution.timeoutSeconds devem ser positivos." });
+
         if (errors.Any(e => e.Severity == "Error"))
         {
             return new YamlValidationResult
@@ -304,6 +333,8 @@ public class AgentYamlValidator
             Domain = dto.Metadata?.Domain ?? string.Empty,
             Instructions = dto.Instructions ?? string.Empty,
             AllowedTools = dto.Abilities?.AllowedTools ?? new(),
+            Capabilities = dto.Abilities?.Capabilities ?? new(),
+            Configuration = dto.Configuration ?? new(),
             WorkflowTemplate = dto.Abilities?.WorkflowTemplate,
             PolicyIds = dto.Governance?.Policies ?? new(),
         };
@@ -313,8 +344,17 @@ public class AgentYamlValidator
             specification.Tier = tierVal;
         }
 
+        if (dto.Rules is not null && dto.Rules.Count > 0)
+        {
+            specification.Configuration["rules"] = dto.Rules;
+        }
+
         if (dto.Execution is not null)
         {
+            if (dto.Execution.MaxConcurrency.HasValue)
+                specification.Configuration["maxConcurrency"] = dto.Execution.MaxConcurrency.Value;
+            if (dto.Execution.TimeoutSeconds.HasValue)
+                specification.Configuration["timeoutSeconds"] = dto.Execution.TimeoutSeconds.Value;
             if (Enum.TryParse<AutonomyLevel>(dto.Execution.AutonomyLevel, true, out var autonomyVal))
             {
                 specification.AutonomyLevel = autonomyVal;

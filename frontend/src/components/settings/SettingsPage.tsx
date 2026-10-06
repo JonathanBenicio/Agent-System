@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Settings2, Save, Loader2, Upload } from 'lucide-react'
+import { useState, useActionState } from 'react'
+import { Settings2, Save, Loader2, Upload, AlertTriangle } from 'lucide-react'
 import { useSettings } from '@/hooks/useSettings'
 import { PageLoading, PageError } from '@/components/shared/Loading'
 import { useToast } from '@/components/shared/Toast'
@@ -8,7 +8,7 @@ import type { GatewaySettings, MemorySettings, RerankingSettings } from '@/types
 type Tab = 'gateway' | 'memory' | 'reranking'
 
 export function SettingsPage() {
-  const { settings, loading, error, saving, refresh, saveGateway, saveMemory, saveReranking, uploadRerankingAssets } = useSettings()
+  const { settings, loading, error, refresh, saveGateway, saveMemory, saveReranking, uploadRerankingAssets } = useSettings()
   const { addToast } = useToast()
   const [tab, setTab] = useState<Tab>('gateway')
   const [gwForm, setGwForm] = useState<GatewaySettings | null>(null)
@@ -18,50 +18,49 @@ export function SettingsPage() {
   const [vocabularyFile, setVocabularyFile] = useState<File | null>(null)
   const [packageFile, setPackageFile] = useState<File | null>(null)
   const [uploadInputKey, setUploadInputKey] = useState(0)
+  const gw = gwForm ?? settings?.gateway ?? null
+  const mem = memForm ?? settings?.memory ?? null
+  const rerank = rerankForm ?? settings?.reranking ?? null
 
-  if (loading) return <PageLoading />
-  if (error || !settings) return <PageError message={error ?? 'Sem dados'} onRetry={refresh} />
-
-  const gw = gwForm ?? settings.gateway
-  const mem = memForm ?? settings.memory
-  const rerank = rerankForm ?? settings.reranking
-
-  const handleSaveGateway = async () => {
+  // --- React 19 Actions ---
+  const [gwActionState, gwAction, gwPending] = useActionState(async () => {
     if (!gw) return
     try {
       await saveGateway(gw)
       setGwForm(null)
       addToast('Configurações de Gateway salvas', 'success')
-    } catch {
+    } catch (err) {
       addToast('Erro ao salvar configurações', 'error')
+      return { error: err instanceof Error ? err.message : 'Falha ao salvar' }
     }
-  }
+  }, null)
 
-  const handleSaveMemory = async () => {
+  const [memActionState, memAction, memPending] = useActionState(async () => {
     if (!mem) return
     try {
       await saveMemory(mem)
       setMemForm(null)
       addToast('Configurações de Memória salvas', 'success')
-    } catch {
+    } catch (err) {
       addToast('Erro ao salvar configurações', 'error')
+      return { error: err instanceof Error ? err.message : 'Falha ao salvar' }
     }
-  }
+  }, null)
 
-  const handleSaveReranking = async () => {
+  const [rerankActionState, rerankAction, rerankPending] = useActionState(async () => {
     if (!rerank) return
     try {
       await saveReranking(rerank)
       setRerankForm(null)
       addToast('Configurações de Rerank salvas', 'success')
-    } catch {
+    } catch (err) {
       addToast('Erro ao salvar configurações de rerank', 'error')
+      return { error: err instanceof Error ? err.message : 'Falha ao salvar' }
     }
-  }
+  }, null)
 
-  const handleUploadRerankingAssets = async () => {
+  const [uploadActionState, uploadAction, uploadPending] = useActionState(async () => {
     if (!modelFile && !vocabularyFile && !packageFile) return
-
     try {
       const updated = await uploadRerankingAssets(modelFile ?? undefined, vocabularyFile ?? undefined, packageFile ?? undefined)
       setRerankForm(prev => prev
@@ -80,13 +79,17 @@ export function SettingsPage() {
       setPackageFile(null)
       setUploadInputKey(key => key + 1)
       addToast('Assets de rerank enviados', 'success')
-    } catch {
+    } catch (err) {
       addToast('Erro ao enviar assets de rerank', 'error')
+      return { error: err instanceof Error ? err.message : 'Falha ao enviar' }
     }
-  }
+  }, null)
+
+  if (loading) return <PageLoading />
+  if (error || !settings) return <PageError message={error ?? 'Sem dados'} onRetry={refresh} />
 
   const updateRerank = <K extends keyof RerankingSettings>(key: K, value: RerankingSettings[K]) => {
-    setRerankForm({ ...rerank, [key]: value })
+    setRerankForm({ ...(rerank ?? settings.reranking), [key]: value })
   }
 
   const tabs: { id: Tab; label: string }[] = [
@@ -122,7 +125,13 @@ export function SettingsPage() {
 
         {/* Gateway Tab */}
         {tab === 'gateway' && gw && (
-          <div className="space-y-4">
+          <form action={gwAction} className="space-y-4">
+            {gwActionState?.error && (
+              <div className="p-3 text-xs text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                {gwActionState.error}
+              </div>
+            )}
             <FormField label="Daily Budget ($)">
               <input
                 type="number"
@@ -163,13 +172,19 @@ export function SettingsPage() {
                 className="input"
               />
             </FormField>
-            <SaveButton onClick={handleSaveGateway} saving={saving} disabled={!gwForm} />
-          </div>
+            <SaveButton type="submit" saving={gwPending} disabled={!gwForm} />
+          </form>
         )}
 
         {/* Memory Tab */}
         {tab === 'memory' && mem && (
-          <div className="space-y-4">
+          <form action={memAction} className="space-y-4">
+            {memActionState?.error && (
+              <div className="p-3 text-xs text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                {memActionState.error}
+              </div>
+            )}
             <FormField label="Obsidian Vault Path">
               <input
                 type="text"
@@ -199,12 +214,18 @@ export function SettingsPage() {
                 placeholder="Host=localhost;Database=..."
               />
             </FormField>
-            <SaveButton onClick={handleSaveMemory} saving={saving} disabled={!memForm} />
-          </div>
+            <SaveButton type="submit" saving={memPending} disabled={!memForm} />
+          </form>
         )}
 
         {tab === 'reranking' && rerank && (
-          <div className="space-y-6">
+          <form action={rerankAction} className="space-y-6">
+            {rerankActionState?.error && (
+              <div className="p-3 text-xs text-red-400 bg-red-950/20 border border-red-900/30 rounded-lg flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                {rerankActionState.error}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <ToggleField
                 label="Reranking Ativo"
@@ -333,16 +354,18 @@ export function SettingsPage() {
                     {vocabularyFile?.name ?? 'Nenhum vocab.txt selecionado'}
                   </div>
                   <button
-                    type="button"
-                    onClick={handleUploadRerankingAssets}
-                    disabled={saving || (!modelFile && !vocabularyFile && !packageFile)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                   type="button"
+                   onClick={() => uploadAction()}
+                   disabled={uploadPending || (!modelFile && !vocabularyFile && !packageFile)}
+                   className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 px-3 py-2 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
                   >
-                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                    {saving ? 'Enviando...' : 'Enviar Assets'}
+                   {uploadPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                   {uploadPending ? 'Enviando...' : 'Enviar Assets'}
                   </button>
-                </div>
-
+                  </div>
+                  {uploadActionState?.error && (
+                  <p className="text-xs text-red-400 mt-1">{uploadActionState.error}</p>
+                  )}
                 <div className="grid grid-cols-1 gap-4">
                   <FormField label="Model Path (.onnx)">
                     <input
@@ -549,8 +572,8 @@ export function SettingsPage() {
               </FormField>
             </div>
 
-            <SaveButton onClick={handleSaveReranking} saving={saving} disabled={!rerankForm} />
-          </div>
+            <SaveButton type="submit" saving={rerankPending} disabled={!rerankForm} />
+          </form>
         )}
       </div>
     </div>
@@ -608,10 +631,21 @@ function AssetStatusCard({
   )
 }
 
-function SaveButton({ onClick, saving, disabled }: { onClick: () => void; saving: boolean; disabled: boolean }) {
+function SaveButton({ 
+  onClick, 
+  type = "button", 
+  saving, 
+  disabled 
+}: { 
+  onClick?: () => void; 
+  type?: "button" | "submit"; 
+  saving: boolean; 
+  disabled: boolean 
+}) {
   return (
     <div className="flex justify-end pt-4 border-t border-zinc-800">
       <button
+        type={type}
         onClick={onClick}
         disabled={saving || disabled}
         className="flex items-center gap-2 px-4 py-2 text-sm rounded-lg bg-teal-600 text-white hover:bg-teal-500 disabled:opacity-50"

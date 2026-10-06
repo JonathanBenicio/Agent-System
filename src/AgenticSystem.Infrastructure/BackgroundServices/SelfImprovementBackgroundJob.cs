@@ -71,8 +71,49 @@ public class SelfImprovementBackgroundJob : BackgroundService
         {
             using var scope = _serviceProvider.CreateScope();
             var improvementService = scope.ServiceProvider.GetRequiredService<ISelfImprovementEngine>();
+            var tenantStore = scope.ServiceProvider.GetService<ITenantStore>();
+            var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
 
-            await improvementService.ProcessBatchImprovementsAsync(ct);
+            if (tenantStore is null)
+            {
+                _logger.LogWarning("Tenant store is unavailable; skipping self-improvement cycle.");
+                return;
+            }
+
+            IReadOnlyList<Tenant> allTenants;
+            try
+            {
+                allTenants = await tenantStore.GetAllAsync(ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load tenants; skipping self-improvement cycle.");
+                return;
+            }
+
+            var tenants = allTenants
+                .Select(tenant => tenant.Id)
+                .Where(tenantId => !string.IsNullOrWhiteSpace(tenantId))
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+            if (tenants.Count == 0)
+            {
+                _logger.LogInformation("No tenants are provisioned; skipping self-improvement cycle.");
+                return;
+            }
+
+            foreach (var tenantId in tenants)
+            {
+                using var tenantScope = tenantContextAccessor.BeginScope(new TenantContext { TenantId = tenantId });
+                try 
+                {
+                    await improvementService.ProcessBatchImprovementsAsync(ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "❌ Error during self-improvement cycle for tenant {TenantId}", tenantId);
+                }
+            }
         }
         catch (Exception ex)
         {

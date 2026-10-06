@@ -33,4 +33,20 @@ public static class AgentBuilderMiddlewareExtensions
     {
         return builder.Use(inner => new QualityGateDelegatingAgent(inner, qualityGateService, logger));
     }
+
+    /// <summary>
+    /// Adiciona middleware FIDES para mascaramento de dados sensíveis.
+    /// Intercepta a mensagem antes de enviá-la para o modelo.
+    /// </summary>
+    public static AIAgentBuilder UseFidesDataProtection(
+        this AIAgentBuilder builder,
+        ITenantContextAccessor tenantContext,
+        IFidesTenantPolicyStore policyStore,
+        IFidesMediaScanner mediaScanner,
+        Microsoft.Extensions.Options.IOptions<AgenticSystem.Infrastructure.Configuration.FidesSecuritySettings> settings,
+        ILogger<AgenticSystem.Infrastructure.Security.FidesDataProtectionMiddleware> logger)
+    {
+        return builder.Use(inner => new AgenticSystem.Infrastructure.Security.FidesDataProtectionMiddleware(
+            inner, tenantContext, policyStore, mediaScanner, settings, logger));
+    }
 }

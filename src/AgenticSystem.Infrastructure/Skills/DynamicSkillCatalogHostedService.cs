@@ -10,18 +10,18 @@ namespace AgenticSystem.Infrastructure.Skills;
 
 internal sealed class DynamicSkillCatalogHostedService : IHostedService
 {
-    private readonly ISkillManager _skillManager;
+    private readonly IPlatformSkillCatalog _skillCatalog;
     private readonly DynamicSkillsOptions _options;
     private readonly IHostEnvironment _hostEnvironment;
     private readonly ILogger<DynamicSkillCatalogHostedService> _logger;
 
     public DynamicSkillCatalogHostedService(
-        ISkillManager skillManager,
+        IPlatformSkillCatalog skillCatalog,
         IOptions<DynamicSkillsOptions> options,
         IHostEnvironment hostEnvironment,
         ILogger<DynamicSkillCatalogHostedService> logger)
     {
-        _skillManager = skillManager;
+        _skillCatalog = skillCatalog;
         _options = options.Value;
         _hostEnvironment = hostEnvironment;
         _logger = logger;
@@ -64,10 +64,10 @@ internal sealed class DynamicSkillCatalogHostedService : IHostedService
 
                 if (_options.OverrideExistingSkills)
                 {
-                    _skillManager.UnregisterSkill(skill.Id);
+                    _skillCatalog.UnregisterPlatformSkill(skill.Id);
                 }
 
-                _skillManager.RegisterSkill(skill);
+                _skillCatalog.RegisterPlatformSkill(skill);
             }
             catch (Exception ex)
             {

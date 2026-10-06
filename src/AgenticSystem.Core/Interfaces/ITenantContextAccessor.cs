@@ -4,6 +4,7 @@ namespace AgenticSystem.Core.Interfaces;
 
 public interface ITenantContextAccessor
 {
-    TenantContext Current { get; }
+    string CurrentTenantId { get; }
+    TenantContext? CurrentContext => null;
     IDisposable BeginScope(TenantContext context);
 }

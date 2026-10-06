@@ -10,6 +10,7 @@ public class TenantIsolationService : ITenantIsolationEnforcer
     private readonly ISessionStore _sessionStore;
     private readonly IVectorStore _vectorStore;
     private readonly ICostTracker _costTracker;
+    private readonly IDynamicAgentRepository _dynamicAgentRepository;
     private readonly ILogger<TenantIsolationService> _logger;
 
     public TenantIsolationService(
@@ -17,30 +18,52 @@ public class TenantIsolationService : ITenantIsolationEnforcer
         ISessionStore sessionStore,
         IVectorStore vectorStore,
         ICostTracker costTracker,
+        IDynamicAgentRepository dynamicAgentRepository,
         ILogger<TenantIsolationService> logger)
     {
         _tenantStore = tenantStore;
         _sessionStore = sessionStore;
         _vectorStore = vectorStore;
         _costTracker = costTracker;
+        _dynamicAgentRepository = dynamicAgentRepository;
         _logger = logger;
     }
 
     public async Task<bool> CanStartSessionAsync(string tenantId, CancellationToken ct = default)
     {
         var tenant = await _tenantStore.GetByIdAsync(tenantId, ct);
-        if (tenant == null) return true; // Default behavior if tenant not found
+        if (tenant == null || !tenant.IsActive) return false;
 
-        // In a real app, TenantResourceLimits would be part of the Tenant model or IsolationConfig
-        // For now, we'll assume a default limit if not explicitly configured
-        var limits = new TenantResourceLimits(); 
-        
-        var sessions = await _sessionStore.GetByTenantAsync(tenantId, ct: ct);
-        var activeCount = sessions.Count(s => !s.EndedAt.HasValue);
+        var limit = tenant.Limits.MaxConcurrentSessions;
+        if (limit <= 0) return true;
 
-        if (activeCount >= limits.MaxConcurrentSessions)
+        var activeCount = await _sessionStore.CountActiveAsync(tenantId, ct);
+
+        if (activeCount >= limit)
         {
-            _logger.LogWarning("🚫 Tenant {TenantId} reached concurrent session limit ({Limit})", tenantId, limits.MaxConcurrentSessions);
+            _logger.LogWarning("Tenant {TenantId} reached concurrent session limit ({Limit})", tenantId, limit);
+            return false;
+        }
+
+        return true;
+    }
+
+    public async Task<bool> CanCreateAgentAsync(string tenantId, string agentName, CancellationToken ct = default)
+    {
+        var tenant = await _tenantStore.GetByIdAsync(tenantId, ct);
+        if (tenant is null || !tenant.IsActive) return false;
+
+        if (await _dynamicAgentRepository.GetByNameAsync(agentName, ct) is not null)
+            return true;
+
+        var limit = tenant.Limits.MaxAgents;
+        if (limit <= 0) return true;
+
+        var agents = await _dynamicAgentRepository.GetAllAsync(ct);
+        var count = agents.Count();
+        if (count >= limit)
+        {
+            _logger.LogWarning("Tenant {TenantId} reached agent limit ({Limit})", tenantId, limit);
             return false;
         }
 
@@ -50,26 +73,23 @@ public class TenantIsolationService : ITenantIsolationEnforcer
     public async Task<bool> CanIngestDocumentAsync(string tenantId, long newDocumentSizeCount = 1, long newBytesCount = 0, CancellationToken ct = default)
     {
         var tenant = await _tenantStore.GetByIdAsync(tenantId, ct);
-        if (tenant == null) return true;
+        if (tenant == null || !tenant.IsActive) return false;
 
-        var limits = new TenantResourceLimits();
-        
         var stats = await _vectorStore.GetStatsAsync(tenantId, ct);
 
-        // Define generic limits if none exist on TenantResourceLimits right now
-        long maxDocs = limits.MaxDocuments > 0 ? limits.MaxDocuments : 50000;
-        long maxStorage = limits.MaxStorageMb > 0 ? limits.MaxStorageMb * 1024L * 1024L : 1024L * 1024 * 1024; // 1 GB default
+        var maxDocs = tenant.Limits.MaxDocuments;
+        var maxStorage = (long)tenant.Limits.MaxDocumentsMb * 1024L * 1024L;
 
-        if (stats.DocumentCount + newDocumentSizeCount > maxDocs)
+        if (maxDocs > 0 && stats.DocumentCount + newDocumentSizeCount > maxDocs)
         {
-            _logger.LogWarning("🚫 Tenant {TenantId} reached document limit ({Current} + {New} > {Limit})", 
+            _logger.LogWarning("Tenant {TenantId} reached document limit ({Current} + {New} > {Limit})",
                 tenantId, stats.DocumentCount, newDocumentSizeCount, maxDocs);
             return false;
         }
 
-        if (stats.TotalBytes + newBytesCount > maxStorage)
+        if (maxStorage > 0 && stats.TotalBytes + newBytesCount > maxStorage)
         {
-             _logger.LogWarning("🚫 Tenant {TenantId} reached storage limit ({Current} + {New} > {Limit})", 
+            _logger.LogWarning("Tenant {TenantId} reached storage limit ({Current} + {New} > {Limit})",
                 tenantId, stats.TotalBytes, newBytesCount, maxStorage);
             return false;
         }
@@ -79,18 +99,20 @@ public class TenantIsolationService : ITenantIsolationEnforcer
 
     public async Task<TenantUsageSummary> GetUsageAsync(string tenantId, CancellationToken ct = default)
     {
-        var sessions = await _sessionStore.GetByTenantAsync(tenantId, ct: ct);
-        var activeCount = sessions.Count(s => !s.EndedAt.HasValue);
-        
+        var tenant = await _tenantStore.GetByIdAsync(tenantId, ct)
+            ?? throw new KeyNotFoundException($"Tenant '{tenantId}' was not found.");
+        var activeCount = await _sessionStore.CountActiveAsync(tenantId, ct);
+        var agents = await _dynamicAgentRepository.GetAllAsync(ct);
         var stats = await _vectorStore.GetStatsAsync(tenantId, ct);
 
         return new TenantUsageSummary
         {
             TenantId = tenantId,
             ActiveSessions = activeCount,
+            ActiveAgents = agents.Count(),
             TotalDocuments = (int)stats.DocumentCount,
             StorageUsageBytes = stats.TotalBytes,
-            Limits = new TenantResourceLimits()
+            Limits = TenantResourceLimits.From(tenant.Limits)
         };
     }
 }

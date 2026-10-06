@@ -1,5 +1,188 @@
 # User Stories — Agentic System
 
+## BACK-REVIEW-139 — Corrigir os 32 achados do PR #132
+
+Como usuário e mantenedor do sistema multi-tenant, quero corrigir os defeitos confirmados na revisão integral, para operar autenticação, recursos e workflows com contratos coerentes e evidência verificável.
+
+[Epic #139](https://github.com/JonathanBenicio/Agent-System/issues/139) · [ADR-041](architecture/adr/041-pr132-review-remediation.md) · [Plano/matriz R01–R32](plan/pr132-review-remediation.md) · [Validação](backend/validation/pr132-review-remediation-2026-10-02.md).
+Status: em execução, implementação/validação pendentes salvo contribuição documental R30 em 169c3f8. Esta epic não fecha automaticamente escopos antigos nem promove Lab ao núcleo.
+
+### BACK-REVIEW-139-01 — Autorização OpenAI, sessão HttpOnly e preview seguro de skills
+Issue: [#140](https://github.com/JonathanBenicio/Agent-System/issues/140) · Achados: R02, R03, R20, R21.
+Critérios de aceite:
+- [ ] Authorization cru sem Bearer aplica tenant ativo, membership e papel; associação revogada/inativa é negada antes de executar.
+- [ ] Login usa cookie HttpOnly sem credencial em localStorage/headers persistidos; logout chama o backend e invalida autenticação cookie.
+- [ ] Preview de skill usa renderização Markdown segura; payload HTML/script/event handler não executa nem cria conteúdo ativo.
+- [ ] Regressões de login/logout/raw-key revogada e stored XSS exercitam os caminhos reais.
+
+
+### BACK-REVIEW-139-02 — Aplicar FIDES aos despachos de execução direta
+Issue: [#141](https://github.com/JonathanBenicio/Agent-System/issues/141) · Achados: R01.
+Critérios de aceite:
+- [ ] Chamada direta e roteamento simples inspecionam conteúdo antes do provider com a política do tenant.
+- [ ] Credenciais obrigatórias são redigidas; falha/timeout de proteção bloqueia despacho.
+- [ ] Não adicionar caminho paralelo nem promover Lab; testes com provider fake capturam o conteúdo realmente enviado.
+
+
+### BACK-REVIEW-139-03 — Limitar dimensões e memória de processamento ONNX
+Issue: [#142](https://github.com/JonathanBenicio/Agent-System/issues/142) · Achados: R04.
+Critérios de aceite:
+- [ ] Upload/update/test e worker validam dimensões, canais e cálculo de bytes com aritmética segura antes de alocar.
+- [ ] Limites configuráveis possuem padrão seguro e erro de validação claro; configurações/modelos válidos seguem funcionais.
+- [ ] Regressões rejeitam negativos, overflow e tamanhos acima do orçamento sem provocar OOM.
+
+
+### BACK-REVIEW-139-04 — Preservar isolamento e escrita autorizada de salas e agentes
+Issue: [#143](https://github.com/JonathanBenicio/Agent-System/issues/143) · Achados: R06, R07, R19, R23.
+Critérios de aceite:
+- [ ] Ingestão de sala exige Editor/Admin, incluindo suporte; Reader é negado antes de gravar.
+- [ ] Repositório dinâmico InMemory particiona por tenant; nomes iguais não colidem nem vazam/desativam outros tenants.
+- [ ] Filtro room_ids tem semântica compartilhada de lista permitida em InMemory/SQLite/Pinecone e PostgreSQL; vazio nega.
+- [ ] Drop/upload envia roomId distinto de source e chunks aparecem apenas na sala/tenant autorizados.
+
+
+### BACK-REVIEW-139-05 — Corrigir reset, cancelamento e teto uniforme de sessões
+Issue: [#144](https://github.com/JonathanBenicio/Agent-System/issues/144) · Achados: R08, R09, R10, R11.
+Critérios de aceite:
+- [ ] Quota InMemory faz reset diário determinístico, preservando isolamento; PostgreSQL mantém uso após restart.
+- [ ] Stream cancelado/falho registra consumo recebido e estimativa explícita quando provider não reporta uso, sem duplicação.
+- [ ] Contagem de sessões consulta todas as ativas; histórico encerrado recente não esconde ativas antigas.
+- [ ] Criação aplica teto em REST/SSE/SignalR/direct; continuação da sessão autorizada funciona no teto; concorrência não permite ultrapassar limite.
+
+
+### BACK-REVIEW-139-06 — Alinhar contratos, aprovação, paralelismo e scheduler de workflows
+Issue: [#145](https://github.com/JonathanBenicio/Agent-System/issues/145) · Achados: R12, R13, R14, R15, R16, R25.
+Critérios de aceite:
+- [ ] Tipos de step são estáveis e JSON/UI compartilham string enum; round-trip de todos os tipos preserva significado.
+- [ ] Aprovação/rejeição identifica step; duas aprovações paralelas podem ser decididas independentemente, com compatibilidade para uma pendente.
+- [ ] Outputs paralelos têm merge/sincronização segura; ciclos e dependências ausentes são rejeitados antes de salvar/executar.
+- [ ] Claim global requer SystemOperationContext interno; execução tenant-owned usa tenant real.
+- [ ] UI só confirma decisão após sucesso e preserva estado/mostra erro em 403/409/500/offline.
+
+
+### BACK-REVIEW-139-07 — Preservar lifetime do DbContext em ferramentas de analytics
+Issue: [#146](https://github.com/JonathanBenicio/Agent-System/issues/146) · Achados: R17.
+Critérios de aceite:
+- [ ] Scope/DbContext permanecem vivos até finalizar consultas de custos/performance/sessões/workflows.
+- [ ] Teste com provider DI real de escopo detecta descarte prematuro; tenant não pode consultar dados de outro.
+- [ ] Cancelamento e erro encerram scope corretamente sem vazamentos.
+
+
+### BACK-REVIEW-139-08 — Particionar cache de contexto pela consulta e filtros
+Issue: [#147](https://github.com/JonathanBenicio/Agent-System/issues/147) · Achados: R18.
+Critérios de aceite:
+- [ ] Perguntas distintas do mesmo usuário/tenant não reutilizam resposta específica da primeira consulta.
+- [ ] Cache inclui consulta normalizada/filtros pertinentes ou evita cache de contexto específico; isolamento usuário/tenant preservado.
+- [ ] Regressões cobrem resultado vazio seguido de matches e perguntas não relacionadas.
+
+
+### BACK-REVIEW-139-09 — Alinhar rotas de tools e round-trip de manifestos YAML
+Issue: [#148](https://github.com/JonathanBenicio/Agent-System/issues/148) · Achados: R22, R24.
+Critérios de aceite:
+- [ ] UI/SDK/API concordam em /api/agent/tools list/get/delete/execute e auth/tenant permanecem obrigatórios.
+- [ ] Template e serializer visual geram metadata/instructions válidos para o DTO, com rota save-yaml real.
+- [ ] Alternar visual/YAML e salvar/reabrir preserva campos; testes validam manifesto oficial e rotas.
+
+
+### BACK-REVIEW-139-10 — Executar CI/E2E nos contratos atuais e isolar diagnósticos Compose
+Issue: [#149](https://github.com/JonathanBenicio/Agent-System/issues/149) · Achados: R05, R26, R27, R28, R31.
+Critérios de aceite:
+- [ ] Workflow roda para develop e branch integration de #132; job Playwright inicia frontend e aguarda servidor.
+- [ ] Mocks usam /api/chat/configuration e content/agentName; teste XSS confirma renderização antes da ausência de execução.
+- [ ] Teste timeout usa política atual/controlável e verifica recuperação; Cypress inicia/usa servidor frontend correto.
+- [ ] Scripts SQL recebem nome de projeto Compose da execução, nunca consultam stack/banco não relacionado.
+- [ ] Lint/build/Playwright/Cypress e diagnóstico de isolamento passam; falhas não são convertidas em sucesso.
+
+
+### BACK-REVIEW-139-11 — Unificar IDs de stories e regras de commits e conclusão
+Issue: [#150](https://github.com/JonathanBenicio/Agent-System/issues/150) · Achados: R29, R30.
+Critérios de aceite:
+- [ ] Cada story tem ID único e todas as referências ADR/plano/índices apontam ao significado correto.
+- [ ] GEMINI/AGENTS/templates concordam Refs para parcial e Closes apenas critérios completos intencionais.
+- [ ] Planos/ADRs/docs normativos refletem contratos corrigidos e evidência real; histórico não é apresentado como validação atual.
+- [ ] Estado das issues antigas é confrontado com critérios completos; não fechar por subconjunto.
+
+
+### BACK-REVIEW-139-12 — Corrigir conclusão de tasks do schema opcional DurableTask
+Issue: [#151](https://github.com/JonathanBenicio/Agent-System/issues/151) · Achados: R32.
+Critérios de aceite:
+- [ ] PostgreSQL16 executa dt.complete_tasks para lote0/1/2+ sem DISTINCT+FOR UPDATE inválido e sem ROW_COUNT agregado incorreto.
+- [ ] Probe transacional valida deleção/conclusão atômica e concorrência/retry conforme contrato; erro não publica resultado parcial.
+- [ ] Instalação limpa aplica migrations e cria tabelas/modelo corretos; engine padrão permanece dinâmico e DurableTask opcional.
+- [ ] Se correção exigir nova migration, manter cadeia explícita e has-pending-model-changes limpo.
+
+## BACK-FIX-111–117 — Núcleo seguro e operacional
+Como usuário de um tenant, quero executar conversas e consumir recursos autorizados sem acesso cruzado ou falhas de persistência, para operar o núcleo com isolamento e contabilização confiáveis.
+
+Issues: [#111](https://github.com/JonathanBenicio/Agent-System/issues/111)–[#117](https://github.com/JonathanBenicio/Agent-System/issues/117) • [ADR-035](architecture/adr/035-backend-core-isolation-and-reliability.md) • [Plano](plan/backend-core-remediation.md) • [Validação](backend/validation/backend-core-remediation.md). Status: cenários funcionais validados; release ainda depende do gate de cobertura e dos limites descritos no relatório.
+
+- BACK-FIX-111: chave Viewer conserva Viewer e não muda tenant sem vínculo/concessão; Admin legado permanece scoped.
+- BACK-FIX-112: header/query/claim seguem a mesma política; tenants desconhecidos/inativos são negados; eventos dos cinco hubs permanecem no tenant autorizado; Gateway global exige Platform Admin.
+- BACK-FIX-113: RAG vazio nega, SQL funciona no PostgreSQL real e sala permitida é encontrada mesmo com mais de 55 candidatos proibidos.
+- BACK-FIX-114: chat REST/SSE/SignalR gera conteúdo/sessionId, retoma somente para o dono e persiste após restart com isolamento MAF configurado.
+- BACK-FIX-115: incrementos confirmados não se perdem sob concorrência; consumo real de tokens/custo é persistido e volta a ser bloqueado após restart; janela RPM é local ao processo.
+- BACK-FIX-116: dois tenants têm defaults completos e isolados após restart; seeding concorrente/idempotente conserva IDs e customizações antigas.
+- BACK-FIX-117: memberships por tenant aplicam papéis independentes; Platform Admin não tem conteúdo implícito; suporte expira/revoga com auditoria; gateway global exige Platform Admin; planos limitam quotas e recursos, ACL de sala sempre obrigatória.
+
+Evidência unitária não substitui integração; critérios falhos/não executados permanecem abertos.
+
+## BACK-MAF-120 — MAF atualizado e providers integrados ao Gateway
+
+Como mantenedor do backend multi-tenant, quero atualizar o Microsoft Agent Framework com compatibilidade comprovada e encaminhar providers ativos pelo Gateway, para que o runtime de produção tenha execução e telemetria reais sob os controles existentes.
+
+Issue: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [Plano](plan/maf-122-protocols-gateway.md).
+Status: MAF 1.22 e store global implementados; Gateway parcial no PR #132. A configuração de produção, streaming e reload entre processos seguem em #133. O relatório de 2026-09-29 registra 755 aprovados/1 skip naquele snapshot; a suíte consolidada do PR #132 registrou 771 aprovados/16 ignorados. PostgreSQL validou store global/NOTIFY e dois LLMManagers/Gateways fizeram inferência Ollama no mesmo processo. Sessão MAF foi reaberta após reinício real da API e Wait recuperado após encerramento forçado. Banner gerou arquivo com client determinístico e skills reais; inferência vision/editor ainda não foi executada. Handler externo precisa deduplicar após crash. A2A/AG-UI preview está separado em #121. [Evidência](backend/validation/maf-122-workflow-runtime-2026-09-29.md).
+
+- Dada sessão pertencente a usuário/tenant, quando criada, serializada, retomada ou restaurada após restart, então seu owner, tenant, ID e estado MAF permanecem iguais; identidade de outro tenant recebe negação sem dados.
+- Dado provider de infraestrutura habilitado na configuração do host, quando a aplicação inicia e chama o modelo, então ele aparece no Gateway e chamadas completas/streaming atualizam status/circuito/limite; provider desabilitado não é registrado.
+- Dada API key BYOK pertencente a um tenant, quando esse tenant escolhe o provider, então sua rota e quota por tenant permanecem isoladas, sem compartilhar circuit/rate state global via Gateway.
+- Dado Platform Admin que atualiza provider global, quando dois tenants usam o runtime após restart ou em nós diferentes, então ambos veem os mesmos limites/modelos/chave global cifrada; mudança fica auditada pelo ator e a API retorna apenas presença da credencial.
+- Dado tenant com configuração BYOK existente, quando a configuração global é alterada, então o valor legado continua tenant-scoped e não é promovido nem sobrescrito; a chamada usa credencial do tenant antes da global.
+- Dado falha/cancelamento durante stream, quando ocorre, então recursos são liberados, falha é contabilizada e fallback só é usado antes de conteúdo ter sido entregue; quotas persistidas por tenant continuam aplicadas.
+- Dada mudança de pacote/API MAF ou migration explícita do store global, quando build/testes/EF são executados, então incompatibilidade é corrigida sem migrar dados tenant para globais, ou fica registrada como bloqueio verificável.
+- Dado workflow dinâmico compilado por tenant/request no modo PostgreSQL, quando iniciado, então existe um worker compatível e todas as instâncias conhecem a mesma versão da definição; caso contrário, o backend não deve retornar uma execução pendente como se a tivesse enfileirado com sucesso.
+
+## BACK-ORCH-122 — Orquestrar agentes dinamicos pelo supervisor MAF
+
+Como usuário da plataforma de agentes personalizáveis, quero que o orquestrador identifique e delegue a solicitação aos especialistas ativos configurados para meu tenant, para receber resposta consolidada sem perder o estado das sessões.
+
+Issue: [#122](https://github.com/JonathanBenicio/Agent-System/issues/122) · [ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md) · [Plano separado](plan/dynamic-orchestrator-implementation.md). Dependência: API de sessões MAF 1.22 em [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
+Status: implementação do caminho supervisor-com-tools incluída parcialmente no PR #132; #134 acompanha os gaps de catálogo/fingerprint e retomada entre processos. Regressões cobrem multi-tool, binding, identidade, catálogo, persistência seletiva de sessões e cache tenant-scoped. A sessão MAF do supervisor foi reaberta após reinício real da API; isso não prova retomada de sessões de especialistas entre hosts/processos. O relatório de 2026-09-29 registra 755 aprovados/1 skip naquele snapshot; a suíte consolidada do PR #132 registrou 771 aprovados/16 ignorados.
+
+- Dada lista de specialists com bindings válidos, quando o modo “Intelligent Router” recebe input, então `ChatClientAgent` do MAF pode invocar um ou mais `AIFunction`s correspondentes e consolidar resposta útil.
+- Dado agente ativo cuja tool/binding falhou ou agente inativo, quando o prompt supervisor é construído, então ele não é apresentado como candidato delegável.
+- Dada alteração de descrição/domínio/tier/tools no catálogo, quando o próximo request constrói supervisor, então a instrução/cache reflete a nova configuração sem restart.
+- Dada execução com delegação, quando termina, então a sessão MAF do supervisor e de cada specialist invocado é persistida com partição tenant+usuário e retomável após restart.
+- Dada chamada direta por `targetAgent`, quando executada, então continua bypassando o orquestrador; respostas SignalR/REST continuam informando `agentName` real e `sessionId`.
+- Dada execução sem especialista aplicável, quando o supervisor não delega, então a resposta direta continua válida; quota, erro e cancelamento não produzem sucesso vazio.
+
+## BACK-PROTO-121 — Validar A2A e AG-UI sob hosting preview
+
+Como integrador de protocolos, quero validar A2A e AG-UI de ponta a ponta depois da atualização do core MAF, para saber se autenticação, tenant, sessão e streaming funcionam antes de tratar esses endpoints preview como suportados.
+
+Issue: [#121](https://github.com/JonathanBenicio/Agent-System/issues/121) · [ADR-037](architecture/adr/037-a2a-agui-preview-validation.md) · [Plano](plan/a2a-agui-preview-validation.md). Dependência: [#120](https://github.com/JonathanBenicio/Agent-System/issues/120).
+Status: planejada; prioridade secundária, não bloqueia MAF core/Gateway.
+
+- Dado hosting preview compatível com o core atualizado, quando a flag habilita A2A/AG-UI, então endpoint e contrato básico iniciam no host de validação.
+- Dada identidade sem auth, tenant desconhecido/inativo ou sem membership, quando invoca qualquer protocolo, então a chamada é negada sem emitir conteúdo.
+- Dada sessão em tenant A, quando identidade de tenant B tenta criar/retomar ou subscrever stream, então recebe negação sem conteúdo de A.
+- Dada execução válida em cada protocolo, quando resposta ou stream ocorre e é cancelado, então formato esperado chega ao solicitante e recursos são encerrados.
+- Dada evidência com modelo local, fixture, skip ou indisponibilidade externa, quando registrada, então cada categoria fica distinguida e nenhuma é descrita como validação mais ampla.
+
+## BACK-DOC-001 — Contratos claros e validação do núcleo
+
+Como mantenedor, quero contratos rastreáveis de endpoints, acesso e recursos, para distinguir funcionalidades comprovadas de lacunas.
+
+Issue: [#110](https://github.com/JonathanBenicio/Agent-System/issues/110) • ADR: [034](architecture/adr/034-backend-contracts-and-access-target.md) • Plano: [execução](plan/backend-documentation-validation.md).
+Status: documentação e diagnóstico entregues; falhas de produto no [backlog](backend/backlog.md). Evidência: [relatório](backend/validation/2026-09-28.md).
+
+- Dado o código da baseline, quando consultar o hub, então encontrar rotas e fontes, regras atuais, alvo desejado e limites de validação.
+- Dado dois tenants e usuários sem ACL, quando executar diagnóstico, então registrar aprovação ou reprodução de vazamento/negação incorreta sem alterar produção.
+- Dado falha ou cenário não executado, quando entregar o PR, então informar resultado e backlog sem declarar estabilidade.
+- Dado nova iniciativa, quando usar templates, então obter issue → ADR → story → plano → commits → PR e evidências adequadas.
+
+IDs novos usam domínio e número únicos; IDs históricos duplicados permanecem como legado, sem renumeração destrutiva.
+
 > Catálogo consolidado de User Stories do backend (.NET 10, runtime framework-first hospedado) e frontend (React 19).
 > Gerado via pipeline Spec→Code em maio/2026.
 
@@ -62,24 +245,22 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 
 ### Intelligence (ML3–ML5)
 
-#### ML3 — Task Planning
+#### ML3 — Task Planning & Native Workflow Orchestration
 
 **Como** usuário que faz solicitações complexas,
-**quero** que o sistema decomponha minha tarefa em etapas executáveis,
-**para que** tarefas multi-step sejam rastreadas e executadas com controle.
+**quero** que o sistema orquestre tarefas usando os workflows nativos do MAF 1.6+,
+**para que** tarefas multi-step sejam executadas de forma padrão e observável.
 
 | Item | Detalhe |
 |------|---------|
-| Serviço | `ITaskPlanManager` |
-| Responsabilidade | Criação de planos com steps, avanço/falha de etapas, pausa e cancelamento |
+| Serviço | `ITaskPlanManager` / `WorkflowBuilder` Nativo |
+| Responsabilidade | Criação de planos e roteamento entre agentes usando primitivas nativas (`Microsoft.Agents.AI.Workflows`) |
 | Testes | Unitários (xUnit) |
-| Status | ✅ Implementado |
+| Status | ✅ Em Migração (MAF Nativo) |
 
 **Critérios de Aceite:**
-- [x] Plano é criado com N steps ordenados
-- [x] Cada step pode ser avançado, pausado ou falhado individualmente
-- [x] Status do plano reflete progresso (InProgress, Completed, Failed, Cancelled)
-- [x] Histórico de execução é persistido por sessão
+- [x] O workflow deve ser instanciado via `Microsoft.Agents.AI.Workflows.WorkflowBuilder`.
+- [x] Estados de transição e roteamento são manipulados via `RouteBuilder` e `WorkflowSession`.
 
 ---
 
@@ -145,6 +326,8 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 - [x] Layer 1 (LLM): Realiza triagem profunda e decomposição de tarefas para consultas complexas
 - [x] Roteamento para `DotNetExpertAgent` quando detectado domínio técnico de backend
 - [x] Resiliência: se o modelo local falhar, o sistema faz fallback gracioso para LLM
+
+Este aceite também cobre a referência de #16 ao especialista `DotNetExpertAgent`; a classe e o roteamento estão implementados/testados. Uma função nova de triagem de propostas de auto-melhoria pelo agente exigiria aceite separado.
 
 ---
 
@@ -410,20 +593,21 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 
 ---
 
-#### ML17 — IChatClient Compatibility Layer
+#### ML17 — IChatClient Compatibility & Native MAF Integration
 
 **Como** integrador de LLM providers,
-**quero** bridge automático entre `IChatClient` (M.E.AI) e `ILLMProvider`,
-**para que** qualquer `IChatClient` seja utilizável sem código adicional.
+**quero** utilizar os clientes nativos do Microsoft Agent Framework (`Microsoft.Agents.AI.OpenAI`),
+**para que** a comunicação com o LLM possua telemetria oficial e binding otimizado de ferramentas.
 
 | Item | Detalhe |
 |------|---------|
-| Serviço | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` |
-| Responsabilidade | Seleção dinâmica de provider/modelo no runtime e compatibilidade entre `IChatClient` e `ILLMProvider` quando necessária |
+| Serviço | `LLMManager` + `ContextAwareChatClient` + `ProviderBackedChatClient` (Legado) / Clientes MAF Nativos |
+| Responsabilidade | Seleção dinâmica de provider/modelo no runtime e interoperabilidade nativa com MAF 1.6+ |
 | Testes | Unitários (xUnit) |
-| Status | ✅ Implementado |
+| Status | ✅ Em Migração (MAF Nativo) |
 
 **Critérios de Aceite:**
+- [x] O pipeline principal deve instanciar LLMs utilizando bibliotecas oficiais (`Microsoft.Agents.AI.OpenAI`).
 - [x] `ContextAwareChatClient` resolve provider/modelo a partir do contexto runtime atual
 - [x] `LLMManager` mantém catálogo administrativo e registro de chat clients por provider
 - [x] `ProviderBackedChatClient` oferece compatibilidade reversa quando um fluxo precisa expor `ILLMProvider` como `IChatClient`
@@ -474,14 +658,42 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 - [x] `TenantContext` propagado por middleware a todo pipeline
 - [x] Store in-memory (default) com interface para persistência
 - [x] Sessões, preferências e agents isolados por tenant
-- [x] Request sem tenant → default tenant ou rejeição (configurável)
+- [x] Rotas autenticadas que acessam dados de tenant sem tenant explícito são rejeitadas; rotas públicas/isentas seguem sua política documentada
 - [x] `JwtTenantAuthenticationHandler : AuthenticationHandler<JwtTenantAuthenticationOptions>` — autenticação JWT com extração automática de tenant
 - [x] `TenantMiddleware` — intercepta toda request, resolve tenant e popula `TenantContext`
-- [x] `TenantResolver : ITenantResolver` — lógica de resolução: JWT claim → header → default
+- [x] `TenantResolver : ITenantResolver` — resolve tenant explícito; runtime não usa `default` como fallback
 - [x] `Tenant` persistido via EF Core com `TenantConfiguration : IEntityTypeConfiguration<Tenant>`
 - [x] `TenantLimits` — rate limiting e quotas por tenant (requests, tokens, storage)
 
 ---
+
+#### ML19.1 — Auto-Bootstrap e Remoção do Tenant Default
+
+**Como** arquiteto do sistema,  
+**quero** que a plataforma gerencie credenciais dinamicamente via banco de dados e só provisione o tenant inicial quando a chave de bootstrap estiver configurada explicitamente,
+**para que** o fallback inseguro "default" seja eliminado e haja isolamento multi-tenant real e estrito.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços | `SystemBootstrapService` · `ApiKeyAuthenticationHandler` · `TenantMiddleware` |
+| Responsabilidade | Auto-bootstrap de tenant/chaves no startup, validação de chaves hashed SHA-256 e remoção de referências hardcoded a "default" |
+| Testes | Unitários (xUnit) e Integração/E2E |
+| Status | Implementado e validado na branch integrada do PR #132; a issue aguarda merge para `develop` |
+
+**Critérios de Aceite:**
+- [x] Banco vazio com `AgenticSystem:AdminApiKey` explícita cria o tenant `admin`, hash da chave e membership; tenant já provisionado não recebe outra chave.
+- [x] Banco vazio sem a configuração inicia sem tenant ou credencial; operações tenant-owned ficam bloqueadas até provisionamento explícito.
+- [x] Chaves persistidas são localizadas pelo hash e resolvidas ao tenant e papel de membership associados.
+- [x] Requisições protegidas sem tenant explícito ou com tenant desconhecido/inativo são rejeitadas; rotas públicas seguem as exceções documentadas.
+- [x] Bootstrap não semeia agentes de produto nem cria Platform Admin; fallback `default` foi removido do runtime coberto pela implementação.
+- [x] `default`, `platform`, `system-background` e `system-devui` não são resolvidos nem aceitos como tenant por header, claim ou store.
+- [x] Operações globais/background usam contexto de sistema tipado; nenhum registro tenant-owned é gravado sob identificador sintético.
+- [x] Quotas/catálogos/outbox/alertas de plataforma ficam em stores globais; dados BYOK/alerts/outbox tenant-owned são lidos e gravados sob o tenant corrente.
+- [x] Jobs multi-tenant enumeram tenants provisionados e processam dados tenant-owned sob o contexto real de cada tenant.
+- [x] A migration move catálogos, quotas e eventos antigos `platform`/`system-background` para stores globais e preserva eventos associados a um tenant real.
+
+---
+
 
 ### Infraestrutura Transversal (Backend)
 
@@ -582,8 +794,8 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 | Status | ✅ Implementado |
 
 **Critérios de Aceite:**
-- [x] ApiKey handler valida contra `AgenticSystem:AdminApiKey` com comparação timing-safe
-- [x] ApiKey gera claims: Name=admin, Role=Admin, tenant_id=default
+- [x] API key é validada pelo hash persistido em `access_api_keys` e pela membership; `AgenticSystem:AdminApiKey` é apenas o segredo explícito do bootstrap inicial
+- [x] API key usa tenant e papel armazenados no banco/membership; o bootstrap configurado associa a chave ao tenant `admin`, sem claim/fallback `default`
 - [x] JWT handler valida signing key, issuer, audience e lifetime
 - [x] JWT exige claim `tenant_id` — rejeita token sem ele
 - [x] PolicyScheme `MultiAuth` roteia automaticamente pelo header presente
@@ -602,7 +814,7 @@ As capacidades abaixo compõem a baseline unificada do Agentic System. O modelo 
 | Middleware | `TenantMiddleware` |
 | Diretório | `Api/Middleware/` |
 | DI | `TenantContext` (scoped) · `ITenantResolver` · `ITenantStore` |
-| Resolução | 1º JWT claim `tenant_id` → 2º header `X-Tenant-Id` → fallback "default" |
+| Resolução | `X-Tenant-Id` ou claim JWT `tenant_id` explícitos, com validação de correspondência e existência; sem fallback `default` em rotas protegidas |
 | Contexto | `TenantContext.TenantId`, `.TenantName`, `.Plan`, `.Limits`, `.IsAuthenticated` |
 | Status | ✅ Implementado |
 
@@ -1208,55 +1420,88 @@ TriggerEngine.EvaluateAsync(rule)
 |------|---------|
 | Serviços | `LocalOnnxCrossEncoderReRankerProvider` |
 | Responsabilidade | Re-ranqueamento de chunks recuperados via modelo ONNX local |
-| Status | ⏳ Planejado |
-
-**Critérios de Aceite:**
-- [ ] Carregamento do modelo ONNX e vocabulário na inicialização.
-- [ ] Processamento de pares (query, chunk) para atribuição de score de relevância.
-- [ ] Filtragem e reordenação dos Top-K resultados antes de passar para o gerador.
-
----
-
-#### ML39 — FinOps & Auto-Melhoria
-
-**Como** administrador do sistema,
-**quero** cotas proativas de uso de LLM e processamento em batch para auto-melhoria,
-**para que** os custos sejam controlados e o sistema aprenda sem impactar a latência das respostas em tempo real.
-
-| Item | Detalhe |
-|------|---------|
-| Serviços | `ProactiveQuotaManager` · `SelfImprovementService` |
-| Responsabilidade | Controle de custos e limites de tokens; execução assíncrona de rotinas de auto-melhoria |
-| Status | ⏳ Planejado |
-
-**Critérios de Aceite:**
-- [ ] Bloqueio de requisições que excedam a quota diária de tokens/custo.
-- [ ] Processamento diário de reflexões em background (Hosted Service).
-- [ ] Aplicação automática de melhorias com confiança acima do threshold.
-
----
-
-#### ML40 — Smart Triage & Fast Path
-
-**Como** orquestrador de alta performance,
-**quero** uma pipeline de triage em 3 camadas (Regex → ML.NET → LLM),
-**para que** solicitações simples sejam resolvidas com latência ultra-baixa (Fast Path) e sem custo de LLM.
-
-| Item | Detalhe |
-|------|---------|
-| Serviços | `SmartRouter` · `MlFastPathInterceptor` · `RegexInterceptor` |
-| Responsabilidade | Classificação de intenção em multi-camadas e curto-circuito de execução |
-| Testes | Unitários (xUnit) + Benchmarking de latência |
 | Status | ✅ Implementado |
 
 **Critérios de Aceite:**
-- [x] Camada 1 (Regex): Intercepta saudações e comandos fixos em < 1ms
-- [x] Camada 2 (ML.NET): Classifica intenções comuns via modelo local em < 10ms
-- [x] Camada 3 (LLM): Somente ativada se as camadas anteriores não atingirem confiança mínima
-- [x] Fast Path: Retorna resposta pré-definida ou via template sem invocar agentes pesados
-- [x] Otimização: Redução de ~40% no consumo de tokens em interações triviais
+- [x] Carregamento do modelo ONNX e vocabulário na inicialização.
+- [x] Processamento de pares (query, chunk) para atribuição de score de relevância.
+- [x] Filtragem e reordenação dos Top-K resultados antes de passar para o gerador.
 
 ---
+
+#### ML39 — FinOps & Auto-Melhoria (índice de escopo)
+
+Issue [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) · decisão de aprovação humana: [ADR-040](architecture/adr/040-self-improvement-human-approval.md) · [especificação/status](plan/open-issues-specification-audit-2026-09-29.md#issue-16).
+
+ML39 foi decomposta para separar implementação atual de trabalho futuro:
+- **ML40 — Forecast proativo de quotas LLM:** pendente, [issue #135](https://github.com/JonathanBenicio/Agent-System/issues/135) e [plano](plan/proactive-llm-quota-forecast.md).
+- **BACK-ML39-BATCH — Propostas batch de auto-melhoria:** implementado na pilha do PR #132; reflexões críticas tenant-scoped geram propostas persistidas, sem aplicação por confidence; Owner/Admin aprova/rejeita, com auditoria, versionamento e rollback. Ver [ADR-040](architecture/adr/040-self-improvement-human-approval.md).
+- **DotNetExpertAgent:** classe/roteamento existente e coberto em ML35. Não criar issue duplicada enquanto não houver aceite específico para outra função.
+
+**Status de ML39:** Parcial; a previsão de quota continua planejada em ML40. As quotas rígidas continuam sendo a autoridade de bloqueio.
+
+#### ML40 — Forecast proativo de quotas LLM
+
+Issue [#135](https://github.com/JonathanBenicio/Agent-System/issues/135) · parent de origem: [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) · ADR de referência: [ADR-008](architecture/adr/008-quota-monitoring-finops.md) · [plano](plan/proactive-llm-quota-forecast.md).
+
+**Como** Owner/Admin de um tenant,
+**quero** prever o ritmo de consumo e receber alertas tenant-scoped antes do esgotamento da quota,
+**para que** eu possa ajustar o uso sem depender de uma estimativa escondida ou cruzar dados de outros tenants.
+
+| Item | Detalhe |
+|------|---------|
+| Serviços atuais | `QuotaEnforcer` · `ExternalQuotaSyncService` |
+| Lacuna | Existe enforcement rígido/sincronização externa; ainda não há forecast de consumo ou ETA confiável |
+| Status | ⏳ Planejado; janela, horizonte, confiança e canal serão especificados antes da implementação |
+
+**Critérios de Aceite:**
+- [ ] Contrato expõe consumo observado, quota efetiva, janela/horizonte e previsão ou estado de dados insuficientes.
+- [ ] Plano é teto; quota configurada mais restritiva continua prevalecendo.
+- [ ] Previsões/alertas não bloqueiam chamadas nem expõem dados de outro tenant.
+- [ ] Validação cobre histórico insuficiente, virada de janela, mudança de quota e isolamento tenant.
+
+#### BACK-ML39-BATCH — Propostas batch de auto-melhoria
+
+Issue parent [#16](https://github.com/JonathanBenicio/Agent-System/issues/16) · [ADR-040](architecture/adr/040-self-improvement-human-approval.md) · implementação no PR #132.
+
+**Como** Owner/Admin de um tenant,
+**quero** que reflexões críticas sejam analisadas em background e gerem propostas revisáveis,
+**para que** a melhoria não atrase requisições interativas e nenhuma instrução seja aplicada sem aprovação humana.
+
+| Item | Detalhe |
+|------|---------|
+| Serviço | `SelfImprovementBackgroundJob` · `SelfImprovementService` · `ISelfImprovementProposalStore` |
+| Status | ✅ Implementado na pilha #132; aguarda merge/revisão da consolidação |
+
+**Critérios de Aceite:**
+- [x] Job processa reflexões novas de forma periódica por tenant e persiste propostas.
+- [x] `confidence` nunca aplica proposta automaticamente.
+- [x] Owner/Admin aprova ou rejeita; decisão é auditada, versionada e pode ser revertida.
+
+---
+
+
+### Follow-ups de validação do PR #132
+
+#### BACK-MAF-133 — Provider global na composição Gateway de produção
+
+Issue [#133](https://github.com/JonathanBenicio/Agent-System/issues/133), follow-up de #120 · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [plano](plan/maf-gateway-production-validation.md).
+
+**Como** operador da plataforma,
+**quero** comprovar que a configuração global de providers chega ao Gateway na composição normal da API,
+**para que** um registro validado apenas no ambiente `Validation` não seja confundido com integração de produção.
+
+**Critérios:** provider habilitado/desabilitado correto; geração e streaming pelo Gateway usando stub local; NOTIFY entre dois hosts; BYOK/quota tenant-scoped; relatório distingue stub de provider externo real.
+
+#### BACK-ORCH-134 — Retomar supervisor e especialistas após restart
+
+Issue [#134](https://github.com/JonathanBenicio/Agent-System/issues/134), follow-up de #122 · [ADR-038](architecture/adr/038-dynamic-supervisor-orchestrator.md) · [plano](plan/dynamic-supervisor-session-recovery.md).
+
+**Como** tenant Owner/Admin,
+**quero** que a conversa supervisionada preserve as sessões do supervisor e dos especialistas efetivamente chamados após restart,
+**para que** a recuperação mantenha tenant/usuário e estado da execução sem promessas de exactly-once para efeitos externos.
+
+**Critérios:** catálogo/fingerprint dinâmicos sem restart; retomada em processo recriado; negação cross-tenant/user; erros/quota/cancelamento explícitos; idempotência/compensação documentada quando houver efeito externo.
 
 ## Backend — Resumo de Cobertura
 
@@ -1275,9 +1520,9 @@ TriggerEngine.EvaluateAsync(rule)
 | Vision | ML26 | 1 | ✅ |
 | MCP & Extensibility | ML27–ML28 | 3 | ✅ |
 | Agent Runtime Platform | ML29–ML34 | 6 | ✅ |
-| Advanced Capabilities | ML35–ML40 | 6 | ⏳ |
+| Advanced Capabilities | ML35–ML40 | 3 implementados + ML40 planejado | Parcial |
 | Transversal | T1–T10 | 10 | ✅ |
-| **Total** | **40 MLs + 10 Transversais** | **60 serviços** | **549+ testes** |
+| **Total** | **40 MLs + 10 Transversais** | **57 serviços** | **771 passaram, 16 ignorados na validação da integração #132** |
 
 ---
 
@@ -1360,6 +1605,66 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 - [x] ID de sessão gerado com `crypto.randomUUID()` (fallback seguro)
 - [x] Sessão persistida via API `/api/sessions`
 - [x] Histórico de mensagens por sessão
+
+---
+
+#### US-11 — Ingestão RAG via Drag and Drop de arquivos
+
+**Como** analista de conhecimento,
+**quero** arrastar e soltar arquivos na área de chat,
+**para que** eles sejam processados e indexados instantaneamente no Vector Store (da sessão ou de uma sala ativa).
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `ChatPage` · `ragApi` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Overlay visual (backdrop blur) com mensagem "Ingestão RAG Contextual" ao arrastar arquivos sobre o chat.
+- [x] Spinner "Processando Documentos" bloqueia interações temporariamente durante a ingestão.
+- [x] Roteamento de contexto de destino para a Sala de Conhecimento ativa ou para a Sessão temporária.
+- [x] Exibe feedback visual via Toast de sucesso/erro e adiciona mensagem especial de sistema informando o status da indexação.
+
+---
+
+#### US-12 — Rastreabilidade e Citações de Fontes RAG
+
+**Como** usuário exigente,
+**quero** auditar as fontes e trechos de documentos que embasaram a resposta do agente,
+**para que** eu possa evitar alucinações e verificar a exatidão das respostas.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `MessageBubble` (citations) |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Seção "Fontes (n)" com ícone de livro em respostas baseadas em RAG.
+- [x] Exibição de pílulas bibliográficas resumindo o nome do documento.
+- [x] Popover interativo exibido ao clicar na pílula da citação.
+- [x] Popup contendo o trecho exato citado (`relevantExcerpt`), porcentagem de confiança e página do documento original.
+
+---
+
+#### US-13 — Visualização de Workflows, Ações e Metadados
+
+**Como** operador de sistema,
+**quero** monitorar a execução de fluxos, ferramentas e metadados diretamente no fluxo do chat,
+**para que** eu compreenda a tomada de decisões e a orquestração do agente.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `MessageBubble` · `WorkflowExecutionCard` |
+| Status | ✅ Implementado |
+
+**Critérios de Aceite:**
+- [x] Renderização inteligente do cartão interativo `WorkflowExecutionCard` quando a resposta do agente contiver `workflowExecutionId`.
+- [x] Badges visuais identificadores para ferramentas (`🔧 tool`) e ações executadas (`⚡ action`).
+- [x] Badge indicador de "Memória Recuperada" nas mensagens enviadas do usuário quando contextualizadas via memória episódica.
+- [x] Mensagens de sistema (erros/conexão) formatadas com borda avermelhada e ícone de perigo `AlertTriangle`.
+
+---
+
 
 ---
 
@@ -1916,7 +2221,11 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 | Workflow Orchestration | 2 | US-34, US-35 | 1 | ⏳ |
 | Webhooks Integration | 2 | US-36, US-37 | 1 | ⏳ |
 | Alerts History | 2 | US-38, US-39 | 1 | ⏳ |
-| **Total** | **40** | | **31 componentes** | **⏳** |
+| Specialized Context & Evolution | 4 | US-41 a US-44 | 1 | 🚧 |
+| Dynamic ONNX Inference Engine | 3 | US-45 a US-47 | 4 | ✅ |
+| Dynamic Customization & No-Code | 3 | US-48 a US-50 | 2 | ⏳ |
+| **Total** | **50** | | **38 componentes** | **⏳** |
+
 
 ---
 
@@ -2024,10 +2333,10 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Canvas interativo com suporte a drag and drop de nós e conexões
-- [ ] Tipos de nós suportados: Agent Node e Tool Node
-- [ ] Toolbar com ações de adicionar nós, salvar e executar
-- [ ] Painel de status do motor exibindo nós ativos e conexões
+- [x] Canvas interativo com suporte a drag and drop de nós e conexões
+- [x] Tipos de nós suportados: Agent Node e Tool Node
+- [x] Toolbar com ações de adicionar nós, salvar e executar
+- [x] Painel de status do motor exibindo nós ativos e conexões
 
 ---
 
@@ -2039,9 +2348,9 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Botão "Save Workflow" gera a definição do workflow (JSON) e envia para a API
-- [ ] Botão "Run" dispara a execução do workflow no backend
-- [ ] Feedback visual de salvamento e execução
+- [x] Botão "Save Workflow" gera a definição do workflow (JSON) e envia para a API
+- [x] Botão "Run" dispara a execução do workflow no backend
+- [x] Feedback visual de salvamento e execução
 
 ---
 
@@ -2053,10 +2362,10 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Lista de webhooks com nome, status (Ativo/Inativo), data de criação e último disparo
-- [ ] Formulário para criar webhook com nome, agente alvo (opcional) e workflow alvo (opcional)
-- [ ] Ação de excluir webhook com confirmação
-- [ ] Copiar URL do webhook para a área de transferência
+- [x] Lista de webhooks com nome, status (Ativo/Inativo), data de criação e último disparo
+- [x] Formulário para criar webhook com nome, agente alvo (opcional) e workflow alvo (opcional)
+- [x] Ação de excluir webhook com confirmação
+- [x] Copiar URL do webhook para a área de transferência
 
 ---
 
@@ -2068,9 +2377,9 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Endpoint `/api/webhooks/receive/{id}` recebe requisições POST
-- [ ] Execução é encaminhada para o agente ou workflow configurado
-- [ ] Retorno de sucesso ou erro apropriado para o chamador
+- [x] Endpoint `/api/webhooks/receive/{id}` recebe requisições POST
+- [x] Execução é encaminhada para o agente ou workflow configurado
+- [x] Retorno de sucesso ou erro apropriado para o chamador
 
 ---
 
@@ -2082,9 +2391,9 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Lista de alertas exibindo provider, tipo, mensagem, percentual restante e data
-- [ ] Alertas não lidos destacados visualmente
-- [ ] Botão para atualizar a lista de alertas
+- [x] Lista de alertas exibindo provider, tipo, mensagem, percentual restante e data
+- [x] Alertas não lidos destacados visualmente
+- [x] Botão para atualizar a lista de alertas
 
 ---
 
@@ -2096,5 +2405,280 @@ Stack: **React 19 + TypeScript + Vite + Tailwind CSS + SignalR**
 
 ### Critérios de Aceite
 
-- [ ] Botão de check para marcar alerta como lido
-- [ ] Atualização do estado do alerta na interface sem recarregar a página
+- [x] Botão de check para marcar alerta como lido
+- [x] Atualização do estado do alerta na interface sem recarregar a página
+
+---
+
+### Épico 9: Specialized Context & Evolution (Roadmap Q2 2026)
+
+#### US-41 — Associar Agente a Knowledge Rooms
+
+**Como** administrador de segurança,
+**quero** selecionar quais Knowledge Rooms um agente pode acessar,
+**para que** o escopo de busca semântica seja restrito a contextos específicos e seguros.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `AgentFormModal` (seletor múltiplo) |
+| API | `PUT /api/agent/agents/{name}/rooms` |
+| Status | ✅ Implementado (ADR-019) |
+
+**Critérios de Aceite:**
+- [x] Lista de salas disponíveis carregada no modal de criação/edição de agente.
+- [x] Persistência da associação em tabela junction `AgentKnowledgeRoomAssignment`.
+- [x] O `KnowledgeSpecialist` filtra a busca vetorial automaticamente pelas salas associadas ao agente.
+
+---
+
+#### US-42 — Dashboard de FinOps e Previsão de Custos
+
+**Como** gestor financeiro,
+**quero** visualizar o consumo detalhado de tokens e custos por tenant/agente,
+**para que** eu possa prever gastos e ajustar quotas proativamente.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `FinOpsPage` (rota `/admin/finops`) |
+| API | `GET /api/admin/gateway/metrics/finops` |
+| Status | ⏳ Planejado (ADR-008) |
+
+**Critérios de Aceite:**
+- [ ] Gráficos de barra: Consumo por Provider (OpenAI, Gemini, Claude).
+- [ ] Tabela de Top-Agents por custo.
+- [ ] Alertas visuais quando um tenant atinge 80% da quota.
+
+---
+
+#### US-43 — Publicar Agentes via A2A/AgUI
+
+**Como** desenvolvedor de ecossistema,
+**quero** expor meus agentes internos via protocolos padronizados,
+**para que** eles possam ser consumidos por sistemas externos (ex: Copilot Studio).
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `ProtocolsPage` |
+| API | `GET /a2a` · `GET /agui` |
+| Status | ⏳ Planejado (ADR-020) |
+
+**Critérios de Aceite:**
+- [ ] Flag "Publicly Exportable" na configuração do agente.
+- [ ] Endpoint `/agui` retorna manifesto JSON válido do protocolo.
+- [ ] Logs de auditoria mostram chamadas originadas via protocolo.
+
+---
+
+#### US-44 — Executar Bateria de Avaliação de Qualidade
+
+**Como** arquiteto de prompts,
+**quero** rodar um Golden Set contra um agente após mudanças no sistema,
+**para que** eu valide scores de Relevância e Grounding (Grounding).
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `EvaluationPage` |
+| Engine | `Microsoft.Extensions.AI.Evaluation` |
+| Status | 🚧 CRUD backend implementado; interface e métricas pendentes (ADR-032) |
+
+**Critérios de Aceite:**
+- [ ] Upload/Edição de Golden Sets (Query vs Expected) na interface.
+- [ ] Relatório de comparação entre versões do agente.
+- [ ] Scores automáticos (0-1) para Grounding e Fluência.
+
+O backend oferece CRUD e execução de Golden Sets via REST. Esses endpoints não concluem, por si só, os critérios da interface e das métricas acima.
+
+---
+
+### Épico 10: Dynamic ONNX In-Process Inference Engine (Roadmap Q2 2026)
+
+#### US-45 — Upload e Gerenciamento Dinâmico de Modelos ONNX
+
+**Como** administrador do sistema,  
+**quero** fazer upload e configurar modelos ONNX pela interface web,  
+**para que** novas capacidades de IA local sejam incorporadas sem a necessidade de novos deploys de código C#.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `OnnxModelsPage` · `OnnxModelUploadModal` · `OnnxModelInspectModal` · `OnnxModelTestModal` |
+| API | `GET/POST/PUT/DELETE /api/onnx/models` · `POST /api/onnx/models/{id}/inspect` · `POST /api/onnx/models/{id}/test` |
+| Status | ✅ Implementado (ADR-010) |
+
+**Critérios de Aceite:**
+- [x] Interface de upload aceita o arquivo `.onnx` principal e opcionalmente o arquivo secundário de pesos (`.data` / `.bin`) para modelos split.
+- [x] Formulário de upload com validações para metadados de inferência (Input/Output Nodes, Width, Height, Channels, Scale Factor, Mean R/G/B, Output Format).
+- [x] Exibição de aviso visual claro e progresso de upload caso a soma dos arquivos exceda 50MB, indicando salvamento físico em disco.
+- [x] Rota de deleção física e lógica que limpa registros no PostgreSQL e diretórios físicos correspondentes no disco.
+- [x] Interface de testes rápidos (`TestModal`) que permite upload de imagem de teste local e exibe o resultado da inferência lado a lado com métricas de latência e shape.
+
+---
+
+#### US-46 — Execução Genérica via DynamicOnnxProcessorTool (ITool)
+
+**Como** construtor de workflows,  
+**quero** utilizar uma tool genérica do processador ONNX como bloco em meu fluxo,  
+**para que** eu possa aplicar inferências de IA em dados de imagem encadeados de forma transparente.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `DynamicOnnxProcessorTool` (`ITool`) · `WorkflowBuilder.tsx` (Properties Panel) |
+| API | SignalR `hubs/chat` · REST execution APIs |
+| Status | ✅ Implementado (ADR-010) |
+
+**Critérios de Aceite:**
+- [x] Registro correto da tool `onnx_processor` no `IToolManager` com a categoria `AI`.
+- [x] Properties Panel do Workflow Builder exibe dropdown populado dinamicamente com os modelos ONNX ativos ao selecionar o nó `onnx_processor`.
+- [x] A execução do processador decodifica a imagem base64 de entrada, realiza o pré-processamento de canais/normalização, cria a `InferenceSession`, executa a inferência e pós-processa o output de volta para base64.
+- [x] Tratamento de erros gracioso: falhas internas do runtime ONNX retornam uma descrição legível de erro no `ToolResult` em vez de crashar a thread.
+
+---
+
+#### US-47 — Isolamento Multi-Tenant e Segurança Físico-Lógica dos Modelos ONNX
+
+**Como** cliente/tenant da plataforma,  
+**quero** garantia absoluta de que meus modelos ONNX e arquivos de pesos carregados estão isolados física e logicamente,  
+**para que** meus ativos intelectuais e de dados nunca vazem para outros tenants.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `TenantMiddleware` · `AgenticDbContext` · `OnnxModelController` |
+| Segurança | Isolamento Físico e Lógico (T5, T7) |
+| Status | ✅ Implementado (ADR-010) |
+
+**Critérios de Aceite:**
+- [x] Aplicação de filtro global EF Core (`TenantId`) na entidade `CustomOnnxModelEntity`.
+- [x] Modelos armazenados fisicamente são salvos estritamente sob a estrutura `wwwroot/onnx-models/{tenantId}/{modelId}/` com nomes originais preservados.
+- [x] Resolução de arquivos secundários (`.data` / `.bin`) via path absoluto restrita estritamente ao diretório do respectivo `tenantId`, bloqueando acessos transversais de diretório (Directory Traversal).
+- [x] Validação no `DeleteModel` para impedir que um tenant delete arquivos pertencentes a outro através da manipulação do `modelId`.
+
+---
+
+### Épico 11: Dynamic Customization & No-Code Orchestration (Future Roadmap)
+
+#### US-48 — No-Code Skills (Dynamic Custom Skills via UI)
+
+**Como** construtor de agentes ou administrador do sistema,  
+**quero** criar, persistir de forma relacional e fiar dinamicamente Skills personalizadas diretamente pela interface de usuário (sem precisar codificar C#),  
+**para que** eu possa estender o comportamento dos agentes rapidamente usando instruções declarativas, parâmetros de inputs/outputs e prompts estruturados.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `CustomSkillsPage` · `SkillCreatorWizard` |
+| API / Serviço | `ICustomSkillManager` · `GET/POST/PUT/DELETE /api/skills/custom` |
+| Status | ⏳ Planejado (Future Roadmap) |
+
+**Critérios de Aceite:**
+- [ ] Interface visual para criação de Skills (Nome, Descrição, System Prompt/Instruções e Variáveis de Entrada/Saída).
+- [ ] Persistência relacional em banco de dados das custom skills com isolamento multi-tenant (`TenantId`).
+- [ ] Associação dinâmica a agentes existentes com fiação em tempo real (runtime reflection).
+- [ ] Validação de schema e tipos das variáveis de entrada/saída declaradas.
+- [ ] Suporte a importação/exportação de definições de Skills em formato YAML/JSON.
+
+---
+
+#### US-49 — Agent Constructor (Visual Agent Builder)
+
+**Como** administrador do sistema,  
+**quero** uma interface visual de construção de agentes que me permita arrastar ou selecionar via checkboxes as capabilities, tools, salas de RAG e skills de forma dinâmica,  
+**para que** novos agentes especializados possam ser montados em minutos sem qualquer deploy de código.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `AgentConstructorPage` · `AgentBuilderCanvas` |
+| API / Serviço | `IDynamicAgentFactory` · `PUT /api/agent/agents/{name}/wire` |
+| Status | ⏳ Planejado (Future Roadmap) |
+
+**Critérios de Aceite:**
+- [ ] Form Wizard visual premium com etapas claras para definição do perfil do Agente (Nome, Avatar, Modelo de LLM, Temperatura, Max Tokens).
+- [ ] Painel de Checkboxes / Multi-select interativo para Capabilities (Web Search, File Search, Advanced Math).
+- [ ] Painel para fiação de Tools de infraestrutura e plugins MCP registrados.
+- [ ] Seletor de Knowledge Rooms autorizadas para o agente (RAG).
+- [ ] Seletor de Custom Skills criadas declarativamente pela interface.
+- [ ] Visualização ao vivo do "Prompt Consolidado" resultante e testes rápidos integrados antes de salvar.
+
+---
+
+#### US-50 — Auto-Triage Pipeline (Semantic Router & Ingest Pipeline)
+
+**Como** arquiteto do sistema agêntico,  
+**quero** um classificador semântico em background que avalie e roteie de forma inteligente uploads de arquivos e mensagens no chat entre RAG (Knowledge Rooms) e Memória Episódica (Histórico/Conhecimento Pessoal do Usuário),  
+**para que** o armazenamento seja otimizado e a recuperação de contexto seja extremamente relevante e rápida.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | Background Ingest Monitor |
+| API / Serviço | `IAutoTriageService` · `SemanticTriageWorker` (Background Service) |
+| Status | ⏳ Planejado (Future Roadmap) |
+
+**Critérios de Aceite:**
+- [ ] Pipeline assíncrono em background (HostedService ou Worker) ativado após uploads ou interações significativas.
+- [ ] Classificador semântico que determina a natureza do dado (ex: manual/documento estático -> RAG Room; decisão/fato pessoal -> Memória Episódica).
+- [ ] Execução assíncrona em background que não bloqueia a interface do usuário nem o envio inicial de mensagens.
+- [ ] Mecanismo de re-indexação inteligente que move chunks stale ou consolidados entre as camadas de memória.
+- [ ] Painel de monitoramento visual do pipeline de triagem com status do routing e estatísticas de destinação.
+
+---
+
+### Épico 12: Multi-Provider LLM Sychronization & Integrity (Issue #94)
+
+#### US-51 — Inspeção Automática de Modelos LLM no Login
+
+**Como** usuário autenticado do sistema,  
+**quero** que a plataforma execute automaticamente em background a inspeção e descoberta de modelos LLM das chaves ativas associadas ao meu tenant,  
+**para que** a lista de modelos disponíveis na interface esteja sempre atualizada com as capacidades reais de cada provedor no momento do acesso.
+
+| Item | Detalhe |
+|------|---------|
+| Componente | `AuthController` (Backend Trigger) · `LlmCatalogUpdated` (SignalR Hub Notification) |
+| API / Serviço | `ILLMAdministrationService` · `ILLMProviderApiKeyService` · `IHubContext<ChatHub>` / `IHubContext<GatewayHub>` |
+| Status | ⏳ Planejado (ADR-021, Issue #94) |
+
+**Critérios de Aceite:**
+- [ ] O serviço `ILLMProviderApiKeyService` deve ser registrado no DI em `ServiceCollectionExtensions.cs` como Scoped.
+- [ ] O controller `AuthController.Login` deve injetar `IServiceScopeFactory` e disparar a descoberta em segundo plano via `Task.Run` sem bloquear o login HTTP.
+- [ ] A varredura de chaves armazenadas em banco deve ser restrita apenas ao **tenant do usuário logado**, mantendo o isolamento de dados entre os inquilinos.
+- [ ] As chaves ativas de infraestrutura global em `AgenticSystemSettings` devem ser inspecionadas se seus respectivos provedores estiverem ativos.
+- [ ] Notificar erros e falhas nas chamadas a APIs de LLM externas de forma isolada nos logs do Serilog, impedindo que a falha de um provedor afete os demais.
+- [ ] Disparar um evento SignalR `LlmCatalogUpdated` direcionado ao grupo do tenant no sucesso da varredura, notificando o frontend para atualizar o catálogo de modelos disponíveis dinamicamente em tempo real.
+
+---
+
+### Épico 13: Resilient Workflows & Durable Orchestration
+
+#### US-52 — Execução recuperável de workflows dinâmicos multi-tenant
+
+**Rastreabilidade:** [Issue original #108 (fechada)](https://github.com/JonathanBenicio/Agent-System/issues/108) · reavaliação do backend em [#120](https://github.com/JonathanBenicio/Agent-System/issues/120) · [ADR-036](architecture/adr/036-maf-122-protocols-and-gateway.md) · [plano](plan/maf-122-protocols-gateway.md).
+
+**Como** usuário de uma plataforma de agentes personalizáveis,<br>
+**quero** executar definições de workflow do meu tenant, acompanhar o mesmo ID até o resultado e retomar execuções após falha do worker,<br>
+**para que** automações dinâmicas preservem estado, autorização e efeitos rastreáveis sem depender de um grafo global estático.
+
+| Item | Detalhe |
+|------|---------|
+| Runtime | `IWorkflowEngine`/`IWorkflowStore` como orquestrador da aplicação; MAF 1.22 como runtime de agentes e ferramentas |
+| Persistência | PostgreSQL com versão/hash imutável da definição, execução, etapas, aprovação/espera e lease de worker |
+| Status | Engine dinâmico canônico implementado: ID/status, snapshot/hash, approval/reject, Agent, Wait persistido, retries, RBAC de tool e lease/recovery. Wait concluiu após encerramento forçado antes do prazo. Banner compartilha start/status com o store e gerou arquivo final com client determinístico/skills reais; modelos vision/editor não foram exercitados. Handler externo precisa deduplicar a chave. Suíte 755 aprovados/1 skip. |
+
+O Issue #108 exigia especificamente `Microsoft.Agents.AI.DurableTask`. Essa escolha foi substituída na análise atual: a extensão agenda por nome com registry criado no startup, enquanto as definições do produto são tenant/request-specific e a API atual consulta `IWorkflowStore`. O valor de produto continua; o mecanismo não é requisito.
+
+**Critérios de aceite:**
+- [x] O start cria um execution ID persistido e o mesmo ID serve à consulta/cancelamento/eventos; PostgreSQL validou leitura negada por outro tenant.
+- [x] Cada execução fixa versão/hash e snapshot imutável; editar a definição viva não altera a retomada.
+- [x] Claims concorrentes, fencing e recovery após lease expirado foram testados no PostgreSQL; Wait persiste prazo e retoma após recriar engine/store. Restart abrupto de API no meio de efeito externo continua follow-up.
+- [x] Etapas Agent/Action executam; Action exige `Permission.Execute`, Approval restringe papéis, Wait retoma no prazo e Subworkflow falha explicitamente quando não suportado.
+- [x] `MaxRetries` é aplicado e a tool recebe chave idempotente estável por execução/etapa; handler externo precisa deduplicar. Semântica at-least-once, sem exactly-once.
+- [x] Testes PostgreSQL no Compose isolado cobrem claims concorrentes, lease expirado, Wait após reinício real, start/status de Banner, aprovação, isolamento e fencing. Efeito externo interrompido e imagem final de Banner seguem abertos.
+## BACK-CHAT-123 — Chat, sessões e configurações efetivamente usadas
+
+**Issue:** [#123](https://github.com/JonathanBenicio/Agent-System/issues/123) · [ADR-039](architecture/adr/039-chat-session-user-tenant-settings.md) · [Plano](plan/chat-session-user-settings.md).
+
+**Como** membro de um tenant, **quero** conversar, retomar minhas sessões e selecionar configurações permitidas, **para que** meu histórico e minhas escolhas sejam preservados e realmente governem a próxima resposta. Owner/Admin pode gerir chaves BYOK e ativação das skills do tenant.
+
+- [x] Chat REST/SignalR devolve conteúdo, erro e `sessionId`; Cypress escolheu o agente direto e persistiu provider/modelo que o provider local recebeu.
+- [x] Sessões são criadas, listadas, abertas, retomadas e encerradas; Cypress recarregou o browser e abriu o mesmo histórico; usuário/tenant cruzados foram negados.
+- [x] Chave BYOK cadastrada, atualizada, validada no endpoint de modelos configurado, removida; DTOs não expuseram segredo; atualização/default foi confirmada no header do chat; Viewer recebeu 403.
+- [x] Catálogo e preferência provider/modelo por usuário/tenant foram salvos e a próxima execução recebeu a seleção efetiva; modelos de chave default descobertos integram as opções.
+- [x] Skills do tenant listadas e alternadas por Owner/Admin; a instrução ativa chegou ao provider e não chegou a uma sessão nova após desativar; tools continuam sujeitas a ACL própria.
+- [x] Frontend, API e PostgreSQL comprovaram em separado configuração persistida e usada, browser reload/session resume e isolamento. [Relatório](backend/validation/chat-session-settings-2026-09-29.md).
+
+**Validação:** no snapshot da branch de origem (2026-09-29), build Release; suíte 763 aprovados/1 skip; Cypress 1/1, incluindo agente direto, provider/modelo, sessão e telas de chave/skills. O relatório daquele snapshot apontou 22 erros e 1 warning no ESLint global. Na árvore consolidada do PR #132, lint e build global do frontend passaram; a atualização e a proveniência estão em [chat-session-settings-2026-09-29.md](backend/validation/chat-session-settings-2026-09-29.md). Issue segue aberta até revisão/merge de #132.

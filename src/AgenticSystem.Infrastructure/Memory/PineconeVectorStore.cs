@@ -47,8 +47,11 @@ public sealed class PineconeVectorStore : IVectorStore
                     {
                         ["content"] = document.Content,
                         ["type"] = document.Type,
+                        ["tenant_id"] = document.TenantId,
                         ["metadata"] = JsonSerializer.Serialize(document.Metadata)
-                    }
+                    }.Concat(document.Metadata.Where(pair => pair.Key is not ("content" or "type" or "metadata" or "tenant_id"))
+                        .Select(pair => new KeyValuePair<string, object>(pair.Key, pair.Value)))
+                        .ToDictionary(pair => pair.Key, pair => pair.Value)
                 }
             },
             @namespace = ns
@@ -83,15 +86,19 @@ public sealed class PineconeVectorStore : IVectorStore
 
     public async Task<SearchResult> SearchWithFiltersAsync(string query, Dictionary<string, string> filters)
     {
+        var allowedRooms = filters.TryGetValue("room_ids", out var roomIds) ? VectorMetadataFilter.ParseRoomIds(roomIds) : null;
+        if (allowedRooms is { Length: 0 }) return new SearchResult { Query = query, Matches = new() };
         var ns = filters.GetValueOrDefault("namespace") ?? _settings.Namespace;
         var topK = int.TryParse(filters.GetValueOrDefault("topK"), out var k) ? k : 10;
 
         // Build Pinecone filter from provided filters (excluding internal keys)
         var pineconeFilter = filters
-            .Where(f => f.Key is not "namespace" and not "topK" and not "vector")
+            .Where(f => f.Key is not "namespace" and not "topK" and not "vector" and not "room_ids")
             .ToDictionary(
                 f => f.Key,
                 f => (object)new Dictionary<string, string> { ["$eq"] = f.Value });
+        if (allowedRooms is not null)
+            pineconeFilter["room_id"] = new Dictionary<string, object> { ["$in"] = allowedRooms };
 
         var body = new
         {
@@ -149,6 +156,22 @@ public sealed class PineconeVectorStore : IVectorStore
             DocumentCount = 0,
             TotalBytes = 0
         });
+    }
+
+    public async Task DeleteCollectionAsync(string collection)
+    {
+        if (string.IsNullOrWhiteSpace(collection))
+            return;
+
+        var body = new
+        {
+            deleteAll = true,
+            @namespace = collection
+        };
+
+        var response = await _httpClient.PostAsJsonAsync("vectors/delete", body);
+        response.EnsureSuccessStatusCode();
+        _logger.LogInformation("🗑️ Deleted Pinecone namespace/collection: {Namespace}", collection);
     }
 
     #region Pinecone API DTOs

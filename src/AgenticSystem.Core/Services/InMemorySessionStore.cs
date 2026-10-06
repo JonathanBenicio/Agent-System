@@ -14,6 +14,21 @@ public class InMemorySessionStore : ISessionStore
     private readonly TimeSpan _ttl = TimeSpan.FromHours(24);
     private readonly int _maxEntries = 10_000;
     private DateTime _lastCleanup = DateTime.UtcNow;
+    private readonly Lock _creationLock = new();
+
+    public Task<int> CountActiveAsync(string tenantId, CancellationToken ct = default)
+        => Task.FromResult(_store.Values.Count(session => session.TenantId == tenantId && session.EndedAt is null));
+
+    public Task<bool> TryCreateAsync(SessionData session, int maxActive, CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        lock (_creationLock)
+        {
+            if (maxActive > 0 && _store.Values.Count(item => item.TenantId == session.TenantId && item.EndedAt is null) >= maxActive)
+                return Task.FromResult(false);
+            return Task.FromResult(_store.TryAdd(session.Id, session));
+        }
+    }
 
     public Task SaveAsync(SessionData session, CancellationToken ct = default)
     {
@@ -28,10 +43,20 @@ public class InMemorySessionStore : ISessionStore
         return Task.FromResult(session);
     }
 
-    public Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, CancellationToken ct = default)
+    public Task<IReadOnlyList<SessionData>> GetByUserAsync(string userId, int maxResults = 10, string? search = null, CancellationToken ct = default)
     {
-        var sessions = _store.Values
-            .Where(s => s.UserId == userId)
+        var query = _store.Values.Where(s => s.UserId == userId);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim().ToLower();
+            query = query.Where(s => 
+                (s.RuntimeSettings.TryGetValue("title", out var title) && title.ToLower().Contains(term)) ||
+                (s.Summary?.Summary?.ToLower().Contains(term) == true)
+            );
+        }
+
+        var sessions = query
             .OrderByDescending(s => s.StartedAt)
             .Take(maxResults)
             .ToList();

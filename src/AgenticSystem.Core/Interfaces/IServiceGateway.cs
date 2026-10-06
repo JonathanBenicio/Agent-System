@@ -9,6 +9,8 @@ namespace AgenticSystem.Core.Interfaces;
 public interface IServiceGateway
 {
     Task<GatewayResponse<T>> ExecuteAsync<T>(string serviceName, Func<CancellationToken, Task<T>> action, CancellationToken ct = default);
+    /// <summary>Executes a provider stream while tracking its full enumeration, failures, and cancellation.</summary>
+    IAsyncEnumerable<T> ExecuteStreamingAsync<T>(string serviceName, Func<CancellationToken, IAsyncEnumerable<T>> action, CancellationToken ct = default);
     Task<ServiceStatus> GetServiceStatusAsync(string serviceName);
     Task<IEnumerable<ServiceStatus>> GetAllServicesStatusAsync();
     Task<IEnumerable<ServiceStatus>> GetServicesByCategoryAsync(string category);
@@ -18,4 +20,5 @@ public interface IServiceGateway
     Task<HealthReport> GetHealthReportAsync();
     Task<GatewayDashboard> GetDashboardAsync();
     void RegisterService(ServiceRegistration registration);
+    void UnregisterService(string serviceName);
 }

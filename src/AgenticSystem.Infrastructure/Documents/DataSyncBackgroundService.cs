@@ -1,5 +1,6 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -7,15 +8,15 @@ namespace AgenticSystem.Infrastructure.Documents;
 
 public class DataSyncBackgroundService : BackgroundService
 {
-    private readonly IDataConnectorManager _manager;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<DataSyncBackgroundService> _logger;
     private readonly TimeSpan _checkInterval = TimeSpan.FromMinutes(5);
 
     public DataSyncBackgroundService(
-        IDataConnectorManager manager,
+        IServiceProvider serviceProvider,
         ILogger<DataSyncBackgroundService> logger)
     {
-        _manager = manager;
+        _serviceProvider = serviceProvider;
         _logger = logger;
     }
 
@@ -27,16 +28,44 @@ public class DataSyncBackgroundService : BackgroundService
         {
             try
             {
-                var connectors = await _manager.ListConnectorsAsync(ct: stoppingToken);
-                var activeConnectors = connectors.Where(c => c.IsActive && ShouldSync(c)).ToList();
+                using var scope = _serviceProvider.CreateScope();
+                var manager = scope.ServiceProvider.GetRequiredService<IDataConnectorManager>();
+                var tenantStore = scope.ServiceProvider.GetRequiredService<ITenantStore>();
+                var tenantContextAccessor = scope.ServiceProvider.GetRequiredService<ITenantContextAccessor>();
 
-                if (activeConnectors.Any())
+                IReadOnlyList<Tenant> allTenants;
+                try
                 {
-                    _logger.LogInformation("🔄 Found {Count} active connectors for sync.", activeConnectors.Count);
-                    foreach (var connector in activeConnectors)
+                    allTenants = await tenantStore.GetAllAsync(stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to enumerate tenants for data sync; skipping this cycle.");
+                    continue;
+                }
+
+                foreach (var tenantId in allTenants.Select(tenant => tenant.Id))
+                {
+                    using var tenantScope = tenantContextAccessor.BeginScope(new TenantContext { TenantId = tenantId });
+                    
+                    try
                     {
-                        if (stoppingToken.IsCancellationRequested) break;
-                        await _manager.SyncConnectorAsync(connector.Id, fullSync: false, ct: stoppingToken);
+                        var connectors = await manager.ListConnectorsAsync(ct: stoppingToken);
+                        var activeConnectors = connectors.Where(c => c.IsActive && ShouldSync(c)).ToList();
+
+                        if (activeConnectors.Any())
+                        {
+                            _logger.LogInformation("🔄 Found {Count} active connectors for sync for tenant {TenantId}.", activeConnectors.Count, tenantId);
+                            foreach (var connector in activeConnectors)
+                            {
+                                if (stoppingToken.IsCancellationRequested) break;
+                                await manager.SyncConnectorAsync(connector.Id, fullSync: false, ct: stoppingToken);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "🚨 Error syncing connectors for tenant {TenantId}", tenantId);
                     }
                 }
             }

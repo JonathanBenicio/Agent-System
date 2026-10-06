@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { StatusBar } from './StatusBar'
 import { QuotaAlertListener } from '@/components/gateway/QuotaAlertListener'
+import { OnnxJobListener } from '@/components/onnx/OnnxJobListener'
 
 interface LayoutProps {
   isConnected: boolean
@@ -13,6 +14,7 @@ export function Layout({ isConnected, connectionState, onNewChat }: LayoutProps)
   return (
     <div className="flex h-screen bg-zinc-950 text-zinc-100">
       <QuotaAlertListener />
+      <OnnxJobListener />
       <Sidebar onNewChat={onNewChat} />
       <div className="flex flex-col flex-1 min-w-0">
         <main className="flex-1 overflow-hidden">
@@ -23,3 +25,4 @@ export function Layout({ isConnected, connectionState, onNewChat }: LayoutProps)
     </div>
   )
 }
+

@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 
-console.log('Zustand create (workflow):', create);
 import type { 
   Connection, 
   Edge, 
@@ -16,12 +15,13 @@ import {
 import type { WorkflowDefinition, WorkflowStep } from '@/types/api';
 
 export const WorkflowStepType = {
-  Action: 0,
-  Decision: 1,
-  Parallel: 2,
-  Wait: 3,
-  Approval: 4,
-  Subworkflow: 5
+  Action: 'action',
+  Agent: 'agent',
+  Decision: 'decision',
+  Parallel: 'parallel',
+  Wait: 'wait',
+  Approval: 'approval',
+  Subworkflow: 'subworkflow'
 } as const;
 
 interface WorkflowState {
@@ -29,6 +29,7 @@ interface WorkflowState {
   edges: Edge[];
   activeWorkflowId: string | null;
   workflowName: string;
+  originalDefinition: WorkflowDefinition | null;
   onNodesChange: (changes: NodeChange[]) => void;
   onEdgesChange: (changes: EdgeChange[]) => void;
   onConnect: (connection: Connection) => void;
@@ -49,6 +50,7 @@ export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
   edges: [],
   activeWorkflowId: null,
   workflowName: 'New Workflow',
+  originalDefinition: null,
 
   onNodesChange: (changes: NodeChange[]) => {
     set({
@@ -79,40 +81,42 @@ export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
   setWorkflowName: (workflowName: string) => set({ workflowName }),
   setActiveWorkflowId: (activeWorkflowId: string | null) => set({ activeWorkflowId }),
 
-  clear: () => set({ nodes: [], edges: [], activeWorkflowId: null, workflowName: 'New Workflow' }),
+  clear: () => set({ nodes: [], edges: [], activeWorkflowId: null, workflowName: 'New Workflow', originalDefinition: null }),
 
   toWorkflowDefinition: (): WorkflowDefinition => {
-    const { nodes, edges, activeWorkflowId, workflowName } = get();
+    const { nodes, edges, activeWorkflowId, workflowName, originalDefinition } = get();
     
     const steps: WorkflowStep[] = nodes.map(node => {
       const incomingEdges = edges.filter(e => e.target === node.id);
       const dependsOn = incomingEdges.map(e => e.source);
       
       return {
+        ...node.data.originalStep as WorkflowStep | undefined,
         id: node.id,
         name: node.data.label as string || node.id,
-        stepType: (node.data.stepType as number) ?? 0,
+        stepType: (node.data.stepType as WorkflowStep['stepType']) ?? WorkflowStepType.Action,
         dependsOn,
         agentName: node.data.agentName as string,
         toolName: node.data.toolName as string,
         actionDescription: node.data.description as string,
         input: (node.data.input as Record<string, unknown>) || {},
-        output: {},
+        output: (node.data.originalStep as WorkflowStep | undefined)?.output ?? {},
         conditionExpression: node.data.condition as string,
-        parallelSteps: [],
-        maxRetries: 0,
-        errorStrategy: 0,
+        parallelSteps: (node.data.originalStep as WorkflowStep | undefined)?.parallelSteps ?? [],
+        maxRetries: (node.data.originalStep as WorkflowStep | undefined)?.maxRetries ?? 0,
+        errorStrategy: (node.data.originalStep as WorkflowStep | undefined)?.errorStrategy ?? 0,
       };
     });
 
     return {
+      ...originalDefinition,
       id: activeWorkflowId || crypto.randomUUID(),
       name: workflowName,
-      version: 1,
+      version: originalDefinition?.version ?? 1,
       steps,
-      variables: {},
-      triggerType: 0,
-      createdAt: new Date().toISOString(),
+      variables: originalDefinition?.variables ?? {},
+      triggerType: originalDefinition?.triggerType ?? 0,
+      createdAt: originalDefinition?.createdAt ?? new Date().toISOString(),
     };
   },
 
@@ -122,11 +126,20 @@ export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
     // In a real app, we'd store them in DefinitionJson or a separate field.
     // For now, let's just arrange them horizontally.
     
+    const getNodeType = (step: WorkflowStep): string => {
+      if (step.stepType === WorkflowStepType.Decision) return 'decision';
+      if (step.stepType === WorkflowStepType.Wait) return 'wait';
+      if (step.agentName) return 'agent';
+      if (step.toolName) return 'tool';
+      return 'agent';
+    };
+
     const nodes: Node[] = def.steps.map((step, index) => ({
       id: step.id,
-      type: 'default',
+      type: getNodeType(step),
       position: { x: 100 + (index * 250), y: 100 + (index % 2 * 100) },
       data: { 
+        originalStep: step,
         label: step.name,
         stepType: step.stepType,
         agentName: step.agentName,
@@ -153,6 +166,7 @@ export const useWorkflowStore = create<WorkflowState>()((set, get) => ({
       edges, 
       activeWorkflowId: def.id, 
       workflowName: def.name 
+      ,originalDefinition: def
     });
   }
 }));

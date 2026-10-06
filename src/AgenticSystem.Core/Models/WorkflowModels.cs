@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace AgenticSystem.Core.Models;
 
 // ═══════════════════════════════════════════════════════════
@@ -14,10 +16,22 @@ public class WorkflowDefinition
     public string? Description { get; init; }
     public int Version { get; set; } = 1;
     public List<WorkflowStep> Steps { get; init; } = [];
+    public List<WorkflowEdge> Edges { get; init; } = [];
+    public string? PromptTemplate { get; init; }
     public Dictionary<string, object> Variables { get; init; } = new();
     public WorkflowTriggerType TriggerType { get; init; } = WorkflowTriggerType.Manual;
     public string? CronExpression { get; init; }
     public DateTime CreatedAt { get; init; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// A directed connection (edge) between two workflow steps.
+/// </summary>
+public class WorkflowEdge
+{
+    public string FromStepId { get; init; } = string.Empty;
+    public string ToStepId { get; init; } = string.Empty;
+    public string? ConditionExpression { get; init; }
 }
 
 /// <summary>
@@ -33,6 +47,8 @@ public class WorkflowStep
     public string? ActionDescription { get; init; }
     public Dictionary<string, object> Input { get; init; } = new();
     public Dictionary<string, object> Output { get; set; } = new();
+    public string? ModelOverride { get; init; }
+    public List<string>? AllowedToolsOverride { get; init; }
 
     // ─── Flow control ───
     public List<string> DependsOn { get; init; } = []; // Step IDs that must complete first
@@ -52,9 +68,17 @@ public class WorkflowStep
 public class WorkflowExecution
 {
     public string Id { get; init; } = Guid.NewGuid().ToString("N");
-    public string TenantId { get; set; } = "default";
+    public string TenantId { get; set; } = string.Empty;
     public string WorkflowId { get; init; } = string.Empty;
     public string WorkflowName { get; init; } = string.Empty;
+    public int WorkflowDefinitionVersion { get; set; }
+    public string WorkflowDefinitionHash { get; set; } = string.Empty;
+    [JsonIgnore]
+    public string WorkflowDefinitionSnapshotJson { get; set; } = string.Empty;
+    [JsonIgnore]
+    public string? LeaseOwner { get; set; }
+    [JsonIgnore]
+    public DateTime? LeaseExpiresAt { get; set; }
     public WorkflowExecutionStatus Status { get; set; } = WorkflowExecutionStatus.Pending;
     public List<WorkflowStepExecution> StepExecutions { get; init; } = [];
     public Dictionary<string, object> Variables { get; set; } = new();
@@ -79,17 +103,24 @@ public class WorkflowStepExecution
     public bool CompensationExecuted { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public DateTime? WaitUntilUtc { get; set; }
 }
 
+[JsonConverter(typeof(WorkflowStepTypeJsonConverter))]
 public enum WorkflowStepType
 {
-    Action,      // Execute a tool or agent
-    Decision,    // Branch based on condition
-    Parallel,    // Execute sub-steps in parallel
-    Wait,        // Wait for external event or timer
-    Approval,    // Human approval gate
-    Subworkflow  // Execute another workflow
+    Action = 0,      // Execute a tool
+    Agent = 1,       // Execute a dynamic agent
+    Decision = 2,    // Branch based on condition
+    Parallel = 3,    // Execute sub-steps in parallel
+    Wait = 4,        // Wait for external event or timer
+    Approval = 5,    // Human approval gate
+    Subworkflow = 6  // Execute another workflow
 }
+
+/// <summary>Uses stable names in API JSON while accepting the explicit numeric snapshot values.</summary>
+public sealed class WorkflowStepTypeJsonConverter()
+    : JsonStringEnumConverter<WorkflowStepType>(System.Text.Json.JsonNamingPolicy.CamelCase);
 
 public enum WorkflowExecutionStatus
 {
@@ -117,4 +148,21 @@ public enum WorkflowTriggerType
     Scheduled,
     Event,
     Webhook
+}
+
+public sealed record WorkflowExecutionClaim(string TenantId, string ExecutionId, string WorkerId);
+
+public sealed class WorkflowExecutionLeaseLostException : InvalidOperationException
+{
+    public WorkflowExecutionLeaseLostException(string executionId)
+        : base($"The worker lease for workflow execution '{executionId}' is no longer owned by this worker.")
+    {
+    }
+}
+
+public sealed class WorkflowApprovalAmbiguousException : InvalidOperationException
+{
+    public IReadOnlyList<string> PendingStepIds { get; }
+    public WorkflowApprovalAmbiguousException(IReadOnlyList<string> pendingStepIds)
+        : base("Multiple approval steps are pending; specify stepId.") => PendingStepIds = pendingStepIds;
 }

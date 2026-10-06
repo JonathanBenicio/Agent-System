@@ -78,6 +78,8 @@ public sealed class HotSwappableVectorStore : IVectorStore, IDisposable
 
     public Task<VectorStoreStats> GetStatsAsync(string tenantId, CancellationToken ct = default) => GetStore().GetStatsAsync(tenantId, ct);
 
+    public Task DeleteCollectionAsync(string collection) => GetStore().DeleteCollectionAsync(collection);
+
     public void Dispose()
     {
         if (_disposed) return;

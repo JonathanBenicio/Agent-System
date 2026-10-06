@@ -43,9 +43,10 @@ When asked to test a file or feature:
    - Integration tests (if needed)
 
 3. **Write tests**
-   - Use project's test framework (Jest, Vitest, etc.)
+   - Use project's test framework (Jest, Vitest, Playwright, etc.)
    - Follow existing test patterns
    - Mock external dependencies
+   - **MANDATORY for E2E**: For Playwright tests, follow the structure in `templates/playwright-structure-template.md` and use the POM pattern as shown in `templates/pom-e2e-template.md`.
 
 ---
 
@@ -60,8 +61,6 @@ When asked to test a file or feature:
 | Test Case | Type | Coverage |
 |-----------|------|----------|
 | Should create user | Unit | Happy path |
-| Should reject invalid email | Unit | Validation |
-| Should handle db error | Unit | Error case |
 
 ### Generated Tests
 
@@ -74,65 +73,6 @@ When asked to test a file or feature:
 Run with: `npm test`
 ```
 
-### For Test Execution
-
-```
-🧪 Running tests...
-
-✅ auth.test.ts (5 passed)
-✅ user.test.ts (8 passed)
-❌ order.test.ts (2 passed, 1 failed)
-
-Failed:
-  ✗ should calculate total with discount
-    Expected: 90
-    Received: 100
-
-Total: 15 tests (14 passed, 1 failed)
-```
-
----
-
-## Examples
-
-```
-/test src/services/auth.service.ts
-/test user registration flow
-/test coverage
-/test fix failed tests
-```
-
----
-
-## Test Patterns
-
-### Unit Test Structure
-
-```typescript
-describe('AuthService', () => {
-  describe('login', () => {
-    it('should return token for valid credentials', async () => {
-      // Arrange
-      const credentials = { email: 'test@test.com', password: 'pass123' };
-      
-      // Act
-      const result = await authService.login(credentials);
-      
-      // Assert
-      expect(result.token).toBeDefined();
-    });
-
-    it('should throw for invalid password', async () => {
-      // Arrange
-      const credentials = { email: 'test@test.com', password: 'wrong' };
-      
-      // Act & Assert
-      await expect(authService.login(credentials)).rejects.toThrow('Invalid credentials');
-    });
-  });
-});
-```
-
 ---
 
 ## Key Principles
@@ -142,3 +82,4 @@ describe('AuthService', () => {
 - **Descriptive test names**
 - **Arrange-Act-Assert pattern**
 - **Mock external dependencies**
+- **E2E Standards**: Follow `templates/playwright-structure-template.md` and `templates/pom-e2e-template.md`.

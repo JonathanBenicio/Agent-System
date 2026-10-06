@@ -10,39 +10,54 @@ public sealed class EfTenantStore : ITenantStore
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<EfTenantStore> _logger;
+    private readonly ISystemOperationContextAccessor _systemOperations;
 
-    public EfTenantStore(IServiceScopeFactory scopeFactory, ILogger<EfTenantStore> logger)
+    public EfTenantStore(
+        IServiceScopeFactory scopeFactory,
+        ILogger<EfTenantStore> logger,
+        ISystemOperationContextAccessor systemOperations)
     {
         _scopeFactory = scopeFactory;
         _logger = logger;
+        _systemOperations = systemOperations;
     }
 
     public async Task<Tenant?> GetByIdAsync(string tenantId, CancellationToken ct = default)
     {
+        if (TenantIdPolicy.IsReservedSystemId(tenantId)) return null;
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.TenantResolution);
+        _systemOperations.Require(SystemOperationKind.TenantResolution);
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
-        await EnsureDefaultTenantAsync(db, ct);
         return await db.Tenants.AsNoTracking().FirstOrDefaultAsync(tenant => tenant.Id == tenantId, ct);
     }
 
     public async Task<Tenant?> GetBySlugAsync(string slug, CancellationToken ct = default)
     {
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.TenantResolution);
+        _systemOperations.Require(SystemOperationKind.TenantResolution);
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
-        await EnsureDefaultTenantAsync(db, ct);
-        return await db.Tenants.AsNoTracking().FirstOrDefaultAsync(tenant => tenant.Slug == slug, ct);
+        var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(item => item.Slug == slug, ct);
+        return tenant is not null && !TenantIdPolicy.IsReservedSystemId(tenant.Id) ? tenant : null;
     }
 
     public async Task<IReadOnlyList<Tenant>> GetAllAsync(CancellationToken ct = default)
     {
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.EnumerateTenantsForBackground);
+        _systemOperations.Require(SystemOperationKind.EnumerateTenantsForBackground);
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
-        await EnsureDefaultTenantAsync(db, ct);
-        return await db.Tenants.AsNoTracking().OrderBy(tenant => tenant.Name).ToListAsync(ct);
+        var tenants = await db.Tenants.AsNoTracking().OrderBy(tenant => tenant.Name).ToListAsync(ct);
+        return tenants.Where(tenant => !TenantIdPolicy.IsReservedSystemId(tenant.Id)).ToArray();
     }
 
     public async Task SaveAsync(Tenant tenant, CancellationToken ct = default)
     {
+        if (TenantIdPolicy.IsReservedSystemId(tenant.Id))
+            throw new ArgumentException("Reserved system identifiers and 'default' cannot be persisted as tenants.", nameof(tenant));
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.TenantRegistryWrite);
+        _systemOperations.Require(SystemOperationKind.TenantRegistryWrite);
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
 
@@ -69,6 +84,10 @@ public sealed class EfTenantStore : ITenantStore
 
     public async Task DeleteAsync(string tenantId, CancellationToken ct = default)
     {
+        if (TenantIdPolicy.IsReservedSystemId(tenantId))
+            throw new ArgumentException("Reserved system identifiers and 'default' cannot be deleted as tenants.", nameof(tenantId));
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.TenantRegistryWrite);
+        _systemOperations.Require(SystemOperationKind.TenantRegistryWrite);
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
         var tenant = await db.Tenants.FirstOrDefaultAsync(item => item.Id == tenantId, ct);
@@ -83,38 +102,11 @@ public sealed class EfTenantStore : ITenantStore
 
     public async Task<bool> ExistsAsync(string tenantId, CancellationToken ct = default)
     {
+        if (TenantIdPolicy.IsReservedSystemId(tenantId)) return false;
+        using var systemScope = _systemOperations.BeginScope(SystemOperationKind.TenantResolution);
+        _systemOperations.Require(SystemOperationKind.TenantResolution);
         using var scope = _scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AgenticDbContext>();
-        await EnsureDefaultTenantAsync(db, ct);
         return await db.Tenants.AnyAsync(tenant => tenant.Id == tenantId, ct);
-    }
-
-    private async Task EnsureDefaultTenantAsync(AgenticDbContext db, CancellationToken ct)
-    {
-        if (await db.Tenants.AnyAsync(tenant => tenant.Id == Tenant.DefaultTenantId, ct))
-        {
-            return;
-        }
-
-        db.Tenants.Add(new Tenant
-        {
-            Id = Tenant.DefaultTenantId,
-            Name = "Default",
-            Slug = "default",
-            Plan = TenantPlan.Pro,
-            Limits = TenantLimits.ProTier(),
-            IsActive = true,
-            UpdatedAt = DateTime.UtcNow
-        });
-
-        try
-        {
-            await db.SaveChangesAsync(ct);
-            _logger.LogInformation("Default tenant created in PostgreSQL tenant store");
-        }
-        catch (DbUpdateException ex)
-        {
-            _logger.LogWarning(ex, "Default tenant was already created concurrently.");
-        }
     }
 }

@@ -11,7 +11,7 @@ export function useKnowledgeRooms() {
   const setActiveWorkspaceId = useKnowledgeStore(state => state.setActiveWorkspace)
 
   const { data: rooms = [], isLoading: loading, error } = useQuery({
-    queryKey: ['knowledge-rooms'],
+    queryKey: ['knowledge-rooms', activeWorkspaceId],
     queryFn: () => knowledgeRoomApi.list(),
   })
 

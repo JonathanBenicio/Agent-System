@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgenticSystem.Core.Interfaces;
 
 namespace AgenticSystem.Core.Models;
 
@@ -7,7 +8,8 @@ public record SessionListItemDto(
     string Title,
     DateTime LastActivity,
     int MessageCount,
-    string? Summary);
+    string? Summary,
+    bool IsEnded = false);
 
 public record SessionDetailDto(
     string Id,
@@ -16,7 +18,9 @@ public record SessionDetailDto(
     DateTime? EndedAt,
     List<ChatMessageDto> Messages,
     SessionSummaryDto? Summary,
-    SessionInsightsDto? Insights);
+    SessionInsightsDto? Insights,
+    string? Provider = null,
+    string? Model = null);
 
 public record ChatMessageDto(
     string Id,
@@ -27,7 +31,8 @@ public record ChatMessageDto(
     List<string>? Actions,
     List<string>? Tools,
     bool? Success,
-    DateTime Timestamp);
+    DateTime Timestamp,
+    bool? MemoryInjected = null);
 
 public record SessionSummaryDto(
     string Summary,
@@ -56,9 +61,11 @@ public static class SessionDtoMapper
         return new SessionListItemDto(
             session.Id,
             title,
-            session.EndedAt ?? session.StartedAt,
+            new[] { session.StartedAt, session.EndedAt ?? session.StartedAt,
+                session.Events.Count > 0 ? session.Events.Max(item => item.Timestamp) : session.StartedAt }.Max(),
             session.Events.Count,
-            summary);
+            summary,
+            session.EndedAt is not null);
     }
 
     public static SessionDetailDto ToDetail(SessionData session)
@@ -69,28 +76,34 @@ public static class SessionDtoMapper
 
         var messages = session.Events
             .OrderBy(e => e.Timestamp)
-            .SelectMany(e => new[]
+            .SelectMany(e =>
             {
-                new ChatMessageDto(
-                    $"user_{e.Id}",
-                    "user",
-                    e.UserInput,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    e.Timestamp),
-                new ChatMessageDto(
-                    $"assistant_{e.Id}",
-                    "assistant",
-                    e.AgentResponse,
-                    e.AgentName,
-                    (int)e.AgentTier,
-                    e.ActionsPerformed,
-                    e.ToolsUsed,
-                    null,
-                    e.Timestamp),
+                var memoryInjected = e.Context.TryGetValue("memory_injected", out var mi) && mi is bool b && b;
+                
+                return new[]
+                {
+                    new ChatMessageDto(
+                        $"user_{e.Id}",
+                        "user",
+                        e.UserInput,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        e.Timestamp,
+                        memoryInjected),
+                    new ChatMessageDto(
+                        $"assistant_{e.Id}",
+                        "assistant",
+                        e.AgentResponse,
+                        e.AgentName,
+                        (int)e.AgentTier,
+                        e.ActionsPerformed,
+                        e.ToolsUsed,
+                        null,
+                        e.Timestamp),
+                };
             })
             .ToList();
 
@@ -117,35 +130,61 @@ public static class SessionDtoMapper
             session.EndedAt,
             messages,
             summaryDto,
-            insightsDto);
+            insightsDto,
+            session.RuntimeSettings.GetValueOrDefault("llm.session.provider"),
+            session.RuntimeSettings.GetValueOrDefault("llm.session.model"));
+    }
+
+    public static SessionSummaryDto ToSummary(SessionSummary summary)
+    {
+        return new SessionSummaryDto(
+            summary.Summary,
+            summary.TopicsDiscussed,
+            summary.AgentsUsed,
+            summary.EventCount);
+    }
+
+    public static SessionInsightsDto ToInsights(SessionInsights insights)
+    {
+        return new SessionInsightsDto(
+            insights.Facts,
+            insights.Decisions,
+            insights.Preferences,
+            insights.ActionItems);
     }
 
     public static List<ChatMessageDto> ToMessages(SessionData session)
     {
         return session.Events
             .OrderBy(e => e.Timestamp)
-            .SelectMany(e => new[]
+            .SelectMany(e =>
             {
-                new ChatMessageDto(
-                    $"user_{e.Id}",
-                    "user",
-                    e.UserInput,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null,
-                    e.Timestamp),
-                new ChatMessageDto(
-                    $"assistant_{e.Id}",
-                    "assistant",
-                    e.AgentResponse,
-                    e.AgentName,
-                    (int)e.AgentTier,
-                    e.ActionsPerformed,
-                    e.ToolsUsed,
-                    null,
-                    e.Timestamp),
+                var memoryInjected = e.Context.TryGetValue("memory_injected", out var mi) && mi is bool b && b;
+
+                return new[]
+                {
+                    new ChatMessageDto(
+                        $"user_{e.Id}",
+                        "user",
+                        e.UserInput,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        e.Timestamp,
+                        memoryInjected),
+                    new ChatMessageDto(
+                        $"assistant_{e.Id}",
+                        "assistant",
+                        e.AgentResponse,
+                        e.AgentName,
+                        (int)e.AgentTier,
+                        e.ActionsPerformed,
+                        e.ToolsUsed,
+                        null,
+                        e.Timestamp),
+                };
             })
             .ToList();
     }

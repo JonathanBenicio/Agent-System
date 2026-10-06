@@ -57,6 +57,7 @@ public class EvalSuiteResult
 {
     public string SuiteId { get; init; } = Guid.NewGuid().ToString("N");
     public string AgentName { get; init; } = string.Empty;
+    public string TenantId { get; set; } = string.Empty;
     public string? AgentVersionId { get; init; }
     public int TotalTests { get; init; }
     public int Passed { get; init; }

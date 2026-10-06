@@ -33,7 +33,7 @@ public class PostgresQualityStoresDIIntegrationTests
 
 public class PostgresAgentVersionStoreTests
 {
-    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
+    private readonly FakeDbContextFactory _dbContextFactory;
     private readonly PostgresAgentVersionStore _sut;
 
     public PostgresAgentVersionStoreTests()
@@ -43,13 +43,14 @@ public class PostgresAgentVersionStoreTests
             .Options;
 
         var tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        tenantAccessor.CurrentTenantId.Returns("test-tenant");
         var context = new AgenticDbContext(options, tenantAccessor);
         context.Database.EnsureCreated();
 
-        var factory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
-        factory.CreateDbContextAsync(Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromResult(new AgenticDbContext(options, tenantAccessor)));
+        var factory = new FakeDbContextFactory
+        {
+            ContextCreator = () => new AgenticDbContext(options, tenantAccessor)
+        };
 
         _dbContextFactory = factory;
         _sut = new PostgresAgentVersionStore(_dbContextFactory, NullLogger<PostgresAgentVersionStore>.Instance);
@@ -179,7 +180,7 @@ public class PostgresAgentVersionStoreTests
 
 public class PostgresPromptTemplateStoreTests
 {
-    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
+    private readonly FakeDbContextFactory _dbContextFactory;
     private readonly PostgresPromptTemplateStore _sut;
 
     public PostgresPromptTemplateStoreTests()
@@ -189,13 +190,14 @@ public class PostgresPromptTemplateStoreTests
             .Options;
 
         var tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        tenantAccessor.CurrentTenantId.Returns("test-tenant");
         var context = new AgenticDbContext(options, tenantAccessor);
         context.Database.EnsureCreated();
 
-        var factory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
-        factory.CreateDbContextAsync(Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromResult(new AgenticDbContext(options, tenantAccessor)));
+        var factory = new FakeDbContextFactory
+        {
+            ContextCreator = () => new AgenticDbContext(options, tenantAccessor)
+        };
 
         _dbContextFactory = factory;
         _sut = new PostgresPromptTemplateStore(_dbContextFactory, NullLogger<PostgresPromptTemplateStore>.Instance);
@@ -262,7 +264,7 @@ public class PostgresPromptTemplateStoreTests
 
 public class PostgresEvalResultStoreTests
 {
-    private readonly IDbContextFactory<AgenticDbContext> _dbContextFactory;
+    private readonly FakeDbContextFactory _dbContextFactory;
     private readonly PostgresEvalResultStore _sut;
 
     public PostgresEvalResultStoreTests()
@@ -272,13 +274,14 @@ public class PostgresEvalResultStoreTests
             .Options;
 
         var tenantAccessor = Substitute.For<ITenantContextAccessor>();
-        tenantAccessor.Current.Returns(new TenantContext { TenantId = "test-tenant" });
+        tenantAccessor.CurrentTenantId.Returns("test-tenant");
         var context = new AgenticDbContext(options, tenantAccessor);
         context.Database.EnsureCreated();
 
-        var factory = Substitute.For<IDbContextFactory<AgenticDbContext>>();
-        factory.CreateDbContextAsync(Arg.Any<CancellationToken>())
-            .Returns(_ => Task.FromResult(new AgenticDbContext(options, tenantAccessor)));
+        var factory = new FakeDbContextFactory
+        {
+            ContextCreator = () => new AgenticDbContext(options, tenantAccessor)
+        };
 
         _dbContextFactory = factory;
         _sut = new PostgresEvalResultStore(_dbContextFactory, NullLogger<PostgresEvalResultStore>.Instance);

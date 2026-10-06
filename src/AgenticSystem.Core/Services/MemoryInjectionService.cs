@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
@@ -20,12 +21,20 @@ public record VectorizeInsightsResult(int DocumentsCreated, string[] Types);
 public class MemoryInjectionService : IMemoryInjectionService
 {
     private readonly IVectorStore _vectorStore;
+    private readonly IMemoryCache _memoryCache;
     private readonly ILogger<MemoryInjectionService> _logger;
+    private readonly MemoryCacheEntryOptions _cacheOptions;
 
-    public MemoryInjectionService(IVectorStore vectorStore, ILogger<MemoryInjectionService> logger)
+    public MemoryInjectionService(IVectorStore vectorStore, IMemoryCache memoryCache, ILogger<MemoryInjectionService> logger)
     {
         _vectorStore = vectorStore;
+        _memoryCache = memoryCache;
         _logger = logger;
+        _cacheOptions = new MemoryCacheEntryOptions
+        {
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5),
+            Size = 1,
+        };
     }
 
     public async Task<VectorizeInsightsResult> VectorizeInsightsAsync(SessionInsights insights, string userId, string tenantId, string sessionId, CancellationToken ct = default)
@@ -129,6 +138,8 @@ public class MemoryInjectionService : IMemoryInjectionService
             upserted++;
         }
 
+        _memoryCache.Set(("memory-generation", userId, tenantId), Guid.NewGuid(), _cacheOptions);
+
         _logger.LogInformation("🧠 Vectorized {Count} insights for session {SessionId}", upserted, sessionId);
 
         return new VectorizeInsightsResult(upserted, types.Distinct().ToArray());
@@ -136,6 +147,19 @@ public class MemoryInjectionService : IMemoryInjectionService
 
     public async Task<string> BuildMemoryContextAsync(string userQuery, string userId, string tenantId, int maxMemories = 10, CancellationToken ct = default)
     {
+        var generation = _memoryCache.GetOrCreate(("memory-generation", userId, tenantId), entry =>
+        {
+            entry.SetOptions(_cacheOptions);
+            return Guid.NewGuid();
+        });
+        var cacheKey = ("memory-context", userId, tenantId, userQuery, maxMemories, generation);
+
+        if (_memoryCache.TryGetValue(cacheKey, out var cached) && cached is CachedMemoryContext cachedResult)
+        {
+            _logger.LogDebug("🧠 Memory context cache hit for user {UserId}", userId);
+            return cachedResult.Context;
+        }
+
         try
         {
             var filters = new Dictionary<string, string>
@@ -149,6 +173,7 @@ public class MemoryInjectionService : IMemoryInjectionService
 
             if (result.Matches.Count == 0)
             {
+                _memoryCache.Set(cacheKey, new CachedMemoryContext(string.Empty), _cacheOptions);
                 return string.Empty;
             }
 
@@ -172,6 +197,7 @@ public class MemoryInjectionService : IMemoryInjectionService
 
             if (facts.Count == 0 && decisions.Count == 0 && preferences.Count == 0 && actionItems.Count == 0)
             {
+                _memoryCache.Set(cacheKey, new CachedMemoryContext(string.Empty), _cacheOptions);
                 return string.Empty;
             }
 
@@ -202,7 +228,10 @@ public class MemoryInjectionService : IMemoryInjectionService
                 foreach (var a in actionItems) sb.AppendLine($"  • {a}");
             }
 
-            return sb.ToString();
+            var context = sb.ToString();
+            _memoryCache.Set(cacheKey, new CachedMemoryContext(context), _cacheOptions);
+
+            return context;
         }
         catch (Exception ex)
         {
@@ -211,3 +240,5 @@ public class MemoryInjectionService : IMemoryInjectionService
         }
     }
 }
+
+internal record CachedMemoryContext(string Context);

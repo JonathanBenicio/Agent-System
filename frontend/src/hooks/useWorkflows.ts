@@ -1,29 +1,19 @@
-import { useState, useEffect, useCallback } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { workflowApi } from '@/lib/api'
-import type { WorkflowDefinitionSummary, WorkflowDefinition, WorkflowExecution } from '@/types/api'
+import { useKnowledgeStore } from '@/store/useKnowledgeStore'
+import type { WorkflowDefinition, WorkflowExecution } from '@/types/api'
 
 export function useWorkflows() {
-  const [workflows, setWorkflows] = useState<WorkflowDefinitionSummary[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const refresh = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
-      const data = await workflowApi.listDefinitions()
-      setWorkflows(data)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar workflows')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => {
-    refresh()
-  }, [refresh])
+  const queryClient = useQueryClient()
+  const tenantId = useKnowledgeStore(state => state.activeWorkspaceId)
+  const queryKey = ['workflow-definitions', tenantId]
+  const query = useQuery({
+    queryKey,
+    queryFn: () => workflowApi.listDefinitions(),
+    enabled: Boolean(tenantId),
+  })
+  const workflows = query.data ?? []
+  const refresh = () => query.refetch()
 
   const getWorkflow = async (id: string) => {
     return await workflowApi.getDefinition(id)
@@ -32,19 +22,19 @@ export function useWorkflows() {
   const saveWorkflow = async (definition: WorkflowDefinition) => {
     try {
       const saved = await workflowApi.saveDefinition(definition)
-      await refresh()
+      await queryClient.invalidateQueries({ queryKey })
       return saved
     } catch (err) {
-      throw new Error('Falha ao salvar workflow')
+      throw new Error('Falha ao salvar workflow', { cause: err })
     }
   }
 
   const deleteWorkflow = async (id: string) => {
     try {
       await workflowApi.deleteDefinition(id)
-      await refresh()
+      await queryClient.invalidateQueries({ queryKey })
     } catch (err) {
-      throw new Error('Falha ao deletar workflow')
+      throw new Error('Falha ao deletar workflow', { cause: err })
     }
   }
 
@@ -52,7 +42,7 @@ export function useWorkflows() {
     try {
       return await workflowApi.startWorkflow(id)
     } catch (err) {
-      throw new Error('Falha ao iniciar execução do workflow')
+      throw new Error('Falha ao iniciar execução do workflow', { cause: err })
     }
   }
 
@@ -66,8 +56,8 @@ export function useWorkflows() {
 
   return {
     workflows,
-    loading,
-    error,
+    loading: query.isLoading,
+    error: query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null,
     refresh,
     getWorkflow,
     saveWorkflow,
@@ -79,10 +69,11 @@ export function useWorkflows() {
 }
 
 export function useWorkflowExecution(executionId: string | null) {
+  const tenantId = useKnowledgeStore(state => state.activeWorkspaceId)
   return useQuery({
-    queryKey: ['workflow-execution', executionId],
+    queryKey: ['workflow-execution', tenantId, executionId],
     queryFn: () => executionId ? workflowApi.getExecution(executionId) : Promise.resolve(null),
-    enabled: !!executionId,
+    enabled: Boolean(tenantId && executionId),
     refetchInterval: (query) => {
       // Poll every 2 seconds if running
       const data = query.state.data as WorkflowExecution | null

@@ -7,7 +7,7 @@ public class UserContext
 {
     public string UserId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public string TenantId { get; set; } = Tenant.DefaultTenantId;
+    public string TenantId { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty;
     public string Timezone { get; set; } = "UTC";
@@ -17,6 +17,9 @@ public class UserContext
     /// Preferências do usuário
     /// </summary>
     public Dictionary<string, object> Preferences { get; set; } = new();
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public WorkflowAgentOptions? WorkflowOptions { get; set; }
     
     /// <summary>
     /// Atividades recentes para contexto
@@ -33,6 +36,9 @@ public class UserContext
     /// </summary>
     public WorkspaceConfig? Workspace { get; set; }
 }
+
+/// <summary>Internal, per-step execution settings from the immutable workflow snapshot.</summary>
+public sealed record WorkflowAgentOptions(string SessionId, string? Model, IReadOnlyList<string>? AllowedTools, string? ImagePath);
 
 /// <summary>
 /// Configuração do workspace do usuário

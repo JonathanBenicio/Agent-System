@@ -50,7 +50,10 @@ public class DocumentIngestionPipeline : IDocumentIngestionPipeline
         // Enforce tenant ingestion limits
         if (_isolationEnforcer != null && !string.IsNullOrEmpty(config.TenantId))
         {
-            if (!await _isolationEnforcer.CanIngestDocumentAsync(config.TenantId, ct: ct))
+            if (!await _isolationEnforcer.CanIngestDocumentAsync(
+                    config.TenantId,
+                    newBytesCount: document.Content.LongLength,
+                    ct: ct))
             {
                 return IngestionResult.Fail(document.Id, document.FileName, "🚫 Limite de documentos atingido para o seu tenant.");
             }
@@ -89,7 +92,10 @@ public class DocumentIngestionPipeline : IDocumentIngestionPipeline
                             Collection = config.Collection,
                             DocumentHash = contentHash,
                             ChunkIndex = i,
-                            TotalChunks = multimodalDoc.ExtractedContents.Count
+                            TotalChunks = multimodalDoc.ExtractedContents.Count,
+                            RoomId = config.RoomId,
+                            DocumentId = document.Id,
+                            SourceBytes = i == 0 ? document.Content.LongLength : 0
                         }
                     });
                 }
@@ -106,6 +112,13 @@ public class DocumentIngestionPipeline : IDocumentIngestionPipeline
                 var parsed = await parser.ParseAsync(document, ct);
                 contentHash = parsed.ContentHash;
                 chunks = (await _chunkingStrategy.ChunkAsync(parsed, config, ct)).ToList();
+                for (var index = 0; index < chunks.Count; index++)
+                {
+                    chunks[index].Metadata.DocumentId = document.Id;
+                    chunks[index].Metadata.SourceBytes = index == 0 ? document.Content.LongLength : 0;
+                    if (!string.IsNullOrWhiteSpace(config.RoomId))
+                        chunks[index].Metadata.RoomId = config.RoomId;
+                }
             }
 
             if (chunks.Count == 0)
@@ -170,6 +183,7 @@ Please give a short, concise context of this chunk within the overall document (
                 totalTokens += chunk.TokenCount;
 
                 var embDoc = chunk.ToEmbeddingDocument();
+                embDoc.TenantId = config.TenantId ?? string.Empty;
                 await _vectorStore.UpsertAsync(embDoc);
             }
 

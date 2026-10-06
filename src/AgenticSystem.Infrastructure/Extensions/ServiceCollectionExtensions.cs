@@ -1,9 +1,12 @@
+#pragma warning disable MAAI001 // Required experimental MAF session-store integration; reviewed under issue #120.
+
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.LLM.Interfaces;
 using AgenticSystem.Core.Services;
 using AgenticSystem.Core.Tools;
 using AgenticSystem.Infrastructure.AgentFramework;
 using AgenticSystem.Infrastructure.AI;
+using AgenticSystem.Infrastructure.BackgroundServices;
 using AgenticSystem.Infrastructure.Chunking;
 using AgenticSystem.Infrastructure.Configuration;
 using AgenticSystem.Infrastructure.Documents;
@@ -15,19 +18,23 @@ using AgenticSystem.Infrastructure.Persistence;
 using AgenticSystem.Infrastructure.RAG;
 using AgenticSystem.Infrastructure.Skills;
 using AgenticSystem.Infrastructure.Sync;
-using AgenticSystem.Infrastructure.BackgroundServices;
 using AgenticSystem.Infrastructure.LLM.BackgroundServices;
 using AgenticSystem.Infrastructure.LLM.Services;
+using AgenticSystem.Infrastructure.Services;
 using Microsoft.Agents.AI.Hosting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
+using DurableTask.PostgreSQL;
+using Microsoft.Agents.AI.DurableTask;
+using Microsoft.Agents.AI.DurableTask.Workflows;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using Microsoft.DurableTask.Client;
 using Pgvector.EntityFrameworkCore;
 using AgenticSystem.Core.Models;
-
 namespace AgenticSystem.Infrastructure.Extensions;
 
 public static class ServiceCollectionExtensions
@@ -66,6 +73,10 @@ public static class ServiceCollectionExtensions
         services.Configure<DynamicSkillsOptions>(configuration.GetSection("AgenticSystem:Skills"));
         services.Configure<SemanticCacheOptions>(configuration.GetSection("AgenticSystem:SemanticCache"));
         services.Configure<SelfImprovementSettings>(configuration.GetSection("AgenticSystem:SelfImprovement"));
+        services.Configure<HyperlightExecutionSettings>(configuration.GetSection("AgenticSystem:Hyperlight"));
+        services.Configure<FidesSecuritySettings>(configuration.GetSection("AgenticSystem:Fides"));
+        services.AddSingleton<IFidesTenantPolicyStore, InMemoryFidesTenantPolicyStore>();
+        services.AddSingleton<IFidesMediaScanner, Security.TesseractFidesMediaScanner>();
 
         return services;
     }
@@ -112,7 +123,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LLMManager>();
         services.AddSingleton<IExternalQuotaSyncService, ExternalQuotaSyncService>();
         services.AddSingleton<ILLMAdministrationService>(sp => sp.GetRequiredService<LLMManager>());
-        services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(sp.GetRequiredService<LLMManager>(), sp.GetRequiredService<ILogger<ContextAwareChatClient>>()));
+        services.AddSingleton<ContextAwareChatClient>(sp => new ContextAwareChatClient(
+            sp.GetRequiredService<LLMManager>(),
+            sp.GetRequiredService<ILLMRuntimeContextAccessor>(),
+            sp.GetRequiredService<IQuotaEnforcer>(),
+            sp.GetRequiredService<ITokenAuditService>(),
+            sp.GetRequiredService<ILogger<ContextAwareChatClient>>(),
+            sp.GetRequiredService<IServiceGateway>()));
+        services.AddScoped<ILLMProviderApiKeyService, LLMProviderApiKeyService>();
 
         services.AddSingleton<IChatClient>(sp =>
         {
@@ -147,6 +165,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddSingleton<ICostTracker, CostTracker>();
         services.AddSingleton<IServiceGateway, ServiceGateway>();
+        services.AddSingleton<GatewayProviderRegistry>();
+        services.AddHostedService<GatewayProviderRegistrationHostedService>();
         services.AddSingleton<ITokenAuditService, AgenticSystem.Infrastructure.Observability.TokenAuditService>();
         return services;
     }
@@ -165,15 +185,21 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<McpToolsAIFunctionAdapter>();
         services.AddHostedService<DynamicSkillCatalogHostedService>();
         services.AddSingleton<UnifiedAIToolProvider>();
+
+        // Registros para Banner Production
+        services.AddSingleton<AgenticSystem.Core.Skills.BannerProductionSkills>();
+        services.AddSingleton<AgenticSystem.Core.Interfaces.ITool, AgenticSystem.Infrastructure.Tools.BannerProductionTool>();
+
         return services;
     }
 
     private static IServiceCollection AddAgenticAgentFramework(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddSingleton<ChatClientPlanner>();
-        services.AddSingleton<IAgentCollaborationWorkflow, AgentCollaborationWorkflow>();
+        services.AddScoped<IAgentCollaborationWorkflow, AgentCollaborationWorkflow>();
         services.AddSingleton<AgenticVectorStoreAdapter>();
         services.AddSingleton<IAgentChannelService, FrameworkAgentChannelService>();
+        services.AddSingleton<AgenticSystem.Core.Interfaces.IAgentYamlValidator, AgenticSystem.Infrastructure.AgentFramework.AgentYamlValidator>();
 
         var ollamaEnabled = configuration.GetValue<bool>("AgenticSystem:Ollama:Enabled");
         var enableStreaming = configuration.GetValue<bool>("AgenticSystem:Ollama:EnableStreaming");
@@ -185,13 +211,23 @@ public static class ServiceCollectionExtensions
             var orchestratorMetadata = OrchestratorMetadata.Default;
 
             services.AddSingleton(orchestratorMetadata);
-            services.AddSingleton<AgentFrameworkFactory>();
+            services.AddScoped<AgentFrameworkFactory>();
             services.AddSingleton<SimpleSessionStoreAdapter>();
+            // AgentSessionStore: uses SimpleSessionStoreAdapter backed by PostgreSQL ISessionStore.
+            // This covers all deployment modes (Docker, bare-metal, cloud) without Azure Functions dependency.
+            services.AddSingleton<Microsoft.Agents.AI.AgentSessionStore>(
+                sp => sp.GetRequiredService<SimpleSessionStoreAdapter>());
+
             services.AddSingleton<OrchestratorAuxiliaryToolService>();
             services.AddSingleton<OrchestratorInstructionService>();
-            services.AddSingleton<OrchestratorToolBindingService>();
+            services.AddScoped<OrchestratorToolBindingService>();
 
-            services.AddSingleton<RAGContextProvider>(sp =>
+            services.AddSingleton<DbAgentSkillsSource>();
+            services.AddSingleton<AgentSkillsProvider>();
+            services.AddSingleton<Security.IHyperlightCodeActRunner, Security.HyperlightCodeActRunner>();
+            services.AddSingleton<Security.HyperlightSandboxedExecutor>();
+
+            services.AddScoped<RAGContextProvider>(sp =>
             {
                 var ragService = sp.GetService<IRAGService>();
                 if (ragService is null) return null!;
@@ -199,30 +235,45 @@ public static class ServiceCollectionExtensions
                 return new RAGContextProvider(
                     ragService,
                     sp.GetService<IContextBudgetManager>(),
-                    sp.GetRequiredService<ILogger<RAGContextProvider>>());
+                    sp.GetRequiredService<ILogger<RAGContextProvider>>(),
+                    sp,
+                    sp.GetRequiredService<ITenantContextAccessor>(),
+                    sp.GetRequiredService<ILLMRuntimeContextAccessor>());
             });
 
-            services.AddSingleton<OrchestratorHostBuilder>(sp =>
+            services.AddScoped<OrchestratorHostBuilder>(sp =>
                 new OrchestratorHostBuilder(
                     sp.GetRequiredService<IChatClient>(),
                     sp.GetRequiredService<ILoggerFactory>(),
                     sp,
                     orchestratorMetadata,
-                    sp.GetRequiredService<IAgentFactory>(),
                     sp.GetRequiredService<OrchestratorInstructionService>(),
                     sp.GetRequiredService<OrchestratorToolBindingService>(),
                     sp.GetRequiredService<OrchestratorAuxiliaryToolService>(),
                     sp.GetRequiredService<ILogger<OrchestratorHostBuilder>>(),
+                    sp.GetRequiredService<ISkillManager>(),
                     sp.GetService<RAGContextProvider>(),
-                    sp.GetService<IQualityGateService>()));
+                    sp.GetService<IQualityGateService>(),
+                    sp.GetService<AgentSkillsProvider>(),
+                    sp.GetService<ITenantContextAccessor>()));
 
-            services.AddSingleton<OrchestratorContextFactory>();
-            services.AddScoped(sp => sp.GetRequiredService<OrchestratorContextFactory>().Resolve());
+            services.AddScoped<OrchestratorContextFactory>();
+            services.AddScoped<OrchestratorContextState>();
+            services.AddScoped<OrchestratorContext>(sp =>
+            {
+                var state = sp.GetRequiredService<OrchestratorContextState>();
+                if (state.OrchestratorAgent == null)
+                {
+                    throw new InvalidOperationException("OrchestratorAgent is not initialized in OrchestratorContextState. Ensure build is called first.");
+                }
+                return new OrchestratorContext(state.OrchestratorAgent, state.SpecialistBindings?.ToList() ?? new List<AgentToolBinding>());
+            });
 
-            services.AddSingleton<IDirectAgentExecutionService>(sp =>
+            services.AddSingleton<IDirectAgentExecutionService, ScopedDirectAgentExecutionService>();
+            services.AddScoped<AgentFrameworkDirectExecutionService>(sp =>
                 new AgentFrameworkDirectExecutionService(
                     sp.GetRequiredService<AgentFrameworkFactory>(),
-                    sp.GetRequiredService<SimpleSessionStoreAdapter>(),
+                    sp.GetRequiredService<Microsoft.Agents.AI.AgentSessionStore>(),
                     sp.GetRequiredService<ISessionManager>(),
                     sp.GetRequiredService<ILogger<AgentFrameworkDirectExecutionService>>(),
                     sp,
@@ -235,7 +286,7 @@ public static class ServiceCollectionExtensions
                 ServiceLifetime.Scoped);
 
             hostedOrchestratorBuilder.WithSessionStore(
-                static (sp, _) => sp.GetRequiredService<SimpleSessionStoreAdapter>(),
+                static (sp, _) => sp.GetRequiredService<Microsoft.Agents.AI.AgentSessionStore>(),
                 ServiceLifetime.Singleton);
 
             services.AddSingleton<IFrameworkOrchestratorService, FrameworkOrchestratorService>();
@@ -281,11 +332,13 @@ public static class ServiceCollectionExtensions
         {
             services.AddSingleton<IAdvancedRetrievalService, PostgresAdvancedRetrievalService>();
             services.AddScoped<IKnowledgeRoomService, PostgresKnowledgeRoomStore>();
+            services.AddScoped<IAgentKnowledgeRoomStore, PostgresAgentKnowledgeRoomStore>();
         }
         else
         {
             services.AddSingleton<IAdvancedRetrievalService, InMemoryAdvancedRetrievalService>();
             services.AddSingleton<IKnowledgeRoomService, InMemoryKnowledgeRoomStore>();
+            services.AddScoped<IAgentKnowledgeRoomStore, PostgresAgentKnowledgeRoomStore>();
         }
         services.AddSingleton<IRAGService, RAGService>();
 
@@ -324,6 +377,12 @@ public static class ServiceCollectionExtensions
     {
         services.AddHostedService<SelfImprovementBackgroundJob>();
         services.AddHostedService<ExternalQuotaSyncHostedService>();
+        services.AddOptions<AgenticSystem.Core.Services.Ml.OnnxInputLimits>()
+            .Bind(configuration.GetSection(AgenticSystem.Core.Services.Ml.OnnxInputLimits.SectionName))
+            .Validate(limits => limits.IsValid, "ONNX input limits must be positive.")
+            .ValidateOnStart();
+        services.AddHostedService<OnnxInferenceBackgroundWorker>();
+        services.AddHostedService<Persistence.WorkflowExecutionBackgroundService>();
         
         var storageMode = configuration["AgenticSystem:LocalExecution:StorageMode"];
         if (!string.Equals(storageMode, "SQLite", StringComparison.OrdinalIgnoreCase) && 
@@ -337,10 +396,10 @@ public static class ServiceCollectionExtensions
 
     private static IServiceCollection AddAgenticMultiTenancy(this IServiceCollection services)
     {
-        services.AddScoped<TenantContext>();
         services.AddSingleton<ITenantContextAccessor, TenantContextAccessor>();
         services.AddScoped<ITenantResolver, TenantResolver>();
-        // ITenantStore implementation should be registered by the storage mode
+        services.AddSingleton<ITenantStore, InMemoryTenantStore>(); // Default fallback, replaced by EfTenantStore in PostgreSQL mode
+        services.AddScoped<ISystemBootstrapService, SystemBootstrapService>();
         return services;
     }
 
@@ -443,6 +502,8 @@ public static class ServiceCollectionExtensions
         EnsureDbContextRegistrations(services, connectionString);
         ReplaceSingleton<IAgentVersionStore, PostgresAgentVersionStore>(services);
         ReplaceSingleton<IPromptTemplateStore, PostgresPromptTemplateStore>(services);
+        ReplaceSingleton<ISelfImprovementProposalStore, PostgresSelfImprovementProposalStore>(services);
+        ReplaceSingleton<IFidesTenantPolicyStore, PostgresFidesTenantPolicyStore>(services);
         ReplaceSingleton<IEvalResultStore, PostgresEvalResultStore>(services);
         return services;
     }
@@ -459,6 +520,8 @@ public static class ServiceCollectionExtensions
         {
             ReplaceSingleton<IVectorStore, InMemoryVectorStore>(services);
             ReplaceSingleton<IExternalQuotaSyncService, InMemoryExternalQuotaSyncService>(services);
+            ReplaceSingleton<IDynamicAgentRepository, InMemoryDynamicAgentRepository>(services);
+            ReplaceScoped<IGoldenSetRepository, AgenticSystem.Core.Services.InMemoryGoldenSetRepository>(services);
             return services;
         }
 
@@ -473,6 +536,8 @@ public static class ServiceCollectionExtensions
 
             ReplaceSingleton<IVectorStore, SqliteVectorStore>(services);
             ReplaceSingleton<IExternalQuotaSyncService, InMemoryExternalQuotaSyncService>(services);
+            ReplaceSingleton<IDynamicAgentRepository, PostgresDynamicAgentRepository>(services);
+            ReplaceScoped<IGoldenSetRepository, PostgresGoldenSetRepository>(services);
             
             // Register MockEmbeddingGenerator for load testing
             services.AddSingleton<Microsoft.Extensions.AI.IEmbeddingGenerator<string, Microsoft.Extensions.AI.Embedding<float>>>(new AgenticSystem.Infrastructure.Memory.MockEmbeddingGenerator());
@@ -497,6 +562,18 @@ public static class ServiceCollectionExtensions
         ReplaceSingleton<IScheduledTaskStore, PostgresScheduledTaskStore>(services);
         ReplaceSingleton<IConfigStore, PostgresConfigStore>(services);
         ReplaceSingleton<IRerankingAssetStore, PostgresRerankingAssetStore>(services);
+        ReplaceSingleton<IDynamicAgentRepository, PostgresDynamicAgentRepository>(services);
+        
+        services.AddSingleton<PostgresSkillManager>();
+        ReplaceSingleton<ISkillManager>(services, sp => sp.GetRequiredService<PostgresSkillManager>());
+        ReplaceSingleton<IPlatformSkillCatalog>(services, sp => sp.GetRequiredService<PostgresSkillManager>());
+        services.AddSingleton<PostgresToolManager>();
+        ReplaceSingleton<IToolManager>(services, sp => sp.GetRequiredService<PostgresToolManager>());
+        ReplaceSingleton<IPlatformToolCatalog>(services, sp => sp.GetRequiredService<PostgresToolManager>());
+        ReplaceSingleton<IPermissionService, PostgresPermissionService>(services);
+        ReplaceSingleton<IPolicyStore, PostgresPolicyStore>(services);
+        ReplaceSingleton<IExternalQuotaSyncService, ExternalQuotaSyncService>(services);
+        ReplaceScoped<IGoldenSetRepository, PostgresGoldenSetRepository>(services);
 
         var useInMemoryEventBus = configuration.GetValue<bool>("AgenticSystem:EventBus:UseInMemory");
 
@@ -516,12 +593,41 @@ public static class ServiceCollectionExtensions
         services.UsePostgresAdvancedIntelligence(connectionString);
         services.UsePostgresPlatformStores(connectionString);
 
+        // Quota persistence: replace in-memory repository with PostgreSQL-backed one.
+        ReplaceSingleton<ITenantQuotaRepository, TenantQuotaRepository>(services);
+        services.AddHostedService<DailyQuotaResetBackgroundService>();
+
+        // Registro nativo do backend durável do DurableTask PostgreSQL usando inicializador de objetos para propriedades init-only
+        var durableSettings = new PostgreSqlOrchestrationServiceSettings
+        {
+            ConnectionString = connectionString,
+            TaskHubName = "AgenticSystemHub",
+            AutoDeploySchema = true
+        };
+        services.AddDurableTaskPostgreSql(durableSettings);
+        // Keep DurableTask for explicitly registered workflows only. Tenant-defined workflows
+        // run through IWorkflowEngine/IWorkflowStore; this static registry cannot resolve them.
+        var maxDurableWorkflowSupersteps = configuration.GetValue(
+            "AgenticSystem:LocalExecution:DurableWorkflowMaxSupersteps",
+            100);
+        services.ConfigureDurableWorkflows(
+            options => options.MaxSupersteps = maxDurableWorkflowSupersteps,
+            clientBuilder: static builder => builder.UseOrchestrationService());
+
+
+        services.ConfigureDurableAgents(options =>
+        {
+            options.DefaultTimeToLive = TimeSpan.FromDays(7);
+        });
+
         return services;
     }
 
     public static IServiceCollection UsePostgresPlatformStores(this IServiceCollection services, string connectionString)
     {
         EnsureDbContextRegistrations(services, connectionString);
+        ReplaceSingleton<IPlatformConfigStore, PostgresPlatformConfigStore>(services);
+        ReplaceSingleton<IChatSettingsStore, PostgresChatSettingsStore>(services);
         ReplaceSingleton<IDataConnectorStore, PostgresDataConnectorStore>(services);
         ReplaceSingleton<IAgentMarketplace, PostgresAgentMarketplace>(services);
         ReplaceSingleton<IMemoryLifecycleStore, PostgresMemoryLifecycleStore>(services);
@@ -583,6 +689,19 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(factory);
     }
 
+    private static void ReplaceScoped<TService, TImplementation>(IServiceCollection services)
+        where TService : class
+        where TImplementation : class, TService
+    {
+        var descriptors = services.Where(d => d.ServiceType == typeof(TService)).ToList();
+        foreach (var descriptor in descriptors)
+        {
+            services.Remove(descriptor);
+        }
+
+        services.AddScoped<TService, TImplementation>();
+    }
+
     private static void EnsureDbContextRegistrations(IServiceCollection services, string connectionString)
     {
         if (services.Any(descriptor => descriptor.ServiceType == typeof(DbContextOptions<AgenticDbContext>)))
@@ -627,11 +746,45 @@ public static class ServiceCollectionExtensions
 
     public static IServiceProvider SeedInfrastructureTools(this IServiceProvider serviceProvider)
     {
-        var toolManager = serviceProvider.GetRequiredService<IToolManager>();
+        var toolCatalog = serviceProvider.GetService<IPlatformToolCatalog>();
+        if (toolCatalog is null)
+        {
+            serviceProvider.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("InfrastructureToolSeeding")
+                .LogDebug("Platform tool catalog is not registered; skipping infrastructure tool seeding.");
+            return serviceProvider;
+        }
+
+        // Registrar automaticamente todas as ferramentas adicionais (ITool) cadastradas no contêiner de DI (ex: BannerProductionTool)
+        var diTools = serviceProvider.GetServices<ITool>();
+        foreach (var tool in diTools)
+        {
+            if (tool != null)
+            {
+                toolCatalog.RegisterPlatformTool(tool);
+            }
+        }
+
         var httpClientFactory = serviceProvider.GetRequiredService<IHttpClientFactory>();
         var logger = serviceProvider.GetRequiredService<ILogger<HttpTool>>();
         var httpClient = httpClientFactory.CreateClient("AgenticTools");
-        toolManager.RegisterTool(new HttpTool(httpClient, logger));
+        toolCatalog.RegisterPlatformTool(new HttpTool(httpClient, logger));
+
+        var hyperlightSettings = serviceProvider.GetRequiredService<IOptions<HyperlightExecutionSettings>>().Value;
+        var environment = serviceProvider.GetRequiredService<IHostEnvironment>();
+        if (hyperlightSettings.Enabled && environment.IsEnvironment("Lab"))
+        {
+            var executor = serviceProvider.GetRequiredService<Security.HyperlightSandboxedExecutor>();
+            var tool = new Security.HyperlightExecuteCodeTool(executor);
+            if (executor.IsAvailable)
+                toolCatalog.RegisterPlatformTool(tool);
+        }
+        else if (hyperlightSettings.Enabled)
+        {
+            serviceProvider.GetRequiredService<ILogger<Security.HyperlightSandboxedExecutor>>()
+                .LogWarning("Hyperlight was requested outside Lab; the execution tool remains unavailable.");
+        }
+
         return serviceProvider;
     }
 }

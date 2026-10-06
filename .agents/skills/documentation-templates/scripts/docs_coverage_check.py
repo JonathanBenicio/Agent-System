@@ -45,8 +45,8 @@ def main():
         project_path / "docs" / "superpowers" / "plans" / "2026-05-14-gemini-429-retry.md",
         
         # Phase 6: Historical Reports & External Reference
-        project_path / "docs" / "historico" / "README.md",
-        project_path / "docs" / "historico" / "DI_RUNTIME_AUDIT.md",
+        project_path / "docs" / "old" / "README.md",
+        project_path / "docs" / "old" / "DI_RUNTIME_AUDIT.md",
         project_path / "docs" / "referencia-externa" / "README.md",
         project_path / "docs" / "referencia-externa" / "agent-framework.md",
     ]

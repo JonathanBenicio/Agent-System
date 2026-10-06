@@ -11,14 +11,12 @@ public class InMemoryExternalQuotaSyncService : IExternalQuotaSyncService
 {
     private readonly ConcurrentDictionary<string, ExternalProviderQuota> _quotas = new();
 
-    private string GetKey(string providerName, string? tenantId, string apiKeyId)
-    {
-        return $"{providerName}:{tenantId ?? "global"}:{apiKeyId}";
-    }
+    private static string GetKey(string providerName, ExternalQuotaOwner owner, string apiKeyId) =>
+        $"{providerName}:{owner.TenantId ?? "<platform>"}:{apiKeyId}";
 
     public Task UpdateFromHeadersAsync(
         string providerName, 
-        string? tenantId, 
+        ExternalQuotaOwner owner,
         string apiKeyId, 
         long limitRequests, 
         long remainingRequests, 
@@ -26,11 +24,11 @@ public class InMemoryExternalQuotaSyncService : IExternalQuotaSyncService
         long remainingTokens, 
         DateTime? resetAt)
     {
-        var key = GetKey(providerName, tenantId, apiKeyId);
+        var key = GetKey(providerName, owner, apiKeyId);
         var quota = new ExternalProviderQuota
         {
             ProviderName = providerName,
-            TenantId = tenantId,
+            TenantId = owner.TenantId,
             ApiKeyId = apiKeyId,
             LimitRequests = limitRequests,
             RemainingRequests = remainingRequests,
@@ -44,16 +42,16 @@ public class InMemoryExternalQuotaSyncService : IExternalQuotaSyncService
         return Task.CompletedTask;
     }
 
-    public Task SyncBillingAsync(string providerName, string? tenantId, string apiKeyId, string apiKey)
+    public Task SyncBillingAsync(string providerName, ExternalQuotaOwner owner, string apiKeyId, string apiKey)
     {
         // Fake sync
-        var key = GetKey(providerName, tenantId, apiKeyId);
+        var key = GetKey(providerName, owner, apiKeyId);
         if (!_quotas.TryGetValue(key, out var quota))
         {
             quota = new ExternalProviderQuota
             {
                 ProviderName = providerName,
-                TenantId = tenantId,
+                TenantId = owner.TenantId,
                 ApiKeyId = apiKeyId,
                 RemainingRequests = 1000,
                 RemainingTokens = 1000000,
@@ -69,16 +67,16 @@ public class InMemoryExternalQuotaSyncService : IExternalQuotaSyncService
         return Task.CompletedTask;
     }
 
-    public Task<ExternalProviderQuota?> GetQuotaAsync(string providerName, string? tenantId, string apiKeyId)
+    public Task<ExternalProviderQuota?> GetQuotaAsync(string providerName, ExternalQuotaOwner owner, string apiKeyId)
     {
-        var key = GetKey(providerName, tenantId, apiKeyId);
+        var key = GetKey(providerName, owner, apiKeyId);
         _quotas.TryGetValue(key, out var quota);
         return Task.FromResult(quota);
     }
 
-    public Task<bool> HasAvailableQuotaAsync(string providerName, string? tenantId, string apiKeyId)
+    public Task<bool> HasAvailableQuotaAsync(string providerName, ExternalQuotaOwner owner, string apiKeyId)
     {
-        var key = GetKey(providerName, tenantId, apiKeyId);
+        var key = GetKey(providerName, owner, apiKeyId);
         if (!_quotas.TryGetValue(key, out var quota))
         {
             return Task.FromResult(true); // Assume available if not tracked
@@ -87,9 +85,9 @@ public class InMemoryExternalQuotaSyncService : IExternalQuotaSyncService
         return Task.FromResult(!quota.IsExhausted);
     }
 
-    public Task<bool> IsProviderAvailableAsync(string providerName, string? tenantId = null)
+    public Task<bool> IsProviderAvailableAsync(string providerName, ExternalQuotaOwner owner)
     {
-        var prefix = $"{providerName}:{tenantId ?? "global"}";
+        var prefix = $"{providerName}:{owner.TenantId ?? "<platform>"}";
         var keys = _quotas.Keys.Where(k => k.StartsWith(prefix));
 
         if (!keys.Any())
@@ -101,11 +99,10 @@ public class InMemoryExternalQuotaSyncService : IExternalQuotaSyncService
         return Task.FromResult(available);
     }
 
-    public Task<IReadOnlyList<ExternalProviderQuota>> GetAllQuotasAsync(string? tenantId = null)
+    public Task<IReadOnlyList<ExternalProviderQuota>> GetAllQuotasAsync(ExternalQuotaOwner owner)
     {
-        var target = tenantId ?? "global";
         var result = _quotas.Values
-            .Where(q => (q.TenantId ?? "global") == target)
+            .Where(q => q.TenantId == owner.TenantId)
             .ToList();
 
         return Task.FromResult<IReadOnlyList<ExternalProviderQuota>>(result);

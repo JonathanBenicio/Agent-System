@@ -271,16 +271,11 @@ Standard templates, typical layouts, common color schemes, overused patterns = *
 
 **📐 VISUAL STYLE VARIETY (CRITICAL):**
 
-- **STOP using "soft lines" (rounded corners/shapes) by default for everything.**
-- Explore **SHARP, GEOMETRIC, and MINIMALIST** edges.
-- **🚫 AVOID THE "SAFE BOREDOM" ZONE (4px-8px):**
-    - Don't just slap `rounded-md` (6-8px) on everything. It looks generic.
-    - **Go EXTREME:**
-        - Use **0px - 2px** for Tech, Luxury, Brutalist (Sharp/Crisp).
-        - Use **16px - 32px** for Social, Lifestyle, Bento (Friendly/Soft).
-    - _Make a choice. Don't sit in the middle._
-- **Break the "Safe/Round/Friendly" habit.** Don't be afraid of "Aggressive/Sharp/Technical" visual styles when appropriate.
-- Every project should have a **DIFFERENT** geometry. One sharp, one rounded, one organic, one brutalist.
+- **PROJECT DEFAULT: SOFT LINES & MODERN CURVES.** The default visual system for this project standardizes on **curves and soft lines** (`rounded-xl` / 12px for list items, botões, inputs; and `rounded-2xl`/`rounded-3xl` / 16px-24px for cards, panels, and modals). 
+- **🚫 AVOID CANTS VIVOS AND "SAFE BOREDOM" ZONE (4px-8px):**
+    - Don't just slap a generic `rounded-md` (6-8px). Go for the refined project standard of **12px to 24px (`rounded-xl` to `rounded-3xl`)** for a premium, friendly, and cohesive soft UI look.
+    - Avoid sharp brutalist edges (0px-2px) unless explicitly requested.
+- Every project layout should feel cohesive, maintaining a visually satisfying geometric harmony.
 
 **✨ MANDATORY ACTIVE ANIMATION & VISUAL DEPTH (REQUIRED):**
 

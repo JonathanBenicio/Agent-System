@@ -1,71 +1,54 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { llmApi } from '@/lib/api'
 import type {
   LLMConfigurationInfo,
-  LLMProviderInfo,
   UpdateDefaultLlmSelectionRequest,
   UpdateProviderRequest,
 } from '@/types/api'
 
 export function useLLMProviders() {
-  const [configuration, setConfiguration] = useState<LLMConfigurationInfo | null>(null)
-  const [providers, setProviders] = useState<LLMProviderInfo[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const queryKey = ['llm-configuration']
+  const query = useQuery({ queryKey, queryFn: () => llmApi.configuration() })
+  const configuration = query.data ?? null
+  const providers = configuration?.providers ?? []
+  const refresh = () => query.refetch()
 
-  const refresh = useCallback(async () => {
-    try {
-      setError(null)
-      setLoading(true)
-      const data = await llmApi.configuration()
-      setConfiguration(data)
-      setProviders(data.providers)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao carregar providers')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  useEffect(() => { refresh() }, [refresh])
-
-  const updateProvider = useCallback(async (name: string, req: UpdateProviderRequest) => {
+  const updateProvider = async (name: string, req: UpdateProviderRequest) => {
     const updated = await llmApi.update(name, req)
-    setProviders(prev => prev.map(p => p.name === name ? updated : p))
-    setConfiguration(prev => prev ? {
+    queryClient.setQueryData<LLMConfigurationInfo>(queryKey, prev => prev ? {
       ...prev,
       providers: prev.providers.map(p => p.name === name ? updated : p),
     } : prev)
     return updated
-  }, [])
+  }
 
-  const updateDefaultSelection = useCallback(async (req: UpdateDefaultLlmSelectionRequest) => {
+  const updateDefaultSelection = async (req: UpdateDefaultLlmSelectionRequest) => {
     const updated = await llmApi.updateDefaultSelection(req)
-    setConfiguration(updated)
-    setProviders(updated.providers)
+    queryClient.setQueryData(queryKey, updated)
     return updated
-  }, [])
+  }
 
-  const testProvider = useCallback(async (name: string) => {
+  const testProvider = async (name: string) => {
     return llmApi.test(name)
-  }, [])
+  }
 
-  const discoverModels = useCallback(async (name: string, apiKey: string) => {
+  const discoverModels = async (name: string, apiKey: string) => {
     return llmApi.discoverModels(name, apiKey)
-  }, [])
+  }
 
-  const syncQuotas = useCallback(async () => {
+  const syncQuotas = async () => {
     await llmApi.syncQuotas()
     await refresh()
-  }, [refresh])
+  }
 
   return {
     providers,
     configuration,
     defaultProvider: configuration?.defaultProvider ?? '',
     defaultModel: configuration?.defaultModel ?? '',
-    loading,
-    error,
+    loading: query.isLoading,
+    error: query.error instanceof Error ? query.error.message : query.error ? String(query.error) : null,
     refresh,
     updateProvider,
     updateDefaultSelection,

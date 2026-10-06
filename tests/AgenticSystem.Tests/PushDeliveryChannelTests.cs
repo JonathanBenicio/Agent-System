@@ -148,7 +148,8 @@ public class PushDeliveryChannelTests
     public async Task IsHealthyAsync_ReturnsTrue()
     {
         var factory = Substitute.For<IHttpClientFactory>();
-        factory.CreateClient(Arg.Any<string>()).Returns(new HttpClient());
+        factory.CreateClient(Arg.Any<string>())
+            .Returns(new HttpClient(new MockHttpMessageHandler(HttpStatusCode.OK)));
 
         var channel = new PushDeliveryChannel(factory, _logger);
         var healthy = await channel.IsHealthyAsync();

@@ -19,6 +19,7 @@ public class AgenticDbContext : DbContext
     }
 
     public DbSet<SessionRecordEntity> SessionRecords => Set<SessionRecordEntity>();
+    public DbSet<ChatSettingsEntity> ChatSettings => Set<ChatSettingsEntity>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<VectorDocumentEntity> VectorDocuments => Set<VectorDocumentEntity>();
     public DbSet<CostEntryEntity> CostEntries => Set<CostEntryEntity>();
@@ -39,9 +40,16 @@ public class AgenticDbContext : DbContext
     public DbSet<RerankingAssetEntity> RerankingAssets => Set<RerankingAssetEntity>();
     public DbSet<AuditEntryEntity> AuditEntries => Set<AuditEntryEntity>();
     public DbSet<RoleAssignmentEntity> RoleAssignments => Set<RoleAssignmentEntity>();
+    public DbSet<TenantMembershipEntity> TenantMemberships => Set<TenantMembershipEntity>();
+    public DbSet<PlatformAdministratorEntity> PlatformAdministrators => Set<PlatformAdministratorEntity>();
+    public DbSet<PlatformConfigEntity> PlatformConfigs => Set<PlatformConfigEntity>();
+    public DbSet<FidesTenantPolicyEntity> FidesTenantPolicies => Set<FidesTenantPolicyEntity>();
+    public DbSet<PlatformConfigAuditEntity> PlatformConfigAudits => Set<PlatformConfigAuditEntity>();
+    public DbSet<TenantSupportGrantEntity> TenantSupportGrants => Set<TenantSupportGrantEntity>();
     public DbSet<OutboxMessageEntity> OutboxMessages => Set<OutboxMessageEntity>();
     public DbSet<AgentPolicyEntity> AgentPolicies => Set<AgentPolicyEntity>();
     public DbSet<AgentVersionEntity> AgentVersions => Set<AgentVersionEntity>();
+    public DbSet<SelfImprovementProposalEntity> SelfImprovementProposals => Set<SelfImprovementProposalEntity>();
     public DbSet<PromptTemplateEntity> PromptTemplates => Set<PromptTemplateEntity>();
     public DbSet<EvalSuiteResultEntity> EvalSuiteResults => Set<EvalSuiteResultEntity>();
     public DbSet<KnowledgeGraphNodeEntity> KnowledgeGraphNodes => Set<KnowledgeGraphNodeEntity>();
@@ -56,15 +64,40 @@ public class AgenticDbContext : DbContext
     public DbSet<LlmPricingRuleEntity> LlmPricingRules => Set<LlmPricingRuleEntity>();
     public DbSet<ExternalProviderQuotaEntity> ExternalProviderQuotas => Set<ExternalProviderQuotaEntity>();
     public DbSet<SystemAlertEntity> SystemAlerts => Set<SystemAlertEntity>();
+    public DbSet<TenantSystemAlertEntity> TenantSystemAlerts => Set<TenantSystemAlertEntity>();
     public DbSet<InboundWebhookEntity> InboundWebhooks => Set<InboundWebhookEntity>();
     public DbSet<KnowledgeRoomEntity> KnowledgeRooms => Set<KnowledgeRoomEntity>();
+    public DbSet<KnowledgeRoomPermissionEntity> KnowledgeRoomPermissions => Set<KnowledgeRoomPermissionEntity>();
+    public DbSet<AgentKnowledgeRoomAssignmentEntity> AgentKnowledgeRoomAssignments => Set<AgentKnowledgeRoomAssignmentEntity>();
     public DbSet<McpPluginEntity> McpPlugins => Set<McpPluginEntity>();
     public DbSet<SessionSummaryEntity> SessionSummaries => Set<SessionSummaryEntity>();
     public DbSet<SessionInsightEntity> SessionInsights => Set<SessionInsightEntity>();
+    public DbSet<SystemStateEntity> SystemStates => Set<SystemStateEntity>();
+    public DbSet<LLMProviderApiKeyEntity> ProviderApiKeys => Set<LLMProviderApiKeyEntity>();
+    public DbSet<CustomOnnxModelEntity> CustomOnnxModels => Set<CustomOnnxModelEntity>();
+    public DbSet<CustomOnnxModelFileEntity> CustomOnnxModelFiles => Set<CustomOnnxModelFileEntity>();
+    public DbSet<CustomOnnxInferenceJobEntity> CustomOnnxInferenceJobs => Set<CustomOnnxInferenceJobEntity>();
+    public DbSet<AccessApiKeyEntity> AccessApiKeys => Set<AccessApiKeyEntity>();
+    public DbSet<DbSkillEntity> AgentSkills => Set<DbSkillEntity>();
+    public DbSet<DynamicAgentEntity> DynamicAgents => Set<DynamicAgentEntity>();
+    public DbSet<DbToolEntity> AgentTools => Set<DbToolEntity>();
+    public DbSet<TenantQuotaEntity> TenantQuotas => Set<TenantQuotaEntity>();
+    public DbSet<GoldenSetEntity> GoldenSets => Set<GoldenSetEntity>();
+    public DbSet<PlatformAgentToolEntity> PlatformAgentTools => Set<PlatformAgentToolEntity>();
+    public DbSet<PlatformAgentSkillEntity> PlatformAgentSkills => Set<PlatformAgentSkillEntity>();
+    public DbSet<PlatformExternalProviderQuotaEntity> PlatformExternalProviderQuotas => Set<PlatformExternalProviderQuotaEntity>();
+    public DbSet<PlatformOutboxMessageEntity> PlatformOutboxMessages => Set<PlatformOutboxMessageEntity>();
+
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AgenticDbContext).Assembly);
+
+        if (Database.ProviderName == "Npgsql.EntityFrameworkCore.PostgreSQL")
+        {
+            modelBuilder.HasPostgresExtension("vector");
+        }
 
         // Global Query Filters for Multi-tenancy
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
@@ -88,7 +121,7 @@ public class AgenticDbContext : DbContext
         {
             modelBuilder.Entity<VectorDocumentEntity>()
                 .HasGeneratedTsVectorColumn(
-                    p => p.SearchVector,
+                    p => p.SearchVector!,
                     "english",
                     p => new { p.Content })
                 .HasIndex(p => p.SearchVector)
@@ -101,7 +134,7 @@ public class AgenticDbContext : DbContext
         modelBuilder.Entity<T>().HasQueryFilter(e => e.TenantId == CurrentTenantId);
     }
 
-    public string CurrentTenantId => _tenantContext.Current.TenantId;
+    public string CurrentTenantId => _tenantContext.CurrentTenantId;
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
@@ -117,19 +150,27 @@ public class AgenticDbContext : DbContext
 
     private void OnBeforeSaving()
     {
-        var tenantId = _tenantContext.Current.TenantId;
+        var tenantEntries = ChangeTracker.Entries<ITenantEntity>()
+            .Where(entry => entry.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .ToList();
+        if (tenantEntries.Count == 0)
+            return;
 
-        foreach (var entry in ChangeTracker.Entries<ITenantEntity>())
+        var tenantId = _tenantContext.CurrentTenantId;
+        if (TenantIdPolicy.IsReservedSystemId(tenantId))
+            throw new InvalidOperationException("A system operation cannot be used as a tenant context.");
+
+        foreach (var entry in tenantEntries)
         {
-            switch (entry.State)
+            if (entry.State == EntityState.Added && string.IsNullOrWhiteSpace(entry.Entity.TenantId))
             {
-                case EntityState.Added:
-                    if (string.IsNullOrEmpty(entry.Entity.TenantId) || entry.Entity.TenantId == "default")
-                    {
-                        entry.Entity.TenantId = tenantId;
-                    }
-                    break;
+                entry.Entity.TenantId = tenantId;
             }
+
+            if (TenantIdPolicy.IsReservedSystemId(entry.Entity.TenantId) ||
+                !string.Equals(entry.Entity.TenantId, tenantId, StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    $"Tenant-owned entity '{entry.Metadata.ClrType.Name}' must be written under its real tenant context.");
         }
     }
 }

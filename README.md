@@ -1,12 +1,22 @@
 # 🤖 Sistema Agentic Generalista
 
-> .NET 10 + Microsoft Agent Framework + Microsoft.Extensions.AI — orquestração framework-first hospedada, memória Obsidian + PostgreSQL/pgvector e superfícies A2A, AG-UI, MCP e OpenAI-compatible.
+> Correção dos 32 achados do PR #132: [epic #139](https://github.com/JonathanBenicio/Agent-System/issues/139), [plano e matriz](docs/plan/pr132-review-remediation.md), [ADR-041](docs/architecture/adr/041-pr132-review-remediation.md) e [evidências por contexto](docs/backend/validation/pr132-review-remediation-2026-10-02.md). Implementação validada e CI verde no SHA `8ba0dd4`; PR #152 permanece draft aguardando revisão/merge.
 
-## Atualização Maio/2026 — Runtime V2
+> Backend: [contratos, acesso, recursos e validação](docs/backend/README.md). Processo: [templates](templates/README.md).
+> Especificações e estado das 46 issues abertas (snapshot 2026-09-29): [registro canônico](docs/plan/open-issues-specification-audit-2026-09-29.md).
+> Revisão do PR: [correções e evidências](docs/backend/validation/2026-09-28-review-fixes.md).
+> Meta atual de chat, sessões e configurações de usuário/tenant: [ADR-039](docs/architecture/adr/039-chat-session-user-tenant-settings.md), [story](docs/USER-STORIES.md#back-chat-123--chat-sessoes-e-configuracoes-efetivamente-usadas) e [plano](docs/plan/chat-session-user-settings.md).
+> Correção ativa dos bugs #111–#117: [ADR-035](docs/architecture/adr/035-backend-core-isolation-and-reliability.md) · [plano/status](docs/plan/backend-core-remediation.md) · [evidências](docs/backend/validation/backend-core-remediation.md).
+
+> .NET 10 + Microsoft Agent Framework + Microsoft.Extensions.AI — orquestração framework-first hospedada, memória Obsidian + PostgreSQL/pgvector e superfícies A2A, AG-UI e OpenAI-compatible. Plugins MCP cliente disponíveis; servidor HTTP /mcp não mapeado na baseline.
+
+## Registro histórico — Runtime V2 (maio/2026)
+
+Os itens abaixo descrevem uma proposta/estado histórico e não definem os endpoints disponíveis na baseline atual. Consulte [contratos e transportes do backend](docs/backend/README.md) para a superfície vigente.
 
 - Execução centralizada em `AgentExecutionWorkflow` (orquestração operacional fora do `MetaAgentOrchestrator`)
 - Streaming fim a fim via SignalR (`ChatHub`) e SSE (`POST /api/chat/stream`)
-- MCP server HTTP autenticado em `/mcp` com tools para listar agents, consultar RAG, inventariar tools e executar o MetaAgent
+- Plugins MCP cliente para conectar o backend a servidores externos; a API atual não hospeda um servidor HTTP em `/mcp`
 - Governança de tools com políticas de risco, aprovação e auditoria
 - Artefatos operacionais persistidos por sessão (plan, steps, review, handoff, tool outputs)
 - Human-in-the-loop para resposta final sensível (`final-approvals`)
@@ -38,6 +48,9 @@ Capacidades experimentais (como protocolos extras, plugins MCP, workflows colabo
 - rollout opcional
 - fallback explícito para o comportamento atual
 
+Self-improvement (#16) permanece na trilha Lab: a flag `AgenticSystem:SelfImprovement:Enabled` fica desligada por padrão; quando habilitada em laboratório, mudanças de prompt viram propostas e exigem aprovação de Owner/Admin, com versão, auditoria e rollback. O contrato está em [API do backend](docs/backend/api-core.md).
+O executor Hyperlight CodeAct é uma capacidade Lab: a flag global começa desligada, e o tool só aparece com `AgenticSystem:Hyperlight:Enabled=true` no ambiente `Lab`.
+
 ### Critérios de incubação e descarte
 
 Toda capacidade experimental precisa nascer com hipótese, critério de sucesso e critério de remoção. A promoção para o core só ocorre com ganho recorrente comprovado contra baseline e sem abrir um segundo caminho principal de execução. Sem ganho mensurável ou com aumento de risco/custo operacional, a diretriz é rollback ou descarte.
@@ -57,7 +70,7 @@ curl -X POST https://localhost:5001/api/chat \
   -d '{"message": "Crie um lembrete para amanhã às 14h"}'
 ```
 
-**MCP server**: `https://localhost:5001/mcp` via Streamable HTTP/SSE, protegido pela autenticação padrão da API.
+**MCP**: a baseline atual oferece plugins MCP cliente; ela não mapeia um servidor HTTP em `/mcp`.
 
 ## 🧠 O que este sistema faz?
 
@@ -105,7 +118,7 @@ graph TD
 | Camada | Tecnologias |
 |--------|-------------|
 | **Core** | .NET 10, ASP.NET Core 10, SignalR 10, Microsoft.Extensions.AI |
-| **Agent Runtime** | Microsoft Agent Framework 1.4 + hosting/workflows |
+| **Agent Runtime** | Microsoft Agent Framework 1.22.0 + hosted agents/workflows; A2A/AG-UI hosting remains preview |
 | **LLM** | OpenAI, Google Gemini, Anthropic Claude, Ollama, IChatClient contextual |
 | **Embeddings** | OpenAI (text-embedding-3-small), Google (text-embedding-004), Ollama (nomic-embed-text), ML.NET+ONNX |
 | **Memory** | Obsidian vault (human-readable), PostgreSQL + pgvector (semantic search) |
@@ -304,15 +317,27 @@ GET  /api/admin/mcp/plugins                    # Listar plugins
 POST /api/admin/mcp/plugins                    # Registrar plugin
 ```
 
-**MCP Server**: `/mcp` — expõe `list_agents`, `search_knowledge`, `list_runtime_tools` e `execute_agent`
+**MCP**: plugins cliente são administrados por `/api/admin/mcp/plugins`; não há servidor HTTP `/mcp` mapeado na baseline.
 
 **SignalR Hub**: `/hubs/gateway` — eventos: `ServiceStatusChanged`, `CostAlertTriggered`, `CircuitStateChanged`, `RateLimitWarning`
 
 **Dashboard Web**: `https://localhost:5001/dashboard`
 
-## 🗺️ Roadmap
+## 🗺️ Roadmap Q2 2026: Consolidação & Especialização
 
-### Core Capabilities (Integrated)
+Estamos evoluindo de um núcleo agentic robusto para uma plataforma especializada, observável e interoperável.
+
+| Track | Objetivo | Status |
+|-------|----------|:------:|
+| **1. Specialized Context** | Restringir conhecimento de agentes a salas específicas (RBAC + Precisão) | 🚧 Filtro SQL implementado; integração PostgreSQL pendente (ADR-019) |
+| **2. FinOps & Quotas** | Monitoramento em tempo real de custos e limites por tenant/agente | 🚧 Persistência implementada; validação operacional pendente (ADR-008) |
+| **3. Protocol Hosting** | Exposição padronizada via A2A e AgUI para ecossistemas externos | ⏳ Planejado |
+| **4. Evaluation Suite** | Medição contínua de qualidade (Grounding, Fluency) via Golden Sets | 🚧 CRUD backend implementado; interface e métricas pendentes (ADR-032) |
+| **5. Automatic LLM Sync** | Descoberta automática de modelos LLM no Login por Tenant | 🚧 Em Progresso (ADR-021, Issue #94) |
+
+> Plano mestre detalhado: [plan/master-roadmap-2026.md](docs/plan/master-roadmap-2026.md)
+
+## 🗺️ Roadmap Histórico (ML Baseline)
 
 | Domínio | Capacidade | Status |
 |---------|------------|:------:|
@@ -486,7 +511,7 @@ Todos os serviços são registrados via DI como Singleton e cobertos por **344 t
 
 ## 📜 Licença
 
-MIT License - veja [LICENSE](LICENSE) para detalhes.
+O projeto declara MIT, mas o arquivo LICENSE não está presente na baseline. A formalização da licença está pendente.
 
 ## 🙏 Inspiração
 

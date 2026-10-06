@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 
 namespace AgenticSystem.Core.Services;
 
-public class InMemorySkillManager : ISkillManager
+public class InMemorySkillManager : ISkillManager, IPlatformSkillCatalog
 {
     private readonly ConcurrentDictionary<string, ISkill> _skills = new();
     private readonly ILogger<InMemorySkillManager> _logger;
@@ -49,6 +49,8 @@ public class InMemorySkillManager : ISkillManager
         _logger.LogInformation("📚 Skill registered: {SkillName} ({Domain})", skill.Name, skill.Domain);
     }
 
+    public void RegisterPlatformSkill(ISkill skill) => RegisterSkill(skill);
+
     public bool UnregisterSkill(string skillId)
     {
         var removed = _skills.TryRemove(skillId, out _);
@@ -56,6 +58,8 @@ public class InMemorySkillManager : ISkillManager
             _logger.LogInformation("📚 Skill removed: {SkillId}", skillId);
         return removed;
     }
+
+    public bool UnregisterPlatformSkill(string skillId) => UnregisterSkill(skillId);
 
     public IEnumerable<ISkill> GetAllSkills() => _skills.Values;
 }

@@ -11,37 +11,76 @@ public class SessionManager : ISessionManager
     private readonly IMemoryInjectionService? _memoryInjection;
     private readonly ILogger<SessionManager> _logger;
     private readonly ISemanticCompressor? _semanticCompressor;
+    private readonly ITenantStore? _tenantStore;
 
     public SessionManager(
         ISessionStore store,
         ISessionConsolidator consolidator,
         ILogger<SessionManager> logger,
         ISemanticCompressor? semanticCompressor = null,
-        IMemoryInjectionService? memoryInjection = null)
+        IMemoryInjectionService? memoryInjection = null,
+        ITenantStore? tenantStore = null)
     {
         _store = store;
         _consolidator = consolidator;
         _memoryInjection = memoryInjection;
         _logger = logger;
         _semanticCompressor = semanticCompressor;
+        _tenantStore = tenantStore;
     }
 
-    public async Task<string> StartSessionAsync(UserContext userContext)
+    public async Task<string> StartSessionAsync(UserContext userContext, string? sessionId = null)
     {
-        var sessionId = $"session-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}";
+        if (!string.IsNullOrWhiteSpace(sessionId))
+        {
+            var existingSession = await _store.GetAsync(sessionId);
+            if (existingSession is not null)
+            {
+                var userTenantId = userContext.TenantId;
+                if (existingSession.UserId != userContext.UserId || existingSession.TenantId != userTenantId)
+                    throw new UnauthorizedAccessException("Session belongs to another user or tenant.");
+                if (existingSession.EndedAt is not null)
+                    throw new InvalidOperationException("Ended sessions cannot be resumed.");
+                _logger.LogInformation("📂 Reusing existing session: {SessionId}", sessionId);
+                return sessionId;
+            }
+        }
+
+        var newSessionId = $"session-{DateTime.UtcNow:yyyyMMdd-HHmmss}-{Guid.NewGuid():N}";
         var session = new SessionData
         {
-            Id = sessionId,
+            Id = newSessionId,
             UserId = userContext.UserId,
-            TenantId = string.IsNullOrWhiteSpace(userContext.TenantId) ? Tenant.DefaultTenantId : userContext.TenantId,
+            TenantId = userContext.TenantId,
             StartedAt = DateTime.UtcNow,
             RuntimeSettings = BuildRuntimeSettings(userContext),
             Events = new List<AgentEvent>()
         };
 
-        await _store.SaveAsync(session);
-        _logger.LogInformation("📂 Session started: {SessionId}", sessionId);
-        return sessionId;
+        if (_tenantStore is not null)
+        {
+            var tenant = await _tenantStore.GetByIdAsync(userContext.TenantId)
+                ?? throw new UnauthorizedAccessException("Tenant not found.");
+            if (!tenant.IsActive) throw new UnauthorizedAccessException("Tenant inactive.");
+            var planCeiling = tenant.Plan switch
+            {
+                TenantPlan.Pro => TenantLimits.ProTier().MaxConcurrentSessions,
+                TenantPlan.Enterprise => TenantLimits.EnterpriseTier().MaxConcurrentSessions,
+                _ => TenantLimits.FreeTier().MaxConcurrentSessions
+            };
+            var configured = tenant.Limits.MaxConcurrentSessions;
+            var limit = configured > 0 && planCeiling > 0 ? Math.Min(configured, planCeiling)
+                : configured > 0 ? configured : planCeiling;
+            if (!await _store.TryCreateAsync(session, limit))
+                throw new AgenticSystem.Core.Exceptions.QuotaExceededException("Concurrent session limit exceeded.");
+        }
+        else
+        {
+            // Legacy test fixtures without a tenant registry do not represent runtime enforcement.
+            await _store.SaveAsync(session);
+        }
+        _logger.LogInformation("📂 Session started: {SessionId}", newSessionId);
+        return newSessionId;
     }
 
     public async Task AddEventAsync(string sessionId, AgentEvent agentEvent)
@@ -126,13 +165,30 @@ public class SessionManager : ISessionManager
         }
     }
 
+    public async Task<string> GetMemoryContextAsync(string userQuery, string userId, string tenantId, CancellationToken ct = default)
+    {
+        if (_memoryInjection == null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return await _memoryInjection.BuildMemoryContextAsync(userQuery, userId, tenantId, ct: ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to build memory context for user {UserId}", userId);
+            return string.Empty;
+        }
+    }
+
     private static Dictionary<string, string> BuildRuntimeSettings(UserContext userContext)
     {
         var settings = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         CopyPreference(userContext.Preferences, settings, "llm.session.provider");
         CopyPreference(userContext.Preferences, settings, "llm.session.model");
-        CopyPreference(userContext.Preferences, settings, "llm.session.apiKey");
 
         if (!settings.ContainsKey("llm.session.provider"))
             CopyPreference(userContext.Preferences, settings, "llm.provider", "llm.session.provider");
@@ -140,8 +196,6 @@ public class SessionManager : ISessionManager
         if (!settings.ContainsKey("llm.session.model"))
             CopyPreference(userContext.Preferences, settings, "llm.model", "llm.session.model");
 
-        if (!settings.ContainsKey("llm.session.apiKey"))
-            CopyPreference(userContext.Preferences, settings, "llm.apiKey", "llm.session.apiKey");
 
         return settings;
     }

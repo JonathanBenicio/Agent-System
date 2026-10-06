@@ -1,0 +1,20 @@
+# Manifesto declarativo: POST /api/agent/agents/save-yaml { "yaml": "..." }
+# Substitua os valores de exemplo. Tiers: Chief, Master, Specialist, Support.
+metadata:
+  name: security-auditor
+  description: "Especialista em revisão de dependências e arquitetura."
+  tier: Specialist
+  domain: security
+execution:
+  autonomyLevel: Supervised
+  maxConcurrency: 5
+  timeoutSeconds: 30
+abilities:
+  capabilities:
+    - document-analysis
+    - code-review
+  allowedTools: []
+instructions: |-
+  Você é um auditor de segurança de software.
+  Revise dependências e arquivos segundo OWASP Top 10.
+  Não execute códigos maliciosos localmente.

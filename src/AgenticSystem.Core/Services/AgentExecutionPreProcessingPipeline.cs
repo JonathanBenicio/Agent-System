@@ -1,5 +1,6 @@
 using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
+using AgenticSystem.Core.Exceptions;
 using Microsoft.Extensions.Logging;
 
 namespace AgenticSystem.Core.Services;
@@ -119,7 +120,7 @@ public class AgentExecutionPreProcessingPipeline : IAgentExecutionPreProcessingP
             var quotaCheck = await _quotaEnforcer.CheckQuotaAsync(context.UserContext.TenantId ?? context.UserContext.UserId, ct: ct);
             if (!quotaCheck.Allowed)
             {
-                throw new InvalidOperationException($"Quota Exceeded: {quotaCheck.DenialReason}");
+                throw new QuotaExceededException(quotaCheck.DenialReason ?? "The request exceeds the tenant's configured usage limit.");
             }
         }
 

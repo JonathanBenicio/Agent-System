@@ -110,8 +110,14 @@ public class WebhooksController : ControllerBase
         if (!string.IsNullOrEmpty(webhook.TargetWorkflowId))
         {
             _logger.LogInformation("⚙️ Triggering workflow {WorkflowId} from webhook {Id}", webhook.TargetWorkflowId, id);
-            // In a real scenario, we might want to parse the payload and pass it as variables
-            await _workflowEngine.ResumeAsync(webhook.TargetWorkflowId, variables);
+            if (string.IsNullOrWhiteSpace(webhook.TenantId))
+            {
+                _logger.LogError("Webhook {WebhookId} has no tenant ownership; workflow {WorkflowId} was not resumed.", id, webhook.TargetWorkflowId);
+                return Problem("Webhook is not associated with a tenant.", statusCode: StatusCodes.Status409Conflict);
+            }
+
+            var tenantId = webhook.TenantId;
+            await _workflowEngine.ResumeAsync(tenantId, webhook.TargetWorkflowId, variables);
         }
 
         // Trigger Agent

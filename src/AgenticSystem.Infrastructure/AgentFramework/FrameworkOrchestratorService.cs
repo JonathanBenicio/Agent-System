@@ -1,7 +1,12 @@
+#pragma warning disable MAAI001 // Required experimental MAF session-store integration; reviewed under issue #120.
+
+using System;
+using System.Linq;
+using System.Collections.Generic;
 using System.Diagnostics;
+using AgenticSystem.Core.Exceptions;
 using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Hosting;
-using Microsoft.Agents.AI.Workflows;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
@@ -60,13 +65,24 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             "🎯 Orchestrator processing request via hosted framework agent: {Input}",
             input[..Math.Min(50, input.Length)]);
 
-        // 1. Resolver o hosted agent nativo e o contexto de specialist bindings da execução atual
+        // 1. Obter agentes ativos e construir o agente orquestrador de forma assíncrona
+        var activeAgents = (await serviceScope.ServiceProvider.GetRequiredService<IAgentFactory>().GetAllAgentsAsync())
+            .Where(a => a.IsActive).ToList();
+
+        var hostBuilder = serviceScope.ServiceProvider.GetRequiredService<OrchestratorHostBuilder>();
+        var orchestratorAgent = await hostBuilder.BuildAsync(activeAgents, sessionId, ct);
+
+        // Armazenar no estado scoped antes de resolver OrchestratorContext
+        var contextState = serviceScope.ServiceProvider.GetRequiredService<OrchestratorContextState>();
+        contextState.OrchestratorAgent = orchestratorAgent;
+        contextState.ActiveAgents = activeAgents;
+
         var orchestratorCtx = scopedServices.GetRequiredService<OrchestratorContext>();
         var orchestrator = scopedServices.GetRequiredKeyedService<AIAgent>(_orchestratorMetadata.Name);
-        var sessionStore = scopedServices.GetRequiredKeyedService<AgentSessionStore>(_orchestratorMetadata.Name);
+        var frameworkFactory = scopedServices.GetRequiredService<AgentFrameworkFactory>();
 
         // 2. Obter ou criar sessão do framework via AgentSessionStore do hosting
-        var session = await sessionStore.GetSessionAsync(orchestrator, sessionId, ct);
+        var session = await frameworkFactory.GetOrCreateSessionAsync(orchestrator, sessionId, ct);
         var preProcessingResult = await PreProcessHostedInputAsync(sessionId, input, context, ct);
 
         await _runtimeCoordinator.PublishEventAsync(new AgentStreamEvent
@@ -76,84 +92,76 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
             Message = "Framework orchestrator delegating to specialists",
             Data = new Dictionary<string, object>
             {
-                ["specialistCount"] = orchestratorCtx.SpecialistBindings.Count,
+                ["specialistCount"] = activeAgents.Count,
                 ["mode"] = "framework-orchestration"
             }
         }, ct);
 
-        // 3. Executar via framework — Handoff Workflow (Adoção Agressiva)
+        // 3. O supervisor chama especialistas como AIFunctions dentro do ChatClientAgent.
         FrameworkAgentResponse frameworkResponse;
         try
         {
-            var activeAgents = (await serviceScope.ServiceProvider.GetRequiredService<IAgentFactory>().GetAllAgentsAsync())
-                .Where(a => a.IsActive).ToList();
-            
-            var workflow = await serviceScope.ServiceProvider.GetRequiredService<OrchestratorHostBuilder>()
-                .BuildHandoffWorkflowAsync(activeAgents, sessionId, ct);
-
             var messages = new List<ChatMessage> { new(ChatRole.User, preProcessingResult.EffectiveInput) };
-            
-            // Usar InProcessExecution para rodar o workflow de Handoff
-            await using var run = await InProcessExecution.RunAsync(workflow, messages, sessionId, ct);
-            
-            // O resultado final do workflow de handoff é capturado dos eventos ou da mensagem final
-            frameworkResponse = ExtractResponseFromWorkflowRun(run);
+            frameworkResponse = await orchestrator.RunAsync(messages, session, cancellationToken: ct);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Framework handoff orchestration failed");
+            var quotaError = QuotaExceededException.Find(ex);
+            if (quotaError is not null)
+                return CoreAgentResponse.Error(quotaError.Message, _orchestratorMetadata.Name);
+
             return CoreAgentResponse.Error(
                 "Erro ao processar via orquestrador de handoff do framework.", _orchestratorMetadata.Name);
         }
 
         // 4. Extrair conteúdo textual da resposta do framework
-        var content = ExtractContent(frameworkResponse);
+        var content = ExtractContent(frameworkResponse, _logger);
+
+        _logger.LogInformation(
+            "📝 Workflow extraction: {MsgCount} messages, content length: {Length}, isEmpty: {IsEmpty}",
+            frameworkResponse.Messages.Count, content.Length, string.IsNullOrWhiteSpace(content));
 
         // 5. Identificar qual especialista foi chamado (via tool calls no histórico ou eventos de handoff)
         var specialistCalls = GetSpecialistToolCalls(frameworkResponse);
         var handoffEvent = ExtractHandoffAgent(frameworkResponse);
-        var calledAgent = handoffEvent ?? specialistCalls.FirstOrDefault();
-        var calledBinding = FindCalledBinding(orchestratorCtx, calledAgent != null ? new[] { calledAgent } : Array.Empty<string>());
+        var calledBinding = FindCalledBinding(orchestratorCtx, specialistCalls);
+        var calledAgent = calledBinding?.Agent.Name ?? handoffEvent ?? specialistCalls.FirstOrDefault();
+
+        IAgent? resolvedAgent = calledBinding?.Agent;
+        if (resolvedAgent is null && !string.IsNullOrEmpty(calledAgent))
+        {
+            var sanitizedCalledName = SanitizeAgentName(calledAgent);
+            var matchingAgentInfo = activeAgents.FirstOrDefault(a => SanitizeAgentName(a.Name) == sanitizedCalledName);
+            if (matchingAgentInfo != null)
+            {
+                var agentFactory = serviceScope.ServiceProvider.GetRequiredService<IAgentFactory>();
+                resolvedAgent = await agentFactory.ResolveAgentAsync(matchingAgentInfo);
+            }
+        }
 
         sw.Stop();
 
+        // Persist the supervisor and each specialist session that actually ran.
+        foreach (var binding in orchestratorCtx.SpecialistBindings.Where(binding =>
+                     specialistCalls.Contains(binding.Tool.Name, StringComparer.OrdinalIgnoreCase)))
+        {
+            await frameworkFactory.PersistSessionAsync(sessionId, binding.FrameworkAgent, binding.Session, ct);
+        }
+
         // 6. Persistir sessão do framework para continuidade via hosting nativo
-        await sessionStore.SaveSessionAsync(orchestrator, sessionId, session, ct);
+        await frameworkFactory.PersistSessionAsync(sessionId, orchestrator, session, ct);
 
         return await PostProcessHostedResponseAsync(
             sessionId,
             input,
             context,
             content,
-            calledBinding?.Agent,
+            resolvedAgent ?? calledBinding?.Agent,
             calledAgent,
             orchestrator.Id ?? string.Empty,
             sw.Elapsed,
             ct);
-    }
-
-    private static FrameworkAgentResponse ExtractResponseFromWorkflowRun(Run run)
-    {
-        var messages = new List<ChatMessage>();
-        
-        // Coletar todas as mensagens de assistant produzidas durante o run
-        foreach (var ev in run.OutgoingEvents)
-        {
-            if (ev is AgentResponseEvent responseEvent)
-            {
-                messages.AddRange(responseEvent.Response.Messages);
-            }
-            else if (ev is WorkflowOutputEvent outputEvent && outputEvent.Is<ChatMessage>(out var msg))
-            {
-                messages.Add(msg);
-            }
-        }
-
-        // Se não houver mensagens, tenta pegar do log de mensagens do run se disponível
-        return new FrameworkAgentResponse
-        {
-            Messages = messages
-        };
     }
 
     private static string? ExtractHandoffAgent(FrameworkAgentResponse response)
@@ -207,12 +215,15 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         TimeSpan latency,
         CancellationToken ct = default)
     {
+        var hasContent = !string.IsNullOrWhiteSpace(content);
+        var errorMessage = hasContent ? null : "O orquestrador não retornou conteúdo textual.";
         var response = new CoreAgentResponse
         {
-            Content = content,
+            Content = hasContent ? content : $"Erro: {errorMessage}",
             AgentName = calledAgentName ?? _orchestratorMetadata.Name,
             AgentTier = calledAgent?.Tier ?? AgentTier.Chief,
-            Success = true,
+            Success = hasContent,
+            ErrorMessage = errorMessage,
             SessionId = sessionId,
             Metadata = new Dictionary<string, object>
             {
@@ -277,19 +288,28 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         };
     }
 
-    private static string ExtractContent(FrameworkAgentResponse frameworkResponse)
+    private static string ExtractContent(FrameworkAgentResponse frameworkResponse, ILogger? logger = null)
     {
         // Extrair texto das mensagens do assistant
         var content = string.Join("\n", frameworkResponse.Messages
             .Where(m => m.Role == ChatRole.Assistant)
             .SelectMany(m => m.Contents.OfType<TextContent>())
-            .Select(t => t.Text));
+            .Select(t => t.Text)).Trim();
 
         if (string.IsNullOrWhiteSpace(content))
         {
             content = string.Join("\n", frameworkResponse.Messages
                 .Where(m => m.Role == ChatRole.Assistant)
-                .Select(m => m.Text));
+                .Select(m => m.Text)).Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(content) && logger != null)
+        {
+            logger.LogWarning(
+                "⚠️ ExtractContent returned empty. Messages: {Count}, Roles: {Roles}, TotalContents: {TotalContents}",
+                frameworkResponse.Messages.Count,
+                string.Join(", ", frameworkResponse.Messages.Select(m => m.Role.ToString())),
+                frameworkResponse.Messages.Sum(m => m.Contents.Count()));
         }
 
         return content ?? string.Empty;
@@ -339,5 +359,11 @@ public class FrameworkOrchestratorService : IFrameworkOrchestratorService
         }
 
         return null;
+    }
+
+    private static string SanitizeAgentName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return string.Empty;
+        return new string(name.Where(c => char.IsLetterOrDigit(c)).ToArray()).ToLowerInvariant();
     }
 }

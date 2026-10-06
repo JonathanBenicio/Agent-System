@@ -1,16 +1,31 @@
 import * as signalR from '@microsoft/signalr'
-import { getAuthToken, getApiKey } from '@/lib/auth'
+import { getAuthToken } from '@/lib/auth'
+import { useKnowledgeStore } from '@/store/useKnowledgeStore'
 
 const GATEWAY_HUB_URL = '/hubs/gateway'
 
 let connection: signalR.HubConnection | null = null
+let lastTenantId: string | null = null
 
 export function getGatewayConnection(): signalR.HubConnection {
+  const currentTenantId = useKnowledgeStore.getState().activeWorkspaceId
+
+  if (connection && lastTenantId !== currentTenantId) {
+    const oldConn = connection
+    connection = null
+    oldConn.stop().catch(err => console.warn('Failed to stop old hub connection on tenant switch:', err))
+  }
+
   if (!connection) {
+    lastTenantId = currentTenantId
+    const url = currentTenantId ? `${GATEWAY_HUB_URL}?X-Tenant-Id=${encodeURIComponent(currentTenantId)}` : GATEWAY_HUB_URL
     connection = new signalR.HubConnectionBuilder()
-      .withUrl(GATEWAY_HUB_URL, {
+      .withUrl(url, {
+        withCredentials: true,
         accessTokenFactory: () => getAuthToken() ?? '',
-        headers: getApiKey() && getApiKey() !== 'admin' && !getAuthToken() ? { 'X-Api-Key': getApiKey()! } : {},
+        headers: {
+          ...(currentTenantId ? { 'X-Tenant-Id': currentTenantId } : {}),
+        },
       })
       .withAutomaticReconnect([0, 2000, 5000, 10000, 30000])
       .configureLogging(signalR.LogLevel.Warning)
@@ -19,14 +34,21 @@ export function getGatewayConnection(): signalR.HubConnection {
   return connection
 }
 
+let startGatewayPromise: Promise<void> | null = null
+
 export async function startGatewayConnection(): Promise<void> {
   const conn = getGatewayConnection()
   if (conn.state === signalR.HubConnectionState.Disconnected) {
-    await conn.start()
+    startGatewayPromise = conn.start()
+    await startGatewayPromise
+    startGatewayPromise = null
   }
 }
 
 export async function stopGatewayConnection(): Promise<void> {
+  if (startGatewayPromise) {
+    await startGatewayPromise.catch(() => {})
+  }
   if (connection && connection.state !== signalR.HubConnectionState.Disconnected) {
     await connection.stop()
   }

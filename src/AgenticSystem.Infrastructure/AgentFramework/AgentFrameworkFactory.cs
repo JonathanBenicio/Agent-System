@@ -1,4 +1,8 @@
+#pragma warning disable MAAI001 // Required experimental MAF session-store integration; reviewed under issue #120.
+
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using System.Text;
@@ -6,6 +10,7 @@ using AgenticSystem.Core.Interfaces;
 using AgenticSystem.Core.Models;
 using AgenticSystem.Infrastructure.AI;
 using AgenticSystem.Infrastructure.MCP;
+using AgenticSystem.Infrastructure.LLM;
 using FrameworkAgent = Microsoft.Agents.AI.AIAgent;
 using FrameworkAgentSession = Microsoft.Agents.AI.AgentSession;
 
@@ -21,9 +26,12 @@ public class AgentFrameworkFactory
     private readonly IChatClient _chatClient;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IServiceProvider _serviceProvider;
+    private readonly ISkillManager? _skillManager;
     private readonly UnifiedAIToolProvider? _toolProvider;
     private readonly McpToolsAIFunctionAdapter? _mcpToolsAdapter;
-    private readonly SimpleSessionStoreAdapter? _sessionStore;
+    private readonly AgentSessionStore? _sessionStore;
+    private readonly RAGContextProvider? _ragContextProvider;
+    private readonly AgentSkillsProvider? _skillsProvider;
 
     // Exposed for OrchestratorContextFactory to create the orchestrator ChatClientAgent
     internal IChatClient ChatClient => _chatClient;
@@ -34,16 +42,23 @@ public class AgentFrameworkFactory
         IChatClient chatClient,
         ILoggerFactory loggerFactory,
         IServiceProvider serviceProvider,
+        ISkillManager? skillManager = null,
         UnifiedAIToolProvider? toolProvider = null,
         McpToolsAIFunctionAdapter? mcpToolsAdapter = null,
-        SimpleSessionStoreAdapter? sessionStore = null)
+        AgentSessionStore? sessionStore = null,
+        RAGContextProvider? ragContextProvider = null,
+        AgentSkillsProvider? skillsProvider = null)
     {
-        _chatClient = chatClient;
+        _chatClient = new AgenticSystem.Infrastructure.Security.FidesProtectedChatClient(
+            chatClient, serviceProvider, loggerFactory);
         _loggerFactory = loggerFactory;
         _serviceProvider = serviceProvider;
+        _skillManager = skillManager;
         _toolProvider = toolProvider;
         _mcpToolsAdapter = mcpToolsAdapter;
         _sessionStore = sessionStore;
+        _ragContextProvider = ragContextProvider;
+        _skillsProvider = skillsProvider;
     }
 
     /// <summary>
@@ -53,28 +68,62 @@ public class AgentFrameworkFactory
     /// é controlada pelo SimpleSessionStoreAdapter quando o agent roda.
     /// </summary>
     public async Task<FrameworkAgent> CreateFromAgentAsync(IAgent agent, CancellationToken ct = default)
-        => await CreateFromAgentAsync(agent, additionalTools: null, ct);
+         => await CreateFromAgentAsync(agent, additionalTools: null, modelOverride: null, ct);
 
     public async Task<FrameworkAgent> CreateFromAgentAsync(
         IAgent agent,
         IEnumerable<AITool>? additionalTools,
         CancellationToken ct = default)
+         => await CreateFromAgentAsync(agent, additionalTools, modelOverride: null, ct);
+
+    public async Task<FrameworkAgent> CreateFromAgentAsync(
+        IAgent agent,
+        IEnumerable<AITool>? additionalTools,
+        string? modelOverride,
+        CancellationToken ct = default,
+        IReadOnlyCollection<string>? allowedToolNames = null)
     {
         ArgumentNullException.ThrowIfNull(agent);
 
         var tools = await GetUnifiedToolsAsync(ct);
         tools = MergeTools(tools, additionalTools);
+        if (allowedToolNames is not null)
+            tools = tools?.Where(tool => allowedToolNames.Contains(tool.Name, StringComparer.OrdinalIgnoreCase)).ToList();
+
+        // Enriquecer as instruções do especialista usando as C# Skills!
+        var enrichedInstructions = _skillManager != null
+            ? await _skillManager.BuildEnrichedPromptAsync(agent.Name, agent.Domain, agent.Instructions)
+            : agent.Instructions;
+
+        var effectiveClient = !string.IsNullOrWhiteSpace(modelOverride)
+            ? new ModelIdOverridingChatClient(_chatClient, modelOverride)
+            : _chatClient;
 
         var chatAgent = new ChatClientAgent(
-            _chatClient,
-            agent.Instructions,  // instructions (system prompt rico)
+            effectiveClient,
+            enrichedInstructions, // instructions (system prompt rico com skills)
             agent.Name,          // name
             agent.Description,   // description
             tools,               // tools — MCP tools via adapter
             _loggerFactory,
             _serviceProvider);
 
-        return chatAgent.AsBuilder()
+        var builder = chatAgent.AsBuilder();
+        var contextProviders = new List<MessageAIContextProvider>();
+        if (_ragContextProvider is not null)
+        {
+            contextProviders.Add(_ragContextProvider);
+        }
+        if (_skillsProvider is not null)
+        {
+            contextProviders.Add(_skillsProvider);
+        }
+        if (contextProviders.Count > 0)
+        {
+            builder = builder.UseAIContextProviders(contextProviders.ToArray());
+        }
+
+        return builder
             .UseLogging(_loggerFactory)
             .UseOpenTelemetry("AgenticSystem.Agents")
             .Build(_serviceProvider);
@@ -84,32 +133,60 @@ public class AgentFrameworkFactory
     /// Cria um ChatClientAgent a partir de uma AgentSpecification (agents dinâmicos).
     /// </summary>
     public async Task<FrameworkAgent> CreateFromSpecificationAsync(AgentSpecification spec, CancellationToken ct = default)
+         => await CreateFromSpecificationAsync(spec, modelOverride: null, ct);
+
+    /// <summary>
+    /// Cria um ChatClientAgent a partir de uma AgentSpecification com suporte a override de modelo.
+    /// </summary>
+    public async Task<FrameworkAgent> CreateFromSpecificationAsync(
+        AgentSpecification spec,
+        string? modelOverride,
+        CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(spec);
 
         var tools = await GetUnifiedToolsAsync(ct);
 
+        // Enriquecer as instruções da especificação dinâmica usando as C# Skills!
+        var enrichedInstructions = _skillManager != null
+            ? await _skillManager.BuildEnrichedPromptAsync(spec.Name, spec.Domain ?? "general", spec.Instructions)
+            : spec.Instructions;
+
+        var effectiveClient = !string.IsNullOrWhiteSpace(modelOverride)
+            ? new ModelIdOverridingChatClient(_chatClient, modelOverride)
+            : _chatClient;
+
         var chatAgent = new ChatClientAgent(
-            _chatClient,
-            spec.Instructions,   // instructions
+            effectiveClient,
+            enrichedInstructions,   // instructions (system prompt rico com skills)
             spec.Name,           // name
             spec.Description,    // description
             tools,               // tools — MCP tools via adapter
             _loggerFactory,
             _serviceProvider);
 
-        return chatAgent.AsBuilder()
+        var builder = chatAgent.AsBuilder();
+        var contextProviders = new List<MessageAIContextProvider>();
+        if (_ragContextProvider is not null)
+        {
+            contextProviders.Add(_ragContextProvider);
+        }
+        if (_skillsProvider is not null)
+        {
+            contextProviders.Add(_skillsProvider);
+        }
+        if (contextProviders.Count > 0)
+        {
+            builder = builder.UseAIContextProviders(contextProviders.ToArray());
+        }
+
+        return builder
             .UseLogging(_loggerFactory)
             .UseOpenTelemetry("AgenticSystem.Agents")
             .Build(_serviceProvider);
     }
 
-    // Backward-compatible sync wrappers used by tests and older callers.
-    public FrameworkAgent CreateFromAgent(IAgent agent)
-        => CreateFromAgentAsync(agent).GetAwaiter().GetResult();
 
-    public FrameworkAgent CreateFromSpecification(AgentSpecification spec)
-        => CreateFromSpecificationAsync(spec).GetAwaiter().GetResult();
 
     public async Task<AgentToolBinding?> CreateToolBindingAsync(IAgent agent, string sessionId, CancellationToken ct = default)
     {
@@ -119,7 +196,8 @@ public class AgentFrameworkFactory
         }
 
         var frameworkAgent = await CreateFromAgentAsync(agent, ct);
-        var session = await _sessionStore.GetSessionAsync(frameworkAgent, sessionId, ct);
+        var sessionKey = await CreateSessionStoreKeyAsync(sessionId, ct);
+        var session = await _sessionStore.GetOrCreateSessionAsync(frameworkAgent, sessionKey, ct);
         var tool = frameworkAgent.AsAIFunction(
             new AIFunctionFactoryOptions
             {
@@ -135,10 +213,11 @@ public class AgentFrameworkFactory
     {
         if (_sessionStore is null)
         {
-            throw new InvalidOperationException("SimpleSessionStoreAdapter is not available.");
+            throw new InvalidOperationException("AgentSessionStore is not available.");
         }
 
-        return await _sessionStore.GetSessionAsync(agent, sessionId, ct);
+        var sessionKey = await CreateSessionStoreKeyAsync(sessionId, ct);
+        return await _sessionStore.GetOrCreateSessionAsync(agent, sessionKey, ct);
     }
 
     public async Task PersistSessionAsync(string sessionId, FrameworkAgent agent, FrameworkAgentSession session, CancellationToken ct = default)
@@ -148,7 +227,22 @@ public class AgentFrameworkFactory
             return;
         }
 
-        await _sessionStore.SaveSessionAsync(agent, sessionId, session, ct);
+        var sessionKey = await CreateSessionStoreKeyAsync(sessionId, ct);
+        await _sessionStore.SaveSessionAsync(agent, sessionKey, session, ct);
+    }
+
+    internal async ValueTask<AgentSessionStoreKey> CreateSessionStoreKeyAsync(string sessionId, CancellationToken ct)
+    {
+        var key = new AgentSessionStoreKey(sessionId);
+        var isolationProvider = _serviceProvider.GetService<AgentIsolationKeyProvider>();
+        if (isolationProvider is null)
+            return key;
+
+        var isolationKey = await isolationProvider.GetIsolationKeyAsync(ct);
+        if (string.IsNullOrWhiteSpace(isolationKey))
+            throw new InvalidOperationException("Authenticated tenant/user isolation is required for MAF session access.");
+
+        return key.WithPartition("isolation", isolationKey);
     }
 
     private async Task<IList<AITool>?> GetUnifiedToolsAsync(CancellationToken ct)

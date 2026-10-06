@@ -111,6 +111,8 @@ public class InMemoryVectorStore : IVectorStore
 
     public async Task<SearchResult> SearchWithFiltersAsync(string query, Dictionary<string, string> filters)
     {
+        if (filters.TryGetValue("room_ids", out var rooms) && VectorMetadataFilter.ParseRoomIds(rooms).Length == 0)
+            return new SearchResult { Query = query, Matches = new() };
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var normalizedQuery = query.Trim();
         var hasQuery = !string.IsNullOrWhiteSpace(normalizedQuery) && normalizedQuery != "*";
@@ -178,28 +180,27 @@ public class InMemoryVectorStore : IVectorStore
 
     public Task<VectorStoreStats> GetStatsAsync(string tenantId, CancellationToken ct = default)
     {
-        long docCount = 0;
-        long totalBytes = 0;
+        var tenantDocs = new List<EmbeddingDocument>();
 
         foreach (var (name, docs) in _collections)
         {
             lock (docs)
             {
-                var tenantDocs = docs.Where(d => d.TenantId == tenantId).ToList();
-                docCount += tenantDocs.Count;
-                totalBytes += tenantDocs.Sum(d => 
-                    d.Content.Length * 2 + 
-                    (d.Embedding?.Length ?? 0) * 4 + 
-                    (d.ContextualSummary?.Length ?? 0) * 2);
+                tenantDocs.AddRange(docs.Where(d => d.TenantId == tenantId));
             }
         }
 
-        return Task.FromResult(new VectorStoreStats
+        return Task.FromResult(VectorUsageCalculator.Calculate(tenantId, tenantDocs.Select(document =>
         {
-            TenantId = tenantId,
-            DocumentCount = docCount,
-            TotalBytes = totalBytes
-        });
+            var metadata = document.Metadata ?? new Dictionary<string, string>();
+            metadata.TryGetValue("document_id", out var documentId);
+            var sourceBytes = metadata.TryGetValue("source_bytes", out var rawBytes) && long.TryParse(rawBytes, out var parsedBytes)
+                ? parsedBytes
+                : (long?)null;
+            return new VectorDocumentUsage(document.Id, documentId, sourceBytes,
+                document.Content.Length * 2L + (document.ContextualSummary?.Length ?? 0) * 2L,
+                (document.Embedding?.Length ?? 0) * 4L);
+        })));
     }
 
     private static double CalculateRelevance(string query, EmbeddingDocument doc, float[]? queryEmbedding)
@@ -286,6 +287,11 @@ public class InMemoryVectorStore : IVectorStore
     {
         foreach (var (key, value) in filters)
         {
+            if (key == "tenant_id")
+            {
+                if (!string.Equals(doc.TenantId, value, StringComparison.Ordinal)) return false;
+                continue;
+            }
             if (key == "type" && !doc.Type.Equals(value, StringComparison.OrdinalIgnoreCase))
                 return false;
             if (key == "collection" && !doc.Collection.Equals(value, StringComparison.OrdinalIgnoreCase))
@@ -294,6 +300,11 @@ public class InMemoryVectorStore : IVectorStore
                 return false;
             if (key is "type" or "collection" or "id")
                 continue;
+            if (key == "room_ids")
+            {
+                if (!VectorMetadataFilter.Matches(doc.Metadata, new Dictionary<string, string> { [key] = value })) return false;
+                continue;
+            }
             if (!doc.Metadata.TryGetValue(key, out var metaValue) ||
                 !metaValue.Equals(value, StringComparison.OrdinalIgnoreCase))
                 return false;
@@ -330,5 +341,22 @@ public class InMemoryVectorStore : IVectorStore
         if (end < content.Length) snippet += "...";
 
         return snippet;
+    }
+
+    public Task DeleteCollectionAsync(string collection)
+    {
+        if (string.IsNullOrWhiteSpace(collection))
+            return Task.CompletedTask;
+
+        if (_collections.TryRemove(collection, out _))
+        {
+            _logger.LogInformation("🗑️ Deleted collection {Collection} from in-memory store", collection);
+        }
+        else
+        {
+            _logger.LogDebug("⚠️ Collection {Collection} not found in in-memory store to delete", collection);
+        }
+
+        return Task.CompletedTask;
     }
 }

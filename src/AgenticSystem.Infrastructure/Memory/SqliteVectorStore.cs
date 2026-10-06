@@ -48,7 +48,7 @@ public sealed class SqliteVectorStore : IVectorStore
             entity.Content = document.Content;
             entity.Type = document.Type;
             entity.Collection = document.Collection;
-            entity.EmbeddingData = document.Embedding != null ? VectorToBytes(document.Embedding) : null;
+            entity.EmbeddingData = document.Embedding is { Length: > 0 } ? VectorToBytes(document.Embedding) : null;
             entity.MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions);
             entity.ContextualSummary = document.ContextualSummary;
             entity.IndexedAt = DateTime.UtcNow;
@@ -127,11 +127,15 @@ public sealed class SqliteVectorStore : IVectorStore
 
     public async Task<SearchResult> SearchWithFiltersAsync(string query, Dictionary<string, string> filters)
     {
+        if (filters.TryGetValue("room_ids", out var rooms) && VectorMetadataFilter.ParseRoomIds(rooms).Length == 0)
+            return new SearchResult { Query = query, Matches = new() };
         var sw = System.Diagnostics.Stopwatch.StartNew();
         await using var db = await _dbContextFactory.CreateDbContextAsync();
         
         var dataQuery = db.VectorDocuments.AsNoTracking().AsQueryable();
 
+        if (filters.TryGetValue("tenant_id", out var tenantFilter))
+            dataQuery = dataQuery.Where(item => item.TenantId == tenantFilter);
         if (filters.TryGetValue("type", out var typeFilter))
             dataQuery = dataQuery.Where(item => item.Type == typeFilter);
         if (filters.TryGetValue("collection", out var collectionFilter))
@@ -149,7 +153,7 @@ public sealed class SqliteVectorStore : IVectorStore
         }
 
         var remainingFilters = filters
-            .Where(item => item.Key is not ("type" or "collection" or "id"))
+            .Where(item => item.Key is not ("type" or "collection" or "id" or "tenant_id"))
             .ToDictionary(item => item.Key, item => item.Value, StringComparer.OrdinalIgnoreCase);
 
         var filtered = candidates.Where(item => MetadataMatches(item.MetadataJson, remainingFilters));
@@ -197,19 +201,21 @@ public sealed class SqliteVectorStore : IVectorStore
     public async Task<VectorStoreStats> GetStatsAsync(string tenantId, CancellationToken ct = default)
     {
         await using var db = await _dbContextFactory.CreateDbContextAsync(ct);
-        var stats = await db.VectorDocuments
-            .Where(x => x.TenantId == tenantId)
-            .GroupBy(x => x.TenantId)
-            .Select(g => new VectorStoreStats
-            {
-                TenantId = g.Key,
-                DocumentCount = g.Count(),
-                // Simplification for SQLite: length of text and embeddings roughly calculated
-                TotalBytes = g.Sum(x => x.Content.Length * 2 + (x.EmbeddingData != null ? x.EmbeddingData.Length : 0))
-            })
-            .FirstOrDefaultAsync(ct);
-
-        return stats ?? new VectorStoreStats { TenantId = tenantId, DocumentCount = 0, TotalBytes = 0 };
+        var documents = await db.VectorDocuments.AsNoTracking()
+            .Where(document => document.TenantId == tenantId)
+            .Select(document => new { document.Id, document.MetadataJson, document.Content, document.EmbeddingData })
+            .ToListAsync(ct);
+        var usage = documents.Select(document =>
+        {
+            var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(document.MetadataJson, JsonOptions) ?? new();
+            metadata.TryGetValue("document_id", out var documentId);
+            var sourceBytes = metadata.TryGetValue("source_bytes", out var rawBytes) && long.TryParse(rawBytes, out var parsedBytes)
+                ? parsedBytes
+                : (long?)null;
+            return new VectorDocumentUsage(document.Id, documentId, sourceBytes,
+                document.Content.Length * 2L, document.EmbeddingData?.LongLength ?? 0);
+        });
+        return VectorUsageCalculator.Calculate(tenantId, usage);
     }
 
     private double CalculateScore(VectorDocumentEntity entity, string query, float[]? queryEmbedding)
@@ -230,10 +236,11 @@ public sealed class SqliteVectorStore : IVectorStore
         return new VectorDocumentEntity
         {
             Id = document.Id,
+            TenantId = document.TenantId,
             Content = document.Content,
             Type = document.Type,
             Collection = document.Collection,
-            EmbeddingData = document.Embedding != null ? VectorToBytes(document.Embedding) : null,
+            EmbeddingData = document.Embedding is { Length: > 0 } ? VectorToBytes(document.Embedding) : null,
             MetadataJson = JsonSerializer.Serialize(document.Metadata, JsonOptions),
             ContextualSummary = document.ContextualSummary,
             IndexedAt = DateTime.UtcNow
@@ -290,7 +297,7 @@ public sealed class SqliteVectorStore : IVectorStore
     {
         if (filters.Count == 0) return true;
         var metadata = JsonSerializer.Deserialize<Dictionary<string, string>>(metadataJson, JsonOptions) ?? new();
-        return filters.All(f => metadata.TryGetValue(f.Key, out var v) && string.Equals(v, f.Value, StringComparison.OrdinalIgnoreCase));
+        return VectorMetadataFilter.Matches(metadata, filters);
     }
 
     private static string ScopeToCollection(SearchScope scope) => scope switch
@@ -301,4 +308,20 @@ public sealed class SqliteVectorStore : IVectorStore
         SearchScope.Domain => "domain",
         _ => ""
     };
+
+    public async Task DeleteCollectionAsync(string collection)
+    {
+        if (string.IsNullOrWhiteSpace(collection))
+            return;
+
+        await using var db = await _dbContextFactory.CreateDbContextAsync();
+        var entities = await db.VectorDocuments.Where(item => item.Collection == collection).ToListAsync();
+        
+        if (entities.Count > 0)
+        {
+            db.VectorDocuments.RemoveRange(entities);
+            await db.SaveChangesAsync();
+            _logger.LogInformation("🗑️ Deleted collection {Collection} from SqliteVectorStore. Removed {Count} chunks.", collection, entities.Count);
+        }
+    }
 }
